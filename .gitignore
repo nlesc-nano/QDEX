@@ -28,3 +28,4 @@ CMakeScripts/
 *.png
 *.log
 namd_precomputed*/
+docs/_build/
