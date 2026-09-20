@@ -1,4 +1,4 @@
-name: minibse_env
+name: minibse
 channels:
   - conda-forge
   - pytorch
@@ -13,11 +13,14 @@ dependencies:
   - pybind11>=2.10.0
   - eigen>=3.4.0
   - libint>=2.6.0
+  - libboost-devel
   
   # Core Python Dependencies
   - numpy>=1.24.0
   - scipy>=1.10.0
   - pandas>=2.0.0
+  - pyyaml>=6.0
+  - pymatgen
   
   # Visualization
   - matplotlib>=3.7.0
@@ -30,4 +33,3 @@ dependencies:
   - pip
   - pip:
     - -e .
-

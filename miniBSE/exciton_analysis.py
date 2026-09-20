@@ -1,6 +1,12 @@
 import numpy as np
 import time
 
+
+def coherent_mulliken_ao_populations(coeff, overlap_coeff, density):
+    """Mulliken AO populations for P=C density C^dagger without forming P."""
+    transformed = coeff @ density
+    return np.real(np.sum(transformed * overlap_coeff.conj(), axis=1))
+
 class ExcitonAnalyzer:
     """
     Highly optimized statistical analysis of excitons, including 
@@ -87,27 +93,33 @@ class ExcitonAnalyzer:
         print(f"  [Analyzer] Initialization completed in {time.time()-t0:.2f}s.")
 
     def get_particle_densities(self, bse_vec):
-        weights = bse_vec**2
-        
-        hole_weights_mo = np.zeros(self.n_occ_act)
-        elec_weights_mo = np.zeros(self.n_virt_act)
-
+        """Mulliken populations from coherent reduced hole/electron density matrices."""
         if self.is_uks_sp:
-            # Use the concatenated combined index arrays
-            vi = self._combined_vi
-            va = self._combined_va
+            ham = self.solver.ham
+            x_a = np.zeros((ham.n_occ_act, ham.n_virt_act), dtype=np.result_type(bse_vec, complex))
+            x_b = np.zeros((ham.n_occ_act_b, ham.n_virt_act_b), dtype=np.result_type(bse_vec, complex))
+            x_a[ham.vi_a, ham.va_a] = bse_vec[:ham.dim_a]
+            x_b[ham.vi_b, ham.va_b] = bse_vec[ham.dim_a:]
+            # Partial trace over spin: retain alpha/beta coherences separately,
+            # and do not add amplitudes from different spin channels.
+            d_h = np.zeros((self.n_occ_act, self.n_occ_act), dtype=complex)
+            d_e = np.zeros((self.n_virt_act, self.n_virt_act), dtype=complex)
+            na_o, na_v = ham.n_occ_act, ham.n_virt_act
+            d_h[:na_o, :na_o] = x_a @ x_a.conj().T
+            d_h[na_o:, na_o:] = x_b @ x_b.conj().T
+            d_e[:na_v, :na_v] = x_a.conj().T @ x_a
+            d_e[na_v:, na_v:] = x_b.conj().T @ x_b
         else:
-            vi = self.solver.ham.valid_i
-            va = self.solver.ham.valid_a
+            ham = self.solver.ham
+            x = np.zeros((self.n_occ_act, self.n_virt_act), dtype=np.result_type(bse_vec, complex))
+            x[ham.valid_i, ham.valid_a] = bse_vec
+            d_h = x @ x.conj().T
+            d_e = x.conj().T @ x
 
-        for idx, w in enumerate(weights):
-            i_rel = vi[idx]
-            a_rel = va[idx]
-            hole_weights_mo[i_rel] += w
-            elec_weights_mo[a_rel] += w
-
-        pop_hole_ao = np.sum((self.C_occ  * hole_weights_mo) * self.SC_occ,  axis=1)
-        pop_elec_ao = np.sum((self.C_virt * elec_weights_mo) * self.SC_virt, axis=1)
+        # Algebraically identical to diag(P S), but avoids two n_AO x n_AO
+        # density matrices.  This is crucial for large QDs.
+        pop_hole_ao = coherent_mulliken_ao_populations(self.C_occ, self.SC_occ, d_h)
+        pop_elec_ao = coherent_mulliken_ao_populations(self.C_virt, self.SC_virt, d_e)
 
         pop_h_atom = np.zeros(self.n_atoms)
         pop_e_atom = np.zeros(self.n_atoms)
@@ -122,7 +134,7 @@ class ExcitonAnalyzer:
     def analyze_state(self, bse_vec, energy, f_osc):
         results = {'energy': energy, 'f_osc': f_osc}
 
-        weights = bse_vec**2
+        weights = np.abs(bse_vec)**2
         weights /= (np.sum(weights) + 1e-12)
 
         results['PR'] = 1.0 / np.sum(weights**2)
@@ -408,4 +420,3 @@ def plot_analysis_summary(analysis_results, physics_metrics=None, filename=None,
 
     if show:
         fig.show()
-

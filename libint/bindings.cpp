@@ -106,6 +106,18 @@ PYBIND11_MODULE(libint_cpp, m)
   },
   py::arg("shells"), py::arg("n_ao"), py::arg("n_prj"), py::arg("nthreads") = 1);
 
+  m.def("cross_overlap_geometries",
+        [](py::list py_shells1, py::list py_shells2, int nthreads) {
+          auto shells1 = convert_shells(py_shells1);
+          auto shells2 = convert_shells(py_shells2);
+          libint2::initialize();
+          Matrix S = licpp::cross_overlap_geometries(shells1, shells2, nthreads);
+          libint2::finalize();
+          return S;
+        },
+        py::arg("shells1"), py::arg("shells2"), py::arg("nthreads") = 1,
+        "Computes cross-overlap between two different geometries in the same basis set");
+
   m.def("dipole",
         [](py::list py_shells, std::array<double,3> origin, int nthreads) {
           auto shells = convert_shells(py_shells);

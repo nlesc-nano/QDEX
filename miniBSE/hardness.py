@@ -94,11 +94,91 @@ MATERIAL_ELEMENTS = {
     "PBS":     ["Pb", "S"], "PBSE":    ["Pb", "Se"]
 }
 
-def estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False):
+# Optical Refractive Indices (at optical / band-edge frequencies)
+# Extracted from experimental literature and bulk eps_inf (n_r ≈ sqrt(eps_inf))
+REFRACTIVE_INDEX_DICT = {
+    "CS3BI2BR9": 1.97,  # sqrt(3.9)
+    "CSPBCL3": 2.00,    # sqrt(4.0)
+    "CSPBBR3": 2.19,    # sqrt(4.8)
+    "CSPBI3": 2.26,     # sqrt(5.1)
+    "MAPBI3": 2.55,     # sqrt(6.5)
+    "FAPBI3": 2.49,     # sqrt(6.2)
+    "ZNS": 2.26,        # sqrt(5.1)
+    "ZNSE": 2.43,       # sqrt(5.9)
+    "ZNTE": 2.59,       # sqrt(6.7)
+    "CDS": 2.32,        # sqrt(5.4)
+    "CDSE": 2.49,       # sqrt(6.2)
+    "CDTE": 2.66,       # sqrt(7.1)
+    "HGS": 3.36,        # sqrt(11.3)
+    "HGSE": 3.74,       # sqrt(14.0)
+    "HGTE": 3.87,       # sqrt(15.0)
+    "ALP": 2.74,        # sqrt(7.5)
+    "ALAS": 2.86,       # sqrt(8.2)
+    "ALSB": 3.19,       # sqrt(10.2)
+    "GAP": 3.02,        # sqrt(9.1)
+    "GAAS": 3.30,       # sqrt(10.9)
+    "GASB": 3.79,       # sqrt(14.4)
+    "INP": 3.10,        # sqrt(9.6)
+    "INAS": 3.44,       # sqrt(11.8)
+    "INSB": 3.96,       # sqrt(15.7)
+    "PBS": 4.15,        # sqrt(17.2)
+    "PBSE": 4.79,       # sqrt(22.9)
+    "DEFAULT": 2.0
+}
+
+def get_refractive_index(material_name):
+    """Returns the optical refractive index n_r for a given semiconductor material."""
+    mat_key = str(material_name).upper().strip() if material_name else "DEFAULT"
+    if mat_key in REFRACTIVE_INDEX_DICT:
+        return REFRACTIVE_INDEX_DICT[mat_key]
+    if mat_key in MATERIAL_DB:
+        return float(np.sqrt(MATERIAL_DB[mat_key][0]))
+    return REFRACTIVE_INDEX_DICT["DEFAULT"]
+
+
+def compute_radiative_rates(E_ev, f_osc, refractive_index=2.0):
     """
-    Computes the parameter-free Quasiparticle Scissor using tabulated bulk GW data.
-    Uses an exact monomer GW limit (vacuum) to prevent 1/R divergence at ultrasmall sizes,
-    then applies the true solvent dielectric environment (eps_out) to the dampened geometry.
+    Computes Einstein A spontaneous emission rates (s^-1 and fs^-1) from exciton energies (eV)
+    and oscillator strengths f_osc in a dielectric medium of refractive index n_r:
+      k_rad = (2 * n_r * e^4 * E^2 * f) / (4 * pi * eps_0 * m_e * c^3 * hbar^2)
+            = C_rad * n_r * E^2 * f
+    where C_rad = 4.3391988e7 s^-1 eV^-2 (4.3391988e-8 fs^-1 eV^-2).
+    """
+    C_RAD_S = 4.3391988e7  # s^-1 * eV^-2
+    E_arr = np.asarray(E_ev, dtype=np.float64)
+    f_arr = np.asarray(f_osc, dtype=np.float64)
+    k_rad_s = C_RAD_S * refractive_index * (np.maximum(E_arr, 0.0) ** 2) * np.maximum(f_arr, 0.0)
+    k_rad_fs = k_rad_s * 1e-15  # fs^-1
+    return k_rad_s, k_rad_fs
+
+
+def compute_energy_gap_law_rate(E_gap_ev, E_LO_ev=0.018, S_hr=1.0, A_nr=1e13):
+    """
+    Computes multi-phonon non-radiative recombination rate via the Englman-Jortner Energy Gap Law:
+      k_nr = A_nr * exp(-gamma * (E_gap / E_LO))
+    where gamma = ln(E_gap / (S * E_LO)) - 1.
+    """
+    if E_gap_ev <= 0.0 or E_LO_ev <= 0.0:
+        return 0.0, 0.0
+    num_phonons = E_gap_ev / E_LO_ev
+    gamma = max(0.1, np.log(max(num_phonons / max(S_hr, 1e-3), 1.01)) - 1.0)
+    exponent = -gamma * num_phonons
+    exponent = max(-100.0, min(0.0, exponent))
+    k_nr_s = A_nr * np.exp(exponent)
+    k_nr_fs = k_nr_s * 1e-15
+    return k_nr_s, k_nr_fs
+
+def estimate_gw_qp_gap(
+    coords, atom_symbols, material_name, eps_out, return_details=False,
+    regularization_length_ang=1.0, residual_power=2.0, strict=False,
+):
+    """
+    Estimate the PBE-to-QP gap correction from a finite vacuum anchor and a bulk limit.
+
+    The leading dielectric-mismatch term scales as 1/(R + ell).  A faster-decaying
+    anchor residual makes the interpolation continuous and exactly reproduces the
+    finite vacuum anchor at R0.  ``ell`` and ``p`` are model parameters; one anchor
+    and the bulk limit do not determine them uniquely.
     """
     if material_name is None:
         print("  [Warning] Material not specified. Cannot compute GW scaling.")
@@ -144,48 +224,55 @@ def estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_deta
     
     print(f"\n  [Scaled GW Model] Quasiparticle Correction for {m_name}:")
     print(f"    Cluster Radius (R_QD) : {R_QD_ang:.3f} Å")
+    anisotropy = float(metrics.get("anisotropy", 1.0))
+    if anisotropy > 2.0:
+        print(
+            f"    [Size Warning] Principal-axis anisotropy is {anisotropy:.2f}; "
+            "the scalar equivalent-volume radius may be a coarse approximation."
+        )
     print(f"    Bulk PBE Gap          : {gap_pbe_bulk:.3f} eV")
     print(f"    Bulk GW Gap           : {gap_gw_bulk:.3f} eV")
     print(f"    -> Bulk Shift         : {delta_bulk_qp:+.3f} eV")
    
-    # --- 2. Vacuum Monomer Anchor (Geometric Damping) ---
-    gamma = 0.0
-    kappa_vac = 0.0        # Initialize here for scope
-    sigma_max_vac = 0.0    # Initialize here for scope
-    
-    if has_monomer_data and gap_gw_mono > 0:
-        # Kappa in pure vacuum (eps_out = 1.0)
-        kappa_vac = IMAGE_CHARGE_CONST_EV_ANG * (1.0 - (1.0 / eps_inf))
+    ell = float(regularization_length_ang)
+    p = float(residual_power)
+    if ell < 0.0:
+        raise ValueError("regularization_length_ang must be non-negative")
+    if p <= 1.0:
+        raise ValueError("residual_power must be greater than 1")
 
-        # Maximum physical shift at the monomer limit in vacuum
-        sigma_max_vac = (gap_gw_mono - gap_pbe_mono) - delta_bulk_qp
-
-        # Calculate gamma, protecting against unphysical negative damping
-        if sigma_max_vac > 0.0:
-            gamma = max(0.0, (kappa_vac / sigma_max_vac) - R_mono)
-            print(f"    Monomer Anchor (Vac)  : R={R_mono:.2f} Å, dE_max={sigma_max_vac:.3f} eV")
-            print(f"    -> Geometric Damping  : γ = {gamma:.3f} Å")
-        else:
-            print("    -> Geometric Damping  : γ = 0.000 Å (Anomalous Monomer Data)")
-    else:
-        print("    -> Geometric Damping  : γ = 0.000 Å (Using standard 1/R without monomer data)")
-
-    def damped_surface_shift(kappa):
-        if has_monomer_data and gap_gw_mono > 0 and R_QD_ang <= (R_mono + 0.01):
-            return sigma_max_vac * (kappa / kappa_vac) if kappa_vac != 0.0 else 0.0
-        if gamma > 0.0:
-            return kappa / (R_QD_ang + gamma)
-        return kappa / R_QD_ang
-
-    # --- 3. Solvent-Screened Surface Polarization ---
-    # Now use the user's actual solvent (eps_out)
+    # --- 2. Anchor-constrained finite-size correction ---
+    kappa_vac = IMAGE_CHARGE_CONST_EV_ANG * (1.0 - (1.0 / eps_inf))
     kappa_solvent = IMAGE_CHARGE_CONST_EV_ANG * ((1.0 / eps_out) - (1.0 / eps_inf))
+    anchor_residual = 0.0
+    anchor_gap_shift = None
+    radius_used = R_QD_ang
 
-    # NEW: HARD CLAMP AT THE MONOMER LIMIT
-    if has_monomer_data and gap_gw_mono > 0 and R_QD_ang <= (R_mono + 0.01): 
-        print(f"    -> Monomer Limit Reached: Clamping to exact CP2K monomer shift.")
-    sigma_pol = damped_surface_shift(kappa_solvent)
-    sigma_pol_vac = damped_surface_shift(kappa_vac)
+    if has_monomer_data and gap_gw_mono > 0.0:
+        anchor_gap_shift = gap_gw_mono - gap_pbe_mono
+        anchor_residual = (
+            anchor_gap_shift - delta_bulk_qp - kappa_vac / (R_mono + ell)
+        )
+        if R_QD_ang < R_mono - 1.0e-8:
+            message = (
+                f"Target radius {R_QD_ang:.3f} Å is below the finite-anchor radius "
+                f"{R_mono:.3f} Å; extrapolation is disabled."
+            )
+            if strict:
+                raise ValueError(message)
+            print(f"    [Warning] {message} Using R=R0 for the QP model.")
+            radius_used = R_mono
+
+        residual = anchor_residual * (R_mono / radius_used) ** p
+        sigma_pol = kappa_solvent / (radius_used + ell) + residual
+        sigma_pol_vac = kappa_vac / (radius_used + ell) + residual
+        print(f"    Finite Vacuum Anchor : R0={R_mono:.3f} Å, gap shift={anchor_gap_shift:+.3f} eV")
+        print(f"    Anchor Residual A    : {anchor_residual:+.3f} eV (ell={ell:.3f} Å, p={p:.3f})")
+    else:
+        # No finite anchor is available; retain the correct bulk and dielectric limits.
+        sigma_pol = kappa_solvent / (radius_used + ell)
+        sigma_pol_vac = kappa_vac / (radius_used + ell)
+        print("    [Warning] No finite-QD GW anchor; using only the regularized asymptotic term.")
 
     print(f"    Solvent Dielectric    : eps_out = {eps_out:.2f}, eps_inf = {eps_inf:.2f}")
     print(f"    -> Polarization Shift : {sigma_pol:+.3f} eV")
@@ -195,9 +282,14 @@ def estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_deta
     print(f"    ==> Total GW Scissor  : {total_scissor:+.3f} eV\n")
 
     details = {
-        "qp_model": "scaled_gw_hardness_dictionary",
+        "qp_model": "anchor_scaled_pbe_to_qp_model",
         "material": m_name,
         "cluster_radius_ang": float(R_QD_ang),
+        "radius_definition_version": metrics.get("radius_definition_version"),
+        "selected_atom_indices": metrics.get("selected_atom_indices"),
+        "principal_extents_ang": metrics.get("principal_extents_ang"),
+        "anisotropy_ratio": metrics.get("anisotropy_ratio"),
+        "surface_offset_ang": metrics.get("surface_offset_ang"),
         "eps_out": float(eps_out),
         "eps_inf": float(eps_inf),
         "bulk_pbe_gap_ev": float(gap_pbe_bulk),
@@ -207,8 +299,17 @@ def estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_deta
         "monomer_radius_ang": float(R_mono) if has_monomer_data else None,
         "monomer_pbe_gap_ev": float(gap_pbe_mono) if has_monomer_data else None,
         "monomer_gw_gap_ev": float(gap_gw_mono) if has_monomer_data else None,
-        "monomer_extra_vacuum_shift_ev": float(sigma_max_vac) if has_monomer_data else None,
-        "geometric_damping_gamma_ang": float(gamma),
+        "anchor_pbe_homo_ev": float(pbe_h) if has_monomer_data else None,
+        "anchor_pbe_lumo_ev": float(pbe_l) if has_monomer_data else None,
+        "anchor_qp_homo_ev": float(gw_h) if has_monomer_data else None,
+        "anchor_qp_lumo_ev": float(gw_l) if has_monomer_data else None,
+        "pbe_to_qp_homo_shift_ev": float(gw_h - pbe_h) if has_monomer_data else None,
+        "pbe_to_qp_lumo_shift_ev": float(gw_l - pbe_l) if has_monomer_data else None,
+        "anchor_gap_shift_ev": float(anchor_gap_shift) if anchor_gap_shift is not None else None,
+        "regularization_length_ang": ell,
+        "residual_power": p,
+        "anchor_residual_ev": float(anchor_residual),
+        "radius_used_ang": float(radius_used),
         "kappa_vacuum_ev_ang": float(kappa_vac),
         "kappa_solvent_ev_ang": float(kappa_solvent),
         "finite_size_shift_vacuum_ev": float(sigma_pol_vac),
@@ -245,31 +346,58 @@ def compute_delta_xc(material):
     return max(delta_xc, 0.0)
 
 def get_cluster_size_metrics(coords_ang, atom_symbols=None, material_name=None):
-    """Calculates size using Axis-Aligned Bounding Box (ideal for lattice-cut QDs)."""
+    """Return rotation/translation-invariant size metrics for selected inorganic atoms."""
     coords = np.asarray(coords_ang, dtype=float)
+    selected_indices = np.arange(len(coords), dtype=int)
 
     if atom_symbols is not None and material_name is not None:
         m_name = material_name.upper()
         if 'MATERIAL_ELEMENTS' in globals() and m_name in MATERIAL_ELEMENTS:
             core_elements = [el.lower() for el in MATERIAL_ELEMENTS[m_name]]
-            core_coords = [coords[i] for i, sym in enumerate(atom_symbols) if sym.lower() in core_elements]
+            selected_indices = np.array(
+                [i for i, sym in enumerate(atom_symbols) if sym.lower() in core_elements],
+                dtype=int,
+            )
+            core_coords = coords[selected_indices]
             if len(core_coords) > 0:
                 coords = np.array(core_coords)
 
     if len(coords) < 2:
-        return {'R_eff_hull': 1.0, 'diameter_hull': 2.0}
+        return {
+            'R_eff_hull': 1.0, 'diameter_hull': 2.0,
+            'selected_atom_indices': selected_indices.tolist(),
+            'radius_definition_version': 'convex_hull_equivalent_volume_v1',
+            'principal_extents_ang': [0.0, 0.0, 0.0], 'anisotropy_ratio': 1.0,
+        }
 
-    # Blazing fast: Calculate peak-to-peak distance directly along X, Y, and Z axes
-    spans = np.ptp(coords, axis=0)
+    centered = coords - np.mean(coords, axis=0)
+    _, _, vh = np.linalg.svd(centered, full_matrices=False)
+    principal_coords = centered @ vh.T
+    extents = np.ptp(principal_coords, axis=0)
+    positive_extents = extents[extents > 1.0e-12]
+    anisotropy = float(np.max(positive_extents) / np.min(positive_extents)) if len(positive_extents) else 1.0
 
-    # Add 2.5 Å for the physical outer electron cloud (van der Waals radii)
-    spans += VDW_SURFACE_ANG
+    try:
+        hull = ConvexHull(coords)
+        volume = float(hull.volume)
+        radius_geom = (3.0 * volume / (4.0 * np.pi)) ** (1.0 / 3.0)
+    except Exception:
+        # Degenerate (linear/coplanar) selections have no 3-D hull volume.
+        radius_geom = float(np.max(np.linalg.norm(centered, axis=1)))
 
-    # The effective diameter is the average of length, width, and height
-    avg_diameter = np.mean(spans)
-    R_eff = avg_diameter / 2.0
-
-    return {'R_eff_hull': float(R_eff), 'diameter_hull': float(avg_diameter)}
+    # VDW_SURFACE_ANG is a diameter allowance in the legacy model; apply half once.
+    surface_offset = 0.5 * VDW_SURFACE_ANG
+    radius_eff = radius_geom + surface_offset
+    return {
+        'R_eff_hull': float(radius_eff),
+        'diameter_hull': float(2.0 * radius_eff),
+        'hull_volume_ang3': float(volume) if 'volume' in locals() else 0.0,
+        'surface_offset_ang': float(surface_offset),
+        'selected_atom_indices': selected_indices.tolist(),
+        'radius_definition_version': 'convex_hull_equivalent_volume_v1',
+        'principal_extents_ang': [float(x) for x in extents],
+        'anisotropy_ratio': anisotropy,
+    }
 
 # =====================================================================
 # Model 1: Classic MNOK Kernel (sTDA style)
@@ -298,14 +426,9 @@ def build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT):
     
     # Apply short-range beta stiffening to the diagonal
     if beta > 0.0:
-        for i, sym in enumerate(atom_symbols):
-            sym_lower = sym.lower()
-            eta_A = etas_ev[i]
-            # Fetch Mann's F0, fallback to 2.1 * eta_A if exotic element
-            u_bare_A = U_BARE_DICT.get(sym_lower, 2.1 * eta_A)
-            
-            # The diagonal perfectly interpolates between relaxed hardness and bare Hubbard U
-            gamma_mat[i, i] = eta_A + beta * (u_bare_A - eta_A)
+        raise ValueError(
+            "beta > 0 is disabled: the bare on-site U table has not been defined and validated"
+        )
             
     return gamma_mat
 
@@ -327,7 +450,6 @@ def build_resta_mnok(atom_symbols, coords, alpha, material_name, eps_out=2.0, et
     entry = MATERIAL_DB.get(m_name, MATERIAL_DB["DEFAULT"])
 
     eps_inf_bulk = entry[0]   # electronic dielectric
-    eps_0_bulk   = entry[4]   # static dielectric
 
     # --------------------------------------------------
     # 2. Core atoms for geometry
@@ -358,23 +480,14 @@ def build_resta_mnok(atom_symbols, coords, alpha, material_name, eps_out=2.0, et
     lambda_s_ang = (1.0 / k_s_au) * BOHR_TO_ANG if k_s_au > 0 else 0.0
 
     # --------------------------------------------------
-    # 4. Dielectric confinement (Self-Consistent Scaling)
-    # --------------------------------------------------
-    # Replace Exciton Bohr radius (a_B) with the Plasma Screening Length (lambda_s)
     confinement_ratio = R_QD_ang / lambda_s_ang if lambda_s_ang > 0 else np.inf
 
-    # Electronic screening (used for QP correction)
-    eps_eff_inf = eps_out + (eps_inf_bulk - eps_out) / (1.0 + lambda_s_ang / R_QD_ang)
-
-    # Static screening (used for BSE electron-hole interaction)
-    eps_eff_0 = eps_out + (eps_0_bulk - eps_out) / (1.0 + lambda_s_ang / R_QD_ang)
-
-    print("\n    [Kernel: Dual-Screening Resta-MNOK]")
+    print("\n    [Kernel: Electronic Resta-MNOK]")
     print(f"    Material            = {m_name}")
     print(f"    R_QD (hull_eff)     = {R_QD_ang:.3f} Å")
     print(f"    R / lambda_s        = {confinement_ratio:.3f}")
-    print(f"    ε_eff (Electronic)  = {eps_eff_inf:.3f} (bulk limit {eps_inf_bulk})")
-    print(f"    ε_eff (Static)      = {eps_eff_0:.3f} (bulk limit {eps_0_bulk})")
+    print(f"    epsilon_in           = {eps_inf_bulk:.3f} (electronic/high-frequency)")
+    print(f"    epsilon_out          = {eps_out:.3f} (QP model only; not used in RESTA)")
     print(f"    Screening length    = {lambda_s_ang/BOHR_TO_ANG:.3f} a.u. ({lambda_s_ang:.3f} Å)")
     print()
 
@@ -391,15 +504,15 @@ def build_resta_mnok(atom_symbols, coords, alpha, material_name, eps_out=2.0, et
     mnok_denom_au = np.sqrt(r_mat_au**2 + damp_mat_au**2)
 
     # --------------------------------------------------
-    # 6. Dual screening kernels
+    # 6. Electronic screened direct kernel.  The environment is intentionally
+    # absent here; eps_out is handled only by the QP polarization model.
     # --------------------------------------------------
-    c_inf = 1.0 / eps_eff_inf
-    gamma_qp_au = (c_inf + (1.0 - c_inf) * np.exp(-k_s_au * r_mat_au)) / mnok_denom_au
-
-    c_static = 1.0 / eps_eff_0
-    gamma_bse_au = (c_static + (1.0 - c_static) * np.exp(-k_s_au * r_mat_au)) / mnok_denom_au
-
-    return gamma_qp_au * HA_TO_EV, gamma_bse_au * HA_TO_EV
+    c_inf = 1.0 / eps_inf_bulk
+    w_resta_au = (c_inf + (1.0 - c_inf) * np.exp(-k_s_au * r_mat_au)) / mnok_denom_au
+    w_resta_ev = w_resta_au * HA_TO_EV
+    # Preserve the historical two-return-value API.  Both are electronic W;
+    # the first is used only by the explicitly experimental COHSEX path.
+    return w_resta_ev, w_resta_ev
 
 
 def estimate_brus_qp_gap(material_name, coords, atom_symbols):

@@ -39,8 +39,9 @@ def read_xyz(path):
 import collections
 import numpy as np
 
-def parse_basis(fname, wanted):
+def parse_basis(fname, wanted, required_elements=None):
     basis = collections.defaultdict(list)
+    required_elements = None if required_elements is None else set(required_elements)
     
     with open(fname) as f:
         # Filter out comments and completely empty lines upfront
@@ -56,8 +57,18 @@ def parse_basis(fname, wanted):
         elem = parts[0]
         bnames = parts[1:]
         
-        # THE FIX: Allow partial matching so "DZVP" matches "DZVP-q13"
-        match_found = any(b.startswith(wanted) for b in bnames)
+        # Prefer an exact CP2K basis name.  A unique prefix remains supported
+        # for compatibility with element-specific suffixes such as ``-q13``.
+        relevant_element = required_elements is None or elem in required_elements
+        matching_names = (
+            [wanted] if wanted in bnames else [b for b in bnames if b.startswith(wanted)]
+        ) if relevant_element else []
+        if len(matching_names) > 1:
+            raise ValueError(
+                f"Ambiguous basis prefix '{wanted}' for element {elem}: "
+                + ", ".join(matching_names)
+            )
+        match_found = bool(matching_names)
         
         if not match_found:
             # Safely skip this block
@@ -74,16 +85,12 @@ def parse_basis(fname, wanted):
             
         # We found a matching element + basis name.
         if elem in basis:
-            try:
-                nset = int(next(it).split()[0])
-                for _ in range(nset):
-                    hdr = next(it).split()
-                    nexp = int(hdr[3])
-                    for _ in range(nexp):
-                        next(it)
-            except StopIteration:
-                break
-            continue
+            raise ValueError(
+                f"Ambiguous basis selection for element {elem}: more than one block matches '{wanted}'. "
+                "Use the complete CP2K basis name."
+            )
+
+        print(f"  [Basis] {elem}: selected {matching_names[0]}")
 
         # Extract the matched basis
         try:
@@ -198,33 +205,189 @@ def _extract_numbers(s):
     return [float(t.replace("D", "E").replace("d", "E")) for t in toks]
 
 
-def read_mos_auto(path, n_ao_total, verbose=False):
+import struct
+
+def read_mos_mbse(path, n_ao_total, verbose=False):
+    """
+    Reads molecular orbitals from a binary .mbse (MBSEMO) file.
+
+    Format specification (MBSEMO2):
+      - 8 bytes magic: b'MBSEMO2\\x00' (or b'MBSEMO1\\x00')
+      - 4 bytes uint32: version (e.g. 2)
+      - 4 bytes uint32: endianness marker (0x01020304)
+      - 8 bytes uint64: header_size (88)
+      - 8 bytes uint64: n_ao
+      - 8 bytes uint64: n_mo
+      - 8 bytes uint64: n_occ
+      - 8 bytes uint64: n_elec
+      - 8 bytes uint64: flags
+      - 8 bytes uint64: offset_C
+      - 8 bytes uint64: offset_eps
+      - 8 bytes uint64: offset_occ
+      - Data at offset_C: n_ao * n_mo float64s in Fortran (column-major) order: C[:, i] for MO i
+      - Data at offset_eps: n_mo float64s
+      - Data at offset_occ: n_mo float64s
+    """
+    t0 = time.perf_counter()
+    with open(path, "rb") as f:
+        header = f.read(88)
+        if len(header) < 88:
+            raise ValueError(f"Corrupt or truncated MBSE MO file '{path}': header < 88 bytes.")
+
+        magic = header[:8]
+        if not magic.startswith(b"MBSEMO"):
+            raise ValueError(f"Invalid MBSE MO magic header in '{path}': expected b'MBSEMO...', got {magic}")
+
+        version, endian = struct.unpack("<II", header[8:16])
+        header_size, n_ao, n_mo, n_occ, n_elec, flags, off_C, off_eps, off_occ = struct.unpack("<9Q", header[16:88])
+
+        if n_ao != n_ao_total:
+            raise ValueError(
+                f"AO count mismatch in {path}: file contains {n_ao} AOs, "
+                f"but current basis set requires {n_ao_total} AOs."
+            )
+
+        f.seek(off_C)
+        raw_C = np.fromfile(f, dtype=np.float64, count=n_ao * n_mo)
+        if raw_C.size != n_ao * n_mo:
+            raise ValueError(f"Truncated C matrix in {path}: expected {n_ao * n_mo} elements, got {raw_C.size}.")
+        C = raw_C.reshape((n_ao, n_mo), order="F")
+
+        f.seek(off_eps)
+        eps = np.fromfile(f, dtype=np.float64, count=n_mo)
+        if eps.size != n_mo:
+            raise ValueError(f"Truncated eps array in {path}: expected {n_mo} elements, got {eps.size}.")
+
+        f.seek(off_occ)
+        occ = np.fromfile(f, dtype=np.float64, count=n_mo)
+        if occ.size != n_mo:
+            raise ValueError(f"Truncated occ array in {path}: expected {n_mo} elements, got {occ.size}.")
+
+    if verbose:
+        dt = time.perf_counter() - t0
+        size_gib = os.path.getsize(path) / (1024.0 ** 3)
+        rate = size_gib / dt if dt > 0.0 else float("inf")
+        print(
+            f"[MOs:MBSE] Loaded {size_gib:.2f} GiB in {dt:.4f} s "
+            f"({rate:.2f} GiB/s) | C shape {C.shape} (n_occ={n_occ}, n_mo={n_mo})"
+        )
+
+    return C, eps, occ
+
+
+def write_mos_mbse(path, C, eps, occ, n_occ=None, n_elec=None, flags=1, version=2):
+    """
+    Writes molecular orbitals to a binary .mbse (MBSEMO2) file.
+    """
+    C = np.asfortranarray(C, dtype=np.float64)
+    eps = np.asarray(eps, dtype=np.float64)
+    occ = np.asarray(occ, dtype=np.float64)
+    n_ao, n_mo = C.shape
+
+    if eps.shape != (n_mo,):
+        raise ValueError(f"eps shape {eps.shape} does not match n_mo {n_mo}")
+    if occ.shape != (n_mo,):
+        raise ValueError(f"occ shape {occ.shape} does not match n_mo {n_mo}")
+
+    if n_occ is None:
+        n_occ = int(np.sum(occ > 0.5))
+    if n_elec is None:
+        n_elec = int(np.round(np.sum(occ)))
+
+    header_size = 88
+    off_C = header_size
+    off_eps = off_C + n_ao * n_mo * 8
+    off_occ = off_eps + n_mo * 8
+
+    magic = f"MBSEMO{version}\x00".encode("ascii")[:8]
+    endian = 0x01020304
+
+    with open(path, "wb") as f:
+        f.write(magic)
+        f.write(struct.pack("<II", version, endian))
+        f.write(struct.pack("<9Q", header_size, n_ao, n_mo, n_occ, n_elec, flags, off_C, off_eps, off_occ))
+        f.write(C.tobytes(order="F"))
+        f.write(eps.tobytes())
+        f.write(occ.tobytes())
+
+
+def read_mos_auto(path, n_ao_total, verbose=False, cache=False):
 
     ext = os.path.splitext(path)[-1].lower()
 
     if ext == ".npz":
-        d = np.load(path)
-        C = csr_matrix((d["data"], d["indices"], d["indptr"]),
-                       shape=d["shape"])
-        eps = d["eps"]
-        occ = d["occ"]
+        d = np.load(path, allow_pickle=False)
+        if "C" in d.files:
+            C = d["C"]
+        else:
+            C = csr_matrix((d["data"], d["indices"], d["indptr"]),
+                           shape=d["shape"])
+        eps, occ = d["eps"], d["occ"]
 
         if verbose:
             print(f"[MOs] Loaded NPZ: {C.shape}")
 
         return C, eps, occ
 
-    return read_mos_txt_cc(path, n_ao_total, verbose=verbose)
+    if ext == ".mbse":
+        return read_mos_mbse(path, n_ao_total, verbose=verbose)
 
-def read_mos_uks(path_alpha, path_beta, n_ao, verbose=False):
+    # Check magic header for extension-agnostic detection
+    if os.path.exists(path) and os.path.getsize(path) >= 88:
+        try:
+            with open(path, "rb") as f:
+                head = f.read(6)
+            if head == b"MBSEMO":
+                return read_mos_mbse(path, n_ao_total, verbose=verbose)
+        except Exception:
+            pass
+
+    cache_path = f"{path}.minibse.npz"
+    source_stat = os.stat(path)
+    if cache and os.path.exists(cache_path):
+        with np.load(cache_path, allow_pickle=False) as d:
+            valid = (
+                int(d["source_size"]) == source_stat.st_size
+                and int(d["source_mtime_ns"]) == source_stat.st_mtime_ns
+                and int(d["n_ao_total"]) == n_ao_total
+            )
+            if valid:
+                t0 = time.perf_counter()
+                C, eps, occ = d["C"], d["eps"], d["occ"]
+                if verbose:
+                    print(
+                        f"[MOs:cache] Loaded {cache_path} in {time.perf_counter() - t0:.4f} s "
+                        f"| C shape {C.shape}"
+                    )
+                return C, eps, occ
+        if verbose:
+            print(f"[MOs:cache] Ignoring stale cache {cache_path}")
+
+    C, eps, occ = read_mos_txt_cc(path, n_ao_total, verbose=verbose)
+    if cache:
+        t0 = time.perf_counter()
+        np.savez(
+            cache_path, C=C, eps=eps, occ=occ,
+            source_size=np.int64(source_stat.st_size),
+            source_mtime_ns=np.int64(source_stat.st_mtime_ns),
+            n_ao_total=np.int64(n_ao_total),
+        )
+        if verbose:
+            print(
+                f"[MOs:cache] Wrote reusable binary cache {cache_path} "
+                f"in {time.perf_counter() - t0:.2f} s"
+            )
+    return C, eps, occ
+
+def read_mos_uks(path_alpha, path_beta, n_ao, verbose=False, cache=False):
     """
     Reads alpha and beta MO files from a CP2K UKS calculation.
     Returns:
         C_alpha, eps_alpha, occ_alpha  — alpha spin channel
         C_beta,  eps_beta,  occ_beta   — beta spin channel
     """
-    C_alpha, eps_alpha, occ_alpha = read_mos_auto(path_alpha, n_ao, verbose=verbose)
-    C_beta,  eps_beta,  occ_beta  = read_mos_auto(path_beta,  n_ao, verbose=verbose)
+    C_alpha, eps_alpha, occ_alpha = read_mos_auto(path_alpha, n_ao, verbose=verbose, cache=cache)
+    C_beta,  eps_beta,  occ_beta  = read_mos_auto(path_beta,  n_ao, verbose=verbose, cache=cache)
     return C_alpha, eps_alpha, occ_alpha, C_beta, eps_beta, occ_beta
 
 
@@ -236,7 +399,12 @@ def read_mos_txt_cc(path, n_ao_total, verbose=False):
     
     if verbose:
         dt = time.perf_counter() - t0
-        print(f"[MOs] Parsed in {dt:.4f} s | C shape {C.shape}")
+        size_gib = os.path.getsize(path) / (1024.0 ** 3)
+        rate = size_gib / dt if dt > 0.0 else float("inf")
+        print(
+            f"[MOs:C++] Parsed {size_gib:.2f} GiB in {dt:.4f} s "
+            f"({rate:.2f} GiB/s) | C shape {C.shape}"
+        )
         
     return C, eps, occ
 
@@ -315,4 +483,3 @@ def get_vxc_ao_matrix(txt_path, n_ao):
         f.write(V_ao.tobytes()) # Zero-overhead raw dump
         
     return V_ao
-

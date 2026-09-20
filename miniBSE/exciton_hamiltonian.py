@@ -2,21 +2,27 @@ import os
 import numpy as np
 import time
 import sys
-from miniBSE.io_utils import get_vxc_ao_matrix
 from miniBSE.constants import HA_TO_EV
+from miniBSE.device_utils import is_gpu, to_tensor, to_numpy, has_torch
 
 class ExcitonHamiltonian:
     def __init__(self, C, eps, overlap, atom_ao_ranges, homo_index, n_occ, n_virt, scissor_ev, gamma_qp, gamma_bse, material=None, 
                  gamma_bare=None, gamma_penalty=None, alpha=1.0, include_exchange=False, estimate_qp=False, e_thresh=None, f_thresh=0.0, mu_ia_x=None, mu_ia_y=None, mu_ia_z=None, 
                  charge_type='mulliken', soc_U=None, soc_E=None, device="numpy", precomputed_sigma=None,
                  vxc_ao_path=None, nthreads=1, spin='singlet', C_beta=None, eps_beta=None, homo_index_beta=None,
-                 n_occ_beta=None, n_virt_beta=None):
+                 n_occ_beta=None, n_virt_beta=None, excitation_mode="bse"):
         
+        self.excitation_mode = str(excitation_mode).lower()
+        self.diagonal_mode = (self.excitation_mode in {"diagonal_bse", "independent_dft", "independent_qp"})
         self.include_exchange = include_exchange
+        self.include_direct_eh = include_exchange
         self.estimate_qp = estimate_qp
         self.gamma_bse = gamma_bse
+        self.W_resta = gamma_bse
         self.gamma_qp = gamma_qp
-        self.gamma = gamma_bse
+        # Historical code called the transition-density term J and screened it.
+        # In BSE/TDA it is the bare exchange/local-field term Kx.
+        self.gamma = gamma_bare if gamma_bare is not None else gamma_bse
         self.spin = spin
         self.material = material
         self.gamma_bare = gamma_bare
@@ -25,6 +31,7 @@ class ExcitonHamiltonian:
         self.soc_flag = (soc_U is not None and soc_E is not None)
         self.overlap = overlap                
         self.atom_ao_ranges = atom_ao_ranges
+        self.device = device
 
         # --------------------------------------------------
         # UKS SPIN-PRESERVING (Manifold B): Coupled alpha-alpha + beta-beta
@@ -37,7 +44,8 @@ class ExcitonHamiltonian:
                 n_virt_beta=n_virt_beta if n_virt_beta is not None else n_virt,
                 overlap=overlap, atom_ao_ranges=atom_ao_ranges, scissor_ev=scissor_ev,
                 e_thresh=e_thresh, f_thresh=f_thresh, mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z,
-                charge_type=charge_type, device=device, soc_U=soc_U, soc_E=soc_E
+                charge_type=charge_type, device=device, soc_U=soc_U, soc_E=soc_E,
+                excitation_mode=excitation_mode
             )
             return
         
@@ -79,31 +87,55 @@ class ExcitonHamiltonian:
         if self.include_exchange or self.soc_flag or (self.estimate_qp and precomputed_sigma is None):
             print(f"\n  Building hole/electron/transition density blocks for Active Space...")
             t_den = time.time()
-            self.q_occ = np.zeros((n_occ_act, n_occ_act, self.n_atoms))
-            self.q_virt = np.zeros((n_virt_act, n_virt_act, self.n_atoms))
-            self.q_ov = np.zeros((n_occ_act, n_virt_act, self.n_atoms))
+            if self.diagonal_mode:
+                # LOW-MEMORY DIAGONAL PATH: 1D Orbital Densities Only (O(N) vs O(N^2))
+                SC_occ = overlap @ C_occ_act
+                SC_virt = overlap @ C_virt_act
+                if hasattr(SC_occ, "toarray"): SC_occ = SC_occ.toarray()
+                if hasattr(SC_virt, "toarray"): SC_virt = SC_virt.toarray()
 
-            SC_occ = overlap @ C_occ_act
-            SC_virt = overlap @ C_virt_act
-            if hasattr(SC_occ, "toarray"): SC_occ = SC_occ.toarray()
-            if hasattr(SC_virt, "toarray"): SC_virt = SC_virt.toarray()
+                self.q_occ_diag = np.zeros((n_occ_act, self.n_atoms), dtype=np.float64)
+                self.q_virt_diag = np.zeros((n_virt_act, self.n_atoms), dtype=np.float64)
 
-            for A, (a0, a1) in enumerate(atom_ao_ranges):
-                Co = C_occ_act[a0:a1, :]
-                SCo = SC_occ[a0:a1, :]
-                self.q_occ[:, :, A] = 0.5 * (Co.T @ SCo + SCo.T @ Co)
+                for A, (a0, a1) in enumerate(atom_ao_ranges):
+                    Co = C_occ_act[a0:a1, :]
+                    SCo = SC_occ[a0:a1, :]
+                    self.q_occ_diag[:, A] = np.sum(Co * SCo, axis=0)
 
-                Cv = C_virt_act[a0:a1, :]
-                SCv = SC_virt[a0:a1, :]
-                self.q_virt[:, :, A] = 0.5 * (Cv.T @ SCv + SCv.T @ Cv)
+                    Cv = C_virt_act[a0:a1, :]
+                    SCv = SC_virt[a0:a1, :]
+                    self.q_virt_diag[:, A] = np.sum(Cv * SCv, axis=0)
 
-                self.q_ov[:, :, A] = 0.5 * (Co.T @ SCv + SCo.T @ Cv)
+                if self.include_exchange:
+                    self.W_virt_diag = self.q_virt_diag @ self.W_resta.T
 
-            if self.include_exchange:
-                qv = self.q_virt.reshape(n_virt_act * n_virt_act, self.n_atoms)
-                self.W_virt = (qv @ self.gamma.T).reshape(n_virt_act, n_virt_act, self.n_atoms)
+                print(f"    Diagonal density blocks built in {time.time() - t_den:2.4f} s")
+            else:
+                self.q_occ = np.zeros((n_occ_act, n_occ_act, self.n_atoms))
+                self.q_virt = np.zeros((n_virt_act, n_virt_act, self.n_atoms))
+                self.q_ov = np.zeros((n_occ_act, n_virt_act, self.n_atoms))
 
-            print(f"    Blocks built in {time.time() - t_den:2.4f} s")
+                SC_occ = overlap @ C_occ_act
+                SC_virt = overlap @ C_virt_act
+                if hasattr(SC_occ, "toarray"): SC_occ = SC_occ.toarray()
+                if hasattr(SC_virt, "toarray"): SC_virt = SC_virt.toarray()
+
+                for A, (a0, a1) in enumerate(atom_ao_ranges):
+                    Co = C_occ_act[a0:a1, :]
+                    SCo = SC_occ[a0:a1, :]
+                    self.q_occ[:, :, A] = 0.5 * (Co.T @ SCo + SCo.T @ Co)
+
+                    Cv = C_virt_act[a0:a1, :]
+                    SCv = SC_virt[a0:a1, :]
+                    self.q_virt[:, :, A] = 0.5 * (Cv.T @ SCv + SCv.T @ Cv)
+
+                    self.q_ov[:, :, A] = 0.5 * (Co.T @ SCv + SCo.T @ Cv)
+
+                if self.include_exchange:
+                    qv = self.q_virt.reshape(n_virt_act * n_virt_act, self.n_atoms)
+                    self.W_virt = (qv @ self.W_resta.T).reshape(n_virt_act, n_virt_act, self.n_atoms)
+
+                print(f"    Blocks built in {time.time() - t_den:2.4f} s")
 
         if self.estimate_qp:
             if precomputed_sigma is not None:
@@ -151,8 +183,8 @@ class ExcitonHamiltonian:
                 W = self.gamma_qp
                 
                 # Fully Vectorized COHSEX Computation
-                q_occ_diag = np.array([self.q_occ[i, i, :] for i in range(self.n_occ_act)])
-                q_virt_diag = np.array([self.q_virt[a, a, :] for a in range(self.n_virt_act)])
+                q_occ_diag = self.q_occ_diag if self.diagonal_mode else np.array([self.q_occ[i, i, :] for i in range(self.n_occ_act)])
+                q_virt_diag = self.q_virt_diag if self.diagonal_mode else np.array([self.q_virt[a, a, :] for a in range(self.n_virt_act)])
 
                 coh_occ = 0.5 * np.einsum('iA,AB,iB->i', q_occ_diag, dW, q_occ_diag, optimize=True)
                 Wq_occ = np.einsum('AB,ijB->ijA', W, q_act_occ_val, optimize=True)
@@ -190,8 +222,8 @@ class ExcitonHamiltonian:
                 print(f"       LUMO COH: {lumo_coh:8.4f} eV  |  SEX: {lumo_sex:8.4f} eV  |  SIC: +{lumo_sic:8.4f} eV")
                 # --- PROOF OF LOCALIZATION (IPR) ---
                 # Extract HOMO (last occupied) and LUMO (first virtual)
-                q_homo = self.q_occ[-1, -1, :]
-                q_lumo = self.q_virt[0, 0, :]
+                q_homo = self.q_occ_diag[-1, :] if self.diagonal_mode else self.q_occ[-1, -1, :]
+                q_lumo = self.q_virt_diag[0, :] if self.diagonal_mode else self.q_virt[0, 0, :]
                 
                 ipr_homo = np.sum(q_homo ** 2)
                 ipr_lumo = np.sum(q_lumo ** 2)
@@ -210,6 +242,7 @@ class ExcitonHamiltonian:
                 # 3. Exact Vxc Correction from AO Matrix OR HOMO Referencing
                 if vxc_ao_path is not None and os.path.exists(vxc_ao_path):
                     print("\n  [Vxc] Applying Exact State-Dependent Vxc Integrals...")
+                    from miniBSE.io_utils import get_vxc_ao_matrix
                     V_ao = get_vxc_ao_matrix(vxc_ao_path, self.overlap.shape[0])
                     
                     # Fully Vectorized Vxc Projection
@@ -312,6 +345,8 @@ class ExcitonHamiltonian:
         # 3. Feed the corrected QP energies into the diagonal
         self.D_spatial = qp_gap_matrix[self.valid_mask] + scissor_ev
         self.D = self.D_spatial
+        self.D_dft_spatial = dft_gap_matrix[self.valid_mask]
+        self.D_dft = self.D_dft_spatial
 
         print(f"\n  CI Space Truncation:")
         print(f"    Transitions passing Energy Threshold ({e_thresh or 'None'} eV): {n_e_passed}")
@@ -320,53 +355,98 @@ class ExcitonHamiltonian:
         # --------------------------------------------------
         # ULTRA-FAST Charge Construction
         # --------------------------------------------------
-        self.q_flat = np.zeros((self.dim, self.n_atoms), dtype=np.float32)
+        if self.diagonal_mode:
+            chunk_size = 50000
+            self.kd_diag = np.zeros(self.dim, dtype=np.float64)
+            self.kx_diag = np.zeros(self.dim, dtype=np.float64)
 
-        if charge_type == 'mulliken':
-            print(f"  Building transition charges (Atom-by-Atom via {device.upper()})...")
-            
-            if device != "numpy" and device != "cpu":
-                import torch
-                dev = torch.device(device)
-                S_t = torch.tensor(overlap.toarray() if hasattr(overlap, "toarray") else overlap, dtype=torch.float32, device=dev)
-                C_o_t = torch.tensor(C_occ_act, dtype=torch.float32, device=dev)
-                C_v_t = torch.tensor(C_virt_act, dtype=torch.float32, device=dev)
+            if self.include_exchange:
+                # Direct kernel Kd
+                for p0 in range(0, self.dim, chunk_size):
+                    p1 = min(p0 + chunk_size, self.dim)
+                    vi_ch = self.valid_i[p0:p1]
+                    va_ch = self.valid_a[p0:p1]
+                    self.kd_diag[p0:p1] = np.sum(self.q_occ_diag[vi_ch, :] * self.W_virt_diag[va_ch, :], axis=1)
 
-                SC_occ_t = S_t @ C_o_t
-                SC_virt_t = S_t @ C_v_t
+                # Exchange kernel Kx
+                if self.excitation_mode == "diagonal_bse":
+                    factor = 2.0 if self.spin == 'singlet' else 0.0
+                    if factor > 0.0:
+                        print(f"  Building transition charges & exchange in streaming chunks...")
+                        gamma = to_numpy(self.gamma)
+                        SC_occ = overlap @ C_occ_act
+                        SC_virt = overlap @ C_virt_act
+                        if hasattr(SC_occ, "toarray"): SC_occ = SC_occ.toarray()
+                        if hasattr(SC_virt, "toarray"): SC_virt = SC_virt.toarray()
 
-                for A, (a0, a1) in enumerate(atom_ao_ranges):
-                    Ci_A = C_o_t[a0:a1, self.valid_i]
-                    SCa_A = SC_virt_t[a0:a1, self.valid_a]
-                    Ca_A = C_v_t[a0:a1, self.valid_a]
-                    SCi_A = SC_occ_t[a0:a1, self.valid_i]
-                    q_A = 0.5 * torch.sum((Ci_A * SCa_A) + (Ca_A * SCi_A), dim=0)
-                    self.q_flat[:, A] = q_A.cpu().numpy()
-                    
-                if not include_exchange:
-                    del S_t, C_o_t, C_v_t, SC_occ_t, SC_virt_t
-            else:
-                SC_occ = overlap @ C_occ_act
-                SC_virt = overlap @ C_virt_act
-                if hasattr(SC_occ, "toarray"): SC_occ = SC_occ.toarray()
-                if hasattr(SC_virt, "toarray"): SC_virt = SC_virt.toarray()
+                        for p0 in range(0, self.dim, chunk_size):
+                            p1 = min(p0 + chunk_size, self.dim)
+                            vi_ch = self.valid_i[p0:p1]
+                            va_ch = self.valid_a[p0:p1]
+                            q_ch = np.zeros((p1 - p0, self.n_atoms), dtype=np.float64)
+                            for A, (a0, a1) in enumerate(atom_ao_ranges):
+                                Ci_A = C_occ_act[a0:a1, :][:, vi_ch]
+                                SCa_A = SC_virt[a0:a1, :][:, va_ch]
+                                Ca_A = C_virt_act[a0:a1, :][:, va_ch]
+                                SCi_A = SC_occ[a0:a1, :][:, vi_ch]
+                                q_ch[:, A] = 0.5 * (np.sum(Ci_A * SCa_A, axis=0) + np.sum(Ca_A * SCi_A, axis=0))
+                            V_ch = q_ch @ gamma
+                            self.kx_diag[p0:p1] = factor * np.sum(q_ch * V_ch, axis=1)
+
+            print(f"    Charges & diagonal kernels built in {time.time() - start_q:2.4f} s")
+        else:
+            self.q_flat = np.zeros((self.dim, self.n_atoms), dtype=np.float64)
+
+            if charge_type == 'mulliken':
+                print(f"  Building transition charges (Atom-by-Atom via {'GPU' if is_gpu(device) else 'CPU'})...")
                 
-                for A, (a0, a1) in enumerate(atom_ao_ranges):
-                    Ci_A = C_occ_act[a0:a1, :][:, self.valid_i]
-                    SCa_A = SC_virt[a0:a1, :][:, self.valid_a]
-                    Ca_A = C_virt_act[a0:a1, :][:, self.valid_a]
-                    SCi_A = SC_occ[a0:a1, :][:, self.valid_i]
-                    self.q_flat[:, A] = 0.5 * (np.sum(Ci_A * SCa_A, axis=0) + np.sum(Ca_A * SCi_A, axis=0))
+                if is_gpu(device):
+                    import torch
+                    dev = torch.device(device) if isinstance(device, str) else device
+                    S_dense = overlap.toarray() if hasattr(overlap, "toarray") else overlap
+                    S_t = to_tensor(S_dense, dev, dtype=torch.float64)
+                    C_o_t = to_tensor(C_occ_act, dev, dtype=torch.float64)
+                    C_v_t = to_tensor(C_virt_act, dev, dtype=torch.float64)
 
-        elif charge_type == 'lowdin':
-            print(f"  Building transition charges (Atom-by-Atom via Lowdin symmetric orthogonalization)...")
-            from miniBSE.lowdin import build_lowdin_transition_charges_flat
-            S_dense = overlap.toarray() if hasattr(overlap, "toarray") else overlap
-            self.q_flat = build_lowdin_transition_charges_flat(
-                C_occ_act, C_virt_act, S_dense, atom_ao_ranges, self.valid_i, self.valid_a
-            )
+                    SC_occ_t = S_t @ C_o_t
+                    SC_virt_t = S_t @ C_v_t
 
-        print(f"    Charges built in {time.time() - start_q:2.4f} s")
+                    q_flat_t = torch.zeros((self.dim, self.n_atoms), dtype=torch.float64, device=dev)
+                    vi_t = torch.as_tensor(self.valid_i, device=dev, dtype=torch.long)
+                    va_t = torch.as_tensor(self.valid_a, device=dev, dtype=torch.long)
+
+                    for A, (a0, a1) in enumerate(atom_ao_ranges):
+                        Ci_A = C_o_t[a0:a1, vi_t]
+                        SCa_A = SC_virt_t[a0:a1, va_t]
+                        Ca_A = C_v_t[a0:a1, va_t]
+                        SCi_A = SC_occ_t[a0:a1, vi_t]
+                        q_flat_t[:, A] = 0.5 * torch.sum((Ci_A * SCa_A) + (Ca_A * SCi_A), dim=0)
+
+                    self.q_flat = to_numpy(q_flat_t)
+                    if not include_exchange:
+                        del S_t, C_o_t, C_v_t, SC_occ_t, SC_virt_t, q_flat_t
+                else:
+                    SC_occ = overlap @ C_occ_act
+                    SC_virt = overlap @ C_virt_act
+                    if hasattr(SC_occ, "toarray"): SC_occ = SC_occ.toarray()
+                    if hasattr(SC_virt, "toarray"): SC_virt = SC_virt.toarray()
+                    
+                    for A, (a0, a1) in enumerate(atom_ao_ranges):
+                        Ci_A = C_occ_act[a0:a1, :][:, self.valid_i]
+                        SCa_A = SC_virt[a0:a1, :][:, self.valid_a]
+                        Ca_A = C_virt_act[a0:a1, :][:, self.valid_a]
+                        SCi_A = SC_occ[a0:a1, :][:, self.valid_i]
+                        self.q_flat[:, A] = 0.5 * (np.sum(Ci_A * SCa_A, axis=0) + np.sum(Ca_A * SCi_A, axis=0))
+
+            elif charge_type == 'lowdin':
+                print(f"  Building transition charges (Atom-by-Atom via Lowdin symmetric orthogonalization)...")
+                from miniBSE.lowdin import build_lowdin_transition_charges_flat
+                S_dense = overlap.toarray() if hasattr(overlap, "toarray") else overlap
+                self.q_flat = build_lowdin_transition_charges_flat(
+                    C_occ_act, C_virt_act, S_dense, atom_ao_ranges, self.valid_i, self.valid_a, device=device
+                )
+
+            print(f"    Charges built in {time.time() - start_q:2.4f} s")
 
         # --------------------------------------------------
         # SPIN-ORBIT COUPLING (SPINOR) TRANSFORMATION
@@ -388,6 +468,7 @@ class ExcitonHamiltonian:
         n_atoms = len(atom_ao_ranges)
         self.n_atoms = n_atoms
         self.scissor_ev = 0.0  # will be consumed into D below
+        self.device = device
 
         if C_beta is None:
             raise ValueError("UKS spin-preserving mode requires C_beta (beta MOs).")
@@ -492,6 +573,8 @@ class ExcitonHamiltonian:
         D_b = qp_gap_b[valid_mask_b]
         self.D_spatial = np.concatenate([D_a, D_b])
         self.D = self.D_spatial
+        self.D_dft_spatial = np.concatenate([dft_gap_a[valid_mask_a], dft_gap_b[valid_mask_b]])
+        self.D_dft = self.D_dft_spatial
 
         print(f"  Alpha energy range: {D_a.min():.3f} – {D_a.max():.3f} eV" if dim_a else "  Alpha: no transitions")
         print(f"  Beta  energy range: {D_b.min():.3f} – {D_b.max():.3f} eV" if dim_b else "  Beta:  no transitions")
@@ -501,41 +584,81 @@ class ExcitonHamiltonian:
         S = overlap.toarray() if hasattr(overlap, 'toarray') else overlap
 
         if charge_type == 'mulliken':
-            print(f"  Building Mulliken transition charges (alpha + beta channels)...")
-            SC_occ_a  = S @ C_occ_a
-            SC_virt_a = S @ C_virt_a
-            SC_occ_b  = S @ C_occ_b
-            SC_virt_b = S @ C_virt_b
-            sc_built = True
+            print(f"  Building Mulliken transition charges (alpha + beta channels via {'GPU' if is_gpu(device) else 'CPU'})...")
+            if is_gpu(device):
+                import torch
+                dev = torch.device(device) if isinstance(device, str) else device
+                S_dense = overlap.toarray() if hasattr(overlap, 'toarray') else overlap
+                S_t = to_tensor(S_dense, dev, dtype=torch.float64)
+                C_occ_a_t = to_tensor(C_occ_a, dev, dtype=torch.float64)
+                C_virt_a_t = to_tensor(C_virt_a, dev, dtype=torch.float64)
+                C_occ_b_t = to_tensor(C_occ_b, dev, dtype=torch.float64)
+                C_virt_b_t = to_tensor(C_virt_b, dev, dtype=torch.float64)
 
-            q_flat_a = np.zeros((dim_a, n_atoms), dtype=np.float32)
-            q_flat_b = np.zeros((dim_b, n_atoms), dtype=np.float32)
+                SC_occ_a_t = S_t @ C_occ_a_t
+                SC_virt_a_t = S_t @ C_virt_a_t
+                SC_occ_b_t = S_t @ C_occ_b_t
+                SC_virt_b_t = S_t @ C_virt_b_t
+                sc_built = True
 
-            for A, (a0, a1) in enumerate(atom_ao_ranges):
-                if dim_a:
-                    Ci_A  = C_occ_a[a0:a1, :][:, vi_a]
-                    SCa_A = SC_virt_a[a0:a1, :][:, va_a]
-                    Ca_A  = C_virt_a[a0:a1, :][:, va_a]
-                    SCi_A = SC_occ_a[a0:a1, :][:, vi_a]
-                    q_flat_a[:, A] = 0.5 * (np.sum(Ci_A * SCa_A, axis=0) + np.sum(Ca_A * SCi_A, axis=0))
-                if dim_b:
-                    Ci_B  = C_occ_b[a0:a1, :][:, vi_b]
-                    SCa_B = SC_virt_b[a0:a1, :][:, va_b]
-                    Ca_B  = C_virt_b[a0:a1, :][:, va_b]
-                    SCi_B = SC_occ_b[a0:a1, :][:, vi_b]
-                    q_flat_b[:, A] = 0.5 * (np.sum(Ci_B * SCa_B, axis=0) + np.sum(Ca_B * SCi_B, axis=0))
+                q_flat_a_t = torch.zeros((dim_a, n_atoms), dtype=torch.float64, device=dev)
+                q_flat_b_t = torch.zeros((dim_b, n_atoms), dtype=torch.float64, device=dev)
+                vi_a_t = torch.as_tensor(vi_a, device=dev, dtype=torch.long)
+                va_a_t = torch.as_tensor(va_a, device=dev, dtype=torch.long)
+                vi_b_t = torch.as_tensor(vi_b, device=dev, dtype=torch.long)
+                va_b_t = torch.as_tensor(va_b, device=dev, dtype=torch.long)
+
+                for A, (a0, a1) in enumerate(atom_ao_ranges):
+                    if dim_a:
+                        Ci_A = C_occ_a_t[a0:a1, :][:, vi_a_t]
+                        SCa_A = SC_virt_a_t[a0:a1, :][:, va_a_t]
+                        Ca_A = C_virt_a_t[a0:a1, :][:, va_a_t]
+                        SCi_A = SC_occ_a_t[a0:a1, :][:, vi_a_t]
+                        q_flat_a_t[:, A] = 0.5 * (torch.sum(Ci_A * SCa_A, dim=0) + torch.sum(Ca_A * SCi_A, dim=0))
+                    if dim_b:
+                        Ci_B = C_occ_b_t[a0:a1, :][:, vi_b_t]
+                        SCa_B = SC_virt_b_t[a0:a1, :][:, va_b_t]
+                        Ca_B = C_virt_b_t[a0:a1, :][:, va_b_t]
+                        SCi_B = SC_occ_b_t[a0:a1, :][:, vi_b_t]
+                        q_flat_b_t[:, A] = 0.5 * (torch.sum(Ci_B * SCa_B, dim=0) + torch.sum(Ca_B * SCi_B, dim=0))
+
+                q_flat_a = to_numpy(q_flat_a_t)
+                q_flat_b = to_numpy(q_flat_b_t)
+            else:
+                SC_occ_a  = S @ C_occ_a
+                SC_virt_a = S @ C_virt_a
+                SC_occ_b  = S @ C_occ_b
+                SC_virt_b = S @ C_virt_b
+                sc_built = True
+
+                q_flat_a = np.zeros((dim_a, n_atoms), dtype=np.float64)
+                q_flat_b = np.zeros((dim_b, n_atoms), dtype=np.float64)
+
+                for A, (a0, a1) in enumerate(atom_ao_ranges):
+                    if dim_a:
+                        Ci_A  = C_occ_a[a0:a1, :][:, vi_a]
+                        SCa_A = SC_virt_a[a0:a1, :][:, va_a]
+                        Ca_A  = C_virt_a[a0:a1, :][:, va_a]
+                        SCi_A = SC_occ_a[a0:a1, :][:, vi_a]
+                        q_flat_a[:, A] = 0.5 * (np.sum(Ci_A * SCa_A, axis=0) + np.sum(Ca_A * SCi_A, axis=0))
+                    if dim_b:
+                        Ci_B  = C_occ_b[a0:a1, :][:, vi_b]
+                        SCa_B = SC_virt_b[a0:a1, :][:, va_b]
+                        Ca_B  = C_virt_b[a0:a1, :][:, va_b]
+                        SCi_B = SC_occ_b[a0:a1, :][:, vi_b]
+                        q_flat_b[:, A] = 0.5 * (np.sum(Ci_B * SCa_B, axis=0) + np.sum(Ca_B * SCi_B, axis=0))
 
         elif charge_type == 'lowdin':
             print(f"  Building Löwdin transition charges (alpha + beta channels)...")
             from miniBSE.lowdin import build_lowdin_transition_charges_flat
-            q_flat_a = build_lowdin_transition_charges_flat(C_occ_a, C_virt_a, S, atom_ao_ranges, vi_a, va_a) if dim_a else np.zeros((0, n_atoms), dtype=np.float32)
-            q_flat_b = build_lowdin_transition_charges_flat(C_occ_b, C_virt_b, S, atom_ao_ranges, vi_b, va_b) if dim_b else np.zeros((0, n_atoms), dtype=np.float32)
+            q_flat_a = build_lowdin_transition_charges_flat(C_occ_a, C_virt_a, S, atom_ao_ranges, vi_a, va_a, device=device) if dim_a else np.zeros((0, n_atoms), dtype=np.float64)
+            q_flat_b = build_lowdin_transition_charges_flat(C_occ_b, C_virt_b, S, atom_ao_ranges, vi_b, va_b, device=device) if dim_b else np.zeros((0, n_atoms), dtype=np.float64)
             sc_built = False
         else:
             raise ValueError(f"Unknown charge_type '{charge_type}'. Use 'mulliken' or 'lowdin'.")
 
         # Concatenate into unified flat charge array [dim_a + dim_b, n_atoms]
-        self.q_flat   = np.concatenate([q_flat_a, q_flat_b], axis=0).astype(np.float32)
+        self.q_flat   = np.concatenate([q_flat_a, q_flat_b], axis=0).astype(np.float64)
         self.q_flat_a = q_flat_a
         self.q_flat_b = q_flat_b
         print(f"    Charges built in {time.time() - start_q:.4f} s")
@@ -577,10 +700,19 @@ class ExcitonHamiltonian:
 
             # Pre-contract screened virtual blocks  W = gamma @ q_virt
             if self.include_exchange:
-                qva = self.q_virt_a.reshape(n_virt_a * n_virt_a, n_atoms)
-                self.W_virt_a = (qva @ self.gamma.T).reshape(n_virt_a, n_virt_a, n_atoms)
-                qvb = self.q_virt_b.reshape(n_virt_b * n_virt_b, n_atoms)
-                self.W_virt_b = (qvb @ self.gamma.T).reshape(n_virt_b, n_virt_b, n_atoms)
+                if is_gpu(device):
+                    import torch
+                    dev = torch.device(device) if isinstance(device, str) else device
+                    W_resta_t = to_tensor(self.W_resta, dev)
+                    qva = to_tensor(self.q_virt_a.reshape(n_virt_a * n_virt_a, n_atoms), dev)
+                    self.W_virt_a = to_numpy((qva @ W_resta_t.T).reshape(n_virt_a, n_virt_a, n_atoms))
+                    qvb = to_tensor(self.q_virt_b.reshape(n_virt_b * n_virt_b, n_atoms), dev)
+                    self.W_virt_b = to_numpy((qvb @ W_resta_t.T).reshape(n_virt_b, n_virt_b, n_atoms))
+                else:
+                    qva = self.q_virt_a.reshape(n_virt_a * n_virt_a, n_atoms)
+                    self.W_virt_a = (qva @ self.W_resta.T).reshape(n_virt_a, n_virt_a, n_atoms)
+                    qvb = self.q_virt_b.reshape(n_virt_b * n_virt_b, n_atoms)
+                    self.W_virt_b = (qvb @ self.W_resta.T).reshape(n_virt_b, n_virt_b, n_atoms)
             print(f"    Same-spin density blocks built in {time.time() - t_ex:.4f} s")
 
         if self.soc_flag:
@@ -604,24 +736,87 @@ class ExcitonHamiltonian:
         print("  -> Rotating spatial charge tensors into the spinor basis...")
         t_sp = time.time()
 
-        q_trans_a = np.einsum("ip,iaA,aq->pqA", U_occ_a.conj(), self.q_ov, U_virt_a, optimize=True)
-        q_trans_b = np.einsum("ip,iaA,aq->pqA", U_occ_b.conj(), self.q_ov, U_virt_b, optimize=True)
-        self.q_spinor = (q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_atoms)
-        del q_trans_a, q_trans_b
+        if self.diagonal_mode:
+            print("  -> Computing spinor diagonal populations (low-memory streaming mode)...")
+            t_sp = time.time()
+            C_sp_occ_a = self.C_orig_occ @ U_occ_a
+            C_sp_occ_b = self.C_orig_occ @ U_occ_b
+            SC_sp_occ_a = self.overlap @ C_sp_occ_a
+            SC_sp_occ_b = self.overlap @ C_sp_occ_b
+            if hasattr(SC_sp_occ_a, "toarray"): SC_sp_occ_a = SC_sp_occ_a.toarray()
+            if hasattr(SC_sp_occ_b, "toarray"): SC_sp_occ_b = SC_sp_occ_b.toarray()
 
-        if self.include_exchange:
-            self.q_hole_spinor = (
-                np.einsum("ip,ijA,jq->pqA", U_occ_a.conj(), self.q_occ, U_occ_a, optimize=True)
-                + np.einsum("ip,ijA,jq->pqA", U_occ_b.conj(), self.q_occ, U_occ_b, optimize=True)
-            )
-            self.q_elec_spinor = (
-                np.einsum("ap,abA,bq->pqA", U_virt_a.conj(), self.q_virt, U_virt_a, optimize=True)
-                + np.einsum("ap,abA,bq->pqA", U_virt_b.conj(), self.q_virt, U_virt_b, optimize=True)
-            )
+            self.q_hole_spinor_diag = np.zeros((self.n_occ_spinor, self.n_atoms), dtype=np.float64)
+            for A, (a0, a1) in enumerate(self.atom_ao_ranges):
+                term_a = np.sum(C_sp_occ_a[a0:a1, :].conj() * SC_sp_occ_a[a0:a1, :], axis=0).real
+                term_b = np.sum(C_sp_occ_b[a0:a1, :].conj() * SC_sp_occ_b[a0:a1, :], axis=0).real
+                self.q_hole_spinor_diag[:, A] = term_a + term_b
 
-        if self.include_exchange:
-            qe = self.q_elec_spinor.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_atoms)
-            self.W_elec_spinor = (qe @ self.gamma.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_atoms)
+            C_sp_virt_a = self.C_orig_virt @ U_virt_a
+            C_sp_virt_b = self.C_orig_virt @ U_virt_b
+            SC_sp_virt_a = self.overlap @ C_sp_virt_a
+            SC_sp_virt_b = self.overlap @ C_sp_virt_b
+            if hasattr(SC_sp_virt_a, "toarray"): SC_sp_virt_a = SC_sp_virt_a.toarray()
+            if hasattr(SC_sp_virt_b, "toarray"): SC_sp_virt_b = SC_sp_virt_b.toarray()
+
+            self.q_elec_spinor_diag = np.zeros((self.n_virt_spinor, self.n_atoms), dtype=np.float64)
+            for A, (a0, a1) in enumerate(self.atom_ao_ranges):
+                term_a = np.sum(C_sp_virt_a[a0:a1, :].conj() * SC_sp_virt_a[a0:a1, :], axis=0).real
+                term_b = np.sum(C_sp_virt_b[a0:a1, :].conj() * SC_sp_virt_b[a0:a1, :], axis=0).real
+                self.q_elec_spinor_diag[:, A] = term_a + term_b
+
+            if self.include_exchange:
+                self.W_elec_spinor_diag = self.q_elec_spinor_diag @ self.W_resta.T
+
+            print(f"  -> Spinor diagonal populations compiled in {time.time() - t_sp:.2f}s")
+        elif is_gpu(self.device):
+            import torch
+            dev = torch.device(self.device) if isinstance(self.device, str) else self.device
+            U_occ_a_t = to_tensor(U_occ_a, dev)
+            U_virt_a_t = to_tensor(U_virt_a, dev)
+            U_occ_b_t = to_tensor(U_occ_b, dev)
+            U_virt_b_t = to_tensor(U_virt_b, dev)
+            q_ov_t = to_tensor(self.q_ov, dev)
+
+            q_trans_a = torch.einsum("ip,iaA,aq->pqA", U_occ_a_t.conj(), q_ov_t, U_virt_a_t)
+            q_trans_b = torch.einsum("ip,iaA,aq->pqA", U_occ_b_t.conj(), q_ov_t, U_virt_b_t)
+            self.q_spinor = to_numpy((q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_atoms))
+
+            if self.include_exchange:
+                q_occ_t = to_tensor(self.q_occ, dev)
+                q_virt_t = to_tensor(self.q_virt, dev)
+                q_hole_sp = (
+                    torch.einsum("ip,ijA,jq->pqA", U_occ_a_t.conj(), q_occ_t, U_occ_a_t)
+                    + torch.einsum("ip,ijA,jq->pqA", U_occ_b_t.conj(), q_occ_t, U_occ_b_t)
+                )
+                q_elec_sp = (
+                    torch.einsum("ap,abA,bq->pqA", U_virt_a_t.conj(), q_virt_t, U_virt_a_t)
+                    + torch.einsum("ap,abA,bq->pqA", U_virt_b_t.conj(), q_virt_t, U_virt_b_t)
+                )
+                self.q_hole_spinor = to_numpy(q_hole_sp)
+                self.q_elec_spinor = to_numpy(q_elec_sp)
+                qe = q_elec_sp.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_atoms)
+                W_resta_t = to_tensor(self.W_resta, dev)
+                self.W_elec_spinor = to_numpy((qe @ W_resta_t.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_atoms))
+        else:
+            q_trans_a = np.einsum("ip,iaA,aq->pqA", U_occ_a.conj(), self.q_ov, U_virt_a, optimize=True)
+            q_trans_b = np.einsum("ip,iaA,aq->pqA", U_occ_b.conj(), self.q_ov, U_virt_b, optimize=True)
+            self.q_spinor = (q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_atoms)
+            del q_trans_a, q_trans_b
+
+            if self.include_exchange:
+                self.q_hole_spinor = (
+                    np.einsum("ip,ijA,jq->pqA", U_occ_a.conj(), self.q_occ, U_occ_a, optimize=True)
+                    + np.einsum("ip,ijA,jq->pqA", U_occ_b.conj(), self.q_occ, U_occ_b, optimize=True)
+                )
+                self.q_elec_spinor = (
+                    np.einsum("ap,abA,bq->pqA", U_virt_a.conj(), self.q_virt, U_virt_a, optimize=True)
+                    + np.einsum("ap,abA,bq->pqA", U_virt_b.conj(), self.q_virt, U_virt_b, optimize=True)
+                )
+
+            if self.include_exchange:
+                qe = self.q_elec_spinor.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_atoms)
+                self.W_elec_spinor = (qe @ self.W_resta.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_atoms)
 
         print(f"  -> Density mappings compiled in {time.time() - t_sp:.2f}s")
 
@@ -679,13 +874,55 @@ class ExcitonHamiltonian:
 
         self.valid_spinor_idx = np.where(self.valid_spinor_mask)[0]
         self.D_spinor = raw_D_spinor[self.valid_spinor_mask]
-        self.q_spinor = self.q_spinor[self.valid_spinor_mask, :]
         self.D = self.D_spinor
+        self.D_dft = raw_gap_spinor_dft[self.valid_spinor_mask]
         
         self.dim_spinor_full = len(raw_D_spinor)
         self.dim = len(self.D_spinor)
         print(f"  -> BSE Active Space expanded to {self.dim_spinor_full} spinor transitions.")
         print(f"  -> Truncated Spinor Space (Energy <= {e_thresh} eV): {self.dim} valid transitions")
+
+        if self.diagonal_mode:
+            chunk_size = 50000
+            self.kd_diag = np.zeros(self.dim, dtype=np.float64)
+            self.kx_diag = np.zeros(self.dim, dtype=np.float64)
+            if self.include_exchange:
+                for p0 in range(0, self.dim, chunk_size):
+                    p1 = min(p0 + chunk_size, self.dim)
+                    full_idx_ch = self.valid_spinor_idx[p0:p1]
+                    I_ch = full_idx_ch // self.n_virt_spinor
+                    A_ch = full_idx_ch % self.n_virt_spinor
+                    self.kd_diag[p0:p1] = np.sum(self.q_hole_spinor_diag[I_ch, :] * self.W_elec_spinor_diag[A_ch, :], axis=1)
+
+                if self.excitation_mode == "diagonal_bse":
+                    print(f"  Building spinor transition charges & exchange in streaming chunks...")
+                    gamma = to_numpy(self.gamma)
+                    for p0 in range(0, self.dim, chunk_size):
+                        p1 = min(p0 + chunk_size, self.dim)
+                        full_idx_ch = self.valid_spinor_idx[p0:p1]
+                        I_ch = full_idx_ch // self.n_virt_spinor
+                        A_ch = full_idx_ch % self.n_virt_spinor
+                        q_ch = np.zeros((p1 - p0, self.n_atoms), dtype=np.complex128)
+                        for at, (a0, a1) in enumerate(self.atom_ao_ranges):
+                            Co_a = C_sp_occ_a[a0:a1, I_ch]
+                            SCo_a = SC_sp_occ_a[a0:a1, I_ch]
+                            Cv_a = C_sp_virt_a[a0:a1, A_ch]
+                            SCv_a = SC_sp_virt_a[a0:a1, A_ch]
+                            Co_b = C_sp_occ_b[a0:a1, I_ch]
+                            SCo_b = SC_sp_occ_b[a0:a1, I_ch]
+                            Cv_b = C_sp_virt_b[a0:a1, A_ch]
+                            SCv_b = SC_sp_virt_b[a0:a1, A_ch]
+                            term_a = 0.5 * (np.sum(Co_a.conj() * SCv_a + SCo_a.conj() * Cv_a, axis=0))
+                            term_b = 0.5 * (np.sum(Co_b.conj() * SCv_b + SCo_b.conj() * Cv_b, axis=0))
+                            q_ch[:, at] = term_a + term_b
+                        V_ch = q_ch @ gamma
+                        self.kx_diag[p0:p1] = np.sum(q_ch.conj() * V_ch, axis=1).real
+
+            del C_sp_occ_a, C_sp_occ_b, SC_sp_occ_a, SC_sp_occ_b
+            del C_sp_virt_a, C_sp_virt_b, SC_sp_virt_a, SC_sp_virt_b
+            import gc; gc.collect()
+        else:
+            self.q_spinor = self.q_spinor[self.valid_spinor_mask, :]
 
     def build_spinor_basis_uks(self, U_mo, soc_E, e_thresh):
         print("\n--- [SOC-UKS] Transforming Exciton Hamiltonian to Spinor Basis ---")
@@ -707,21 +944,54 @@ class ExcitonHamiltonian:
 
         print("  -> Rotating UKS alpha/beta charge tensors into the spinor basis...")
         t_sp = time.time()
-        q_trans_a = np.einsum("ip,iaA,aq->pqA", U_occ_a.conj(), self.q_ov_a, U_virt_a, optimize=True)
-        q_trans_b = np.einsum("ip,iaA,aq->pqA", U_occ_b.conj(), self.q_ov_b, U_virt_b, optimize=True)
-        self.q_spinor = (q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_atoms)
+        if is_gpu(self.device):
+            import torch
+            dev = torch.device(self.device) if isinstance(self.device, str) else self.device
+            U_occ_a_t = to_tensor(U_occ_a, dev)
+            U_virt_a_t = to_tensor(U_virt_a, dev)
+            U_occ_b_t = to_tensor(U_occ_b, dev)
+            U_virt_b_t = to_tensor(U_virt_b, dev)
+            q_ov_a_t = to_tensor(self.q_ov_a, dev)
+            q_ov_b_t = to_tensor(self.q_ov_b, dev)
 
-        if self.include_exchange:
-            self.q_hole_spinor = (
-                np.einsum("ip,ijA,jq->pqA", U_occ_a.conj(), self.q_occ_a, U_occ_a, optimize=True)
-                + np.einsum("ip,ijA,jq->pqA", U_occ_b.conj(), self.q_occ_b, U_occ_b, optimize=True)
-            )
-            self.q_elec_spinor = (
-                np.einsum("ap,abA,bq->pqA", U_virt_a.conj(), self.q_virt_a, U_virt_a, optimize=True)
-                + np.einsum("ap,abA,bq->pqA", U_virt_b.conj(), self.q_virt_b, U_virt_b, optimize=True)
-            )
-            qe = self.q_elec_spinor.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_atoms)
-            self.W_elec_spinor = (qe @ self.gamma.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_atoms)
+            q_trans_a = torch.einsum("ip,iaA,aq->pqA", U_occ_a_t.conj(), q_ov_a_t, U_virt_a_t)
+            q_trans_b = torch.einsum("ip,iaA,aq->pqA", U_occ_b_t.conj(), q_ov_b_t, U_virt_b_t)
+            self.q_spinor = to_numpy((q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_atoms))
+
+            if self.include_exchange:
+                q_occ_a_t = to_tensor(self.q_occ_a, dev)
+                q_occ_b_t = to_tensor(self.q_occ_b, dev)
+                q_virt_a_t = to_tensor(self.q_virt_a, dev)
+                q_virt_b_t = to_tensor(self.q_virt_b, dev)
+                q_hole_sp = (
+                    torch.einsum("ip,ijA,jq->pqA", U_occ_a_t.conj(), q_occ_a_t, U_occ_a_t)
+                    + torch.einsum("ip,ijA,jq->pqA", U_occ_b_t.conj(), q_occ_b_t, U_occ_b_t)
+                )
+                q_elec_sp = (
+                    torch.einsum("ap,abA,bq->pqA", U_virt_a_t.conj(), q_virt_a_t, U_virt_a_t)
+                    + torch.einsum("ap,abA,bq->pqA", U_virt_b_t.conj(), q_virt_b_t, U_virt_b_t)
+                )
+                self.q_hole_spinor = to_numpy(q_hole_sp)
+                self.q_elec_spinor = to_numpy(q_elec_sp)
+                qe = q_elec_sp.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_atoms)
+                W_resta_t = to_tensor(self.W_resta, dev)
+                self.W_elec_spinor = to_numpy((qe @ W_resta_t.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_atoms))
+        else:
+            q_trans_a = np.einsum("ip,iaA,aq->pqA", U_occ_a.conj(), self.q_ov_a, U_virt_a, optimize=True)
+            q_trans_b = np.einsum("ip,iaA,aq->pqA", U_occ_b.conj(), self.q_ov_b, U_virt_b, optimize=True)
+            self.q_spinor = (q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_atoms)
+
+            if self.include_exchange:
+                self.q_hole_spinor = (
+                    np.einsum("ip,ijA,jq->pqA", U_occ_a.conj(), self.q_occ_a, U_occ_a, optimize=True)
+                    + np.einsum("ip,ijA,jq->pqA", U_occ_b.conj(), self.q_occ_b, U_occ_b, optimize=True)
+                )
+                self.q_elec_spinor = (
+                    np.einsum("ap,abA,bq->pqA", U_virt_a.conj(), self.q_virt_a, U_virt_a, optimize=True)
+                    + np.einsum("ap,abA,bq->pqA", U_virt_b.conj(), self.q_virt_b, U_virt_b, optimize=True)
+                )
+                qe = self.q_elec_spinor.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_atoms)
+                self.W_elec_spinor = (qe @ self.W_resta.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_atoms)
 
         print(f"  -> UKS density mappings compiled in {time.time() - t_sp:.2f}s")
 
@@ -747,94 +1017,199 @@ class ExcitonHamiltonian:
         self.D_spinor = raw_D_spinor[self.valid_spinor_mask]
         self.q_spinor = self.q_spinor[self.valid_spinor_mask, :]
         self.D = self.D_spinor
+        self.D_dft = raw_gap_spinor_dft[self.valid_spinor_mask]
 
         self.dim_spinor_full = len(raw_D_spinor)
         self.dim = len(self.D_spinor)
         print(f"  -> UKS BSE Active Space expanded to {self.dim_spinor_full} spinor transitions.")
         print(f"  -> Truncated UKS Spinor Space (Energy <= {e_thresh} eV): {self.dim} valid transitions")
 
-    def matvec(self, x):
-        """Matrix-vector product for Davidson Solver."""
-        
+    def kernel_actions(self, x):
+        """Return Kx_bare@x and Kd_screened@x in the active transition space."""
+        if has_torch():
+            import torch
+            if isinstance(x, torch.Tensor):
+                dev = x.device
+                kx = torch.zeros(self.dim, dtype=x.dtype, device=dev)
+                kd = torch.zeros(self.dim, dtype=x.dtype, device=dev)
+
+                if not self.soc_flag:
+                    spin = getattr(self, 'spin', 'singlet')
+                    if spin != 'triplet':
+                        factor = 1.0 if spin == 'uks_spin_preserving' else 2.0
+                        q_flat_t = to_tensor(self.q_flat, dev)
+                        gamma_t = to_tensor(self.gamma, dev)
+                        transition_potential = gamma_t @ (q_flat_t.T @ x)
+                        kx = factor * (q_flat_t @ transition_potential)
+
+                    if self.include_direct_eh:
+                        if spin == 'uks_spin_preserving':
+                            x_a = x[:self.dim_a]
+                            xmat_a = torch.zeros((self.n_occ_act, self.n_virt_act), dtype=x.dtype, device=dev)
+                            vi_a = torch.as_tensor(self.vi_a, device=dev, dtype=torch.long)
+                            va_a = torch.as_tensor(self.va_a, device=dev, dtype=torch.long)
+                            xmat_a[vi_a, va_a] = x_a
+                            q_occ_a = to_tensor(self.q_occ_a, dev)
+                            W_virt_a = to_tensor(self.W_virt_a, dev)
+                            act_a = torch.einsum("ijA,abA,jb->ia", q_occ_a.conj(), W_virt_a, xmat_a)
+                            kd[:self.dim_a] = act_a[vi_a, va_a]
+
+                            x_b = x[self.dim_a:]
+                            xmat_b = torch.zeros((self.n_occ_act_b, self.n_virt_act_b), dtype=x.dtype, device=dev)
+                            vi_b = torch.as_tensor(self.vi_b, device=dev, dtype=torch.long)
+                            va_b = torch.as_tensor(self.va_b, device=dev, dtype=torch.long)
+                            xmat_b[vi_b, va_b] = x_b
+                            q_occ_b = to_tensor(self.q_occ_b, dev)
+                            W_virt_b = to_tensor(self.W_virt_b, dev)
+                            act_b = torch.einsum("ijA,abA,jb->ia", q_occ_b.conj(), W_virt_b, xmat_b)
+                            kd[self.dim_a:] = act_b[vi_b, va_b]
+                        else:
+                            xmat = torch.zeros((self.n_occ_act, self.n_virt_act), dtype=x.dtype, device=dev)
+                            vi = torch.as_tensor(self.valid_i, device=dev, dtype=torch.long)
+                            va = torch.as_tensor(self.valid_a, device=dev, dtype=torch.long)
+                            xmat[vi, va] = x
+                            q_occ = to_tensor(self.q_occ, dev)
+                            W_virt = to_tensor(self.W_virt, dev)
+                            act = torch.einsum("ijA,abA,jb->ia", q_occ.conj(), W_virt, xmat)
+                            kd = act[vi, va]
+                    return kx, kd
+                else:
+                    q_sp = to_tensor(self.q_spinor, dev)
+                    gamma_t = to_tensor(self.gamma, dev)
+                    transition_potential = gamma_t @ (q_sp.T @ x)
+                    kx = q_sp.conj() @ transition_potential
+                    if self.include_direct_eh:
+                        x_full = torch.zeros(self.dim_spinor_full, dtype=x.dtype, device=dev)
+                        v_idx = torch.as_tensor(self.valid_spinor_idx, device=dev, dtype=torch.long)
+                        x_full[v_idx] = x
+                        xmat = x_full.reshape(self.n_occ_spinor, self.n_virt_spinor)
+                        qh_sp = to_tensor(self.q_hole_spinor, dev)
+                        we_sp = to_tensor(self.W_elec_spinor, dev)
+                        act = torch.einsum(
+                            "ijA,abA,jb->ia", qh_sp.conj(),
+                            we_sp, xmat,
+                        ).reshape(-1)
+                        kd = act[v_idx]
+                    return kx, kd
+
+        dtype = np.result_type(x, self.D)
+        kx = np.zeros(self.dim, dtype=dtype)
+        kd = np.zeros(self.dim, dtype=dtype)
+
         if not self.soc_flag:
-            if getattr(self, 'spin', 'singlet') == 'triplet':
-                # === TRIPLET SPATIAL MATVEC ===
-                y = self.D_spatial * x
-                # No J term
-                if self.include_exchange:
-                    x_mat = np.zeros((self.n_occ_act, self.n_virt_act))
-                    x_mat[self.valid_i, self.valid_a] = x
-                    K = np.einsum("ijA, abA, jb -> ia", self.q_occ, self.W_virt, x_mat, optimize=True)
-                    y -= 1.0 * K[self.valid_i, self.valid_a]
-                return y
+            spin = getattr(self, 'spin', 'singlet')
+            if spin != 'triplet':
+                factor = 1.0 if spin == 'uks_spin_preserving' else 2.0
+                transition_potential = self.gamma @ (self.q_flat.T @ x)
+                kx = factor * (self.q_flat @ transition_potential)
 
-            if getattr(self, 'spin', 'singlet') == 'uks_spin_preserving':
-                # === UKS SPIN-PRESERVING MATVEC (Manifold B) ===
-                # Diagonal term
-                y = self.D_spatial * x
-
-                # Full Coulomb J (spin-independent, couples all alpha and beta transitions)
-                # Factor is 1.0 (we are explicit in spin-channel space, no 2x factor)
-                T = self.q_flat.T @ x          # [n_atoms]
-                y += 1.0 * self.q_flat @ (self.gamma @ T)
-
-                if self.include_exchange:
-                    # Alpha block: K_alpha applied to x_alpha part
+            if self.include_direct_eh:
+                if spin == 'uks_spin_preserving':
                     x_a = x[:self.dim_a]
-                    x_mat_a = np.zeros((self.n_occ_act, self.n_virt_act))
-                    x_mat_a[self.vi_a, self.va_a] = x_a
-                    K_a = np.einsum("ijA, abA, jb -> ia", self.q_occ_a, self.W_virt_a, x_mat_a, optimize=True)
-                    y[:self.dim_a] -= K_a[self.vi_a, self.va_a]
-
-                    # Beta block: K_beta applied to x_beta part
+                    xmat_a = np.zeros((self.n_occ_act, self.n_virt_act), dtype=dtype)
+                    xmat_a[self.vi_a, self.va_a] = x_a
+                    act_a = np.einsum("ijA,abA,jb->ia", self.q_occ_a.conj(), self.W_virt_a, xmat_a, optimize=True)
+                    kd[:self.dim_a] = act_a[self.vi_a, self.va_a]
                     x_b = x[self.dim_a:]
-                    x_mat_b = np.zeros((self.n_occ_act_b, self.n_virt_act_b))
-                    x_mat_b[self.vi_b, self.va_b] = x_b
-                    K_b = np.einsum("ijA, abA, jb -> ia", self.q_occ_b, self.W_virt_b, x_mat_b, optimize=True)
-                    y[self.dim_a:] -= K_b[self.vi_b, self.va_b]
+                    xmat_b = np.zeros((self.n_occ_act_b, self.n_virt_act_b), dtype=dtype)
+                    xmat_b[self.vi_b, self.va_b] = x_b
+                    act_b = np.einsum("ijA,abA,jb->ia", self.q_occ_b.conj(), self.W_virt_b, xmat_b, optimize=True)
+                    kd[self.dim_a:] = act_b[self.vi_b, self.va_b]
+                else:
+                    xmat = np.zeros((self.n_occ_act, self.n_virt_act), dtype=dtype)
+                    xmat[self.valid_i, self.valid_a] = x
+                    act = np.einsum("ijA,abA,jb->ia", self.q_occ.conj(), self.W_virt, xmat, optimize=True)
+                    kd = act[self.valid_i, self.valid_a]
+            return kx, kd
 
-                return y
+        transition_potential = self.gamma @ (self.q_spinor.T @ x)
+        kx = self.q_spinor.conj() @ transition_potential
+        if self.include_direct_eh:
+            x_full = np.zeros(self.dim_spinor_full, dtype=np.result_type(dtype, complex))
+            x_full[self.valid_spinor_idx] = x
+            xmat = x_full.reshape(self.n_occ_spinor, self.n_virt_spinor)
+            act = np.einsum(
+                "ijA,abA,jb->ia", self.q_hole_spinor.conj(),
+                self.W_elec_spinor, xmat, optimize=True,
+            ).reshape(-1)
+            kd = act[self.valid_spinor_idx]
+        return kx, kd
 
-            # === STANDARD SPATIAL MATVEC (Singlets) ===
-            y = self.D_spatial * x
-            T = self.q_flat.T @ x
-            y += 2.0 * self.q_flat @ (self.gamma @ T) # 2.0 Spin-Multiplicity
-            
-            if self.include_exchange:
-                x_mat = np.zeros((self.n_occ_act, self.n_virt_act))
-                x_mat[self.valid_i, self.valid_a] = x
-                K = np.einsum("ijA, abA, jb -> ia", self.q_occ, self.W_virt, x_mat, optimize=True)
-                y -= 1.0 * K[self.valid_i, self.valid_a]
-                
-            return y
+    def independent_transition_energies(self, mode):
+        """Energies for uncoupled one-electron transitions without diagonalization."""
+        aliases = {
+            'dft': 'independent_dft', 'qp': 'independent_qp',
+            'qp_kernels': 'diagonal_bse', 'diagonal': 'diagonal_bse',
+        }
+        mode = aliases.get(mode, mode)
+        if mode not in {'independent_dft', 'independent_qp', 'diagonal_bse'}:
+            raise ValueError(f"Unknown excitation_mode '{mode}'")
+        kx_diag = np.zeros(self.dim, dtype=float)
+        kd_diag = np.zeros(self.dim, dtype=float)
+        if mode == 'independent_dft':
+            return np.asarray(self.D_dft).copy(), kx_diag, kd_diag
+        if mode == 'independent_qp':
+            return np.asarray(self.D).copy(), kx_diag, kd_diag
 
-        # === RELATIVISTIC SPINOR MATVEC ===
-        y = self.D_spinor * x
-        
-        # Coulomb J (No 2x factor for spinors)
-        # J_action = q_spinor.conj() @ gamma @ q_spinor.T @ x
-        T_C = self.q_spinor.T @ x
-        V_C = self.gamma @ T_C
-        y += self.q_spinor.conj() @ V_C
+        if hasattr(self, 'kx_diag') and hasattr(self, 'kd_diag') and getattr(self, 'diagonal_mode', False):
+            return np.asarray(self.D) + self.kx_diag - self.kd_diag, self.kx_diag, self.kd_diag
 
-        if self.include_exchange:
-            # Exchange K (Complex tensors)
-            if hasattr(self, 'valid_spinor_idx'):
-                x_full = np.zeros(self.dim_spinor_full, dtype=complex)
-                x_full[self.valid_spinor_idx] = x
-                x_mat = x_full.reshape(self.n_occ_spinor, self.n_virt_spinor)
+        # --- Vectorized Analytic Diagonal Evaluation (O(N) instead of O(N^2)) ---
+        if not self.soc_flag:
+            spin_mode = getattr(self, 'spin', 'singlet')
+            if spin_mode == 'triplet':
+                kx_diag = np.zeros(self.dim, dtype=float)
             else:
-                x_mat = x.reshape(self.n_occ_spinor, self.n_virt_spinor)
-                
-            # K[i, a] = \sum_{j,b,A} (q_hole[i, j, A])^* W[a, b, A] x_mat[j, b]
-            K = np.einsum("ijA, abA, jb -> ia", self.q_hole_spinor.conj(), self.W_elec_spinor, x_mat, optimize=True)
-            
-            if hasattr(self, 'valid_spinor_idx'):
-                y -= K.flatten()[self.valid_spinor_idx]
-            else:
-                y -= K.flatten()
-            
-        return y
+                factor = 1.0 if spin_mode == 'uks_spin_preserving' else 2.0
+                q_flat = to_numpy(self.q_flat)
+                gamma = to_numpy(self.gamma)
+                V_x = q_flat @ gamma
+                kx_diag = factor * np.sum(q_flat.conj() * V_x, axis=1).real
+
+            if self.include_direct_eh:
+                if spin_mode == 'uks_spin_preserving':
+                    q_occ_a = to_numpy(self.q_occ_a)
+                    W_virt_a = to_numpy(self.W_virt_a)
+                    q_occ_b = to_numpy(self.q_occ_b)
+                    W_virt_b = to_numpy(self.W_virt_b)
+                    Q_ia = q_occ_a[self.vi_a, self.vi_a, :]
+                    W_aa = W_virt_a[self.va_a, self.va_a, :]
+                    kd_a = np.sum(Q_ia.conj() * W_aa, axis=-1).real
+                    Q_ib = q_occ_b[self.vi_b, self.vi_b, :]
+                    W_ab = W_virt_b[self.va_b, self.va_b, :]
+                    kd_b = np.sum(Q_ib.conj() * W_ab, axis=-1).real
+                    kd_diag = np.concatenate([kd_a, kd_b])
+                else:
+                    q_occ = to_numpy(self.q_occ)
+                    W_virt = to_numpy(self.W_virt)
+                    Q_i = q_occ[self.valid_i, self.valid_i, :]
+                    W_a = W_virt[self.valid_a, self.valid_a, :]
+                    kd_diag = np.sum(Q_i.conj() * W_a, axis=-1).real
+        else:
+            q_spinor = to_numpy(self.q_spinor)
+            gamma = to_numpy(self.gamma)
+            V_x = q_spinor @ gamma
+            kx_diag = np.sum(q_spinor.conj() * V_x, axis=1).real
+            if self.include_direct_eh:
+                q_hole = to_numpy(self.q_hole_spinor)
+                W_elec = to_numpy(self.W_elec_spinor)
+                i = self.valid_spinor_idx // self.n_virt_spinor
+                a = self.valid_spinor_idx % self.n_virt_spinor
+                Q_i = q_hole[i, i, :]
+                W_a = W_elec[a, a, :]
+                kd_diag = np.sum(Q_i.conj() * W_a, axis=-1).real
+
+        return np.asarray(self.D) + kx_diag - kd_diag, kx_diag, kd_diag
+
+    def matvec(self, x):
+        """Hermitian BSE/TDA matrix-vector product: D_QP + Kx_bare - Kd_screened."""
+        kx, kd = self.kernel_actions(x)
+        if has_torch():
+            import torch
+            if isinstance(x, torch.Tensor):
+                D_t = to_tensor(self.D, x.device, dtype=x.dtype)
+                return D_t * x + kx - kd
+        return self.D * x + kx - kd
 
     def get_transition_dipoles(self, mu_ia_x, mu_ia_y, mu_ia_z):
         """Extracts transition dipoles in either the spatial or spinor basis."""

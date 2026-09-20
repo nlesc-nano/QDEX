@@ -92,6 +92,7 @@ std::vector<Matrix> compute_multipoles(
         engines[tid].compute(shells[s1], shells[s2]);
 
         for (unsigned op = 0; op < NP; ++op) {
+          if (buf.size() <= op || buf[op] == nullptr) continue;
           Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> block(buf[op], n1, n2);
           result[op].block(bf1,bf2,n1,n2) = block;
           if (s1 != s2)
@@ -113,6 +114,44 @@ Matrix cross_overlap(const std::vector<libint2::Shell>& shells,
                      size_t n_ao, size_t n_prj, int nthreads) {
   Matrix S = overlap(shells, nthreads);           
   return S.block(0, n_ao, n_ao, n_prj);           
+}
+
+Matrix cross_overlap_geometries(const std::vector<libint2::Shell>& shells1,
+                                const std::vector<libint2::Shell>& shells2,
+                                int nthreads) {
+  const auto nbf1 = nbasis(shells1);
+  const auto nbf2 = nbasis(shells2);
+  Matrix S = Matrix::Zero(nbf1, nbf2);
+
+  size_t max_nprim_v = std::max(max_nprim(shells1), max_nprim(shells2));
+  int max_l_v = std::max(max_l(shells1), max_l(shells2));
+
+  std::vector<libint2::Engine> engines(nthreads);
+  engines[0] = libint2::Engine(libint2::Operator::overlap, max_nprim_v, max_l_v, 0);
+  for (int i = 1; i < nthreads; ++i) engines[i] = engines[0];
+
+  const auto s2bf1 = map_shell_to_basis_function(shells1);
+  const auto s2bf2 = map_shell_to_basis_function(shells2);
+  const int nS1 = static_cast<int>(shells1.size());
+  const int nS2 = static_cast<int>(shells2.size());
+
+  auto worker = [&](int tid) {
+    const auto& buf = engines[tid].results();
+    for (int s1 = 0; s1 < nS1; ++s1) {
+      if (s1 % nthreads != tid) continue;
+      int bf1 = s2bf1[s1], n1 = shells1[s1].size();
+      for (int s2 = 0; s2 < nS2; ++s2) {
+        int bf2 = s2bf2[s2], n2 = shells2[s2].size();
+
+        engines[tid].compute(shells1[s1], shells2[s2]);
+        if (buf.empty() || buf[0] == nullptr) continue;
+        Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> block(buf[0], n1, n2);
+        S.block(bf1, bf2, n1, n2) = block;
+      }
+    }
+  };
+  parallel_do(worker, nthreads);
+  return S;
 }
 
 std::vector<Matrix> dipole(const std::vector<libint2::Shell>& shells,
@@ -185,6 +224,7 @@ Matrix compute_hgh_projector_overlaps(
             Matrix tmp(n_ao, n_funcs); tmp.setZero();
             for (size_t s1 = 0; s1 < ao_shells.size(); ++s1) {
                 engine.compute(ao_shells[s1], proj_shell);
+                if (buf.empty() || buf[0] == nullptr) continue;
                 Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
                     computed_block(buf[0], ao_shells[s1].size(), n_funcs);
                 tmp.block(ao_s2bf[s1], 0, ao_shells[s1].size(), n_funcs) = computed_block;
@@ -354,4 +394,3 @@ Matrix overlap_pbc(const std::vector<libint2::Shell>& shells,
 }
 
 } // namespace licpp
-
