@@ -9,8 +9,8 @@ By combining the ease of a Python interface with a lightning-fast C++ backend po
 At its core, `miniBSE` solves the **Bethe-Salpeter Equation (BSE)** under the Tamm-Dancoff Approximation (TDA). It constructs an active-space electron-hole Hamiltonian using:
 1. **DFT Ground State Data**: Takes Molecular Orbitals (MOs) and orbital energies from a prior ground-state DFT calculation.
 2. **Analytic Integrals**: Uses `Libint2` to instantly compute Gaussian basis set overlaps and dipole transition matrices in real-space.
-3. **Screened Coulomb Interactions**: Implements a distance-dependent Ohno-Klopman Coulomb kernel, screened by automated or user-defined bulk dielectric constants. Optional sTDA-like exchange kernels are also supported.
-4. **Iterative Diagonalization**: Deploys a Davidson algorithm (or full dense diagonalization) to extract the lowest-lying excited states and their oscillator strengths.
+3. **Separated BSE/TDA interactions**: Uses unscreened MNOK transition charges for the bare exchange/local-field term and an electronic Resta-MNOK interaction for the screened direct electron-hole attraction.
+4. **Several excitation levels**: Solves the static BSE in the Tamm-Dancoff approximation with Davidson or dense diagonalization, or evaluates uncoupled one-electron transitions without diagonalization.
 
 Beyond calculating energies, `miniBSE` performs **extensive wavefunction analysis** based on the Dreuw/Plasser framework, outputting physical descriptors such as exciton radii ($d_{eh}$), spatial correlation (Pearson $R$), and volumetric transition densities.
 
@@ -83,11 +83,19 @@ minibse \
 * `--qp_gap`: The target quasi-particle gap (in eV). `miniBSE` uses this to apply a "scissor shift" to the raw DFT HOMO-LUMO gap.
 * `--e_thresh`: Energy threshold (in eV). Truncates the active space by discarding electron-hole transitions that exceed this gap.
 * `--material`: Uses a built-in material database to estimate dielectric screening.
-* `--alpha`: Manually overrides the Coulomb screening factor ($\alpha$).
-* `--exchange`: Toggles the inclusion of the sTDA-like exchange matrix.
+* `--eps-out`: External dielectric used by the finite-size QP polarization correction. It does not replace the material electronic dielectric inside the microscopic Resta kernel.
+* `--include-direct-eh` / `--no-direct-eh`: Enables or disables the screened attractive electron-hole direct term. The old `exchange: true` YAML key remains a deprecated compatibility alias.
+* `--alpha`: Scales only the legacy non-Resta kernel. It is ignored, with a warning, when `kernel: resta` is selected.
+
+**Excitation approximations:**
+
+* `--excitation-mode bse`: Diagonalize the coupled BSE/TDA Hamiltonian, $D_{QP}+K_x^{bare}-K_d^{screened}$ (the default).
+* `--excitation-mode independent_dft`: Do not diagonalize; use the underlying DFT occupied-to-virtual energy differences.
+* `--excitation-mode independent_qp`: Do not diagonalize; use rigid-scissor or otherwise selected QP occupied-to-virtual energy differences.
+* `--excitation-mode diagonal_bse`: Do not diagonalize; correct each QP transition by its diagonal bare $K_x$ and screened $K_d$ matrix elements. Off-diagonal configuration mixing is omitted.
 
 **Solver & Output Controls:**
-* `--full-diag`: Forces full dense diagonalization. Omit this to use the iterative Davidson solver for larger systems.
+* `--full-diag`: Forces full dense diagonalization of the resonant BSE/TDA matrix. This is not a non-TDA BSE calculation. For an independent-transition mode it requests all retained transitions without diagonalizing a matrix.
 * `--nthreads`: Number of CPU threads dedicated to C++ integral generation and PyTorch matrix contractions.
 * `--sigma`: Broadening width (in eV) for the generated UV-Vis spectrum.
 * `--plot`: Generates PNG spectra and an interactive HTML diagnostic dashboard.
@@ -104,4 +112,3 @@ A successful run of `miniBSE` will yield several outputs in your working directo
 3. **`exciton_analysis.html`**: An interactive Plotly dashboard. This visualizes exciton spatial correlations, sizes, and charge-transfer ratios across the energy spectrum.
 4. **`exciton_results.csv`**: (If `--write-csv` is used) Tabular data containing detailed spatial metrics ($d_{CT}$, $\sigma_h$, $\sigma_e$) for post-processing or tracking across MD trajectories.
 5. **Cube Files**: (If `--cube` is used) Volumetric densities ready to be visualized in software like VMD, PyMOL, or ChimeraX.
-

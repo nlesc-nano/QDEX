@@ -271,9 +271,31 @@ def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_
     np.savez_compressed(f"fuzzy_data_{prefix}_beta.npz", intensity=Z_b.astype(np.float32), **common)
     print(f"  [Fuzzy-UKS] Exported fuzzy_data_{prefix}.npz with spin polarization overlay in {time.time()-t0:.2f} s")
 
+def _matmul_real_matrix(A_real, B, device="numpy"):
+    from miniBSE.device_utils import is_gpu
+    if not np.iscomplexobj(B):
+        if is_gpu(device):
+            import torch
+            dev = torch.device(device)
+            A_t = torch.from_numpy(A_real).to(device=dev, dtype=torch.float64)
+            B_t = torch.from_numpy(np.ascontiguousarray(B)).to(device=dev, dtype=torch.float64)
+            return torch.matmul(A_t, B_t).cpu().numpy()
+        return A_real @ B
+    if is_gpu(device):
+        import torch
+        dev = torch.device(device)
+        A_t = torch.from_numpy(A_real).to(device=dev, dtype=torch.float64)
+        B_r = torch.from_numpy(np.ascontiguousarray(np.real(B))).to(device=dev, dtype=torch.float64)
+        B_i = torch.from_numpy(np.ascontiguousarray(np.imag(B))).to(device=dev, dtype=torch.float64)
+        res_r = torch.matmul(A_t, B_r).cpu().numpy()
+        res_i = torch.matmul(A_t, B_i).cpu().numpy()
+        return res_r + 1j * res_i
+    return (A_real @ np.ascontiguousarray(np.real(B))) + 1j * (A_real @ np.ascontiguousarray(np.imag(B)))
+
 def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_index, e_homo, e_lumo, e_fermi_raw, syms, coords_ang, shells, pops_sf, soc_active_indices=None, soc_E_act=None, soc_U_act=None, spinor_homo_idx=None, qp_energies=None, eps_abs=None, qp_energies_abs=None, soc_E_abs_act=None, C_beta_dense=None, eps_beta_shifted=None, eps_beta_abs=None, homo_index_beta=None, qp_energies_beta=None, qp_energies_beta_abs=None, soc_active_indices_beta=None):
     import time
     import numpy as np
+    from miniBSE.device_utils import is_gpu
     from miniBSE.pdos_coop import compute_pdos_and_coop, export_pdos_coop_data
     
     print("\n===================================================")
@@ -347,7 +369,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         pdos_analysis_sf = compute_pdos_and_coop(
             C_dense, S_dense, eps_shifted, shells, args.pdos_atoms, args.coop_pairs, dft_ewin,
             sigma=pdos_sigma_use, is_soc=False, prefix="sf", pops=pops_sf,
-            population_bars=getattr(args, "population_bars", None)
+            population_bars=getattr(args, "population_bars", None),
+            device=getattr(args, "device", "numpy")
         )
 
     if dashboard_energy_mode in ("qp", "both"):
@@ -501,9 +524,18 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc")
 
         eps_soc_qp = None
+        sort_idx_qp = None
+        soc_qp_ewin = None
         if dashboard_energy_mode in ("qp", "both") and soc_E_qp_act is not None:
-            eps_soc_qp_unsorted = np.concatenate([E_core_qp, soc_E_qp_act, E_virt_qp])[plot_keep]
-            soc_qp_ewin = auto_energy_window(eps_soc_qp_unsorted, sigma_ev=sigma_use)
+            eps_soc_qp_abs_unsorted = np.concatenate([E_core_qp, soc_E_qp_act, E_virt_qp])[plot_keep]
+            if qp_energy_reference == "fermi":
+                eps_soc_qp_abs_sorted = np.sort(eps_soc_qp_abs_unsorted)
+                qp_midgap = 0.5 * (eps_soc_qp_abs_sorted[global_spinor_homo_idx] + eps_soc_qp_abs_sorted[global_spinor_homo_idx + 1])
+                eps_soc_qp_unsorted = eps_soc_qp_abs_unsorted - qp_midgap
+                soc_qp_ewin = dft_ewin
+            else:
+                eps_soc_qp_unsorted = eps_soc_qp_abs_unsorted
+                soc_qp_ewin = auto_energy_window(eps_soc_qp_unsorted, sigma_ev=sigma_use)
             sort_idx_qp = np.argsort(eps_soc_qp_unsorted)
             eps_soc_qp = eps_soc_qp_unsorted[sort_idx_qp]
             F_spinor_qp = F_spinor_plot_unsorted[sort_idx_qp, :]
@@ -517,70 +549,103 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             print("  [PDOS/COOP] Computing SOC Spinor population analysis...")
             t_pop = time.time()
             n_ao = S_dense.shape[0]
-
-            C_spinor_ao = np.zeros((2 * n_ao, len(eps_soc_unsorted)), dtype=complex)
-            SC_dense = S_dense @ C_dense
-            SC_spinor_ao = np.zeros((2 * n_ao, len(eps_soc_unsorted)), dtype=complex)
+            device = getattr(args, "device", "numpy")
 
             if is_uks and soc_active_indices_beta is not None:
-                SC_dense_beta = S_dense @ C_beta_dense
+                n_ca = len(core_idx)
+                n_cb = len(core_idx_b)
+                n_act = soc_U_act.shape[1]
+                n_va = len(virt_idx)
+                n_vb = len(virt_idx_b)
                 n_alpha_act = len(soc_active_indices)
                 n_beta_act = len(soc_active_indices_beta)
 
-                cursor = 0
-                C_spinor_ao[:n_ao, cursor:cursor + len(core_idx)] = C_dense[:, core_idx]
-                SC_spinor_ao[:n_ao, cursor:cursor + len(core_idx)] = SC_dense[:, core_idx]
-                cursor += len(core_idx)
+                b_core_a = np.zeros((2 * n_ao, 0), dtype=complex)
+                b_core_b = np.zeros((2 * n_ao, 0), dtype=complex)
+                b_act = np.zeros((2 * n_ao, 0), dtype=complex)
+                b_virt_a = np.zeros((2 * n_ao, 0), dtype=complex)
+                b_virt_b = np.zeros((2 * n_ao, 0), dtype=complex)
 
-                C_spinor_ao[n_ao:, cursor:cursor + len(core_idx_b)] = C_beta_dense[:, core_idx_b]
-                SC_spinor_ao[n_ao:, cursor:cursor + len(core_idx_b)] = SC_dense_beta[:, core_idx_b]
-                cursor += len(core_idx_b)
+                m_ca = plot_keep[:n_ca]
+                if np.any(m_ca):
+                    b_core_a = np.zeros((2 * n_ao, np.sum(m_ca)), dtype=complex)
+                    b_core_a[:n_ao, :] = C_dense[:, core_idx[m_ca]]
 
-                C_act_a = C_dense[:, soc_active_indices]
-                C_act_b = C_beta_dense[:, soc_active_indices_beta]
-                SC_act_a = SC_dense[:, soc_active_indices]
-                SC_act_b = SC_dense_beta[:, soc_active_indices_beta]
-                n_spinor_act = soc_U_act.shape[1]
-                C_spinor_ao[:, cursor:cursor + n_spinor_act] = np.vstack([
-                    C_act_a @ soc_U_act[:n_alpha_act, :],
-                    C_act_b @ soc_U_act[n_alpha_act:n_alpha_act + n_beta_act, :]
-                ])
-                SC_spinor_ao[:, cursor:cursor + n_spinor_act] = np.vstack([
-                    SC_act_a @ soc_U_act[:n_alpha_act, :],
-                    SC_act_b @ soc_U_act[n_alpha_act:n_alpha_act + n_beta_act, :]
-                ])
-                cursor += n_spinor_act
+                m_cb = plot_keep[n_ca : n_ca + n_cb]
+                if np.any(m_cb):
+                    b_core_b = np.zeros((2 * n_ao, np.sum(m_cb)), dtype=complex)
+                    b_core_b[n_ao:, :] = C_beta_dense[:, core_idx_b[m_cb]]
 
-                C_spinor_ao[:n_ao, cursor:cursor + len(virt_idx)] = C_dense[:, virt_idx]
-                SC_spinor_ao[:n_ao, cursor:cursor + len(virt_idx)] = SC_dense[:, virt_idx]
-                cursor += len(virt_idx)
+                m_act = plot_keep[n_ca + n_cb : n_ca + n_cb + n_act]
+                if np.any(m_act):
+                    U_act_kept = soc_U_act[:, m_act]
+                    C_act_a = C_dense[:, soc_active_indices]
+                    C_act_b = C_beta_dense[:, soc_active_indices_beta]
+                    C_act_top = _matmul_real_matrix(C_act_a, U_act_kept[:n_alpha_act, :], device=device)
+                    C_act_bot = _matmul_real_matrix(C_act_b, U_act_kept[n_alpha_act:n_alpha_act + n_beta_act, :], device=device)
+                    b_act = np.vstack([C_act_top, C_act_bot])
 
-                C_spinor_ao[n_ao:, cursor:cursor + len(virt_idx_b)] = C_beta_dense[:, virt_idx_b]
-                SC_spinor_ao[n_ao:, cursor:cursor + len(virt_idx_b)] = SC_dense_beta[:, virt_idx_b]
+                m_va = plot_keep[n_ca + n_cb + n_act : n_ca + n_cb + n_act + n_va]
+                if np.any(m_va):
+                    b_virt_a = np.zeros((2 * n_ao, np.sum(m_va)), dtype=complex)
+                    b_virt_a[:n_ao, :] = C_dense[:, virt_idx[m_va]]
+
+                m_vb = plot_keep[n_ca + n_cb + n_act + n_va :]
+                if np.any(m_vb):
+                    b_virt_b = np.zeros((2 * n_ao, np.sum(m_vb)), dtype=complex)
+                    b_virt_b[n_ao:, :] = C_beta_dense[:, virt_idx_b[m_vb]]
+
+                blocks = [b_core_a, b_core_b, b_act, b_virt_a, b_virt_b]
+                C_spinor_ao_plot = np.hstack([b for b in blocks if b.shape[1] > 0])
             else:
-                C_spinor_ao[:n_ao, :len(core_idx)] = C_dense[:, core_idx]
-                C_spinor_ao[n_ao:, len(core_idx):2*len(core_idx)] = C_dense[:, core_idx]
+                n_c = len(core_idx)
+                n_act = len(soc_E_act)
+                n_v = len(virt_idx)
+                n_act_half = len(soc_active_indices)
 
-                C_act = C_dense[:, soc_active_indices]
-                C_spinor_act_a = C_act @ soc_U_act[:len(soc_active_indices), :]
-                C_spinor_act_b = C_act @ soc_U_act[len(soc_active_indices):, :]
-                C_spinor_ao[:, 2*len(core_idx) : 2*len(core_idx) + 2*len(soc_active_indices)] = np.vstack([C_spinor_act_a, C_spinor_act_b])
+                b_core_a = np.zeros((2 * n_ao, 0), dtype=complex)
+                b_core_b = np.zeros((2 * n_ao, 0), dtype=complex)
+                b_act = np.zeros((2 * n_ao, 0), dtype=complex)
+                b_virt_a = np.zeros((2 * n_ao, 0), dtype=complex)
+                b_virt_b = np.zeros((2 * n_ao, 0), dtype=complex)
 
-                virt_start = 2*len(core_idx) + 2*len(soc_active_indices)
-                C_spinor_ao[:n_ao, virt_start : virt_start+len(virt_idx)] = C_dense[:, virt_idx]
-                C_spinor_ao[n_ao:, virt_start+len(virt_idx) :] = C_dense[:, virt_idx]
+                m_ca = plot_keep[:n_c]
+                if np.any(m_ca):
+                    b_core_a = np.zeros((2 * n_ao, np.sum(m_ca)), dtype=complex)
+                    b_core_a[:n_ao, :] = C_dense[:, core_idx[m_ca]]
 
-                SC_spinor_ao[:n_ao, :len(core_idx)] = SC_dense[:, core_idx]
-                SC_spinor_ao[n_ao:, len(core_idx):2*len(core_idx)] = SC_dense[:, core_idx]
+                m_cb = plot_keep[n_c : 2 * n_c]
+                if np.any(m_cb):
+                    b_core_b = np.zeros((2 * n_ao, np.sum(m_cb)), dtype=complex)
+                    b_core_b[n_ao:, :] = C_dense[:, core_idx[m_cb]]
 
-                SC_act = SC_dense[:, soc_active_indices]
-                SC_spinor_ao[:, 2*len(core_idx) : 2*len(core_idx) + 2*len(soc_active_indices)] = np.vstack([SC_act @ soc_U_act[:len(soc_active_indices), :], SC_act @ soc_U_act[len(soc_active_indices):, :]])
+                m_act = plot_keep[2 * n_c : 2 * n_c + n_act]
+                if np.any(m_act):
+                    U_act_kept = soc_U_act[:, m_act]
+                    C_act = C_dense[:, soc_active_indices]
+                    C_act_top = _matmul_real_matrix(C_act, U_act_kept[:n_act_half, :], device=device)
+                    C_act_bot = _matmul_real_matrix(C_act, U_act_kept[n_act_half:, :], device=device)
+                    b_act = np.vstack([C_act_top, C_act_bot])
 
-                SC_spinor_ao[:n_ao, virt_start : virt_start+len(virt_idx)] = SC_dense[:, virt_idx]
-                SC_spinor_ao[n_ao:, virt_start+len(virt_idx) :] = SC_dense[:, virt_idx]
+                m_va = plot_keep[2 * n_c + n_act : 2 * n_c + n_act + n_v]
+                if np.any(m_va):
+                    b_virt_a = np.zeros((2 * n_ao, np.sum(m_va)), dtype=complex)
+                    b_virt_a[:n_ao, :] = C_dense[:, virt_idx[m_va]]
 
-            C_spinor_ao = C_spinor_ao[:, plot_keep][:, sort_idx]
-            SC_spinor_ao = SC_spinor_ao[:, plot_keep][:, sort_idx]
+                m_vb = plot_keep[2 * n_c + n_act + n_v :]
+                if np.any(m_vb):
+                    b_virt_b = np.zeros((2 * n_ao, np.sum(m_vb)), dtype=complex)
+                    b_virt_b[n_ao:, :] = C_dense[:, virt_idx[m_vb]]
+
+                blocks = [b_core_a, b_core_b, b_act, b_virt_a, b_virt_b]
+                C_spinor_ao_plot = np.hstack([b for b in blocks if b.shape[1] > 0])
+
+            SC_spinor_top = _matmul_real_matrix(S_dense, C_spinor_ao_plot[:n_ao, :], device=device)
+            SC_spinor_bot = _matmul_real_matrix(S_dense, C_spinor_ao_plot[n_ao:, :], device=device)
+            SC_spinor_ao_plot = np.vstack([SC_spinor_top, SC_spinor_bot])
+
+            C_spinor_ao = C_spinor_ao_plot[:, sort_idx]
+            SC_spinor_ao = SC_spinor_ao_plot[:, sort_idx]
 
             pops_soc_full = np.real(C_spinor_ao[:n_ao, :].conj() * SC_spinor_ao[:n_ao, :]) + \
                             np.real(C_spinor_ao[n_ao:, :].conj() * SC_spinor_ao[n_ao:, :])
@@ -589,8 +654,21 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             compute_pdos_and_coop(
                 C_spinor_ao, S_dense, eps_soc, shells, args.pdos_atoms, args.coop_pairs, soc_ewin,
                 sigma=pdos_sigma_use, is_soc=True, prefix="soc", pops=pops_soc_full,
-                population_bars=getattr(args, "population_bars", None)
+                population_bars=getattr(args, "population_bars", None),
+                device=device
             )
+
+            if dashboard_energy_mode in ("qp", "both") and eps_soc_qp is not None and sort_idx_qp is not None:
+                C_spinor_ao_qp = C_spinor_ao_plot[:, sort_idx_qp]
+                SC_spinor_ao_qp = SC_spinor_ao_plot[:, sort_idx_qp]
+                pops_soc_qp = np.real(C_spinor_ao_qp[:n_ao, :].conj() * SC_spinor_ao_qp[:n_ao, :]) + \
+                               np.real(C_spinor_ao_qp[n_ao:, :].conj() * SC_spinor_ao_qp[n_ao:, :])
+                compute_pdos_and_coop(
+                    C_spinor_ao_qp, S_dense, eps_soc_qp, shells, args.pdos_atoms, args.coop_pairs, soc_qp_ewin,
+                    sigma=pdos_sigma_use, is_soc=True, prefix="soc_qp", pops=pops_soc_qp,
+                    population_bars=getattr(args, "population_bars", None),
+                    device=device
+                )
 
     # --- 3. Generate Multi-Row Interactive Plotly HTML ---
     if getattr(args, 'plot', True) or getattr(args, 'plot_fuzzy', True):
@@ -667,10 +745,10 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             generate_interactive_plot(
                 prefix="soc_qp",
                 material=args.material,
-                ef=None,
+                ef=0.0 if qp_energy_reference == "fermi" else None,
                 e_homo=eps_soc_qp[global_spinor_homo_idx],
                 e_lumo=eps_soc_qp[global_spinor_homo_idx + 1],
                 normalize_coop=False,
-                energy_label="QP+SOC energy vs vacuum (eV)",
+                energy_label="QP+SOC energy vs vacuum (eV)" if qp_energy_reference == "vacuum" else "QP+SOC energy relative to Fermi (eV)",
                 output_html="fuzzy_dashboard_soc_qp.html"
             )

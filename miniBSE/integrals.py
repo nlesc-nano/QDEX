@@ -14,3 +14,11 @@ def compute_dipole_ao(shells, origin=None, nthreads=1):
     return mu_ao[0], mu_ao[1], mu_ao[2]
 
 
+def compute_cross_overlap_ao(shells1, shells2, nthreads=1):
+    """
+    Computes cross-overlap between two different geometries in the same basis set.
+    Returns (nbf1, nbf2) numpy array.
+    """
+    return libint_cpp.cross_overlap_geometries(shells1, shells2, nthreads)
+
+

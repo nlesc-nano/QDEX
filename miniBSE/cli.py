@@ -11,6 +11,9 @@ import yaml
 
 import libint_cpp
 
+if __package__ is None or __package__ == "":
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from miniBSE.io_utils import (
     read_xyz, parse_basis, build_shell_dicts,
     count_ao_from_shells, build_atom_ao_ranges, read_mos_auto, read_mos_uks
@@ -29,6 +32,7 @@ from miniBSE.orbital_analysis import (
 )
 from miniBSE.fuzzy_bands import run_fuzzy_bands_and_pdos, build_qp_energies, build_qp_energies_vacuum
 from miniBSE.nto import run_nto_analysis
+from miniBSE.profiler import ResourceTracker
 
 
 class TeeStream:
@@ -43,6 +47,33 @@ class TeeStream:
     def flush(self):
         for stream in self.streams:
             stream.flush()
+
+
+from miniBSE.device_utils import is_gpu, resolve_device
+
+def transform_ao_operator(mu_ao, c_left, c_right, device="numpy"):
+    """Transform an AO operator without silently reducing reference precision.
+
+    Apple MPS does not implement float64/complex128 matrix multiplication.  The
+    transition-dipole transform is small compared with the BSE solve, so MPS
+    runs deliberately use the NumPy reference path here instead of changing
+    the physical result to float32.
+    """
+    dtype = np.complex128 if any(np.iscomplexobj(x) for x in (mu_ao, c_left, c_right)) else np.float64
+    mu = np.asarray(mu_ao, dtype=dtype)
+    left = np.asarray(c_left, dtype=dtype)
+    right = np.asarray(c_right, dtype=dtype)
+    half = mu @ right
+
+    if is_gpu(device):
+        import torch
+        dev = torch.device(device) if isinstance(device, str) else device
+        return (
+            torch.as_tensor(left, device=dev).conj().T
+            @ torch.as_tensor(half, device=dev)
+        ).cpu().numpy().astype(dtype, copy=False)
+
+    return (left.conj().T @ half).astype(dtype, copy=False)
 
 
 def setup_run_logging(log_file):
@@ -67,7 +98,7 @@ def print_qp_provenance(details, dft_gap=None, target_qp_gap=None, output_file=N
     if not details:
         return
 
-    print("\n  [QP Provenance] Scaled-GW hardness dictionary model")
+    print("\n  [QP Provenance] Anchor-scaled PBE-to-QP model")
     print(f"    Material                 : {details['material']}")
     if "cluster_radius_ang" in details:
         print(f"    Cluster radius           : {details['cluster_radius_ang']:.3f} Å")
@@ -78,7 +109,12 @@ def print_qp_provenance(details, dft_gap=None, target_qp_gap=None, output_file=N
     if details.get("has_monomer_anchor"):
         print(f"    Monomer anchor radius    : {details['monomer_radius_ang']:.3f} Å")
         print(f"    Monomer PBE -> GW gap    : {details['monomer_pbe_gap_ev']:.3f} -> {details['monomer_gw_gap_ev']:.3f} eV")
-        print(f"    Geometric damping gamma  : {details['geometric_damping_gamma_ang']:.3f} Å")
+        print(f"    Anchor residual A        : {details['anchor_residual_ev']:+.3f} eV")
+        print(f"    ell, p                   : {details['regularization_length_ang']:.3f} Å, {details['residual_power']:.3f}")
+    if details.get("principal_extents_ang"):
+        extents = ", ".join(f"{x:.3f}" for x in details["principal_extents_ang"])
+        print(f"    Principal extents        : [{extents}] Å")
+        print(f"    Anisotropy ratio         : {details['anisotropy_ratio']:.3f}")
     print(f"    Vacuum finite-size shift : {details['finite_size_shift_vacuum_ev']:+.3f} eV")
     print(f"    Solvent finite-size shift: {details['finite_size_shift_solvent_ev']:+.3f} eV")
     print(f"    Vacuum scissor           : {details['total_scissor_vacuum_ev']:+.3f} eV")
@@ -155,7 +191,10 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     print(f"===================================================")
 
     start_solve = time.time()
-    energies_ev, vectors = solver.solve(nroots=args.nroots, full_diag=args.full_diag, tol=args.tol)
+    energies_ev, vectors = solver.solve(
+        nroots=args.nroots, full_diag=args.full_diag, tol=args.tol,
+        excitation_mode=args.excitation_mode,
+    )
     
     if args.soc != 0.0:
         energies_ev = energies_ev - args.soc
@@ -163,7 +202,11 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     print(f"  {label} Solver converged in {time.time() - start_solve:2.2f} s")
 
     mu_ia = solver.ham.get_transition_dipoles(mu_ia_x, mu_ia_y, mu_ia_z)
-    f_strengths = compute_oscillator_strengths(energies_ev, vectors, mu_ia, is_spinor=solver.soc_flag)
+    f_strengths = compute_oscillator_strengths(
+        energies_ev, vectors, mu_ia,
+        is_spinor=solver.soc_flag,
+        spin_resolved=(spin == "uks_spin_preserving"),
+    )
 
     def project_spinor_vec_to_spatial(vec):
         X_IA = np.zeros(solver.ham.dim_spinor_full, dtype=complex)
@@ -194,8 +237,15 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         U_virt_a = soc_U[:n_mo, n_occ_sp:]
         U_occ_b = soc_U[n_mo:, :n_occ_sp]
         U_virt_b = soc_U[n_mo:, n_occ_sp:]
-        X_ia = U_occ_a.conj() @ X_IA @ U_virt_a.T + U_occ_b.conj() @ X_IA @ U_virt_b.T
-        return np.abs(X_ia[solver.ham.valid_i, solver.ham.valid_a])
+        X_ia_a = U_occ_a.conj() @ X_IA @ U_virt_a.T
+        X_ia_b = U_occ_b.conj() @ X_IA @ U_virt_b.T
+        # Do not add alpha and beta amplitudes before forming densities: valid
+        # spin channels can cancel at amplitude level.  This norm preserves the
+        # spin trace for the approximate spatial analysis path.
+        return np.sqrt(
+            np.abs(X_ia_a[solver.ham.valid_i, solver.ham.valid_a]) ** 2
+            + np.abs(X_ia_b[solver.ham.valid_i, solver.ham.valid_a]) ** 2
+        )
 
     print("\n" + "-"*60)
     print(f" SYSTEM ENERGY SUMMARY ({label})")
@@ -205,11 +255,13 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         print(f"  SOC Gap               : {soc_gap:8.4f} eV")
     print(f"  QP Correction (Shift) : {scissor:8.4f} eV")
     print(f"  Confinement Energy    : {confinement_energy:8.4f} eV")
-    print(f"  Dielectric Tuning (α) : {args.alpha:8.4f}")
+    print(f"  Excitation Mode        : {args.excitation_mode}")
+    if args.kernel != "resta":
+        print(f"  Legacy Kernel Scaling  : {args.alpha:8.4f}")
     print("-" * 60)
 
     print("\n" + "="*172)
-    print(f"{'State':>5} {'Energy':>10} {'Main Trans':>12} {'Weight':>8} {'f_osc':>10} | {'PR':>5} | {'dE(eV)':>8} {'J(eV)':>8} {'K(eV)':>8} | {'Spin-Free Character':>62}")
+    print(f"{'State':>5} {'Energy':>10} {'Main Trans':>12} {'Weight':>8} {'f_osc':>10} | {'PR':>5} | {'D(eV)':>8} {'Kx(eV)':>8} {'-Kd(eV)':>8} | {'Spin-Free Character':>62}")
     print("-" * 172)
 
     n_print = min(100, len(energies_ev))
@@ -243,13 +295,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             trans_str = f"{abs_h:3d}->{abs_e:3d}"
 
         vec_conj = vec.conj() if np.iscomplexobj(vec) else vec
-        dE_val = np.sum((np.abs(vec)**2) * solver.ham.D)
-        
-        if hasattr(solver, 'J_mat'):
-            J_val = np.real(vec_conj.T @ solver.J_mat @ vec)
-            K_val = -np.real(vec_conj.T @ solver.K_mat @ vec) if solver.ham.include_exchange else 0.0
-        else:
-            J_val, K_val = 0.0, 0.0
+        dE_val, Kx_val, minus_Kd_val = solver.expectation_components(vec)
 
         pr = 1.0 / np.sum(np.abs(vec)**4)
 
@@ -281,7 +327,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         else:
             spin_str = "100.0% S /   0.0% T"
 
-        print(f"{n+1:5d} {energies_ev[n]:10.4f}  {trans_str:>12}  {weight**2:8.3f}  {f_strengths[n]:10.5f} | {pr:5.1f} | {dE_val:8.4f} {J_val:8.4f} {K_val:8.4f} | {spin_str:>62}")
+        print(f"{n+1:5d} {energies_ev[n]:10.4f}  {trans_str:>12}  {weight**2:8.3f}  {f_strengths[n]:10.5f} | {pr:5.1f} | {dE_val:8.4f} {Kx_val:8.4f} {minus_Kd_val:8.4f} | {spin_str:>62}")
 
     if len(energies_ev) > 100: print(f" ... {len(energies_ev) - 100} additional states computed (output truncated) ...")
     print("="*172)
@@ -289,8 +335,9 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     print(f"\n--- Performing Dreuw/Plasser Analysis ({label}) ---")
     analyzer = ExcitonAnalyzer(solver, np.array(coords_ang), syms)
     analysis_results = []
+    analysis_t0 = time.perf_counter()
 
-    print(f"{'State':>5} {'Energy':>8} {'f_osc':>8} | {'PR':>5} {'d_eh(A)':>7} {'d_CT(A)':>7} {'sig_h':>6} {'sig_e':>6} | {'Type':>8}")
+    print(f"{'State':>5} {'Energy':>8} {'f_osc':>8} | {'PR':>5} {'d_eh~(A)':>8} {'d_CT~(A)':>8} {'sig_h~':>7} {'sig_e~':>7} | {'Type':>8}")
     print("-" * 95)
 
     for n in range(n_print):
@@ -311,6 +358,11 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         else: ex_type = "Wannier"
 
         print(f"{n+1:5d} {res['energy']:8.3f} {res['f_osc']:8.4f} | {res['PR']:5.1f} {res['d_eh']:7.2f} {res['d_CT']:7.2f} {res['sigma_h']:6.1f} {res['sigma_e']:6.1f} | {ex_type:>8}")
+
+    print(
+        f"  [Analyzer] Completed {len(analysis_results)} coherent-state analyses "
+        f"in {time.perf_counter() - analysis_t0:.2f} s"
+    )
 
     if getattr(args, 'nto', False):
         run_nto_analysis(
@@ -422,6 +474,15 @@ def validate_args(args, parser):
     if args.run_fuzzy and args.cif is None:
         parser.error("Validation error: --run_fuzzy requires a CIF crystal structure file via --cif.")
 
+    if args.beta > 0.0:
+        parser.error("Validation error: beta > 0 is unavailable until a validated on-site U table is provided.")
+
+    if args.qp_regularization_length < 0.0:
+        parser.error("Validation error: --qp-regularization-length must be non-negative.")
+
+    if args.qp_residual_power <= 1.0:
+        parser.error("Validation error: --qp-residual-power must be greater than 1.")
+
     if getattr(args, "periodic_enabled", False):
         lattice_vectors = getattr(args, "lattice_vectors", None)
         if lattice_vectors is None:
@@ -441,10 +502,18 @@ def _apply_config(args, config_data):
                 setattr(args, "overlap_cutoff", parameters["overlap_cutoff"])
             continue
 
+        if section == "namd" and isinstance(parameters, dict):
+            setattr(args, "namd_cfg", parameters)
+            continue
+
         if isinstance(parameters, dict):
             for key, value in parameters.items():
+                if not hasattr(args, key):
+                    raise ValueError(f"Unknown YAML key '{section}.{key}'")
                 setattr(args, key, value)
         else:
+            if not hasattr(args, section):
+                raise ValueError(f"Unknown YAML key '{section}'")
             setattr(args, section, parameters)
 
 
@@ -472,11 +541,15 @@ def main():
     parser.add_argument("--xyz") 
     parser.add_argument("--basis_txt")
     parser.add_argument("--basis_name")
+    parser.add_argument(
+        "--cache-mos", dest="cache_mos", action="store_true",
+        help="Cache parsed text MOs as a validated uncompressed binary NPZ sidecar for faster repeated runs.",
+    )
 
     parser.add_argument("--n-occ", type=int, default=50)
     parser.add_argument("--n-virt", type=int, default=50)
     parser.add_argument("--e_thresh", type=float, default=None)
-    parser.add_argument("--f_thresh", type=float, default=1e-4)
+    parser.add_argument("--f_thresh", type=float, default=0.0)
 
     parser.add_argument("--qp_gap", type=str, default="brus")
     parser.add_argument("--soc", type=float, default=0.0)
@@ -484,14 +557,25 @@ def main():
     parser.add_argument("--gth_file", type=str, default=None)
 
     parser.add_argument("--kernel", choices=["bse", "resta"], default="bse")
-    parser.add_argument("--alpha", type=float, default=1.0, help="Macroscopic screening factor (often 1/eps_inf) for the BSE kernel.")
-    parser.add_argument("--beta", type=float, default=0.0, help="Exact exchange fraction [0.0 to 1.0] for Hubbard U stiffening on the QP bare kernel.")
-    parser.add_argument("--exchange", action="store_true")
+    parser.add_argument("--alpha", type=float, default=1.0, help="Scaling for the legacy non-RESTA kernel; ignored by RESTA.")
+    parser.add_argument("--beta", type=float, default=0.0, help="Reserved on-site stiffening parameter; beta > 0 is currently rejected.")
+    parser.add_argument("--exchange", action="store_true", default=None, help="Deprecated alias for --include-direct-eh.")
+    direct_group = parser.add_mutually_exclusive_group()
+    direct_group.add_argument("--include-direct-eh", dest="include_direct_eh", action="store_true", default=None,
+                              help="Include the Resta-screened attractive electron-hole direct term (default).")
+    direct_group.add_argument("--no-direct-eh", dest="include_direct_eh", action="store_false",
+                              help="Disable the attractive electron-hole direct term.")
     parser.add_argument("--estimate_qp", action="store_true", help="Compute G0W0-lite Quasiparticle corrections via COHSEX")
     parser.add_argument("--use_cohsex_gap", action="store_true", help="Override the tabulated GW gap with the pure COHSEX computed gap")
     parser.add_argument("--vxc_ao", type=str, default=None, help="Path to cleaned CP2K AO-basis Vxc matrix text file")
     parser.add_argument("--material", type=str, default="DEFAULT")
     parser.add_argument("--eps-out", type=float, default=2.0)
+    parser.add_argument("--qp-regularization-length", dest="qp_regularization_length", type=float, default=1.0,
+                        help="Regularization length ell in angstrom for the anchor-scaled QP model.")
+    parser.add_argument("--qp-residual-power", dest="qp_residual_power", type=float, default=2.0,
+                        help="Power p > 1 controlling decay of the anchor residual.")
+    parser.add_argument("--qp-strict", action="store_true",
+                        help="Reject clusters smaller than the finite-size anchor instead of clamping to it.")
 
     parser.add_argument("--broadening", choices=["gaussian", "lorentzian", "none"], default="gaussian")
     parser.add_argument("--sigma", type=float, default=0.1)
@@ -530,7 +614,16 @@ def main():
  
     parser.add_argument("--nroots", type=int, default=10)
     parser.add_argument("--full-diag", action="store_true")
+    parser.add_argument(
+        "--excitation-mode",
+        choices=["bse", "independent_dft", "independent_qp", "diagonal_bse"],
+        default="bse",
+        help=("Excitation model: diagonalize BSE/TDA, or use uncoupled transitions with "
+              "DFT gaps, QP gaps, or QP gaps plus diagonal Kx/Kd corrections."),
+    )
     parser.add_argument("--tol", type=float, default=1e-5)
+    parser.add_argument("--orthonormality-tol", type=float, default=1e-5,
+                        help="Abort when max|C^dagger S C-I| exceeds this tolerance.")
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda", "mps", "numpy"], default="auto")
 
@@ -554,17 +647,54 @@ def main():
     parser.add_argument("--lattice_vectors", type=float, nargs=9, default=None, help="3x3 lattice vectors in angstrom, row-major.")
     parser.add_argument("--overlap_cutoff", type=float, default=-1.0, help="Periodic overlap image cutoff in angstrom; <=0 uses minimum image only.")
 
+    # NAMD arguments
+    parser.add_argument("--namd-precompute", action="store_true", help="Run NAMD precomputation (cross-overlaps, tracking, caching).")
+    parser.add_argument("--namd-run", action="store_true", help="Run NAMD carrier cooling simulation from precomputed data.")
+    parser.add_argument("--namd-compact", type=str, nargs="?", const="default", default=None, help="Compact precomputed NAMD directory (compresses and removes redundant arrays).")
+    parser.add_argument("--namd-soc", action="store_true", help="Enable Spin-Orbit Coupling (SOC) for NAMD precomputation.")
+
     args = parser.parse_args()
 
     config_path = args.config
+    config_data = {}
     if args.config:
         with open(args.config, 'r') as f:
-            config_data = yaml.safe_load(f)
+            config_data = yaml.safe_load(f) or {}
 
-        _apply_config(args, config_data or {})
+        _apply_config(args, config_data)
+
+    if getattr(args, "namd_soc", False):
+        config_data.setdefault("physics", {})["soc"] = True
+    if getattr(args, "gth_file", None):
+        config_data.setdefault("system", {})["gth_file"] = args.gth_file
+
+    if getattr(args, "namd_compact", None) is not None:
+        from miniBSE.namd import compact_precomputed_data
+        compact_dir = args.namd_compact
+        if compact_dir == "default":
+            compact_dir = config_data.get("namd", {}).get("storage", {}).get("precompute_dir", "namd_precomputed")
+        compact_precomputed_data(compact_dir)
+        return
+
+    if getattr(args, "namd_precompute", False):
+        from miniBSE.namd import precompute_namd_data
+        setup_run_logging(getattr(args, "log_file", "minibse.log"))
+        precompute_namd_data(config_data)
+        return
+
+    if getattr(args, "namd_run", False):
+        from miniBSE.namd import run_namd_dynamics
+        setup_run_logging(getattr(args, "log_file", "minibse.log"))
+        run_namd_dynamics(config_data)
+        return
 
     if getattr(args, "lattice_vectors", None) is not None:
         args.lattice_vectors = np.asarray(args.lattice_vectors, dtype=float).reshape(3, 3).tolist()
+
+    if getattr(args, "include_direct_eh", None) is None:
+        args.include_direct_eh = True if args.exchange is None else bool(args.exchange)
+    if args.exchange is not None:
+        print("  [Deprecated] 'exchange' now maps to include_direct_eh; use include_direct_eh instead.")
 
     setup_run_logging(getattr(args, "log_file", "minibse.log"))
     validate_args(args, parser)
@@ -579,16 +709,20 @@ def main():
     print(" miniBSE - Post-DFT Exciton Solver")
     print("===================================================")
 
+    tracker = ResourceTracker()
+
+    tracker.start_stage("Geometry & Basis Parsing")
     print("\n--- Parsing Geometry and Basis Set ---")
     t0_parse = time.time()
     syms, coords_ang = read_xyz(args.xyz)
-    basis_dict = parse_basis(args.basis_txt, args.basis_name)
+    basis_dict = parse_basis(args.basis_txt, args.basis_name, required_elements=set(syms))
     shells = build_shell_dicts(syms, coords_ang, basis_dict)
     shells = [{**sh, 'pure': True} for sh in shells] # Use Sphericals 
     n_ao = count_ao_from_shells(shells)
     atom_ao_ranges = build_atom_ao_ranges(shells)
     print(f"  -> Parsed in {time.time() - t0_parse:.2f} s | Total AOs: {n_ao}")
 
+    tracker.start_stage("AO Overlap Matrix (S)")
     print("\n--- Computing AO overlap ---")
     t0_s = time.time()
     if getattr(args, "periodic_enabled", False):
@@ -608,20 +742,21 @@ def main():
     C_beta, eps_beta, occ_beta = None, None, None
     homo_index_beta = None
 
+    tracker.start_stage("Molecular Orbitals (MOs)")
     if args.mo_file_beta is not None:
         print(f"\n--- Reading Alpha Molecular Orbitals from {args.mo_file} ---")
         t0_mos = time.time()
-        C, eps, occ = read_mos_auto(args.mo_file, n_ao, verbose=True)
+        C, eps, occ = read_mos_auto(args.mo_file, n_ao, verbose=True, cache=args.cache_mos)
         print(f"  -> Alpha MOs parsed in {time.time() - t0_mos:.2f} s | C shape {C.shape}")
         
         print(f"\n--- Reading Beta Molecular Orbitals from {args.mo_file_beta} ---")
         t0_beta = time.time()
-        C_beta, eps_beta, occ_beta = read_mos_auto(args.mo_file_beta, n_ao, verbose=True)
+        C_beta, eps_beta, occ_beta = read_mos_auto(args.mo_file_beta, n_ao, verbose=True, cache=args.cache_mos)
         print(f"  -> Beta MOs parsed in {time.time() - t0_beta:.2f} s | C shape {C_beta.shape}")
     else:
         print(f"\n--- Reading Molecular Orbitals from {args.mo_file} ---")
         t0_mos = time.time()
-        C, eps, occ = read_mos_auto(args.mo_file, n_ao, verbose=True)
+        C, eps, occ = read_mos_auto(args.mo_file, n_ao, verbose=True, cache=args.cache_mos)
         print(f"  -> MOs parsed in {time.time() - t0_mos:.2f} s | C shape {C.shape}")
 
     t0_gap = time.time()
@@ -653,7 +788,7 @@ def main():
     e_homo = eps_shifted[homo_index]
     e_lumo = eps_beta_shifted[homo_index_beta + 1]
 
-    # REPLACE IT WITH THIS:
+    tracker.start_stage("Quasiparticle (GW) Model")
     dft_gap = eps_beta[homo_index_beta + 1] - eps[homo_index]
     target_qp_gap = dft_gap
     confinement_energy = 0.0
@@ -666,9 +801,10 @@ def main():
                 scissor = target_qp_gap - dft_gap
                 confinement_energy = target_qp_gap - MATERIAL_DB.get(args.material.upper(), [0]*9)[3]
             else:
-                print("  [Warning] Brus estimation failed. Falling back to zero scissor.")
-                scissor = 0.0
-                target_qp_gap = dft_gap
+                raise ValueError(
+                    "Brus QP model requested, but the required material data are missing. "
+                    "Select qp_gap: pbe explicitly for an uncorrected calculation."
+                )
                 
         elif args.qp_gap.lower() == "gw":
             if getattr(args, "periodic_enabled", False):
@@ -677,21 +813,34 @@ def main():
             else:
                 # Compute the Scaled GW Scissor directly
                 gw_scissor, qp_provenance = estimate_gw_qp_gap(
-                    np.array(coords_ang), syms, args.material, args.eps_out, return_details=True
+                    np.array(coords_ang), syms, args.material, args.eps_out,
+                    regularization_length_ang=args.qp_regularization_length,
+                    residual_power=args.qp_residual_power,
+                    strict=args.qp_strict,
+                    return_details=True,
                 )
             
             if gw_scissor is not None:
                 scissor = gw_scissor
                 target_qp_gap = dft_gap + scissor
             else:
-                print("  [Warning] Scaled GW estimation failed. Falling back to zero scissor.")
-                scissor = 0.0
-                target_qp_gap = dft_gap
+                raise ValueError(
+                    "GW QP model requested, but the required anchor/bulk data are missing. "
+                    "Select qp_gap: pbe explicitly for an uncorrected calculation."
+                )
                 
             if args.estimate_qp:
                 print("  [QP Warning] qp_gap is set to 'gw', which already uses the recommended scaled-GW hardness model.")
                 print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
                 print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
+        elif args.qp_gap.lower() == "pbe":
+            scissor = 0.0
+            target_qp_gap = dft_gap
+            print("  [QP] Explicit uncorrected PBE mode selected.")
+        else:
+            raise ValueError(
+                f"Unknown qp_gap mode '{args.qp_gap}'. Use 'gw', 'brus', 'pbe', or a numeric gap."
+            )
     else:
         # Numeric explicit gap provided
         target_qp_gap = float(args.qp_gap)
@@ -727,12 +876,16 @@ def main():
         gap_pbe_mono = pbe_l_mono - pbe_h_mono
         
         # 1. Asymmetry Fractions from the GW Anchor
-        delta_h = abs(gw_h_mono - pbe_h_mono)
-        delta_l = abs(gw_l_mono - pbe_l_mono)
-        total_delta = delta_h + delta_l
-        
-        f_lumo = delta_l / total_delta if total_delta > 0 else 0.5
-        f_homo = delta_h / total_delta if total_delta > 0 else 0.5
+        delta_h = gw_h_mono - pbe_h_mono
+        delta_l = gw_l_mono - pbe_l_mono
+        anchor_gap_opening = delta_l - delta_h
+
+        if anchor_gap_opening > 1.0e-12 and delta_h <= 0.0 and delta_l >= 0.0:
+            f_homo = -delta_h / anchor_gap_opening
+            f_lumo = delta_l / anchor_gap_opening
+        else:
+            f_homo = f_lumo = 0.5
+            print("  [QP Warning] Anchor frontier shifts do not bracket the PBE gap; using a symmetric edge split.")
         
         # 2. Project Absolute PBE Levels (Bypassing CP2K floating vacuum)
         # We use the computed intermediate PBE gap (dft_gap) as the physical truth
@@ -747,7 +900,7 @@ def main():
         
         print(f"\n  [Absolute Band Edges (IP & EA)]")
         print(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (Floating Vacuum)")
-        print(f"    True PBE HOMO    : {true_pbe_homo:8.4f} eV (Anchored to Monomer)")
+        print(f"    Modeled PBE HOMO : {true_pbe_homo:8.4f} eV (anchor-reconstructed)")
         print(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}%")
 
     else:
@@ -766,6 +919,17 @@ def main():
     else:
         print(f"    QP HOMO (IP)     : {qp_homo:8.4f} eV   -> IP = {-qp_homo:8.4f} eV")
         print(f"    QP LUMO (EA)     : {qp_lumo:8.4f} eV   -> EA = {-qp_lumo:8.4f} eV")
+    if qp_provenance is not None:
+        qp_provenance.update({
+            "target_pbe_gap_ev": float(dft_gap),
+            "target_qp_gap_ev": float(target_qp_gap),
+            "modeled_qp_homo_ev": float(qp_homo),
+            "modeled_qp_lumo_ev": float(qp_lumo),
+            "modeled_ip_ev": float(-qp_homo),
+            "modeled_ea_ev": float(-qp_lumo),
+            "absolute_edge_model": "anchor_reconstructed",
+        })
+        write_qp_provenance(qp_provenance, dft_gap, target_qp_gap, scissor, args)
     # =========================================================================
 
     print(f"  -> Energy axis shifted and target gap resolved in {time.time() - t0_gap:.4f} s")
@@ -773,6 +937,7 @@ def main():
     # -----------------------------------------------------------------
     # Unified S@C Computation
     # -----------------------------------------------------------------
+    tracker.start_stage("MO Orthonormality & Populations")
     print("\n--- Computing Unified S@C Population Analysis ---")
     t0_pop = time.time()
     C_dense = C.toarray() if hasattr(C, 'toarray') else C
@@ -782,17 +947,35 @@ def main():
     # === DIAGNOSTIC: STRICT C^T S C ORTHONORMALITY CHECK ===
     overlap_label = "PBC" if getattr(args, "periodic_enabled", False) else "finite"
     print(f"\n  [Diag] Testing MO Orthonormality with {overlap_label} overlap (C^T S C = I) ...")
-    norm_matrix = C_dense.T @ SC_dense
-    orth_err = np.linalg.norm(norm_matrix - np.eye(C_dense.shape[1]))
-    print(f"[CHECK] alpha ||CᵀSC - I|| = {orth_err:.3e}")
+    norm_matrix = C_dense.conj().T @ SC_dense
+    orth_delta = norm_matrix - np.eye(C_dense.shape[1])
+    orth_err = np.linalg.norm(orth_delta)
+    orth_max = np.max(np.abs(orth_delta))
+    print(f"[CHECK] alpha ||C†SC - I||_F = {orth_err:.3e}")
+    print(f"[CHECK] alpha max|C†SC - I|  = {orth_max:.3e}")
+    if orth_max > args.orthonormality_tol:
+        raise ValueError(
+            f"MO orthonormality failure: max|C†SC-I|={orth_max:.3e} exceeds "
+            f"{args.orthonormality_tol:.3e}. Check AO ordering, normalization, and spherical conventions."
+        )
+    soc_assume_orthonormal = orth_max < 1.0e-6
 
     if C_beta is not None:
         C_dense_beta_pop = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
         SC_dense_beta_pop = S @ C_dense_beta_pop
-        norm_matrix_beta = C_dense_beta_pop.T @ SC_dense_beta_pop
-        orth_err_beta = np.linalg.norm(norm_matrix_beta - np.eye(C_dense_beta_pop.shape[1]))
-        print(f"[CHECK] beta  ||CᵀSC - I|| = {orth_err_beta:.3e}")
-        cross_err = np.linalg.norm(C_dense.T @ SC_dense_beta_pop)
+        norm_matrix_beta = C_dense_beta_pop.conj().T @ SC_dense_beta_pop
+        orth_delta_beta = norm_matrix_beta - np.eye(C_dense_beta_pop.shape[1])
+        orth_err_beta = np.linalg.norm(orth_delta_beta)
+        orth_max_beta = np.max(np.abs(orth_delta_beta))
+        print(f"[CHECK] beta  ||C†SC - I||_F = {orth_err_beta:.3e}")
+        print(f"[CHECK] beta  max|C†SC - I|  = {orth_max_beta:.3e}")
+        if orth_max_beta > args.orthonormality_tol:
+            raise ValueError(
+                f"Beta MO orthonormality failure: max|C†SC-I|={orth_max_beta:.3e} exceeds "
+                f"{args.orthonormality_tol:.3e}."
+            )
+        soc_assume_orthonormal = soc_assume_orthonormal and orth_max_beta < 1.0e-6
+        cross_err = np.linalg.norm(C_dense.conj().T @ SC_dense_beta_pop)
         print(f"[CHECK] alpha/beta ||Caᵀ S Cb|| = {cross_err:.3e} (diagnostic)")
     # ===========================================================
 
@@ -827,6 +1010,7 @@ def main():
     soc_overlap_cache = None
     
     if args.soc_flag:
+        tracker.start_stage("SOC Active Space (BSE)")
         print(f"\n--- Computing SOC Spinor Subspace for BSE (Small Window) ---")
         if is_uks_sp:
             from miniBSE.soc_utils import compute_spinor_subspace_uks
@@ -835,7 +1019,10 @@ def main():
                 atom_symbols=syms, coords_ang=coords_ang, shells=shells,
                 C_alpha_AO=C_dense, eps_alpha_Ha=eps / HA_TO_EV, active_alpha_indices=bse_active_indices,
                 C_beta_AO=C_dense_beta, eps_beta_Ha=eps_beta / HA_TO_EV, active_beta_indices=bse_active_indices_beta,
-                S_AO=S, gth_file=args.gth_file, nthreads=args.nthreads
+                S_AO=S, gth_file=args.gth_file, nthreads=args.nthreads,
+                assume_orthonormal=soc_assume_orthonormal,
+                SC_alpha_AO=SC_dense, SC_beta_AO=SC_dense_beta_pop,
+                device=args.device,
             )
             bse_spinor_homo_idx = bse_n_occ + bse_n_occ_beta - 1
         else:
@@ -843,7 +1030,9 @@ def main():
             bse_soc_E, bse_soc_U, soc_overlap_cache = compute_spinor_subspace(
                 atom_symbols=syms, coords_ang=coords_ang, shells=shells, 
                 C_AO=C_dense, eps_Ha=eps / HA_TO_EV, S_AO=S, 
-                active_indices=bse_active_indices, gth_file=args.gth_file, nthreads=args.nthreads
+                active_indices=bse_active_indices, gth_file=args.gth_file,
+                nthreads=args.nthreads, assume_orthonormal=soc_assume_orthonormal,
+                SC_AO=SC_dense, device=args.device,
             )
             bse_spinor_homo_idx = (bse_n_occ * 2) - 1
         bse_soc_E = (bse_soc_E * HA_TO_EV) - e_fermi_raw
@@ -930,6 +1119,7 @@ def main():
     # EXCITON CUBE GENERATION: EXECUTED BEFORE FUZZY PLOTTING 
     # -----------------------------------------------------------------
     if getattr(args, 'cube', False):
+        tracker.start_stage("Exciton Cube Generation")
         from miniBSE.exciton_cube import generate_cubes
         print("\n--- Generating Cubes for MOs / Spinors ---")
         
@@ -976,6 +1166,7 @@ def main():
     # MODULE DELEGATION: FUZZY BANDS & PDOS (Large Window)
     # -----------------------------------------------------------------
     if getattr(args, 'run_fuzzy', False):
+        tracker.start_stage("Fuzzy Bands & PDOS/COOP")
         fuzzy_active_indices = _select_soc_window_indices(eps_shifted, homo_index, args.soc_window)
         fuzzy_active_indices_beta = _select_soc_window_indices(eps_beta_shifted, homo_index_beta, args.soc_window)
 
@@ -999,7 +1190,10 @@ def main():
                     atom_symbols=syms, coords_ang=coords_ang, shells=shells,
                     C_alpha_AO=C_dense, eps_alpha_Ha=eps / HA_TO_EV, active_alpha_indices=fuzzy_active_indices,
                     C_beta_AO=C_dense_beta, eps_beta_Ha=eps_beta / HA_TO_EV, active_beta_indices=fuzzy_active_indices_beta,
-                    S_AO=S, gth_file=args.gth_file, nthreads=args.nthreads, soc_cache=soc_overlap_cache
+                    S_AO=S, gth_file=args.gth_file, nthreads=args.nthreads,
+                    soc_cache=soc_overlap_cache, assume_orthonormal=soc_assume_orthonormal,
+                    SC_alpha_AO=SC_dense, SC_beta_AO=SC_dense_beta_pop,
+                    device=args.device,
                 )
                 f_n_occ = np.sum(fuzzy_active_indices <= homo_index)
                 f_n_occ_beta = np.sum(fuzzy_active_indices_beta <= homo_index_beta)
@@ -1010,7 +1204,8 @@ def main():
                     atom_symbols=syms, coords_ang=coords_ang, shells=shells,
                     C_AO=C_dense, eps_Ha=eps / HA_TO_EV, S_AO=S,
                     active_indices=fuzzy_active_indices, gth_file=args.gth_file, nthreads=args.nthreads,
-                    soc_cache=soc_overlap_cache
+                    soc_cache=soc_overlap_cache, assume_orthonormal=soc_assume_orthonormal,
+                    SC_AO=SC_dense, device=args.device,
                 )
                 f_n_occ = np.sum(fuzzy_active_indices <= homo_index)
                 fuzzy_spinor_homo_idx = (f_n_occ * 2) - 1
@@ -1039,6 +1234,8 @@ def main():
     # -----------------------------------------------------------------
     run_bse = getattr(args, 'run_bse', True)
     if not run_bse:
+        tracker.end_stage()
+        tracker.print_summary(device=args.device, nthreads=args.nthreads)
         print("\n--- BSE Calculation Skipped (run_bse: false) ---")
         print("\nAll requested tasks finished successfully.")
         return
@@ -1046,6 +1243,7 @@ def main():
     # -----------------------------------------------------------------
     # BSE CONTINUATION (Only if run_bse is True)
     # -----------------------------------------------------------------
+    tracker.start_stage("Transition Dipoles")
     print("\n--- Computing Transition Dipoles ---")
     if getattr(args, "periodic_enabled", False):
         print("  [Warning] Periodic mode is enabled, but transition dipoles use the finite-cell AO position operator.")
@@ -1054,17 +1252,13 @@ def main():
     mu_ao_x, mu_ao_y, mu_ao_z = compute_dipole_ao(shells, nthreads=args.nthreads)
     print(f"  ->  Dipoles computed in {time.time() - t0_dip:.2f} s")
 
-    compute_device = "numpy"
-    if args.device != "numpy":
+    compute_device, dev_obj = resolve_device(args.device, verbose=True)
+    if dev_obj is not None:
         try:
             import torch
-            if args.device == "auto":
-                if torch.cuda.is_available(): compute_device = "cuda"
-                elif hasattr(torch.backends, "mps") and platform.machine() == 'arm64': compute_device = "mps"
-                else: compute_device = "cpu"
-            else: compute_device = args.device
             torch.set_num_threads(args.nthreads)
-        except ImportError: pass
+        except Exception:
+            pass
 
     # ---------------------------------------------------------------
     # Determine spin mode and compute transition dipoles accordingly
@@ -1078,18 +1272,13 @@ def main():
         C_dense_alpha = C.toarray() if hasattr(C, 'toarray') else np.asarray(C)
         C_dense_beta  = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
 
-        C_occ_a  = C_dense_alpha[:, homo_index - bse_n_occ + 1 : homo_index + 1].astype(np.float32)
-        C_virt_a = C_dense_alpha[:, homo_index + 1 : homo_index + 1 + bse_n_virt].astype(np.float32)
-        C_occ_b  = C_dense_beta[:, homo_index_beta - bse_n_occ + 1 : homo_index_beta + 1].astype(np.float32)
-        C_virt_b = C_dense_beta[:, homo_index_beta + 1 : homo_index_beta + 1 + bse_n_virt].astype(np.float32)
+        C_occ_a  = C_dense_alpha[:, homo_index - bse_n_occ + 1 : homo_index + 1].astype(np.float64)
+        C_virt_a = C_dense_alpha[:, homo_index + 1 : homo_index + 1 + bse_n_virt].astype(np.float64)
+        C_occ_b  = C_dense_beta[:, homo_index_beta - bse_n_occ + 1 : homo_index_beta + 1].astype(np.float64)
+        C_virt_b = C_dense_beta[:, homo_index_beta + 1 : homo_index_beta + 1 + bse_n_virt].astype(np.float64)
 
         def transform_dipole_chan(mu_ao, C_occ_ch, C_virt_ch):
-            half = mu_ao.astype(np.float32) @ C_virt_ch
-            if compute_device in ["cuda", "mps"]:
-                import torch
-                dev = torch.device(compute_device)
-                return (torch.tensor(C_occ_ch, device=dev).T @ torch.tensor(half, device=dev)).cpu().numpy().astype(np.float64)
-            return (C_occ_ch.T @ half).astype(np.float64)
+            return transform_ao_operator(mu_ao, C_occ_ch, C_virt_ch, compute_device)
 
         mu_ia_x_a = transform_dipole_chan(mu_ao_x, C_occ_a, C_virt_a)
         mu_ia_y_a = transform_dipole_chan(mu_ao_y, C_occ_a, C_virt_a)
@@ -1108,19 +1297,14 @@ def main():
         bse_n_virt_beta = min(bse_n_virt, len(eps_beta) - (homo_index_beta + 1))
     else:
         # Singlet or spin-flip triplet: standard single-channel dipoles
-        C_occ = C[:, homo_index - bse_n_occ + 1 : homo_index + 1].astype(np.float32)
+        C_occ = C[:, homo_index - bse_n_occ + 1 : homo_index + 1].astype(np.float64)
         if C_beta is not None:
-            C_virt = C_beta[:, homo_index_beta + 1 : homo_index_beta + 1 + bse_n_virt].astype(np.float32)
+            C_virt = C_beta[:, homo_index_beta + 1 : homo_index_beta + 1 + bse_n_virt].astype(np.float64)
         else:
-            C_virt = C[:, homo_index + 1 : homo_index + 1 + bse_n_virt].astype(np.float32)
+            C_virt = C[:, homo_index + 1 : homo_index + 1 + bse_n_virt].astype(np.float64)
 
         def transform_dipole(mu_ao):
-            half_transformed = mu_ao.astype(np.float32) @ C_virt 
-            if compute_device in ["cuda", "mps"]:
-                import torch
-                dev = torch.device(compute_device)
-                return (torch.tensor(C_occ, device=dev).T @ torch.tensor(half_transformed, device=dev)).cpu().numpy().astype(np.float64)
-            return (C_occ.T @ half_transformed).astype(np.float64)
+            return transform_ao_operator(mu_ao, C_occ, C_virt, compute_device)
 
         mu_ia_x, mu_ia_y, mu_ia_z = transform_dipole(mu_ao_x), transform_dipole(mu_ao_y), transform_dipole(mu_ao_z)
         bse_n_occ_beta  = bse_n_occ
@@ -1131,10 +1315,12 @@ def main():
     # Store this for the analysis printouts later
     args.qp_gap_num = target_qp_gap
 
+    tracker.start_stage("BSE Exciton Solver (Spin-Free)")
     solver_sf = ExcitonSolver(
         C=C, eps=eps_shifted, occ=occ, overlap=S, atom_symbols=syms, atom_coords=np.array(coords_ang),
         atom_ao_ranges=atom_ao_ranges, homo_index=homo_index, n_occ=bse_n_occ, n_virt=bse_n_virt, 
-        scissor_ev=scissor, kernel=args.kernel, alpha=args.alpha, beta=args.beta, include_exchange=args.exchange, 
+        scissor_ev=scissor, kernel=args.kernel, alpha=args.alpha, beta=args.beta, include_exchange=args.include_direct_eh,
+        include_direct_eh=args.include_direct_eh,
         estimate_qp=args.estimate_qp, material=args.material, e_thresh=args.e_thresh, f_thresh=args.f_thresh,
         mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z, eps_out=args.eps_out,
         soc_U=None, soc_E=None, device=compute_device,
@@ -1143,7 +1329,8 @@ def main():
         spin=spin_mode,
         C_beta=C_beta, eps_beta=eps_beta_shifted, homo_index_beta=homo_index_beta,
         charge_type=args.charge_type,
-        n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta
+        n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta,
+        excitation_mode=args.excitation_mode
     )
 
     if args.estimate_qp:
@@ -1169,10 +1356,12 @@ def main():
         precalc_sigma = (solver_sf.ham.sigma_occ, solver_sf.ham.sigma_virt)
 
     if args.soc_flag:
+        tracker.start_stage("BSE Exciton Solver (SOC)")
         solver_soc = ExcitonSolver(
             C=C, eps=eps_shifted, occ=occ, overlap=S, atom_symbols=syms, atom_coords=np.array(coords_ang),
             atom_ao_ranges=atom_ao_ranges, homo_index=homo_index, n_occ=bse_n_occ, n_virt=bse_n_virt, 
-            scissor_ev=scissor, kernel=args.kernel, alpha=args.alpha, beta=args.beta, include_exchange=args.exchange, 
+            scissor_ev=scissor, kernel=args.kernel, alpha=args.alpha, beta=args.beta, include_exchange=args.include_direct_eh,
+            include_direct_eh=args.include_direct_eh,
             estimate_qp=args.estimate_qp, material=args.material, e_thresh=args.e_thresh, f_thresh=args.f_thresh, 
             mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z, eps_out=args.eps_out,
             soc_U=bse_soc_U, soc_E=bse_soc_E, device=compute_device, 
@@ -1181,12 +1370,15 @@ def main():
             spin=spin_mode,
             C_beta=C_beta, eps_beta=eps_beta_shifted, homo_index_beta=homo_index_beta,
             charge_type=args.charge_type,
-            n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta
+            n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta,
+            excitation_mode=args.excitation_mode
         )
  
         run_solver_and_analysis(solver_soc, np.array(coords_ang), syms, shells, mu_ia_x, mu_ia_y, mu_ia_z, 
                                 dft_gap, scissor, confinement_energy, args, suffix="_soc", soc_gap=calculated_soc_gap, soc_U=bse_soc_U, soc_E=bse_soc_E)
 
+    tracker.end_stage()
+    tracker.print_summary(device=args.device, nthreads=args.nthreads)
     print("\nAll calculations finished successfully.")
 
 if __name__ == "__main__":

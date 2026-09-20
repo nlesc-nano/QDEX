@@ -76,6 +76,7 @@ Eigen::MatrixXd compute_hgh_projector_overlaps(
             Eigen::MatrixXd tmp = Eigen::MatrixXd::Zero(n_ao, n_funcs);
             for (size_t s1 = 0; s1 < ao_shells.size(); ++s1) {
                 engine.compute(ao_shells[s1], proj_shell);
+                if (buf.empty() || buf[0] == nullptr) continue;
                 Eigen::Map<const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>
                     computed_block(buf[0], ao_shells[s1].size(), n_funcs);
                 tmp.block(ao_s2bf[s1], 0, ao_shells[s1].size(), n_funcs) = computed_block;
@@ -302,4 +303,3 @@ Eigen::MatrixXd overlap_pbc(const std::vector<libint2::Shell>& shells,
 }
 
 } // namespace licpp
-

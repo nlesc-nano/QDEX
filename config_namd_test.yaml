@@ -1,0 +1,57 @@
+system:
+  basis_txt: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/test/BASIS_MOLOPT_UZH"
+  basis_name: "DZVP-MOLOPT-PBE-GTH"
+  material: "CSPBBR3"
+  nthreads: 8
+
+physics:
+  excitation_mode: "diagonal_bse"
+  qp_gap: "gw"
+  exchange: true
+  kernel: "resta"
+  eps_out: 2.4
+  nhomos: 100
+  nlumos: 100
+
+namd:
+  trajectory:
+    dir: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio"
+    frame_pattern: "frame_*"
+    xyz_file: "frame.xyz"
+    mo_file: "MOs.mbse"
+    dt_nuc_fs: 2.0
+    start_frame: 1
+    end_frame: 5
+
+  storage:
+    precompute_dir: "/Users/ivaninfante/Documents/University/escience/miniBSE/namd_precomputed_test"
+    active_energy_window_ev: [1.5, 6.0]
+
+  tracking:
+    phase_correction: true
+    hungarian_tracking: true
+    completeness_threshold: 0.99
+
+  integration:
+    integrator: "unitary_matrix_exp"
+    n_substeps: 200
+
+  dynamics:
+    method: "cpa_fssh"
+    n_trajectories: 100
+    temperature_k: 300.0
+    detailed_balance: true
+    decoherence: "edc"
+    tau_dec_fs: 15.0
+
+  initial_excitation:
+    mode: "ratio_eg"
+    ratio: 1.3
+    pulse_fwhm_ev: 0.1
+    filter_dark_states: true
+
+  output:
+    cooling_curve_csv: "/Users/ivaninfante/Documents/University/escience/miniBSE/carrier_cooling_test.csv"
+    populations_npz: "/Users/ivaninfante/Documents/University/escience/miniBSE/populations_test.npz"
+    plot_cooling: true
+    plot_file: "/Users/ivaninfante/Documents/University/escience/miniBSE/carrier_cooling_test.png"

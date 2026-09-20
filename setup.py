@@ -14,6 +14,9 @@ class CMakeExtension(Extension):
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
+        cmake_executable = os.path.join(sys.prefix, "bin", "cmake")
+        if not os.path.exists(cmake_executable):
+            cmake_executable = "cmake"
         extdir = os.path.abspath(
             os.path.dirname(self.get_ext_fullpath(ext.name))
         )
@@ -22,7 +25,8 @@ class CMakeBuild(build_ext):
 
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}",
-            f"-DPYTHON_EXECUTABLE={sys.executable}",
+            f"-DPython3_EXECUTABLE={sys.executable}",
+            f"-DCMAKE_PREFIX_PATH={sys.prefix}",
             f"-DCMAKE_BUILD_TYPE={cfg}",
         ]
 
@@ -32,12 +36,12 @@ class CMakeBuild(build_ext):
         os.makedirs(build_temp, exist_ok=True)
 
         subprocess.check_call(
-            ["cmake", ext.sourcedir] + cmake_args,
+            [cmake_executable, ext.sourcedir] + cmake_args,
             cwd=build_temp,
         )
 
         subprocess.check_call(
-            ["cmake", "--build", "."] + build_args,
+            [cmake_executable, "--build", "."] + build_args,
             cwd=build_temp,
         )
 
@@ -55,5 +59,3 @@ setup(
     },
     zip_safe=False,
 )
-
-

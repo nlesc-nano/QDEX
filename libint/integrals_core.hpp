@@ -41,6 +41,9 @@ namespace licpp
                                int nthreads);
     Matrix cross_overlap(const std::vector<libint2::Shell>& shells,
                          size_t n_ao, size_t n_prj, int nthreads);
+    Matrix cross_overlap_geometries(const std::vector<libint2::Shell>& shells1,
+                                    const std::vector<libint2::Shell>& shells2,
+                                    int nthreads = 1);
 
     // --- FUNCTION DECLARATION FOR GTH OVERLAPS ---
     Matrix compute_hgh_projector_overlaps(

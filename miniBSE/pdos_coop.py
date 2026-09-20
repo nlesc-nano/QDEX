@@ -2,6 +2,7 @@ import numpy as np
 import csv
 import time
 from miniBSE.io_utils import count_ao_from_shells
+from miniBSE.device_utils import is_gpu
 
 PDOS_PALETTE = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3", "#FF6692"]
 TAG_PALETTE = ["#111111", "#8C564B", "#17BECF", "#D62728", "#2CA02C", "#9467BD", "#FF7F0E"]
@@ -131,17 +132,18 @@ def export_pdos_coop_data(analysis, eps_eV, pdos_atoms, coop_pairs, ewin, sigma=
     # --- 3. Compute PDOS ---
     energy_grid = np.linspace(ewin[0], ewin[1], 1000)
     pdos_curves, labels_p = [], []
+
+    # Precompute Gaussian smearing matrix once for all elements
+    X = (energy_grid[:, None] - eps_eV[None, :]) / sigma
+    G = np.exp(-0.5 * X * X) / (sigma * np.sqrt(2 * np.pi))
+    if not is_soc:
+        G = 2.0 * G
+
     for sym in pdos_atoms:
         indices = np.where(ao_to_sym == sym)[0]
         if len(indices) == 0: continue
         sym_weight = np.sum(P_weights[indices, :], axis=0)
-
-        X = (energy_grid[:, None] - eps_eV[None, :]) / sigma
-        G = np.exp(-0.5 * X * X) / (sigma * np.sqrt(2 * np.pi))
-        
-        pdos_val = np.sum(sym_weight * G, axis=1)
-        if not is_soc: pdos_val *= 2.0
-            
+        pdos_val = G @ sym_weight
         pdos_curves.append(pdos_val)
         labels_p.append(sym)
         
@@ -190,13 +192,17 @@ def export_population_bar_plot(analysis, eps_eV, pdos_atoms, ewin, prefix="sf", 
         return
 
     labels, weights, colors = [], [], []
-    atom_ids = np.unique(ao_to_atom)
-    atom_weights = {}
-    for atom_id in atom_ids:
-        ao_idx = np.where(ao_to_atom == atom_id)[0]
-        if ao_idx.size == 0:
-            continue
-        atom_weights[int(atom_id)] = np.sum(P_weights[ao_idx[:, None], idx], axis=0)
+    P_sub = P_weights[:, idx]
+
+    # Pre-group AO indices by atom once for fast vectorized lookup
+    atom_to_aos = {}
+    for ao_idx, at_id in enumerate(ao_to_atom):
+        atom_to_aos.setdefault(int(at_id), []).append(ao_idx)
+
+    atom_weights = {
+        at_id: np.sum(P_sub[aos, :], axis=0)
+        for at_id, aos in atom_to_aos.items()
+    }
 
     used_tagged_atoms = set(tagged_atom_to_entry.keys())
     for sym in pdos_atoms:
@@ -269,7 +275,7 @@ def export_population_bar_plot(analysis, eps_eV, pdos_atoms, ewin, prefix="sf", 
             w.writerow([en] + list(row))
 
 
-def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix="sf", pops=None, population_bars=None):
+def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix="sf", pops=None, population_bars=None, device="numpy"):
     t0 = time.time()
     print(f"  [PDOS/COOP] Analyzing {len(pdos_atoms)} elements, {len(coop_pairs)} bonds, IPR, and Surface/Core...")
     
@@ -293,27 +299,93 @@ def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, si
 
     # --- 4. Compute COOP weights once. QP dashboards reuse these unchanged. ---
     coop_results = {}
+    mask_coop = (eps_eV >= ewin[0] - 1.0) & (eps_eV <= ewin[1] + 1.0)
+    coop_idx = np.where(mask_coop)[0]
+    n_mo_total = len(eps_eV)
+
     if is_soc:
-        C_a, C_b = C_dense[:S_dense.shape[0], :], C_dense[S_dense.shape[0]:, :]
+        n_ao = S_dense.shape[0]
+        C_a = C_dense[:n_ao, coop_idx]
+        C_b = C_dense[n_ao:, coop_idx]
+    else:
+        C_sub = C_dense[:, coop_idx]
 
-    for pair in coop_pairs:
-        a_sym, b_sym = pair.split("-")
-        idx_A = np.where(ao_to_sym == a_sym)[0]
-        idx_B = np.where(ao_to_sym == b_sym)[0]
-        if len(idx_A) == 0 or len(idx_B) == 0:
-            continue
+    if is_gpu(device) and len(coop_pairs) > 0 and len(coop_idx) > 0:
+        import torch
+        dev = torch.device(device)
+        for pair in coop_pairs:
+            a_sym, b_sym = pair.split("-")
+            idx_A = np.where(ao_to_sym == a_sym)[0]
+            idx_B = np.where(ao_to_sym == b_sym)[0]
+            if len(idx_A) == 0 or len(idx_B) == 0:
+                continue
 
-        S_AB = S_dense[np.ix_(idx_A, idx_B)]
+            S_AB_t = torch.from_numpy(S_dense[np.ix_(idx_A, idx_B)]).to(device=dev, dtype=torch.float64)
+            coop_full = np.zeros(n_mo_total, dtype=float)
 
-        if is_soc:
-            XB_a, XB_b = S_AB @ C_a[idx_B, :], S_AB @ C_b[idx_B, :]
-            coop_n = 2.0 * (np.sum(C_a[idx_A, :].conj() * XB_a, axis=0).real +
-                            np.sum(C_b[idx_A, :].conj() * XB_b, axis=0).real)
-        else:
-            XB = S_AB @ C_dense[idx_B, :]
-            coop_n = 2.0 * np.sum(C_dense[idx_A, :].conj() * XB, axis=0).real
+            if is_soc:
+                Ca_A_t = torch.from_numpy(C_a[idx_A, :]).to(device=dev, dtype=torch.complex128)
+                Ca_B_t = torch.from_numpy(C_a[idx_B, :]).to(device=dev, dtype=torch.complex128)
+                Cb_A_t = torch.from_numpy(C_b[idx_A, :]).to(device=dev, dtype=torch.complex128)
+                Cb_B_t = torch.from_numpy(C_b[idx_B, :]).to(device=dev, dtype=torch.complex128)
 
-        coop_results[pair] = coop_n
+                XB_a = torch.matmul(S_AB_t.to(dtype=torch.complex128), Ca_B_t)
+                XB_b = torch.matmul(S_AB_t.to(dtype=torch.complex128), Cb_B_t)
+
+                coop_val = 2.0 * (
+                    torch.sum(Ca_A_t.conj() * XB_a, dim=0).real +
+                    torch.sum(Cb_A_t.conj() * XB_b, dim=0).real
+                ).cpu().numpy()
+            else:
+                CA_t = torch.from_numpy(C_sub[idx_A, :]).to(device=dev)
+                CB_t = torch.from_numpy(C_sub[idx_B, :]).to(device=dev)
+                if CA_t.is_complex():
+                    XB = torch.matmul(S_AB_t.to(dtype=torch.complex128), CB_t)
+                    coop_val = 2.0 * torch.sum(CA_t.conj() * XB, dim=0).real.cpu().numpy()
+                else:
+                    XB = torch.matmul(S_AB_t, CB_t)
+                    coop_val = 2.0 * torch.sum(CA_t * XB, dim=0).cpu().numpy()
+
+            coop_full[coop_idx] = coop_val
+            coop_results[pair] = coop_full
+    else:
+        for pair in coop_pairs:
+            a_sym, b_sym = pair.split("-")
+            idx_A = np.where(ao_to_sym == a_sym)[0]
+            idx_B = np.where(ao_to_sym == b_sym)[0]
+            if len(idx_A) == 0 or len(idx_B) == 0:
+                continue
+
+            S_AB = S_dense[np.ix_(idx_A, idx_B)]
+            coop_full = np.zeros(n_mo_total, dtype=float)
+
+            if is_soc:
+                Ca_A = C_a[idx_A, :]
+                Ca_B = C_a[idx_B, :]
+                Cb_A = C_b[idx_A, :]
+                Cb_B = C_b[idx_B, :]
+
+                XB_a_re = S_AB @ np.real(Ca_B)
+                XB_a_im = S_AB @ np.imag(Ca_B)
+                XB_b_re = S_AB @ np.real(Cb_B)
+                XB_b_im = S_AB @ np.imag(Cb_B)
+
+                term_a = np.sum(np.real(Ca_A) * XB_a_re + np.imag(Ca_A) * XB_a_im, axis=0)
+                term_b = np.sum(np.real(Cb_A) * XB_b_re + np.imag(Cb_A) * XB_b_im, axis=0)
+                coop_val = 2.0 * (term_a + term_b)
+            else:
+                CA = C_sub[idx_A, :]
+                CB = C_sub[idx_B, :]
+                if np.iscomplexobj(CA):
+                    XB_re = S_AB @ np.real(CB)
+                    XB_im = S_AB @ np.imag(CB)
+                    coop_val = 2.0 * np.sum(np.real(CA) * XB_re + np.imag(CA) * XB_im, axis=0)
+                else:
+                    XB = S_AB @ CB
+                    coop_val = 2.0 * np.sum(CA * XB, axis=0)
+
+            coop_full[coop_idx] = coop_val
+            coop_results[pair] = coop_full
 
     analysis = {
         "P_weights": P_weights,

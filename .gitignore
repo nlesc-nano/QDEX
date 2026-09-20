@@ -22,4 +22,9 @@ CMakeFiles/
 Makefile
 cmake_install.cmake
 CMakeScripts/
-
+# Simulation outputs and data caches
+*.npz
+*.csv
+*.png
+*.log
+namd_precomputed*/
