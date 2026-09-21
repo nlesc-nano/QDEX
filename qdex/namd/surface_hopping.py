@@ -561,3 +561,55 @@ def run_namd_dynamics(config):
         precompute_dir=precompute_dir,
         recombination_info=recombination_info
     )
+
+    # -------------------------------------------------------------
+    # Transient Absorption (Pump-Probe) Spectroscopy Analysis
+    # -------------------------------------------------------------
+    ta_cfg = namd_cfg.get("transient_absorption", {})
+    run_ta = bool(ta_cfg.get("run", False) or ta_cfg.get("enabled", False) or config.get("system", {}).get("namd_ta", False))
+    if run_ta:
+        from qdex.namd.transient_absorption import (
+            compute_transient_absorption,
+            plot_transient_absorption,
+            export_transient_absorption_data,
+        )
+        print("\n" + "=" * 68)
+        print("  [NAMD] Computing Ultrafast Pump-Probe Transient Absorption...")
+        print("=" * 68)
+        ta_sigma = float(ta_cfg.get("sigma", 0.03))
+        ta_erange = ta_cfg.get("e_range", None)
+        ta_n_e = int(ta_cfg.get("n_e_points", 300))
+        ta_include_se = bool(ta_cfg.get("include_se", True))
+
+        ta_res = compute_transient_absorption(
+            times_fs=times,
+            populations=populations,
+            E_pairs=E0_pairs,
+            f_pairs=f0_pairs,
+            i_pairs=i_pairs0,
+            a_pairs=a_pairs0,
+            sigma_ev=ta_sigma,
+            e_range=ta_erange,
+            n_e_points=ta_n_e,
+            include_se=ta_include_se,
+            all_energies=all_energies if all_energies.shape[1] == populations.shape[1] else None,
+        )
+
+        fit = ta_res["fit_results"]
+        print(f"  1S Band-Edge Energy          : {ta_res['e_1s_ev']:.3f} eV")
+        if fit.get("success", False):
+            print(f"  1S Bleach Rise Time (tau_C)  : {fit['tau_rise_fs']:.1f} fs ({fit['tau_rise_ps']:.3f} ps)")
+            print(f"  Carrier Cooling Rate (k_C)   : {fit['k_cool_ps']:.2f} ps^-1")
+        print("=" * 68 + "\n")
+
+        # Plotting
+        plot_ta = bool(ta_cfg.get("plot", True))
+        if plot_ta:
+            ta_plot_file = ta_cfg.get("plot_file", "transient_absorption_map.png")
+            mat_name = config.get("system", {}).get("material", "CSPBBR3")
+            plot_transient_absorption(ta_res, plot_file=ta_plot_file, material_name=mat_name)
+
+        # Exporting
+        csv_file = ta_cfg.get("csv_file", "ta_bleach_kinetics.csv")
+        map_npz = ta_cfg.get("map_npz", "ta_2d_map.npz")
+        export_transient_absorption_data(ta_res, kinetics_csv=csv_file, map_npz=map_npz)
