@@ -468,8 +468,21 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         eps_eval = solver.eps.copy()
         if scissor is not None and scissor != 0.0:
             eps_eval[solver.homo_index + 1:] += scissor
-        if solver.soc_flag and soc_E is not None:
+        if solver.soc_flag and soc_E is not None and soc_U is not None:
+            k = soc_U.shape[0] // 2
+            act_start = solver.homo_index - solver.n_occ + 1
+            act_end = solver.homo_index + 1 + solver.n_virt
+            C_act = solver.C[:, act_start:act_end]
+            U_spinor_alpha = C_act @ soc_U[:k, :]
+            U_spinor_beta = C_act @ soc_U[k:, :]
             eps_eval = soc_E
+            homo_idx_eval = (solver.n_occ * 2) - 1
+            is_spinor = True
+        else:
+            U_spinor_alpha = None
+            U_spinor_beta = None
+            homo_idx_eval = solver.homo_index
+            is_spinor = False
 
         calculate_auger_rates(
             C=solver.C,
@@ -478,7 +491,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             atom_ao_ranges=solver.atom_ao_ranges,
             coords=solver.coords,
             atom_symbols=solver.atom_symbols,
-            homo_idx=solver.homo_index,
+            homo_idx=homo_idx_eval,
             W_resta=getattr(solver.ham, "W_resta", None),
             material_name=getattr(args, "material", "DEFAULT"),
             eps_out=getattr(args, "eps_out", 2.0),
@@ -487,9 +500,9 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             channel=getattr(args, "auger_channel", "all"),
             n_initial_elec=getattr(args, "auger_states", 1),
             n_initial_hole=getattr(args, "auger_states", 1),
-            spinor=solver.soc_flag,
-            U_spinor_alpha=getattr(solver.ham, "U_spinor_alpha", None) if solver.soc_flag else None,
-            U_spinor_beta=getattr(solver.ham, "U_spinor_beta", None) if solver.soc_flag else None,
+            spinor=is_spinor,
+            U_spinor_alpha=U_spinor_alpha,
+            U_spinor_beta=U_spinor_beta,
             verbose=True,
         )
 
