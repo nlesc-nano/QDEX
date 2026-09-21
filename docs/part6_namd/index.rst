@@ -879,6 +879,88 @@ and performs non-linear least-squares fitting to an exponential rise model:
 
 This directly yields the **hot-carrier cooling time** :math:`\tau_C` (in fs/ps) and **cooling rate** :math:`k_C = 1 / \tau_C` (in :math:`\text{ps}^{-1}`), providing direct theoretical counterparts to the experimental 1S bleach rise traces reported in transient absorption spectroscopy.
 
+Schematic Diagrams of Transient Absorption Processes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The optical mechanisms (GSB, SE, ESA) and dynamical carrier relaxation cascade underlying transient absorption are illustrated schematically below:
+
+**1. Three Optical Mechanisms in Nanocrystal Transient Absorption**
+
+.. code-block:: text
+
+   =========================================================================================================
+             THREE OPTICAL MECHANISMS IN TRANSIENT ABSORPTION SPECTROSCOPY (ΔA)
+   =========================================================================================================
+
+     (a) Ground-State Bleach (GSB)            (b) Stimulated Emission (SE)             (c) Excited-State Absorption (ESA)
+         ΔA < 0  (Pauli Blocking)                 ΔA < 0  (Probe Photons Added)            ΔA > 0  (Induced Absorption)
+
+         Energy                                   Energy                                   Energy
+           ▲                                        ▲                                        ▲
+           │                                        │                                        │  Conduction Continuum
+           │                                        │                                        │  ┌─────┐ a'
+           │                                        │                                        │  │     │
+           │                                        │                                        │  └─────┘
+           │                                        │                                        │     ▲
+           │                                        │                                        │     │  Probe Absorbed:
+           │                                        │                                        │     │  hν_probe = E_a' - E_a
+    CB  ┼──┼── CBM                               CB ┼──┼── CBM                            CB ┼──┼──┤  Δf_aa'^ESA > 0
+           │  ┌─────┐ a                             │  ┌─────┐ a                             │  ┌──┴──┐ a (Populated)
+           │  │  ●  │ n_a (Blocked!)                │  │  ●  │ P_ia (Populated pair)         │  │  ●  │ n_a
+           │  └─────┘                               │  └─────┘                               │  └─────┘
+           │     ▲                                  │     │
+           │     │  Probe Blocked!                  │     │  Probe Stimulates:               │
+           │     │  hν_probe ≈ E_ia                 │     │  hν_probe + hν_em (2 photons!)   │
+           │     │  Δf_ia^GSB < 0                   │     ▼  Δf_ia^SE < 0                    │
+    VB  ┼──┼── VBM                               VB ┼──┼── VBM                            VB ┼──┼── VBM
+           │  ┌─────┐ i                             │  ┌─────┐ i                             │  ┌─────┐ i
+           │  │  ○  │ p_i (Blocked!)                │  │  ○  │                               │  │  ●  │
+           │  └─────┘                               │  └─────┘                               │  └─────┘
+           └────────────────────────►               └────────────────────────►               └────────────────────────►
+
+      Formula Mapping:                         Formula Mapping:                         Formula Mapping:
+        • Electron fill: n_a = Σ_i P_ia          • Exciton pop:   P_ia(t)                 • ESA strength:  Δf_aa'^ESA = +f_aa'^(0) n_a
+        • Hole fill:     p_i = Σ_a P_ia          • Stim. emission:                        • Net signal:    ΔA_ESA(E, t) > 0
+        • Bleach strength:                         Δf_ia^SE = -f_ia^(0) P_ia(t)
+          Δf_ia^GSB = -f_ia^(0) (n_a + p_i)      • Coherent probe amplification
+        • Net signal:    ΔA_GSB(E, t) < 0        • Net signal:    ΔA_SE(E, t) < 0
+
+**2. Hot-Carrier Relaxation Cascade & 1S Bleach Kinetic Rise Profile**
+
+.. code-block:: text
+
+   =========================================================================================================
+         HOT-CARRIER RELAXATION CASCADE & 1S BLEACH KINETIC RISE PROFILE
+   =========================================================================================================
+
+     1. Hot Excitation & Vibronic Cooling Cascade           2. Time-Resolved 1S Bleach Profile S_1S(t)
+        Energy                                                 Bleach: S_1S(t) = -ΔA(E_1S, t)
+          ▲                                                      ▲
+          │  Pump: hν_pump ≈ 2 * E_g                             │
+          │    ┌─────┐ e* (Hot Electron)                         │                      Plateau A_0
+          │    │  ●  │                                           │               . - - - - - - - - - - - - -
+          │    └─────┘                                           │           . '
+          │       │                                              │        . '
+          │       │ Non-adiabatic cooling                        │      . '   S_1S(t) = A_0 (1 - e^{-t/τ_C})
+          │       │ d_ab = ⟨a|∂/∂t|b⟩                            │     /
+          │       ▼ (Phonon emission cascade)                    │    /
+     CB ──┼─── ┌─────┐ 1S_e (CBM Band Edge)                      │   /
+          │    │  ●  │ State filling n_1Se(t) rises!             │  /
+          │    └─────┘                                           │ /
+          │                                                      │/
+          │       E_1S ≈ E_g (Probe monitors 1S)                 └────────────────────────────────────────►
+          │                                                      0          τ_C               t (Delay)
+     VB ──┼─── ┌─────┐ 1S_h (VBM Band Edge)
+          │    │  ○  │ State filling p_1Sh(t) rises!          Kinetic Parameters:
+          │    └─────┘                                          • Hot carrier cooling time: τ_C (fs or ps)
+          │       ▲ (Phonon emission cascade)                   • Carrier cooling rate:     k_C = 1 / τ_C (ps⁻¹)
+          │       │ Non-adiabatic cooling                       • Band-edge 1S energy:      E_1S = ε_1Se - ε_1Sh - E_b
+          │       │ d_ij = ⟨i|∂/∂t|j⟩                           • Bleach signal:            -ΔA(E_1S, t)
+          │       │
+          │    ┌─────┐
+          │    │  ○  │ h* (Hot Hole)
+          │    └─────┘
+
 How QDEX Data Are Used to Compute Every Formula Term
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
