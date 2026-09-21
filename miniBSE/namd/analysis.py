@@ -104,7 +104,7 @@ def compute_nac_energy_gap_data(precompute_dir, max_steps=20, max_sample_pairs=5
     return res
 
 
-def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_exciton=True):
+def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_exciton=True, temp_k=300.0):
     r"""
     Extracts band-edge orbital energies (HOMO and LUMO) or lowest excited state along the MD trajectory
     from precompute_dir, and computes:
@@ -202,6 +202,23 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
     idx_dec = np.where(D_t <= 1.0 / np.e)[0]
     tau_dec_fs = float(times[idx_dec[0]]) if len(idx_dec) > 0 else np.nan
 
+    # Extract dominant optical phonon frequency from PSD (excluding DC component < 30 cm^-1)
+    mask_lo = (wavenumbers_cm >= 30.0) & (wavenumbers_cm <= 600.0)
+    if np.any(mask_lo):
+        sub_psd = psd[mask_lo]
+        sub_wn = wavenumbers_cm[mask_lo]
+        peak_idx = np.argmax(sub_psd)
+        dominant_freq_cm1 = float(sub_wn[peak_idx])
+    else:
+        dominant_freq_cm1 = 150.0
+
+    from miniBSE.hardness import extract_recombination_parameters_from_namd
+    recomb_params = extract_recombination_parameters_from_namd(
+        var_E_gap_ev2=var_g,
+        dominant_freq_cm1=dominant_freq_cm1,
+        temp_k=temp_k
+    )
+
     return {
         "times": times,
         "gaps": gaps,
@@ -214,6 +231,8 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
         "g_t": g_t,
         "D_t": D_t,
         "tau_dec_fs": tau_dec_fs,
+        "dominant_freq_cm1": dominant_freq_cm1,
+        "recomb_params": recomb_params,
     }
 
 
@@ -370,6 +389,10 @@ def analyze_and_plot_namd_results(
         print(f"  Hole Cooling Lifetime     : {tau_h:.1f} fs")
     print("=" * 65 + "\n")
 
+    bg_data = None
+    if precompute_dir and os.path.isdir(precompute_dir):
+        bg_data = compute_band_gap_dynamics_and_spectral_density(precompute_dir)
+
     if recombination_info is not None:
         mat_name = recombination_info.get("material", "N/A")
         n_refr = recombination_info.get("refractive_index", 2.0)
@@ -395,6 +418,13 @@ def analyze_and_plot_namd_results(
                 print(f"  Non-Radiative Lifetime      : {tau_nr:.2f} ns (k_nr = {k_nr_s:.2e} s^-1)")
         if np.isfinite(plqy):
             print(f"  Predicted PL Quantum Yield  : {plqy:.1f} %")
+        if bg_data is not None and "recomb_params" in bg_data:
+            rp = bg_data["recomb_params"]
+            print("  --- Trajectory-Derived Parameters (Non-Empirical) ---")
+            print(f"  Dominant Optical Phonon     : {rp['dominant_freq_cm1']:.1f} cm^-1 (hbar*omega_LO = {rp['E_LO_ev']*1e3:.1f} meV)")
+            print(f"  Nuclear Reorganization (lam): {rp['lambda_ev']*1e3:.1f} meV")
+            print(f"  Huang-Rhys Factor (S)       : {rp['S_hr']:.3f}")
+            print(f"  Thermal Gap Fluctuation (sig): {rp['sigma_ev']*1e3:.1f} meV")
         print("=" * 65 + "\n")
 
     # 4. Generate Multi-Panel Visualizations (6-panel publication layout)
@@ -533,8 +563,7 @@ def analyze_and_plot_namd_results(
         # Panel (e): Phonon Spectral Density J(omega)
         # -------------------------------------------------------------
         ax5 = axes[1, 1]
-        bg_data = None
-        if precompute_dir and os.path.isdir(precompute_dir):
+        if bg_data is None and precompute_dir and os.path.isdir(precompute_dir):
             bg_data = compute_band_gap_dynamics_and_spectral_density(precompute_dir)
 
         if bg_data is not None:
