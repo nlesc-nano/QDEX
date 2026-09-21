@@ -130,3 +130,11 @@ qdex.profiler
    :members:
    :undoc-members:
    :show-inheritance:
+
+qdex.auger
+----------
+
+.. automodule:: qdex.auger
+   :members:
+   :undoc-members:
+   :show-inheritance:

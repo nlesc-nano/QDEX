@@ -463,6 +463,36 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         plot_file = f"exciton_analysis{suffix}.html" if args.plot else None
         plot_analysis_summary(analysis_results, physics_metrics=metrics, filename=plot_file, show=args.show, broadening=args.broadening, sigma=args.sigma)
 
+    if getattr(args, "auger", False):
+        from qdex.auger import calculate_auger_rates
+        eps_eval = solver.eps.copy()
+        if scissor is not None and scissor != 0.0:
+            eps_eval[solver.homo_index + 1:] += scissor
+        if solver.soc_flag and soc_E is not None:
+            eps_eval = soc_E
+
+        calculate_auger_rates(
+            C=solver.C,
+            eps=eps_eval,
+            S=solver.overlap,
+            atom_ao_ranges=solver.atom_ao_ranges,
+            coords=solver.coords,
+            atom_symbols=solver.atom_symbols,
+            homo_idx=solver.homo_index,
+            W_resta=getattr(solver.ham, "W_resta", None),
+            material_name=getattr(args, "material", "DEFAULT"),
+            eps_out=getattr(args, "eps_out", 2.0),
+            sigma_ev=getattr(args, "auger_sigma", 0.05),
+            broadening_mode=getattr(args, "auger_lineshape", "gaussian"),
+            channel=getattr(args, "auger_channel", "all"),
+            n_initial_elec=getattr(args, "auger_states", 1),
+            n_initial_hole=getattr(args, "auger_states", 1),
+            spinor=solver.soc_flag,
+            U_spinor_alpha=getattr(solver.ham, "U_spinor_alpha", None) if solver.soc_flag else None,
+            U_spinor_beta=getattr(solver.ham, "U_spinor_beta", None) if solver.soc_flag else None,
+            verbose=True,
+        )
+
 
 def validate_args(args, parser):
     if args.e_thresh is not None and (args.nhomos is not None or args.nlumos is not None):
@@ -504,6 +534,18 @@ def _apply_config(args, config_data):
 
         if section == "namd" and isinstance(parameters, dict):
             setattr(args, "namd_cfg", parameters)
+            continue
+
+        if section == "auger" and isinstance(parameters, dict):
+            setattr(args, "auger", bool(parameters.get("run", parameters.get("enabled", True))))
+            if "sigma" in parameters:
+                setattr(args, "auger_sigma", float(parameters["sigma"]))
+            if "channel" in parameters:
+                setattr(args, "auger_channel", str(parameters["channel"]))
+            if "n_initial_states" in parameters:
+                setattr(args, "auger_states", int(parameters["n_initial_states"]))
+            if "lineshape" in parameters:
+                setattr(args, "auger_lineshape", str(parameters["lineshape"]))
             continue
 
         if isinstance(parameters, dict):
@@ -626,6 +668,13 @@ def main():
                         help="Abort when max|C^dagger S C-I| exceeds this tolerance.")
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda", "mps", "numpy"], default="auto")
+
+    # Auger arguments
+    parser.add_argument("--auger", action="store_true", help="Compute non-radiative Auger recombination rates and biexciton lifetimes.")
+    parser.add_argument("--auger-sigma", type=float, default=0.05, help="Energy conservation Gaussian broadening for Auger recombination in eV (default: 0.05).")
+    parser.add_argument("--auger-channel", choices=["all", "eeh", "hhe"], default="all", help="Auger channel to compute: all, eeh, or hhe (default: all).")
+    parser.add_argument("--auger-states", type=int, default=1, help="Number of band-edge frontier states to consider as initial carriers (default: 1).")
+    parser.add_argument("--auger-lineshape", choices=["gaussian", "fcwd"], default="gaussian", help="Energy conservation line shape for Auger rates (default: gaussian).")
 
     # Fuzzy arguments
     parser.add_argument("--run_fuzzy", action="store_true")

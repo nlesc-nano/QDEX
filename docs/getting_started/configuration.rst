@@ -63,6 +63,13 @@ Complete Example Configuration
      nto_csv: true                     # Write detailed NTO descriptors to CSV
      plot: true                        # Generate publication plots and Plotly HTML dashboards
 
+   auger:
+     run: true                         # Compute non-radiative Auger recombination rates
+     sigma: 0.05                       # Energy conservation broadening in eV
+     channel: "all"                    # "all", "eeh", or "hhe"
+     n_initial_states: 1               # Number of frontier band-edge carriers
+     lineshape: "gaussian"             # "gaussian" or "fcwd"
+
    namd:
      trajectory_dir: "./trajectory"    # Directory containing frame_0001, frame_0002...
      dt_fs: 1.0                        # Nuclear MD time step in femtoseconds
@@ -147,6 +154,14 @@ analysis
 * **nto_top** (*int*): Number of dominant NTO pairs to print per state.
 * **nto_csv** (*bool*): Export NTO compactness metrics and weights to ``nto_results.csv``.
 * **plot** (*bool*): Generate publication figures and interactive Plotly HTML dashboards.
+
+auger
+~~~~~
+* **run** (*bool*): Enable Auger recombination calculations.
+* **sigma** (*float*): Gaussian energy conservation broadening width in eV (default: ``0.05``).
+* **channel** (*str*): Recombination channel: ``"all"``, ``"eeh"``, or ``"hhe"``.
+* **n_initial_states** (*int*): Number of frontier band-edge states to consider as initial carriers (default: ``1``).
+* **lineshape** (*str*): Energy conservation model: ``"gaussian"`` or ``"fcwd"`` (Marcus multi-phonon line shape).
 
 namd
 ~~~~
