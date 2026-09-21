@@ -42,7 +42,114 @@ The NAMD simulation workflow is decoupled into three modular stages:
 
 ---
 
-2. Pauli Master Equation (PME) vs. CPA-FSSH: When to Use Which?
+2. Multi-Timescale Integration: Separating Nuclear and Electronic Time Steps
+----------------------------------------------------------------------------
+
+A fundamental challenge in simulating non-adiabatic carrier dynamics is the dramatic **timescale mismatch** between nuclear vibrations and electronic phase oscillations.
+
+The Timescale Mismatch
+~~~~~~~~~~~~~~~~~~~~~~
+
+* **Nuclear Motion (:math:`\sim 1 - 2\text{ fs}`)**: 
+  Atomic nuclei are thousands of times heavier than electrons (:math:`M_{\mathrm{Pb}} / m_e \approx 3.8 \times 10^5`). Nuclear motion is governed by acoustic and optical phonon frequencies (:math:`\omega_{\mathrm{ph}} \approx 50 - 300\text{ cm}^{-1}`), corresponding to vibrational periods of :math:`T_{\mathrm{vib}} \approx 100 - 600\text{ fs}`. A nuclear time step of :math:`\Delta t_{\mathrm{nuc}} \approx 1.0 - 2.0\text{ fs}` is therefore fully sufficient to integrate classical Newton's equations of motion with energy conservation.
+
+* **Electronic Wavefunction Oscillations (:math:`\sim 0.005 - 0.05\text{ fs}`)**:
+  In contrast, the electronic wavepacket oscillates at the Bohr transition frequencies:
+
+  .. math::
+
+     \omega_{IJ} = \frac{|E_I - E_J|}{\hbar}
+
+  For electronic energy differences of :math:`\Delta E \approx 1.0 - 4.0\text{ eV}`, the characteristic quantum phase oscillation period is:
+
+  .. math::
+
+     \tau_{\mathrm{elec}} = \frac{2\pi \hbar}{\Delta E} \approx 1.0 - 4.1\text{ fs}
+
+Attempting to propagate the electronic Schrödinger equation using the coarse nuclear step :math:`\Delta t_{\mathrm{nuc}} \sim 1\text{ fs}` violates the Nyquist-Shannon sampling theorem, causing severe numerical instability, catastrophic loss of norm conservation (:math:`\sum_I |c_I|^2 \neq 1`), and unphysical population blowup.
+
+The Classical Path Approximation (CPA)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To solve this timescale separation, ``miniBSE`` operates within the **Classical Path Approximation (CPA)**. 
+
+In semiconductor nanoclusters, the electronic transition involves one or two electrons out of thousands of valence electrons. To first order, the nuclear trajectory :math:`\mathbf{R}(t)` is driven primarily by the ground-state lattice potential, and the back-reaction of single-carrier relaxation on the heavy nuclear motion is negligible compared to thermal kinetic fluctuations at 300 K.
+
+This provides an immense computational advantage:
+1. **Decoupled Workflow**: The heavy *ab initio* DFT molecular dynamics simulation is performed **only once** to generate the classical trajectory :math:`\mathbf{R}(t)`.
+2. **Post-Processing Reusability**: All non-adiabatic electronic calculations (FSSH with thousands of stochastic trajectories, or PME at multiple temperatures and decoherence models) are executed in post-processing without ever re-evaluating expensive DFT self-consistent field cycles or nuclear forces.
+
+Electronic Sub-Stepping in CPA-FSSH
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Within each nuclear time interval :math:`[t_k, t_{k+1}]` of duration :math:`\Delta t_{\mathrm{nuc}}`, ``miniBSE`` divides the interval into :math:`N_{\mathrm{sub}}` fine electronic sub-steps (typically :math:`N_{\mathrm{sub}} = 100 - 500`):
+
+.. math::
+
+   \delta t_{\mathrm{elec}} = \frac{\Delta t_{\mathrm{nuc}}}{N_{\mathrm{sub}}} \approx 0.002 - 0.02\text{ fs}
+
+Along the sub-steps :math:`\tau_m = (m + 0.5) \delta t_{\mathrm{elec}}`, the adiabatic energies are linearly interpolated:
+
+.. math::
+
+   E_I(\tau_m) = E_I(t_k) + \frac{\tau_m}{\Delta t_{\mathrm{nuc}}} \left( E_I(t_{k+1}) - E_I(t_k) \right)
+
+The effective non-adiabatic Hamiltonian driving electronic evolution is constructed in ``miniBSE.namd.integrator``:
+
+.. math::
+
+   \mathbf{H}_{\mathrm{eff}}(\tau_m) = \operatorname{diag}\left( \mathbf{E}(\tau_m) \right) - i \hbar \, \mathbf{d}(t_k)
+
+Because the non-adiabatic coupling matrix :math:`\mathbf{d}` is anti-Hermitian (:math:`d_{IJ} = -d_{JI}^*`), the product :math:`-i\hbar \mathbf{d}` is **strictly Hermitian**, ensuring that :math:`\mathbf{H}_{\mathrm{eff}}` is Hermitian.
+
+Unitary Matrix Exponentiation
+"""""""""""""""""""""""""""""
+
+To propagate the electronic amplitudes :math:`\mathbf{c}(\tau)` across each sub-step without any norm drift, ``miniBSE`` diagonalizes :math:`\mathbf{H}_{\mathrm{eff}} = \mathbf{V} \boldsymbol{\Lambda} \mathbf{V}^\dagger` and evaluates the exact unitary matrix exponential:
+
+.. math::
+
+   \mathbf{c}(\tau + \delta t_{\mathrm{elec}}) = \mathbf{V} \, \exp\left( -i \boldsymbol{\Lambda} \frac{\delta t_{\mathrm{elec}}}{\hbar} \right) \mathbf{V}^\dagger \, \mathbf{c}(\tau)
+
+This guarantees that total electronic probability is conserved to machine precision:
+
+.. math::
+
+   \sum_{I} |c_I(\tau)|^2 = 1.000000000000000
+
+Tully Hopping Flux Accumulation
+"""""""""""""""""""""""""""""""
+
+Tully's fewest switches hopping probabilities are accumulated incrementally across the electronic sub-steps:
+
+.. math::
+
+   g_{I \to J} = \sum_{m=1}^{N_{\mathrm{sub}}} \max\left( 0, \, \frac{-2 \delta t_{\mathrm{elec}} \, \operatorname{Re}\left( c_I^*(\tau_m) c_J(\tau_m) d_{IJ} \right)}{|c_I(\tau_m)|^2} \right) \times B_{IJ}(T)
+
+A stochastic hopping decision is then made using the net accumulated probability over the nuclear step :math:`\Delta t_{\mathrm{nuc}}`.
+
+Electronic Sub-Stepping in the Pauli Master Equation (PME)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Although the Pauli Master Equation propagates real-valued populations :math:`P_I(t)` rather than oscillating complex amplitudes :math:`c_I(t)`, sub-stepping is equally vital for numerical stability.
+
+In dense manifolds where non-adiabatic couplings are large, single-step forward Euler integration of :math:`\frac{d\mathbf{P}}{dt} = \mathbf{R} \mathbf{P}` with a coarse step :math:`\Delta t_{\mathrm{nuc}} \sim 1\text{ fs}` can lead to **stiffness instabilities**, causing populations to oscillate or become negative (:math:`P_I < 0`).
+
+In ``miniBSE.namd.master_equation``, two robust solutions are provided:
+
+1. **Exact Matrix Exponential**:
+   For modest state spaces, the population vector is propagated analytically over the nuclear step:
+
+   .. math::
+
+      \mathbf{P}(t + \Delta t_{\mathrm{nuc}}) = \exp\left( \mathbf{R} \, \Delta t_{\mathrm{nuc}} \right) \mathbf{P}(t)
+
+2. **Tensorized Sub-Stepping (Diagonal BSE)**:
+   For huge manifolds (:math:`10^6` exciton pairs), the tensorized rate equations are sub-stepped with :math:`N_{\mathrm{sub}} = 20 - 50` steps (:math:`\delta t = \Delta t_{\mathrm{nuc}} / N_{\mathrm{sub}} \approx 0.02 - 0.05\text{ fs}`). Within each sub-step, loss vectors :math:`\mathbf{L}_e` and :math:`\mathbf{L}_h` continuously remove population while electron and hole transition matrices inject population, preserving strict positivity (:math:`P_{ia} \ge 0`) and probability normalization (:math:`\sum_{ia} P_{ia} = 1.0`).
+
+---
+
+3. Pauli Master Equation (PME) vs. CPA-FSSH: When to Use Which?
 ---------------------------------------------------------------
 
 A central methodological decision in non-adiabatic dynamics is choosing between a **deterministic Master Equation** and **stochastic Fewest Switches Surface Hopping (FSSH)**. Both frameworks are implemented in ``miniBSE``, and each possesses distinct physical domains of applicability:
@@ -102,7 +209,7 @@ Summary Decision Rule
 
 ---
 
-3. Theoretical Foundations of the Dynamical Engines
+4. Theoretical Foundations of the Dynamical Engines
 ---------------------------------------------------
 
 1. Derivation of the Pauli Master Equation (PME)
@@ -191,7 +298,7 @@ A uniform random number :math:`\xi \in [0, 1]` is generated; if :math:`\sum_{K=1
 
 ---
 
-4. Trajectory Precomputation & Wavefunction Tracking
+5. Trajectory Precomputation & Wavefunction Tracking
 -----------------------------------------------------
 
 Numerical Non-Adiabatic Couplings (NAC)
@@ -237,7 +344,7 @@ This guarantees diabatic tracking and preserves the physical identity of frontie
 
 ---
 
-5. Electronic Decoherence: Origin, Computation, and Rationale
+6. Electronic Decoherence: Origin, Computation, and Rationale
 -------------------------------------------------------------
 
 Physical Origin of Electronic Decoherence
@@ -303,7 +410,7 @@ Why We Compute It This Way
 
 ---
 
-6. Phonon Spectral Density J(ω): Mapping Electron-Phonon Coupling
+7. Phonon Spectral Density J(ω): Mapping Electron-Phonon Coupling
 -----------------------------------------------------------------
 
 Mathematical Definition
@@ -337,7 +444,7 @@ By inspecting the peaks in :math:`J(\omega)`, researchers can directly identify 
 
 ---
 
-7. Radiative & Non-Radiative Recombination Mechanisms
+8. Radiative & Non-Radiative Recombination Mechanisms
 -----------------------------------------------------
 
 Once carriers have relaxed to the band edges (forming the lowest 1S exciton), they recombine to the ground state :math:`|S_0\rangle` through competing radiative and non-radiative channels:
@@ -409,7 +516,7 @@ The total Photoluminescence Quantum Yield is evaluated from the branching ratio 
 
 ---
 
-8. In-Depth Analysis of NAMD Simulations
+9. In-Depth Analysis of NAMD Simulations
 ----------------------------------------
 
 ``miniBSE`` includes a dedicated analysis module (``miniBSE.namd.analysis``) that automatically processes precomputed and dynamic trajectory data.
@@ -456,8 +563,8 @@ Executing the analysis workflow generates a comprehensive 6-panel summary figure
 
 ---
 
-9. CLI Flags & YAML Configuration Reference
--------------------------------------------
+10. CLI Flags & YAML Configuration Reference
+--------------------------------------------
 
 Command-Line Arguments
 ~~~~~~~~~~~~~~~~~~~~~~
