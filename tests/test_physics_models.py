@@ -135,6 +135,19 @@ class RecombinationModelTests(unittest.TestCase):
         k_s2, _ = compute_fcwd_rate(E_gap_ev=0.5, V_el_ev=0.002, lambda_ev=0.05, sigma_ev=0.05)
         self.assertAlmostEqual(k_s2 / k_s, 4.0, places=5)
 
+    def test_band_edge_arrival_times(self):
+        from miniBSE.namd.analysis import compute_band_edge_arrival_times
+        times = np.linspace(0, 1000, 1001)
+        tau = 100.0
+        # Ideal exponential decay: excess(t) = 1.0 * exp(-t / 100)
+        excess = 1.0 * np.exp(-times / tau)
+        res = compute_band_edge_arrival_times(times, excess, tau, temp_k=300.0)
+        self.assertAlmostEqual(res["est_95_fs"], 300.0, delta=2.0)
+        self.assertAlmostEqual(res["est_99_fs"], 460.5, delta=2.0)
+        self.assertAlmostEqual(res["act_95_fs"], 300.0, delta=2.0)
+        self.assertAlmostEqual(res["act_99_fs"], 461.0, delta=2.0)
+        self.assertAlmostEqual(res["k_cool_ps"], 10.0, places=3)
+
 
 if __name__ == "__main__":
     unittest.main()
