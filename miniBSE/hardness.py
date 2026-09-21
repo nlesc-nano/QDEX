@@ -172,6 +172,108 @@ def compute_energy_gap_law_rate(E_gap_ev, E_LO_ev=0.018, S_hr=1.0, A_nr=1e13):
     k_nr_fs = k_nr_s * 1e-15
     return k_nr_s, k_nr_fs
 
+
+def compute_fcwd_rate(E_gap_ev, V_el_ev, lambda_ev, sigma_ev):
+    r"""
+    Computes non-radiative recombination rate via Fermi's Golden Rule with
+    Franck-Condon Weighted Density of States (FCWD)::
+
+      k_nr = (2 * pi / hbar) * |V_el|^2 * FCWD(E_gap)
+      FCWD(E_gap) = (1 / sqrt(2 * pi * sigma^2)) * exp(-(E_gap - lambda)^2 / (2 * sigma^2))
+
+    where:
+      - V_el is the effective electronic coupling (eV), e.g. :math:`\hbar \langle |d_{10}| \rangle` from NAMD
+      - lambda is the nuclear reorganization energy (eV)
+      - sigma is the thermal Gaussian broadening (eV), sigma = sqrt(2 * lambda * k_B * T) = sigma_E
+      - E_gap is the transition energy (eV)
+
+    Returns:
+      (k_nr_s, k_nr_fs) in s^-1 and fs^-1.
+    """
+    HBAR_EV_FS = 0.6582119569  # eV * fs
+    sigma = max(float(sigma_ev), 1e-6)
+    V_el = float(V_el_ev)
+    E_g = float(E_gap_ev)
+    lam = float(lambda_ev)
+
+    fcwd = (1.0 / (np.sqrt(2.0 * np.pi) * sigma)) * np.exp(-((E_g - lam) ** 2) / (2.0 * (sigma ** 2)))
+    k_nr_fs = (2.0 * np.pi / HBAR_EV_FS) * (V_el ** 2) * fcwd
+    k_nr_s = k_nr_fs * 1e15
+    return k_nr_s, k_nr_fs
+
+
+def extract_recombination_parameters_from_namd(
+    var_E_gap_ev2,
+    dominant_freq_cm1=None,
+    temp_k=300.0,
+    mean_nac_fs=None,
+    material_name=None
+):
+    r"""
+    Extracts non-empirical physical parameters for radiative and non-radiative
+    recombination from NAMD trajectory data:
+
+    1. Dominant optical phonon energy :math:`\hbar \omega_{\mathrm{LO}}` from spectral density peak:
+       E_LO = h * c * nu_peak  (eV)
+    2. Nuclear reorganization energy :math:`\lambda` from classical fluctuation-dissipation:
+       :math:`\lambda = \sigma_E^2 / (2 k_B T)`  (eV)
+    3. Dimensionless Huang-Rhys factor S:
+       :math:`S = \lambda / (\hbar \omega_{\mathrm{LO}}) = \sigma_E^2 / (2 k_B T \hbar \omega_{\mathrm{LO}})`
+    4. Gaussian broadening parameter :math:`\sigma`:
+       :math:`\sigma = \sqrt{\sigma_E^2}`  (eV)
+    5. Effective electronic coupling :math:`V_{\mathrm{el}}` from mean non-adiabatic coupling:
+       :math:`V_{\mathrm{el}} = \hbar \langle |d_{10}| \rangle`  (eV)
+
+    Parameters:
+      var_E_gap_ev2: float, variance of the band edge gap fluctuations :math:`\sigma_E^2` in eV^2.
+      dominant_freq_cm1: float, dominant vibrational mode wavenumber in cm^-1 from J(omega).
+      temp_k: float, temperature in Kelvin.
+      mean_nac_fs: float, mean non-adiabatic coupling magnitude in fs^-1.
+      material_name: str, material name fallback if dominant_freq_cm1 is not available.
+
+    Returns:
+      dict with keys: 'E_LO_ev', 'dominant_freq_cm1', 'lambda_ev', 'S_hr', 'sigma_ev', 'V_el_ev'
+    """
+    KB_EV = 8.617333262e-5  # eV / K
+    HBAR_EV_FS = 0.6582119569  # eV * fs
+    HC_EV_CM = 1.239841984e-4  # eV * cm
+
+    # 1. Optical phonon energy \hbar\omega_LO
+    if dominant_freq_cm1 is not None and dominant_freq_cm1 > 0:
+        E_LO_ev = float(dominant_freq_cm1 * HC_EV_CM)
+        freq_cm1 = float(dominant_freq_cm1)
+    elif material_name and str(material_name).upper() in MATERIAL_DB:
+        mat_entry = MATERIAL_DB[str(material_name).upper()]
+        E_LO_ev = float(mat_entry[6]) if len(mat_entry) > 6 else 0.018
+        freq_cm1 = E_LO_ev / HC_EV_CM
+    else:
+        E_LO_ev = 0.018  # default ~145 cm^-1 (typical perovskite Pb-X LO mode)
+        freq_cm1 = E_LO_ev / HC_EV_CM
+
+    # 2. Nuclear Reorganization Energy \lambda = \sigma_E^2 / (2 * k_B * T)
+    var_g = max(float(var_E_gap_ev2), 1e-12)
+    T = max(float(temp_k), 1.0)
+    lambda_ev = var_g / (2.0 * KB_EV * T)
+
+    # 3. Huang-Rhys factor S = \lambda / (\hbar\omega_LO)
+    S_hr = lambda_ev / max(E_LO_ev, 1e-6)
+
+    # 4. Thermal Gaussian broadening \sigma = \sqrt{\sigma_E^2}
+    sigma_ev = np.sqrt(var_g)
+
+    # 5. Effective electronic coupling V_el = \hbar * \langle |d_10| \rangle
+    V_el_ev = float(HBAR_EV_FS * mean_nac_fs) if mean_nac_fs is not None else None
+
+    return {
+        "E_LO_ev": E_LO_ev,
+        "dominant_freq_cm1": freq_cm1,
+        "lambda_ev": lambda_ev,
+        "S_hr": S_hr,
+        "sigma_ev": sigma_ev,
+        "V_el_ev": V_el_ev
+    }
+
+
 def estimate_gw_qp_gap(
     coords, atom_symbols, material_name, eps_out, return_details=False,
     regularization_length_ang=1.0, residual_power=2.0, strict=False,

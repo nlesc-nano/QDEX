@@ -8,6 +8,10 @@ from miniBSE.hardness import (
     build_resta_mnok,
     estimate_gw_qp_gap,
     get_cluster_size_metrics,
+    compute_radiative_rates,
+    compute_energy_gap_law_rate,
+    compute_fcwd_rate,
+    extract_recombination_parameters_from_namd,
 )
 
 
@@ -89,6 +93,47 @@ class GeometryAndQPModelTests(unittest.TestCase):
         at_anchor, _ = self._qp_at_radius(r0, eps_out=1.0)
         just_above, _ = self._qp_at_radius(r0 + 1.0e-7, eps_out=1.0)
         self.assertLess(abs(just_above - at_anchor), 1.0e-6)
+
+
+class RecombinationModelTests(unittest.TestCase):
+    def test_radiative_rates_scaling(self):
+        k_s, k_fs = compute_radiative_rates(2.0, 1.0, refractive_index=2.0)
+        self.assertGreater(k_s, 0.0)
+        self.assertAlmostEqual(k_fs, k_s * 1e-15, places=20)
+        # Double energy -> 4x rate
+        k_s2, _ = compute_radiative_rates(4.0, 1.0, refractive_index=2.0)
+        self.assertAlmostEqual(k_s2 / k_s, 4.0, places=5)
+
+    def test_energy_gap_law_decay(self):
+        k1_s, _ = compute_energy_gap_law_rate(0.2, E_LO_ev=0.018, S_hr=1.0)
+        k2_s, _ = compute_energy_gap_law_rate(0.4, E_LO_ev=0.018, S_hr=1.0)
+        self.assertGreater(k1_s, 0.0)
+        self.assertGreater(k2_s, 0.0)
+        self.assertGreater(k1_s, k2_s)  # larger gap -> slower non-radiative decay
+
+    def test_extract_recombination_parameters(self):
+        var_g = 0.05 ** 2  # 50 meV fluctuation
+        params = extract_recombination_parameters_from_namd(
+            var_E_gap_ev2=var_g,
+            dominant_freq_cm1=150.0,
+            temp_k=300.0,
+            mean_nac_fs=0.001
+        )
+        self.assertAlmostEqual(params["dominant_freq_cm1"], 150.0)
+        self.assertAlmostEqual(params["sigma_ev"], 0.05, places=5)
+        self.assertGreater(params["E_LO_ev"], 0.015)
+        self.assertGreater(params["lambda_ev"], 0.0)
+        self.assertGreater(params["S_hr"], 0.0)
+        self.assertIsNotNone(params["V_el_ev"])
+        self.assertGreater(params["V_el_ev"], 0.0)
+
+    def test_fcwd_rate_scaling(self):
+        k_s, k_fs = compute_fcwd_rate(E_gap_ev=0.5, V_el_ev=0.001, lambda_ev=0.05, sigma_ev=0.05)
+        self.assertGreater(k_s, 0.0)
+        self.assertAlmostEqual(k_fs, k_s * 1e-15, places=20)
+        # Double V_el -> 4x rate
+        k_s2, _ = compute_fcwd_rate(E_gap_ev=0.5, V_el_ev=0.002, lambda_ev=0.05, sigma_ev=0.05)
+        self.assertAlmostEqual(k_s2 / k_s, 4.0, places=5)
 
 
 if __name__ == "__main__":

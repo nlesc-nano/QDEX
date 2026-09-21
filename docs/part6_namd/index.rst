@@ -447,72 +447,269 @@ By inspecting the peaks in :math:`J(\omega)`, researchers can directly identify 
 8. Radiative & Non-Radiative Recombination Mechanisms
 -----------------------------------------------------
 
-Once carriers have relaxed to the band edges (forming the lowest 1S exciton), they recombine to the ground state :math:`|S_0\rangle` through competing radiative and non-radiative channels:
+Once photoexcited hot carriers have cooled to the band edge (forming the lowest :math:`1S` exciton state), they recombine to the electronic ground state :math:`|S_0\rangle` on longer timescales (nanoseconds). In ``miniBSE``, carrier recombination is coupled directly to the population dynamics:
 
 .. math::
 
    \frac{d P_I(t)}{dt} = \sum_{J \neq I} \left[ k_{J \to I} P_J - k_{I \to J} P_I \right] - \left( k_{I \to 0}^{\mathrm{rad}} + k_{I \to 0}^{\mathrm{nr}} \right) P_I
 
-1. Ab Initio Einstein Radiative Rate (:math:`k_{\mathrm{rad}}`)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+where :math:`k_{I \to 0}^{\mathrm{rad}}` and :math:`k_{I \to 0}^{\mathrm{nr}}` represent the radiative and non-radiative recombination rates from excited state :math:`|I\rangle` to the ground state.
 
-Spontaneous photon emission from state :math:`|I\rangle` into the vacuum radiation field inside a dielectric medium is evaluated from the **Einstein A coefficient**:
+1. Microscopic Origin: From DFT and BSE to Recombination
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To avoid empirical approximations, all transition energies and optical matrix elements originate directly from the ground-state DFT and excited-state frameworks:
+
+1. **Ground-State DFT (CP2K)**:
+   Self-consistent field calculations yield the Kohn-Sham molecular orbitals :math:`\psi_i(\mathbf{r}) = \sum_\mu C_{\mu i} \chi_\mu(\mathbf{r})` and orbital eigenvalues :math:`\varepsilon_i`. The atomic-orbital transition dipole matrices are computed analytically via Libint:
+
+   .. math::
+
+      \boldsymbol{\mu}_{\mu\nu}^{\mathrm{AO}} = \langle \chi_\mu | e \mathbf{r} | \chi_\nu \rangle
+
+2. **Spin-Orbit Coupling (SOC)**:
+   When SOC is active, spatial orbitals are projected into two-component spinors:
+
+   .. math::
+
+      \Psi_n^{\mathrm{SP}}(\mathbf{r}) = U_{n\alpha} \psi_\alpha(\mathbf{r}) + U_{n\beta} \psi_\beta(\mathbf{r})
+
+   The transition dipole matrix is rotated into the spinor basis:
+
+   .. math::
+
+      \boldsymbol{\mu}_{ia}^{\mathrm{SP}} = \mathbf{U}_{\mathrm{occ},\alpha}^\dagger \mathbf{M} \mathbf{U}_{\mathrm{virt},\alpha} + \mathbf{U}_{\mathrm{occ},\beta}^\dagger \mathbf{M} \mathbf{U}_{\mathrm{virt},\beta}
+
+   where :math:`\mathbf{M} = \mathbf{C}_{\mathrm{act}}^T \boldsymbol{\mu}^{\mathrm{AO}} \mathbf{C}_{\mathrm{act}}`.
+
+3. **Quasiparticle Corrections & Excitation Energies**:
+   Applying the GW scissor shift :math:`\Delta_{\mathrm{scissor}}` yields quasiparticle eigenvalues :math:`\tilde{\varepsilon}_i = \varepsilon_i - \Delta_{\mathrm{scissor}} f_i^{\mathrm{HOMO}}` and :math:`\tilde{\varepsilon}_a = \varepsilon_a + \Delta_{\mathrm{scissor}} f_a^{\mathrm{LUMO}}`.
+
+   * **In Diagonal BSE (``diagonal_bse``)**:
+     The transition energy of an electron-hole pair :math:`|i \to a\rangle` incorporates the direct screened Coulomb attraction:
+
+     .. math::
+
+        E_{ia} = \tilde{\varepsilon}_a - \tilde{\varepsilon}_i - K_d(ia, ia)
+
+     where :math:`K_d(ia, ia) = \sum_{AB} q_{ii}^A W_{AB} q_{aa}^B` is the Ohno-Klopman or Resta-MNOK screened kernel.
+   * **In Full BSE / sTDA (``bse``, ``stda``)**:
+     Exciton states are coherent superpositions of single-particle transitions:
+
+     .. math::
+
+        |\Psi_I\rangle = \sum_{ia} c_{ia}^I |i \to a\rangle
+
+     with total transition dipole :math:`\boldsymbol{\mu}_I = \sum_{ia} c_{ia}^I \boldsymbol{\mu}_{ia}^{\mathrm{SP}}`.
+
+4. **Oscillator Strengths**:
+   The dimensionless oscillator strength for transition :math:`|I\rangle \to |S_0\rangle` is evaluated as:
+
+   .. math::
+
+      f_I = \frac{2}{3} \frac{m_e}{\hbar^2} E_I |\boldsymbol{\mu}_I|^2
+
+2. Einstein Radiative Rate: Single-Frame vs. NAMD Trajectory Averaging
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Spontaneous photon emission into the vacuum radiation field inside a dielectric medium of refractive index :math:`n_{\mathrm{r}}` is given by the Einstein A coefficient:
 
 .. math::
 
-   k_{I \to 0}^{\mathrm{rad}} = \left[ \frac{2 e^2}{4\pi \epsilon_0 m_e c^3 \hbar^2} \right] n_{\mathrm{r}} \, E_I^2 \, f_I
+   k_{I \to 0}^{\mathrm{rad}} = \left[ \frac{2 e^2}{4\pi \epsilon_0 m_e c^3 \hbar^2} \right] n_{\mathrm{r}} \, E_I^2 \, f_I = C_{\mathrm{rad}} \, n_{\mathrm{r}} \, E_I^2 \, f_I
 
-where:
-* :math:`E_I` is the emission transition energy (in eV).
-* :math:`f_I = \frac{2}{3} \frac{m_e}{\hbar^2} E_I |\boldsymbol{\mu}_I|^2` is the *ab initio* dimensionless oscillator strength.
-* :math:`n_{\mathrm{r}}` is the optical refractive index of the semiconductor material, loaded from ``REFRACTIVE_INDEX_DICT`` in ``hardness.py`` (e.g. :math:`n_{\mathrm{r}} = 2.3` for :math:`\text{CsPbBr}_3`, :math:`n_{\mathrm{r}} = 3.5` for :math:`\text{InAs}`).
+where :math:`C_{\mathrm{rad}} = 4.3391988 \times 10^7\text{ s}^{-1}\text{ eV}^{-2}` (:math:`4.3391988 \times 10^{-8}\text{ fs}^{-1}\text{ eV}^{-2}`) and :math:`n_{\mathrm{r}}` is loaded from ``REFRACTIVE_INDEX_DICT`` in ``miniBSE.hardness`` (e.g. :math:`n_{\mathrm{r}} = 2.19` for :math:`\text{CsPbBr}_3`, :math:`n_{\mathrm{r}} = 3.30` for :math:`\text{GaAs}`).
 
-2. Non-Radiative Multi-Phonon Decay Across Large Gaps
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Single-Frame vs. Trajectory Ensemble Averaging
+""""""""""""""""""""""""""""""""""""""""""""""
 
-Direct non-radiative recombination across the fundamental band gap (:math:`E_g > 1.5\text{ eV}`) requires dissipating a massive amount of electronic energy into the nuclear bath. Because this corresponds to dozens of vibrational quanta (:math:`p = E_g / \hbar \omega_{\mathrm{LO}} \sim 50`), perturbation theory in nuclear kinetic energy yields the **Englman-Jortner Energy Gap Law**:
+A critical question is whether :math:`f_I` and :math:`E_I` should be taken from a single static snapshot (frame 0) or averaged along the NAMD trajectory:
+
+1. **Static / Single-Frame Rate (:math:`k_{\mathrm{rad}}(t=0)`)**:
+   Evaluates :math:`E_I(0)` and :math:`f_I(0)` at the relaxed ground-state equilibrium geometry.
+2. **Thermalized Band-Edge Rate at Frame 0**:
+   Because the fine-structure splitting between band-edge exciton states (:math:`1-10\text{ meV}`) is much smaller than thermal energy (:math:`k_B T \approx 25.8\text{ meV}` at :math:`300\text{ K}`), carriers rapidly reach thermal equilibrium among low-lying states before radiating:
+
+   .. math::
+
+      k_{\mathrm{rad}}^{\mathrm{therm}}(t=0) = \frac{\sum_I k_{\mathrm{rad}, I}(0) \, \exp\left( -\frac{E_I(0) - E_0(0)}{k_B T} \right)}{\sum_I \exp\left( -\frac{E_I(0) - E_0(0)}{k_B T} \right)}
+
+3. **Trajectory Ensemble-Averaged Radiative Rate (:math:`\langle k_{\mathrm{rad}} \rangle_{\mathrm{MD}}`)**:
+   When precomputed step data is available along the ab initio MD trajectory, the rate is averaged across all sampled nuclear configurations:
+
+   .. math::
+
+      \langle k_{\mathrm{rad}} \rangle_{\mathrm{MD}} = \frac{1}{N_{\mathrm{frames}}} \sum_{k=1}^{N_{\mathrm{frames}}} k_{\mathrm{rad}}^{\mathrm{therm}}(t_k)
+
+Why Trajectory Averaging is Physically Crucial
+""""""""""""""""""""""""""""""""""""""""""""""
+
+* **Timescale Separation**: Carrier thermalization occurs on the femtosecond timescale (:math:`\tau_{\mathrm{cooling}} \sim 100 - 500\text{ fs}`), while radiative recombination takes nanoseconds (:math:`\tau_{\mathrm{rad}} \sim 1 - 50\text{ ns}`, over 10,000 times longer!). During this long waiting time, the nanocrystal explores its canonical thermal phase space.
+* **Dynamic Symmetry Breaking & Herzberg-Teller Coupling**: At 0 K, high-symmetry nanocrystals (such as cubic perovskites or octahedral dots) often exhibit strictly dipole-forbidden dark ground excitons (:math:`f(0) = 0`). Thermal lattice vibrations dynamically break instantaneous inversion symmetry, mixing optically bright character into the ground exciton (*vibronic intensity borrowing*). Evaluating :math:`f` only at frame 0 would artificially predict an infinite radiative lifetime, whereas the trajectory ensemble average :math:`\langle f(t) \rangle_{\mathrm{MD}} > 0` correctly reproduces experimental nanosecond photoluminescence.
+
+3. Non-Radiative Decay Across Large Gaps: Englman-Jortner Energy Gap Law
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Direct non-radiative recombination across a wide semiconductor band gap (:math:`E_g > 1.0\text{ eV}`) requires dissipating enormous electronic energy into the nuclear lattice. Because this involves dozens of vibrational quanta (:math:`p = E_g / \hbar \omega_{\mathrm{LO}} \sim 30 - 80`), multi-phonon perturbation theory (Englman & Jortner, 1970) yields the **Energy Gap Law**:
 
 .. math::
 
    k_{\mathrm{nr}} = A_{\mathrm{nr}} \exp\left( -\gamma \frac{E_g}{\hbar \omega_{\mathrm{LO}}} \right)
 
 where:
-* :math:`\hbar \omega_{\mathrm{LO}}` is the characteristic optical phonon energy.
-* :math:`\gamma = \ln\left( \frac{E_g}{S \, \hbar \omega_{\mathrm{LO}}} \right) - 1` is the electronic-vibrational coupling parameter, with :math:`S` being the Huang-Rhys factor.
-* :math:`A_{\mathrm{nr}} \approx 10^{13}\text{ s}^{-1}` is the electronic pre-exponential factor.
 
-Because :math:`k_{\mathrm{nr}}` decreases exponentially with increasing band gap, pristine, defect-free quantum dots exhibit negligible band-to-band non-radiative decay, resulting in near-unity intrinsic luminescence.
+* :math:`\hbar \omega_{\mathrm{LO}}` is the dominant accepting optical phonon energy.
+* :math:`\gamma` is the multi-phonon coupling parameter:
 
-3. Intermediate & Small Gaps (Multi-Phonon Nuclear Bath)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  .. math::
 
-When the gap narrows (e.g. in infrared quantum dots like HgTe or PbS with :math:`E_g < 0.8\text{ eV}`), multi-phonon emission accelerates dramatically. In this regime where explicit AIMD trajectories cannot sample rare multi-phonon tunneling, a **Franck-Condon Weighted Density of States (FCWD)** model can be employed:
+     \gamma = \ln\left( \frac{E_g}{S \, \hbar \omega_{\mathrm{LO}}} \right) - 1 = \ln\left( \frac{E_g}{\lambda} \right) - 1
+
+  where :math:`S` is the dimensionless Huang-Rhys factor and :math:`\lambda = S \hbar \omega_{\mathrm{LO}}` is the nuclear reorganization energy.
+* :math:`A_{\mathrm{nr}}` is the electronic prefactor:
+
+  .. math::
+
+     A_{\mathrm{nr}} = \frac{C_{\mathrm{el}}^2}{\hbar} \sqrt{\frac{2\pi}{\hbar \omega_{\mathrm{LO}} E_g}} \sim 10^{12} - 10^{13}\text{ s}^{-1}
+
+  where :math:`C_{\mathrm{el}} \approx V_{\mathrm{el}}` is the non-adiabatic coupling matrix element between excited and ground states.
+
+4. Non-Empirical Extraction of Optical Phonon Energy from NAMD Spectral Density
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Rather than relying on empirical phonon frequencies, ``miniBSE`` extracts :math:`\hbar \omega_{\mathrm{LO}}` directly from the **Phonon Spectral Density** :math:`J(\omega)` of the NAMD trajectory:
+
+1. The instantaneous energy gap fluctuation of the lowest transition along the MD trajectory is tracked:
+
+   .. math::
+
+      \delta E_g(t) = E_g(t) - \langle E_g \rangle
+
+2. The normalized gap time-autocorrelation function is evaluated:
+
+   .. math::
+
+      C(t) = \frac{\langle \delta E_g(0) \delta E_g(t) \rangle}{\sigma_E^2}
+
+3. A Hann-windowed Fast Fourier Transform computes the power spectral density :math:`J(\omega)` in wavenumbers (:math:`\text{cm}^{-1}`):
+
+   .. math::
+
+      J(\omega) = \frac{1}{2\pi} \int_{-\infty}^{\infty} C(t) W(t) \, e^{i \omega t} \, dt
+
+4. The dominant optical phonon mode is identified from the primary peak of :math:`J(\omega)` (excluding low-frequency acoustic noise :math:`< 30\text{ cm}^{-1}`):
+
+   .. math::
+
+      \tilde{\nu}_{\mathrm{LO}} = \operatorname{argmax}_{\tilde{\nu} \ge 30\text{ cm}^{-1}} J(\tilde{\nu})
+
+5. Converting from wavenumber to energy gives the optical phonon quantum:
+
+   .. math::
+
+      \hbar \omega_{\mathrm{LO}} = h c \, \tilde{\nu}_{\mathrm{LO}} = (1.23984 \times 10^{-4}\text{ eV}\cdot\text{cm}) \times \tilde{\nu}_{\mathrm{LO}}
+
+   *For example, in lead halide perovskites (:math:`\text{CsPbBr}_3`), the dominant peak at :math:`\tilde{\nu} \approx 150\text{ cm}^{-1}` yields :math:`\hbar \omega_{\mathrm{LO}} = 18.6\text{ meV}`. In CdSe nanocrystals (:math:`\tilde{\nu} \approx 210\text{ cm}^{-1}`), it yields :math:`\hbar \omega_{\mathrm{LO}} = 26.0\text{ meV}`.*
+
+5. Derivation of Huang-Rhys Factor S and Reorganization Energy λ from Trajectory Data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A central parameter in multi-phonon transitions is the **Huang-Rhys factor** :math:`S`, which quantifies the average number of phonons emitted during electronic transition. In ``miniBSE``, :math:`S` and the nuclear reorganization energy :math:`\lambda` are determined non-empirically via the **Fluctuation-Dissipation Theorem / Marcus linear response theory**:
+
+1. **Thermal Gap Variance**:
+   Along the ab initio trajectory at temperature :math:`T`, the classical variance of the energy gap is computed directly:
+
+   .. math::
+
+      \sigma_E^2 = \langle (E_g(t) - \langle E_g \rangle)^2 \rangle = \frac{1}{N_{\mathrm{frames}}} \sum_{k=1}^{N_{\mathrm{frames}}} \delta E_g(t_k)^2
+
+2. **Nuclear Reorganization Energy (:math:`\lambda`)**:
+   In linear response theory for a harmonic bath in the classical limit (:math:`k_B T \gg \hbar \omega / 2`), the energy gap variance is directly proportional to the reorganization energy:
+
+   .. math::
+
+      \sigma_E^2 = 2 \lambda \, k_B T \implies \lambda = \frac{\sigma_E^2}{2 \, k_B T}
+
+   *(Quantum mechanically, this corresponds to :math:`\sigma_E^2 = \int_0^\infty \frac{2}{\pi} \hbar \omega J(\omega) \coth\left(\frac{\hbar \omega}{2 k_B T}\right) d\omega`).*
+
+3. **Huang-Rhys Factor (:math:`S`)**:
+   Because the total reorganization energy partitioned into the dominant optical phonon mode of frequency :math:`\hbar \omega_{\mathrm{LO}}` is :math:`\lambda = S \, \hbar \omega_{\mathrm{LO}}`, we solve directly for :math:`S`:
+
+   .. math::
+
+      S = \frac{\lambda}{\hbar \omega_{\mathrm{LO}}} = \frac{\sigma_E^2}{2 \, k_B T \, \hbar \omega_{\mathrm{LO}}}
+
+**Physical Significance**: Both :math:`\lambda` and :math:`S` are extracted directly from the NAMD trajectory without any adjustable parameters. Soft, polar perovskite lattices with large thermal gap fluctuations (:math:`\sigma_E \approx 60\text{ meV}`) yield :math:`\lambda \approx 70\text{ meV}` and :math:`S \approx 3.8`, reflecting significant electron-phonon coupling, whereas rigid covalent nanocrystals exhibit :math:`S \approx 0.5 - 1.5`.
+
+6. Intermediate & Narrow Gap Decay: Franck-Condon Weighted Density of States (FCWD)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In narrow-gap quantum dots (:math:`E_g < 1.0\text{ eV}`, e.g. infrared PbS, PbSe, HgTe, or InAs) or near crossing points with shallow defect states, the number of required accepting phonons is small (:math:`p < 15`). In this regime, the discrete multi-phonon expansion transitions into a continuous **Franck-Condon Weighted Density of States (FCWD)** evaluated from Fermi's Golden Rule:
 
 .. math::
 
-   k_{\mathrm{nr}} = \frac{2\pi}{\hbar} |V_{\mathrm{el}}|^2 \, \mathrm{FCWD}(E_g)
+   k_{\mathrm{nr}}^{\mathrm{FCWD}} = \frac{2\pi}{\hbar} |V_{\mathrm{el}}|^2 \, \mathrm{FCWD}(E_g)
 
-where :math:`\mathrm{FCWD}(E_g) = \frac{1}{\sqrt{2\pi \sigma^2}} \exp\left( -\frac{(E_g - \lambda)^2}{2\sigma^2} \right)` accounts for the nuclear reorganization energy :math:`\lambda`.
+In the Marcus-Levich framework, the nuclear Franck-Condon factor takes a Gaussian line-shape:
 
-4. Defect Trap-Assisted Recombination
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. math::
 
-In real nanocrystals with unpassivated surfaces, non-radiative recombination is dominated by **Shockley-Read-Hall (SRH) defect trapping**. Deep mid-gap trap states break the large band gap into smaller sub-steps, dramatically accelerating non-radiative relaxation. In ``miniBSE``, trap-assisted recombination is modeled by specifying an effective trap lifetime:
+   \mathrm{FCWD}(E_g) = \frac{1}{\sqrt{2\pi \sigma^2}} \exp\left( -\frac{(E_g - \lambda)^2}{2\sigma^2} \right)
+
+Data-Driven Extraction of FCWD Parameters
+""""""""""""""""""""""""""""""""""""""""""
+
+Every variable in this rate expression is evaluated directly from the NAMD trajectory:
+
+1. **Gaussian Broadening (:math:`\sigma`)**:
+   :math:`\sigma` is **not an arbitrary broadening parameter**! It is the exact standard deviation of the energy gap fluctuations from the MD trajectory:
+
+   .. math::
+
+      \sigma = \sigma_E = \sqrt{\langle (E_g(t) - \langle E_g \rangle)^2 \rangle} = \sqrt{2 \lambda k_B T}
+
+2. **Nuclear Reorganization Energy (:math:`\lambda`)**:
+   Computed from the trajectory variance: :math:`\lambda = \frac{\sigma_E^2}{2 k_B T}`.
+3. **Electronic Coupling (:math:`V_{\mathrm{el}}`)**:
+   In non-adiabatic transition theory, :math:`V_{\mathrm{el}}` is the effective off-diagonal electronic coupling between the initial excited state :math:`|1\rangle` and the ground state :math:`|0\rangle`. Via the Hellmann-Feynman theorem, the non-adiabatic coupling vector along nuclear velocity :math:`\dot{\mathbf{R}}` is:
+
+   .. math::
+
+      d_{10}(t) = \left\langle \psi_1(t) \middle| \frac{\partial}{\partial t} \middle| \psi_0(t) \right\rangle = \sum_A \dot{\mathbf{R}}_A \cdot \langle \psi_1 | \boldsymbol{\nabla}_A | \psi_0 \rangle
+
+   In the time-derivative coupling representation, the effective electronic coupling matrix element is:
+
+   .. math::
+
+      V_{\mathrm{el}} = \hbar \, \langle |d_{10}(t)| \rangle
+
+   where :math:`\langle |d_{10}| \rangle` is the trajectory-averaged non-adiabatic coupling magnitude between frontier orbitals, precomputed and stored in ``miniBSE``'s step files.
+
+7. Defect Trap-Assisted Recombination (Shockley-Read-Hall)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In real quantum dots with unpassivated surfaces or vacancies, non-radiative recombination is overwhelmingly accelerated by **Shockley-Read-Hall (SRH) mid-gap traps**. Instead of bridging a single large gap of :math:`2.0\text{ eV}`, carriers drop into an intermediate trap state (:math:`\Delta E \approx 0.5 - 1.0\text{ eV}`), where multi-phonon tunneling is orders of magnitude faster.
+
+In ``miniBSE``, trap-assisted recombination can be configured via the YAML input:
 
 .. code-block:: yaml
 
    namd:
      recombination:
-       tau_nr_ns: 25.0  # Trap recombination lifetime in nanoseconds
+       include_ground_state: true
+       tau_nr_ns: 25.0  # Trap non-radiative lifetime in nanoseconds
 
-5. Photoluminescence Quantum Yield (PLQY)
+8. Photoluminescence Quantum Yield (PLQY)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The total Photoluminescence Quantum Yield is evaluated from the branching ratio between radiative emission and non-radiative loss:
+The total Photoluminescence Quantum Yield (PLQY) represents the branching ratio between radiative photon emission and non-radiative dissipation:
 
 .. math::
 
    \mathrm{PLQY} = \frac{\langle k_{\mathrm{rad}} \rangle}{\langle k_{\mathrm{rad}} \rangle + k_{\mathrm{nr}}} \times 100\%
+
+* In pristine, defect-free nanocrystals where :math:`E_g \gg \hbar \omega_{\mathrm{LO}}`, the intrinsic non-radiative rate is negligible (:math:`k_{\mathrm{nr}} \ll 10^3\text{ s}^{-1}`), leading to near-unity PLQY (:math:`\sim 99\%`).
+* In the presence of surface traps (:math:`\tau_{\mathrm{nr}} \sim 10 - 50\text{ ns}`), non-radiative decay competes directly with radiative emission (:math:`\tau_{\mathrm{rad}} \sim 5 - 20\text{ ns}`), yielding realistic PLQYs between :math:`20\%` and :math:`70\%`.
 
 ---
 
