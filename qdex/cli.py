@@ -721,6 +721,10 @@ def main():
     parser.add_argument("--namd-ta", action="store_true", help="Compute ultrafast pump-probe transient absorption (TA) spectra from NAMD dynamics.")
     parser.add_argument("--namd-ta-sigma", type=float, default=0.03, help="Gaussian line broadening in eV for transient absorption probe spectra (default: 0.03).")
     parser.add_argument("--namd-ta-plot", action="store_true", help="Generate 2D false-color TA map and 1S bleach rise kinetics plot.")
+    parser.add_argument("--namd-ecsh-auger", action="store_true", help="Enable Energy-Conserving Surface Hopping (ECSH) for Auger processes in NAMD.")
+    parser.add_argument("--namd-ecsh-window", type=float, default=None, help="Resonance energy window in eV for ECSH Auger transitions (default: k_B * T).")
+    parser.add_argument("--namd-trajectory-loops", type=int, default=1, help="Number of times to loop precomputed MD trajectory to reach long Auger timescales (default: 1).")
+    parser.add_argument("--namd-biexciton", action="store_true", help="Initialize NAMD from a biexciton state (XX) to simulate Auger annihilation dynamics.")
 
     args = parser.parse_args()
 
@@ -744,6 +748,19 @@ def main():
             ta_dict["sigma"] = args.namd_ta_sigma
         if getattr(args, "namd_ta_plot", False):
             ta_dict["plot"] = True
+
+    if getattr(args, "namd_ecsh_auger", False) or getattr(args, "namd_biexciton", False):
+        dyn_dict = config_data.setdefault("namd", {}).setdefault("dynamics", {})
+        dyn_dict["ecsh_auger"] = True
+        if getattr(args, "namd_ecsh_window", None) is not None:
+            dyn_dict["ecsh_window_ev"] = args.namd_ecsh_window
+        if getattr(args, "namd_trajectory_loops", 1) > 1:
+            dyn_dict["trajectory_loops"] = args.namd_trajectory_loops
+        if getattr(args, "namd_biexciton", False):
+            dyn_dict["initial_state"] = "biexciton"
+    elif getattr(args, "namd_trajectory_loops", 1) > 1:
+        dyn_dict = config_data.setdefault("namd", {}).setdefault("dynamics", {})
+        dyn_dict["trajectory_loops"] = args.namd_trajectory_loops
 
     if getattr(args, "namd_compact", None) is not None:
         from qdex.namd import compact_precomputed_data
