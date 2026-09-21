@@ -1,0 +1,88 @@
+# ==============================================================================
+# QDEX Configuration: Energy-Conserving Surface Hopping (ECSH) Auger Dynamics
+# System: CsPbBr3 Perovskite Quantum Dot (500-frame AIMD trajectory, dt = 2.0 fs)
+# Location: /Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio
+# ==============================================================================
+
+system:
+  xyz: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/frame_000001/frame.xyz"
+  mo_file: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/frame_000001/MOs.mbse"
+  basis_txt: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/test/BASIS_MOLOPT_UZH"
+  basis_name: "DZVP-MOLOPT-PBE-GTH"
+  material: "CSPBBR3"
+  gth_file: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/GTH_SOC_POTENTIALS.txt"
+  nthreads: 8
+
+physics:
+  excitation_mode: "diagonal_bse"
+  qp_gap: "gw"
+  exchange: true
+  kernel: "resta"
+  eps_out: 2.4
+  nhomos: 100                  # Optical BSE active space; Auger continuum accesses all 2500 MOs
+  nlumos: 100
+
+auger:
+  run: true                    # Enable static Auger recombination rate calculation
+  sigma: 0.05                  # Energy conservation Gaussian broadening (eV, ~2*k_B*T at 300 K)
+  channel: "all"               # Auger channel: "all", "eeh" (negative trion), or "hhe" (positive trion)
+  n_initial_states: 1          # Number of frontier band-edge states (1 = thermalized LUMO / HOMO)
+  lineshape: "gaussian"        # Energy conservation lineshape: "gaussian" or "fcwd"
+  eps_eff: 1.8                 # Dynamic screening at hbar*omega=Eg (~1.8 yields k_XX ~ 200-300 ns^-1)
+
+namd:
+  trajectory:
+    dir: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio"
+    frame_pattern: "frame_*"
+    xyz_file: "frame.xyz"
+    mo_file: "MOs.mbse"
+    dt_nuc_fs: 2.0
+    start_frame: 1
+    end_frame: 500  
+
+  storage:
+    precompute_dir: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/namd_precomputed_5000_thr3.5"
+    active_energy_window_ev: [2.5, 7.5]
+
+  tracking:
+    phase_correction: true
+    hungarian_tracking: true
+    completeness_threshold: 0.99
+
+  integration:
+    integrator: "unitary_matrix_exp"
+    n_substeps: 100
+
+  dynamics:
+    method: "cpa_fssh"                 # Classical Path Fewest Switches Surface Hopping
+    n_trajectories: 200                # Number of stochastic surface hopping swarms
+    temperature_k: 300.0               # Lattice temperature (K)
+    detailed_balance: true             # Boltzmann detailed balance for 1-body phonon dissipation
+    decoherence: "cumulant"            # Ab initio cumulant decoherence
+    tau_dec_fs: 15.0
+
+    # --- Auger ECSH Options (Gumber & Prezhdo, JCTC 2024, 20, 5408) ---
+    ecsh_auger: true                   # Enable Energy-Conserving Surface Hopping for Auger hops
+    ecsh_window_ev: 0.026              # Resonant energy conservation window (|Ei - Ef| <= k_B*T)
+    initial_state: "biexciton"         # Initialize in neutral biexciton state (XX: 2e + 2h)
+    trajectory_loops: 5                # Loop MD trajectory 5x (5000 fs / 5.0 ps) under ergodic CPA
+
+  initial_excitation:
+    mode: "biexciton"                  # Biexciton initial state (E_XX ~ 2 * Eg)
+    ratio: 2.0
+    pulse_fwhm_ev: 0.08
+    filter_dark_states: true
+
+  output:
+    cooling_curve_csv: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/biexciton_auger_cooling.csv"
+    populations_npz: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/populations_auger_biexciton.npz"
+    plot_cooling: true
+    plot_file: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/biexciton_auger_cooling.png"
+
+  # --- Ultrafast Pump-Probe Transient Absorption (TA) ---
+  transient_absorption:
+    run: true                          # Compute dynamic TA differential absorbance map dA(E, t)
+    sigma: 0.03                        # Probe spectral broadening (eV)
+    plot: true                         # Generate 3-panel publication dashboard
+    plot_file: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/transient_absorption_map.png"
+    csv_file: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/ta_bleach_kinetics.csv"

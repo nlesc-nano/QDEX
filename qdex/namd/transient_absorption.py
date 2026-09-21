@@ -132,10 +132,16 @@ def compute_transient_absorption(
 
         # Gaussian spectral convolution
         # delta_A[k, :] = sum_ia delta_f_ia * G(E - E_ia)
-        # Vectorized over probe grid
-        diff_sq = (probe_energies[np.newaxis, :] - E_k[:, np.newaxis]) ** 2
-        gauss_profiles = inv_sqrt2pi_sigma * np.exp(- diff_sq / two_sigma_sq)
-        delta_A[k, :] = np.dot(delta_f, gauss_profiles)
+        # Vectorized over probe grid, evaluated only on pairs with non-negligible |delta_f|
+        active_mask = np.abs(delta_f) > 1e-12
+        if np.any(active_mask):
+            E_active = E_k[active_mask]
+            df_active = delta_f[active_mask]
+            diff_sq = (probe_energies[np.newaxis, :] - E_active[:, np.newaxis]) ** 2
+            gauss_profiles = inv_sqrt2pi_sigma * np.exp(- diff_sq / two_sigma_sq)
+            delta_A[k, :] = np.dot(df_active, gauss_profiles)
+        else:
+            delta_A[k, :] = 0.0
 
     # 4. Extract 1S Bleach Kinetic Profile
     # Find probe grid point closest to the 1S transition

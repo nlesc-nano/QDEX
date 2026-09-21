@@ -92,6 +92,15 @@ def run_namd_dynamics(config):
     frame0_path = os.path.join(precompute_dir, "frame_00000.npz")
 
     if not os.path.exists(meta_path) or not os.path.exists(frame0_path):
+        traj_dir = namd_cfg.get("trajectory", {}).get("dir", "")
+        if traj_dir and os.path.isdir(traj_dir):
+            cand = os.path.join(traj_dir, precompute_dir)
+            if os.path.exists(os.path.join(cand, "namd_metadata.npz")) and os.path.exists(os.path.join(cand, "frame_00000.npz")):
+                precompute_dir = cand
+                meta_path = os.path.join(precompute_dir, "namd_metadata.npz")
+                frame0_path = os.path.join(precompute_dir, "frame_00000.npz")
+
+    if not os.path.exists(meta_path) or not os.path.exists(frame0_path):
         raise FileNotFoundError(
             f"Precomputed NAMD data not found in '{precompute_dir}'. "
             "Please run 'minibse --namd-precompute' first!"
@@ -354,11 +363,11 @@ def run_namd_dynamics(config):
                 break
 
             step_data = np.load(step_file)
-            E_k = step_data["E_prev"]
+            E_k = step_data["E_prev"] if "E_prev" in step_data else all_energies[step_idx, :]
             E_kplus1 = step_data["E_curr"]
             all_energies[step_idx + 1, :] = E_kplus1
-            i_pairs = step_data["i_pairs"] if "i_pairs" in step_data else step_data["i_pairs_curr"]
-            a_pairs = step_data["a_pairs"] if "a_pairs" in step_data else step_data["a_pairs_curr"]
+            i_pairs = step_data["i_pairs"] if "i_pairs" in step_data else (step_data["i_pairs_curr"] if "i_pairs_curr" in step_data else i_pairs0)
+            a_pairs = step_data["a_pairs"] if "a_pairs" in step_data else (step_data["a_pairs_curr"] if "a_pairs_curr" in step_data else a_pairs0)
             S_occ = step_data["S_occ"]
             S_virt = step_data["S_virt"]
             eps_occ_curr = step_data["eps_occ_curr"] if "eps_occ_curr" in step_data else eps_occ_0
