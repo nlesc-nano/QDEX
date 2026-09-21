@@ -136,6 +136,128 @@ According to the universal multiexciton scaling relation (*Klimov et al., Scienc
 
 where :math:`\Gamma_{eeh}` is the single negative trion rate and :math:`\Gamma_{hhe}` is the single positive trion rate.
 
+Schematic Diagrams of the Auger Processes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The energy-level configurations, particle movements, and coupling formulas for the :math:`eeh`, :math:`hhe`, and biexciton :math:`XX` processes are summarized schematically below:
+
+**1. Negative Trion / Biexciton eeh Channel (Electron Ejected to Continuum)**
+
+.. code-block:: text
+
+   =========================================================================================================
+                             NEGATIVE TRION / BIEXCITON: eeh (Electron Ejected)
+   =========================================================================================================
+
+          Energy
+            ▲
+            │                                                              e' (Hot Continuum Electron)
+            │                                                            ┌─────┐
+            │                                                            │  ●  │ ε_e' = ε_e1 + ΔE_recomb
+            │                                                            └─────┘
+            │                                                               ▲
+            │                                                               │  ΔE_eject = ε_e' - ε_e1
+            │                                                               │  (Absorbs Coulomb energy)
+            │                                                               │
+     CB     ┼─── CBM ───   ┌─────┐             ┌─────┐                  ┌─────┐
+            │              │ e_1 │(Spectator)  │ e_2 │(Recombines)      │     │
+            │              │  ●  │             │  ●  │                  │     │
+            │              └─────┘             └─────┘                  └─────┘
+            │                 │                   │
+            │                 │                   │ ΔE_recomb = ε_e2 - ε_h ≈ E_g
+            │                 │                   ▼
+     VB     ┼─── VBM ───   ┌─────┐             ┌─────┐                  ┌─────┐
+            │              │     │             │  ○  │(Hole h)          │     │ (Recombined: 0 holes)
+            │              │     │             │     │                  │     │
+            │              └─────┘             └─────┘                  └─────┘
+            │
+            │             INITIAL STATE (e_1, e_2, h)                  FINAL STATE (e')
+            └────────────────────────────────────────────────────────────────────────────────────────►
+                                                         Reaction Coordinate
+
+     Formula Mapping:
+       • Recombination energy:    ΔE_recomb = ε_e2 - ε_h ≈ E_g
+       • Recombination charge:    q_A^{e2 h} = Σ_{λ∈A, σ} C_{λ e2} S_{λσ} C_{σ h}
+       • Ejection charge:         q_B^{e' e1} = Σ_{μ∈B, ν} C_{μ e'} S_{μν} C_{ν e1}
+       • Direct Coulomb integral: V_dir  = (q^{e2 h})^T  W^Resta  q^{e' e1}
+       • Exchange integral:       V_exch = (q^{e1 h})^T  W^Resta  q^{e' e2}
+       • Net matrix element:      |M_if|² = |V_dir - V_exch|² + |V_dir|²
+       • Recombination rate:      Γ_eeh = (2π / ħ) Σ_e' |M_if|² ρ(ε_e' - ε_e1 - ΔE_recomb)
+
+**2. Positive Trion / Biexciton hhe Channel (Hole Pushed Deep into Valence)**
+
+.. code-block:: text
+
+   =========================================================================================================
+                             POSITIVE TRION / BIEXCITON: hhe (Hole Ejected)
+   =========================================================================================================
+
+          Energy
+            ▲
+            │
+     CB     ┼─── CBM ───   ┌─────┐             ┌─────┐                  ┌─────┐
+            │              │  e  │(Recombines) │     │                  │     │ (Recombined: 0 electrons)
+            │              │  ●  │             │     │                  │     │
+            │              └─────┘             └─────┘                  └─────┘
+            │                 │
+            │                 │ ΔE_recomb = ε_e - ε_h2 ≈ E_g
+            │                 ▼
+     VB     ┼─── VBM ───   ┌─────┐             ┌─────┐                  ┌─────┐
+            │              │  ○  │(Hole h_2)   │  ○  │(Spectator h_1)   │     │
+            │              │     │             │     │                  │     │
+            │              └─────┘             └─────┘                  └─────┘
+            │                                     │
+            │                                     │ ΔE_eject = ε_h1 - ε_h'
+            │                                     │ (Pushed deep into valence)
+            │                                     ▼
+            │                                                           ┌─────┐
+            │                                                           │  ○  │ h' (Deep Valence Hole)
+            │                                                           └─────┘ ε_h' = ε_h1 - ΔE_recomb
+            │
+            │             INITIAL STATE (e, h_1, h_2)                  FINAL STATE (h')
+            └────────────────────────────────────────────────────────────────────────────────────────►
+                                                         Reaction Coordinate
+
+     Formula Mapping:
+       • Recombination energy:    ΔE_recomb = ε_e - ε_h2 ≈ E_g
+       • Recombination charge:    q_A^{e h2} = Σ_{λ∈A, σ} C_{λ e} S_{λσ} C_{σ h2}
+       • Ejection charge:         q_B^{h1 h'} = Σ_{μ∈B, ν} C_{μ h1} S_{μν} C_{ν h'}
+       • Direct Coulomb integral: V_dir  = (q^{e h2})^T  W^Resta  q^{h1 h'}
+       • Exchange integral:       V_exch = (q^{e h1})^T  W^Resta  q^{h2 h'}
+       • Net matrix element:      |M_if|² = |V_dir - V_exch|² + |V_dir|²
+       • Recombination rate:      Γ_hhe = (2π / ħ) Σ_h' |M_if|² ρ(ε_h1 - ε_h' - ΔE_recomb)
+
+**3. Neutral Biexciton Annihilation (XX) & ECSH Dynamical Relaxation Cascade**
+
+.. code-block:: text
+
+   =========================================================================================================
+         NEUTRAL BIEXCITON (XX) ANNIHILATION & ENERGY-CONSERVING SURFACE HOPPING (ECSH) CASCADE
+   =========================================================================================================
+
+     Step 1: Initial Biexciton State (2e + 2h)
+             Energy: E_XX ≈ 2 * E_g
+             Conduction: [ e_1 , e_2 ]      Valence: [ h_1 , h_2 ]
+                    │
+                    │  Auger Annihilation Hop: ΔN_orb = 2 (Two-Particle Coulomb Operator)
+                    │  Statistical Scaling: Γ_XX = 4 * Γ_eeh + 4 * Γ_hhe
+                    │  ECSH Rule: Energy conserved internally within electrons (|E_XX - E_X*| <= k_B*T)
+                    │  NO phonon loss! NO Boltzmann damping! (Zero nuclear velocity rescaling)
+                    ▼
+     Step 2: Hot Single Exciton State (X*)
+             One (e, h) pair annihilated; excess energy absorbed by spectator carrier:
+             • Either Hot Electron State: (e', h_2) with ε_e' ≈ CBM + E_g
+             • Or Hot Hole State:         (e_1, h') with ε_h' ≈ VBM - E_g
+                    │
+                    │  Non-Adiabatic Electron-Phonon Cascades: ΔN_orb = 1 (Single-Particle NACs)
+                    │  Coupling: d_ij = <φ_i | ∂/∂t | φ_j> along AIMD trajectory
+                    │  Dissipates electronic energy into lattice vibrations (heat/phonons)
+                    │  Upward hops Boltzmann-scaled: P * exp(-ΔE / k_B*T)
+                    ▼
+     Step 3: Thermalized Band-Edge Exciton (1S)
+             Cold electron at CBM (1S_e), Cold hole at VBM (1S_h)
+             Energy: E_1S ≈ E_g  -->  Subsequent slow radiative emission (τ_rad ~ 10 - 50 ns)
+
 ---
 
 3. The Atom-Centered Resta Screening Contraction
