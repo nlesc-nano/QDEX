@@ -19,6 +19,7 @@ The documentation is organized systematically into progressive parts:
 5. **Part 5: Excited-State Wavefunction Analysis**: Rigorous Plasser-Dreuw real-space descriptors (:math:`d_{eh}, R_{eh}, d_{\mathrm{CT}}, \sigma_h, \sigma_e`), Natural Transition Orbitals (NTOs), and volumetric 3D visualization.
 6. **Part 6: Non-Adiabatic Dynamics & Photoluminescence (NAMD)**: Cross-frame overlaps and non-adiabatic couplings, gauge phase alignment, Hungarian crossing tracking, the tensorized Pauli Master Equation (PME), CPA-FSSH surface hopping, *ab initio* cumulant decoherence, Einstein radiative decay, and Photoluminescence Quantum Yield (PLQY).
 7. **Part 7: Step-by-Step Tutorials**: Practical, end-to-end computational workflows mirroring the exact progression from Parts 1 through 6 on a model perovskite quantum dot.
+8. **Part 8: Multi-Carrier Auger Recombination**: Non-radiative Auger decay in quantum dots, breakdown of translational symmetry and :math:`1/V^2` volume scaling, negative trion (:math:`eeh`) and positive trion (:math:`hhe`) channels, biexciton lifetimes (:math:`\tau_{XX}`), atom-centered Resta-screened Coulomb contractions, and static vs. trajectory-averaged NAMD dynamics.
 
 .. toctree::
    :maxdepth: 2
@@ -69,6 +70,12 @@ The documentation is organized systematically into progressive parts:
    :caption: Part 7: Step-by-Step Tutorials
 
    part7_examples/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Part 8: Multi-Carrier Auger Recombination
+
+   part8_auger/index
 
 .. toctree::
    :maxdepth: 2

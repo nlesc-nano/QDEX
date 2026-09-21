@@ -8,7 +8,7 @@ By combining the ease of a Python interface with a lightning-fast C++ backend po
 
 ## What QDEX Does
 
-`QDEX` bridges the gap between static DFT calculations and real-time excited-state dynamics across six integrated modules:
+`QDEX` bridges the gap between static DFT calculations and real-time excited-state dynamics across seven integrated modules:
 
 1. **Ground-State Electronic Structure**: 
    - Projects CP2K Kohn-Sham molecular orbitals (MOs) onto atomic sites via Lowdin and Mulliken population analysis.
@@ -34,6 +34,10 @@ By combining the ease of a Python interface with a lightning-fast C++ backend po
    - Propagates carrier cooling deterministically via the tensorized Pauli Master Equation (PME) or stochastically via Fewest Switches Surface Hopping (CPA-FSSH).
    - Solves for *ab initio* decoherence times $\tau_{\mathrm{dec}}$ via second-order cumulant expansion of energy gap fluctuations.
    - Evaluates spontaneous emission rates ($k_{\mathrm{rad}}$), multi-phonon non-radiative rates ($k_{\mathrm{nonrad}}$ via Jortner, Marcus, and SRH defect models), carrier cooling lifetimes ($\tau_{\mathrm{cool}}$), band-edge arrival times, and photoluminescence quantum yields (PLQY).
+7. **Multi-Carrier Auger Recombination**:
+   - Solves Fermi's Golden Rule for negative trion ($eeh$) and positive trion ($hhe$) channels and neutral biexciton lifetimes ($\tau_{XX}$).
+   - Contracts transition densities into atom-centered charges and uses the microscopic Resta dielectric kernel, completely avoiding $O(N_{\mathrm{ao}}^5)$ four-center integrals.
+   - Supports both static single-geometry evaluation and trajectory-averaged NAMD dynamics.
 
 ---
 
