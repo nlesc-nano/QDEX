@@ -26,6 +26,69 @@ def fit_exponential_lifetime(times, values):
     return np.nan
 
 
+def compute_band_edge_arrival_times(times, values, tau, temp_k=300.0):
+    """
+    Computes analytical estimates and actual trajectory times to reach the band edge:
+      - Cooling rate k_cool = 1 / tau (in ps^-1).
+      - Estimated time to dissipate 95% of excess energy: ~ 3.0 * tau (-ln(0.05) * tau).
+      - Estimated time to dissipate 99% of excess energy: ~ 4.6 * tau (-ln(0.01) * tau).
+      - Actual trajectory time to dissipate 95% of initial excess: first t where Delta E(t) <= 0.05 * Delta E(0).
+      - Actual trajectory time to dissipate 99% of initial excess: first t where Delta E(t) <= 0.01 * Delta E(0).
+      - Actual trajectory time to reach thermal energy threshold: first t where Delta E(t) <= k_B * T.
+    """
+    from miniBSE.namd.integrator import KB_EV
+
+    times_arr = np.asarray(times, dtype=np.float64)
+    val_arr = np.asarray(values, dtype=np.float64)
+    v0 = float(val_arr[0]) if len(val_arr) > 0 else 0.0
+    t_end = float(times_arr[-1]) if len(times_arr) > 0 else 0.0
+
+    # 1. Cooling rate k_cool in ps^-1
+    k_cool_ps = (1e3 / tau) if (np.isfinite(tau) and tau > 0) else np.nan
+
+    # 2. Analytical estimates from fitted tau
+    if np.isfinite(tau) and tau > 0:
+        est_95 = 2.99573227 * tau  # -ln(0.05) * tau ≈ 3.0 * tau
+        est_99 = 4.60517019 * tau  # -ln(0.01) * tau ≈ 4.6 * tau
+    else:
+        est_95 = np.nan
+        est_99 = np.nan
+
+    # 3. Actual numerical times from simulation trajectory
+    # 95% dissipated (excess <= 5% of v0)
+    idx_95 = np.where(val_arr <= 0.05 * v0)[0]
+    act_95 = float(times_arr[idx_95[0]]) if len(idx_95) > 0 else np.nan
+
+    # 99% dissipated (excess <= 1% of v0)
+    idx_99 = np.where(val_arr <= 0.01 * v0)[0]
+    act_99 = float(times_arr[idx_99[0]]) if len(idx_99) > 0 else np.nan
+
+    # Thermalized: excess <= k_B * T
+    thermal_thresh = KB_EV * max(float(temp_k), 1.0)
+    idx_therm = np.where(val_arr <= thermal_thresh)[0]
+    act_therm = float(times_arr[idx_therm[0]]) if len(idx_therm) > 0 else np.nan
+
+    return {
+        "tau_fs": tau,
+        "k_cool_ps": k_cool_ps,
+        "est_95_fs": est_95,
+        "est_99_fs": est_99,
+        "act_95_fs": act_95,
+        "act_99_fs": act_99,
+        "act_therm_fs": act_therm,
+        "t_end_fs": t_end,
+    }
+
+
+def format_time_fs(val, t_max=None):
+    """Formats a time in femtoseconds cleanly, handling finite, NaN, and window exceedance."""
+    if np.isfinite(val):
+        return f"{val:.1f} fs"
+    elif t_max is not None:
+        return f"> {t_max:.1f} fs (exceeds window)"
+    return "N/A"
+
+
 def compute_nac_energy_gap_data(precompute_dir, max_steps=20, max_sample_pairs=5000):
     """
     Extracts non-adiabatic coupling magnitudes and energy differences::
@@ -369,29 +432,55 @@ def analyze_and_plot_namd_results(
     )
     print(f"  [Output] State populations saved to: {npz_file}")
 
-    # 3. Fit Lifetimes
+    # 3. Fit Lifetimes & Band Edge Arrival Times
     tau_total = fit_exponential_lifetime(times_fs, excess_total)
     tau_e = fit_exponential_lifetime(times_fs, mean_excess_e)
     tau_h = fit_exponential_lifetime(times_fs, mean_excess_h)
 
-    print("\n" + "=" * 65)
-    print(" NAMD Carrier Cooling Summary")
-    print("=" * 65)
-    print(f"  Initial Energy <E(0)>     : {mean_energies_ev[0]:.4f} eV")
-    print(f"  Final Energy   <E(end)>   : {mean_energies_ev[-1]:.4f} eV")
-    print(f"  Band Edge Gap (Eg)        : {qp_gap_ev:.4f} eV")
-    print(f"  Total Energy Dissipated   : {mean_energies_ev[0] - mean_energies_ev[-1]:.4f} eV")
+    arr_tot = compute_band_edge_arrival_times(times_fs, excess_total, tau_total)
+    arr_e = compute_band_edge_arrival_times(times_fs, mean_excess_e, tau_e)
+    arr_h = compute_band_edge_arrival_times(times_fs, mean_excess_h, tau_h)
+
+    print("\n" + "=" * 68)
+    print(" NAMD Carrier Cooling & Relaxation Summary")
+    print("=" * 68)
+    print(f"  Initial Energy <E(0)>        : {mean_energies_ev[0]:.4f} eV")
+    print(f"  Final Energy   <E(end)>      : {mean_energies_ev[-1]:.4f} eV")
+    print(f"  Band Edge Gap (Eg)           : {qp_gap_ev:.4f} eV")
+    print(f"  Total Energy Dissipated      : {mean_energies_ev[0] - mean_energies_ev[-1]:.4f} eV")
+    print()
+    print("  --- Exponential Cooling Lifetimes & Rates (k_cool = 1/tau) ---")
     if np.isfinite(tau_total):
-        print(f"  Exciton Cooling Lifetime  : {tau_total:.1f} fs")
+        print(f"  Exciton Lifetime (tau)       : {tau_total:.1f} fs (k_cool = {arr_tot['k_cool_ps']:.2f} ps^-1)")
     if np.isfinite(tau_e):
-        print(f"  Electron Cooling Lifetime : {tau_e:.1f} fs")
+        print(f"  Electron Lifetime (tau_e)    : {tau_e:.1f} fs (k_cool = {arr_e['k_cool_ps']:.2f} ps^-1)")
     if np.isfinite(tau_h):
-        print(f"  Hole Cooling Lifetime     : {tau_h:.1f} fs")
-    print("=" * 65 + "\n")
+        print(f"  Hole Lifetime (tau_h)        : {tau_h:.1f} fs (k_cool = {arr_h['k_cool_ps']:.2f} ps^-1)")
+    print()
+    print("  --- Band Edge Arrival Time (95% excess dissipated, ~3.0*tau) ---")
+    print(f"  Exciton                      : Estimated = {format_time_fs(arr_tot['est_95_fs']):<10} | Actual = {format_time_fs(arr_tot['act_95_fs'], times_fs[-1])}")
+    print(f"  Electron                     : Estimated = {format_time_fs(arr_e['est_95_fs']):<10} | Actual = {format_time_fs(arr_e['act_95_fs'], times_fs[-1])}")
+    print(f"  Hole                         : Estimated = {format_time_fs(arr_h['est_95_fs']):<10} | Actual = {format_time_fs(arr_h['act_95_fs'], times_fs[-1])}")
+    print()
+    print("  --- Complete Thermalization Time (99% excess dissipated, ~4.6*tau) ---")
+    print(f"  Exciton                      : Estimated = {format_time_fs(arr_tot['est_99_fs']):<10} | Actual = {format_time_fs(arr_tot['act_99_fs'], times_fs[-1])}")
+    print(f"  Electron                     : Estimated = {format_time_fs(arr_e['est_99_fs']):<10} | Actual = {format_time_fs(arr_e['act_99_fs'], times_fs[-1])}")
+    print(f"  Hole                         : Estimated = {format_time_fs(arr_h['est_99_fs']):<10} | Actual = {format_time_fs(arr_h['act_99_fs'], times_fs[-1])}")
+    print()
+    print("  --- Lattice Thermalization Window (Excess <= k_B*T ≈ 25.8 meV) ---")
+    print(f"  Exciton                      : Actual = {format_time_fs(arr_tot['act_therm_fs'], times_fs[-1])}")
+    print(f"  Electron                     : Actual = {format_time_fs(arr_e['act_therm_fs'], times_fs[-1])}")
+    print(f"  Hole                         : Actual = {format_time_fs(arr_h['act_therm_fs'], times_fs[-1])}")
+    print("=" * 68 + "\n")
 
     bg_data = None
+    nac_data = None
+    mean_nac_fs = None
     if precompute_dir and os.path.isdir(precompute_dir):
         bg_data = compute_band_gap_dynamics_and_spectral_density(precompute_dir)
+        nac_data = compute_nac_energy_gap_data(precompute_dir)
+        if nac_data is not None and len(nac_data.get("rms_nac_series", [])) > 0:
+            mean_nac_fs = float(np.mean(nac_data["rms_nac_series"]))
 
     if recombination_info is not None:
         mat_name = recombination_info.get("material", "N/A")
@@ -403,29 +492,48 @@ def analyze_and_plot_namd_results(
         k_rad_therm_s = recombination_info.get("k_rad_therm_s", 0.0)
         k_nr_s = recombination_info.get("k_nr_s", 0.0)
 
-        print("=" * 65)
+        print("=" * 68)
         print(" Recombination & Photoluminescence Summary")
-        print("=" * 65)
-        print(f"  Material                    : {mat_name} (Refractive Index n = {n_refr:.2f})")
+        print("=" * 68)
+        print(f"  Material                     : {mat_name} (Refractive Index n = {n_refr:.2f})")
         if np.isfinite(tau_rad_1):
-            print(f"  Lowest Exciton Rad Lifetime : {tau_rad_1:.2f} ns (k_rad = {1e9/max(tau_rad_1, 1e-12):.2e} s^-1)")
+            print(f"  Lowest Exciton Rad Lifetime  : {tau_rad_1:.2f} ns (k_rad = {1e9/max(tau_rad_1, 1e-12):.2e} s^-1)")
         if np.isfinite(tau_rad_therm):
-            print(f"  Thermalized Rad Lifetime    : {tau_rad_therm:.2f} ns (k_rad = {k_rad_therm_s:.2e} s^-1)")
+            print(f"  Thermalized Rad Lifetime     : {tau_rad_therm:.2f} ns (k_rad = {k_rad_therm_s:.2e} s^-1)")
         if np.isfinite(tau_nr):
             if tau_nr > 1e6:
-                print(f"  Non-Radiative Lifetime      : > 1 ms (intrinsic limit, k_nr = {k_nr_s:.2e} s^-1)")
+                print(f"  Effective Non-Rad Lifetime   : > 1 ms (intrinsic limit, k_nr = {k_nr_s:.2e} s^-1)")
             else:
-                print(f"  Non-Radiative Lifetime      : {tau_nr:.2f} ns (k_nr = {k_nr_s:.2e} s^-1)")
+                print(f"  Effective Non-Rad Lifetime   : {tau_nr:.2f} ns (k_nr = {k_nr_s:.2e} s^-1)")
         if np.isfinite(plqy):
-            print(f"  Predicted PL Quantum Yield  : {plqy:.1f} %")
+            print(f"  Predicted PL Quantum Yield   : {plqy:.1f} %")
+
         if bg_data is not None and "recomb_params" in bg_data:
             rp = bg_data["recomb_params"]
-            print("  --- Trajectory-Derived Parameters (Non-Empirical) ---")
-            print(f"  Dominant Optical Phonon     : {rp['dominant_freq_cm1']:.1f} cm^-1 (hbar*omega_LO = {rp['E_LO_ev']*1e3:.1f} meV)")
-            print(f"  Nuclear Reorganization (lam): {rp['lambda_ev']*1e3:.1f} meV")
-            print(f"  Huang-Rhys Factor (S)       : {rp['S_hr']:.3f}")
+            from miniBSE.hardness import compute_energy_gap_law_rate, compute_fcwd_rate
+            from miniBSE.namd.integrator import HBAR_EV_FS
+            if mean_nac_fs is not None and rp.get("V_el_ev") is None:
+                rp["V_el_ev"] = float(HBAR_EV_FS * mean_nac_fs)
+
+            k_jort_s, _ = compute_energy_gap_law_rate(qp_gap_ev, E_LO_ev=rp["E_LO_ev"], S_hr=rp["S_hr"])
+            print()
+            print("  --- Trajectory-Derived Parameters (Non-Empirical from NAMD) ---")
+            print(f"  Dominant Optical Phonon      : {rp['dominant_freq_cm1']:.1f} cm^-1 (hbar*omega_LO = {rp['E_LO_ev']*1e3:.1f} meV)")
+            print(f"  Nuclear Reorganization (lam) : {rp['lambda_ev']*1e3:.1f} meV")
+            print(f"  Huang-Rhys Factor (S)        : {rp['S_hr']:.3f}")
             print(f"  Thermal Gap Fluctuation (sig): {rp['sigma_ev']*1e3:.1f} meV")
-        print("=" * 65 + "\n")
+            if rp.get("V_el_ev") is not None:
+                print(f"  Electronic Coupling (V_el)   : {rp['V_el_ev']*1e3:.2f} meV (<|d_10|> = {mean_nac_fs:.4f} fs^-1)")
+                k_fcwd_s, _ = compute_fcwd_rate(qp_gap_ev, V_el_ev=rp["V_el_ev"], lambda_ev=rp["lambda_ev"], sigma_ev=rp["sigma_ev"])
+                if k_fcwd_s > 0:
+                    tau_fcwd = 1e9 / k_fcwd_s
+                    fcwd_str = f"{tau_fcwd:.2f} ns" if tau_fcwd < 1e6 else "> 1 ms (intrinsic wide-gap limit)"
+                    print(f"  FCWD Multi-Phonon Rate       : {k_fcwd_s:.2e} s^-1 (tau_nr = {fcwd_str})")
+            if k_jort_s > 0:
+                tau_jort = 1e9 / k_jort_s
+                jort_str = f"{tau_jort:.2f} ns" if tau_jort < 1e6 else "> 1 ms (intrinsic wide-gap limit)"
+                print(f"  Jortner Energy Gap Law Rate  : {k_jort_s:.2e} s^-1 (tau_nr = {jort_str})")
+        print("=" * 68 + "\n")
 
     # 4. Generate Multi-Panel Visualizations (6-panel publication layout)
     if plot_enabled:
