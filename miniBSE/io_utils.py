@@ -382,6 +382,7 @@ def read_mos_auto(path, n_ao_total, verbose=False, cache=False):
 def read_mos_uks(path_alpha, path_beta, n_ao, verbose=False, cache=False):
     """
     Reads alpha and beta MO files from a CP2K UKS calculation.
+
     Returns:
         C_alpha, eps_alpha, occ_alpha  — alpha spin channel
         C_beta,  eps_beta,  occ_beta   — beta spin channel

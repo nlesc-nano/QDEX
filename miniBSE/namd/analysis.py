@@ -28,9 +28,11 @@ def fit_exponential_lifetime(times, values):
 
 def compute_nac_energy_gap_data(precompute_dir, max_steps=20, max_sample_pairs=5000):
     """
-    Extracts non-adiabatic coupling magnitudes and energy differences:
-      |d^virt_ab| vs |eps_b - eps_a|
-      |d^occ_ij| vs |eps_j - eps_i|
+    Extracts non-adiabatic coupling magnitudes and energy differences::
+
+      |d_ab^virt| vs |eps_b - eps_a|
+      |d_ij^occ| vs |eps_j - eps_i|
+
     sampled across precomputed step files.
     """
     step_files = sorted(glob.glob(os.path.join(precompute_dir, "step_*.npz")), key=natural_sort_key)
@@ -103,16 +105,17 @@ def compute_nac_energy_gap_data(precompute_dir, max_steps=20, max_sample_pairs=5
 
 
 def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_exciton=True):
-    """
+    r"""
     Extracts band-edge orbital energies (HOMO and LUMO) or lowest excited state along the MD trajectory
     from precompute_dir, and computes:
-      1. Band-gap fluctuation delta_Eg(t) = Eg(t) - <Eg>.
-      2. Time-autocorrelation function C(tau) = <delta_Eg(t) delta_Eg(t+tau)> / sigma^2.
-      3. Phonon spectral density J(omega) in cm^-1 via windowed FFT.
-      4. Second-order cumulant expansion pure dephasing function:
-           g(t) = (sigma^2 / hbar^2) * int_0^t dt1 int_0^t1 dt2 C(t2)
-           D(t) = exp(-g(t))
-      5. Pure electronic dephasing time tau_dec where D(tau_dec) = 1/e.
+
+    1. Band-gap fluctuation delta_Eg(t) = Eg(t) - <Eg>.
+    2. Time-autocorrelation function C(tau) = <delta_Eg(t) delta_Eg(t+tau)> / sigma^2.
+    3. Phonon spectral density J(omega) in cm^-1 via windowed FFT.
+    4. Second-order cumulant expansion pure dephasing function:
+       g(t) = (sigma^2 / hbar^2) * int_0^t dt1 int_0^t1 dt2 C(t2)
+       D(t) = exp(-g(t))
+    5. Pure electronic dephasing time tau_dec where D(tau_dec) = 1/e.
     """
     import glob
     from miniBSE.namd.integrator import HBAR_EV_FS

@@ -714,13 +714,15 @@ def precompute_namd_data(config):
 
 def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
     """
-    Compacts an existing precompute directory:
+    Compacts an existing precompute directory::
+
       1. Converts step_*.npz to compressed format with np.savez_compressed.
       2. Removes redundant duplicate arrays (i_pairs, a_pairs, i_pairs_prev, i_pairs_curr,
          a_pairs_prev, a_pairs_curr, E_prev, f_prev, f_curr) from all step files.
       3. Preserves frame_00000.npz and namd_metadata.npz with complete pair mappings.
       4. Deletes redundant frame_00001.npz .. frame_XXXXX.npz (which are not needed
          for dynamics or analysis).
+
     Reduces disk footprint by 75-95% (e.g. from 22 GB down to ~3-4 GB).
     """
     import glob

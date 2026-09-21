@@ -19,6 +19,62 @@ miniBSE.cli
    :undoc-members:
    :show-inheritance:
 
+miniBSE.pdos_coop
+-----------------
+
+.. automodule:: miniBSE.pdos_coop
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+miniBSE.fuzzy_bands
+-------------------
+
+.. automodule:: miniBSE.fuzzy_bands
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+miniBSE.soc_utils
+-----------------
+
+.. automodule:: miniBSE.soc_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+miniBSE.hardness
+----------------
+
+.. automodule:: miniBSE.hardness
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+miniBSE.exciton_analysis
+------------------------
+
+.. automodule:: miniBSE.exciton_analysis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+miniBSE.nto
+-----------
+
+.. automodule:: miniBSE.nto
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+miniBSE.exciton_cube
+--------------------
+
+.. automodule:: miniBSE.exciton_cube
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 miniBSE.namd.precompute
 -----------------------
 
@@ -47,22 +103,6 @@ miniBSE.namd.analysis
 ---------------------
 
 .. automodule:: miniBSE.namd.analysis
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.soc_utils
------------------
-
-.. automodule:: miniBSE.soc_utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.hardness
-----------------
-
-.. automodule:: miniBSE.hardness
    :members:
    :undoc-members:
    :show-inheritance:
