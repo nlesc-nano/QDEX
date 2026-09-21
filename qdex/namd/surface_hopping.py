@@ -7,7 +7,8 @@ from qdex.namd.integrator import (
     propagate_channel_rk4,
     propagate_channel_batch_rk4,
     propagate_channel_batch_strang,
-    KB_EV
+    KB_EV,
+    HBAR_EV_FS
 )
 from qdex.namd.initial_condition import sample_initial_states
 from qdex.namd.master_equation import (
@@ -265,6 +266,24 @@ def run_namd_dynamics(config):
         print(f"  Integrator           : {integrator_type} (device: {device_cfg})")
     print("=" * 65 + "\n")
 
+    trajectory_loops = int(dyn_cfg.get("trajectory_loops", 1))
+    ecsh_auger = bool(dyn_cfg.get("ecsh_auger", False))
+    ecsh_window_ev = float(dyn_cfg.get("ecsh_window_ev", KB_EV * max(temp_k, 1e-3)))
+    initial_state_mode = str(dyn_cfg.get("initial_state", init_cfg.get("mode", "ratio_eg"))).lower()
+    is_biexciton = (initial_state_mode == "biexciton")
+
+    if ecsh_auger or is_biexciton:
+        print(f"  Auger Dynamics Mode  : ECSH (Energy-Conserving Surface Hopping)")
+        print(f"  ECSH Resonance Window: {ecsh_window_ev*1e3:.2f} meV")
+        if is_biexciton:
+            print(f"  Initial State        : Biexciton (XX) -> Auger Annihilation")
+    if trajectory_loops > 1:
+        print(f"  Trajectory Looping   : {trajectory_loops} loops (simulating {(n_frames - 1) * trajectory_loops * dt_nuc_fs:.1f} fs / {(n_frames - 1) * trajectory_loops * dt_nuc_fs * 1e-3:.2f} ps)")
+
+    n_steps_base = max(1, n_frames - 1)
+    n_steps_total = n_steps_base * max(1, trajectory_loops)
+    n_frames_total = n_steps_total + 1
+
     # Sample initial state distribution
     sampled_states, P_init = sample_initial_states(
         energies=E0_pairs,
@@ -275,13 +294,13 @@ def run_namd_dynamics(config):
         filter_dark_states=filter_dark
     )
 
-    times = np.arange(n_frames) * dt_nuc_fs
-    mean_energy = np.zeros(n_frames)
-    mean_excess_e = np.zeros(n_frames)
-    mean_excess_h = np.zeros(n_frames)
-    populations = np.zeros((n_frames, len(E0_pairs)))
-    trajectory_energies = np.zeros((n_frames, n_trajectories)) if method == "cpa_fssh" else None
-    all_energies = np.zeros((n_frames, len(E0_pairs)))
+    times = np.arange(n_frames_total) * dt_nuc_fs
+    mean_energy = np.zeros(n_frames_total)
+    mean_excess_e = np.zeros(n_frames_total)
+    mean_excess_h = np.zeros(n_frames_total)
+    populations = np.zeros((n_frames_total, len(E0_pairs)))
+    trajectory_energies = np.zeros((n_frames_total, n_trajectories)) if method == "cpa_fssh" else None
+    all_energies = np.zeros((n_frames_total, len(E0_pairs)))
     all_energies[0, :] = E0_pairs
 
     eps_occ_0 = frame0["eps_occ"] if "eps_occ" in frame0 else None
@@ -294,8 +313,26 @@ def run_namd_dynamics(config):
         active_pairs = [(int(i_pairs0[s]), int(a_pairs0[s])) for s in sampled_states]
         active_surfaces = np.array(sampled_states, dtype=int)
 
-        mean_energy[0] = np.mean(E0_pairs[active_surfaces])
-        trajectory_energies[0, :] = E0_pairs[active_surfaces]
+        biexciton_active = np.ones(n_trajectories, dtype=bool) if is_biexciton else None
+        biexciton_pop = np.zeros(n_frames_total) if is_biexciton else None
+        if is_biexciton:
+            biexciton_pop[0] = 1.0
+            mean_energy[0] = 2.0 * qp_gap
+            if trajectory_energies is not None:
+                trajectory_energies[0, :] = 2.0 * qp_gap
+            if "tau_auger_ps" in dyn_cfg:
+                k_auger_fs = (1.0 / max(float(dyn_cfg["tau_auger_ps"]), 1e-6)) * 1e-3
+            elif "tau_auger_ns" in dyn_cfg:
+                k_auger_fs = (1.0 / max(float(dyn_cfg["tau_auger_ns"]) * 1e3, 1e-6)) * 1e-3
+            elif "k_auger_fs" in dyn_cfg:
+                k_auger_fs = float(dyn_cfg["k_auger_fs"])
+            else:
+                k_auger_fs = 2.0e-5  # Default ~50 ps
+        else:
+            mean_energy[0] = np.mean(E0_pairs[active_surfaces])
+            if trajectory_energies is not None:
+                trajectory_energies[0, :] = E0_pairs[active_surfaces]
+
         if eps_occ_0 is not None and eps_virt_0 is not None:
             mean_excess_e[0] = np.mean(eps_virt_0[a_pairs0[active_surfaces]] - eps_virt_0[0])
             mean_excess_h[0] = np.mean(eps_occ_0[-1] - eps_occ_0[i_pairs0[active_surfaces]])
@@ -306,11 +343,12 @@ def run_namd_dynamics(config):
         for s in active_surfaces:
             populations[0, s] += 1.0 / n_trajectories
 
-        print(f"  [NAMD:FSSH] Starting batched propagation across {n_frames} frames ({n_trajectories} trajectories)...")
+        print(f"  [NAMD:FSSH] Starting batched propagation across {n_steps_total} steps ({n_trajectories} trajectories)...")
         beta = 1.0 / (KB_EV * max(temp_k, 1e-3))
 
-        for k in range(n_frames - 1):
+        for step_idx in range(n_steps_total):
             t_step_start = time.time()
+            k = step_idx % n_steps_base
             step_file = os.path.join(precompute_dir, f"step_{k:05d}_to_{k+1:05d}.npz")
             if not os.path.exists(step_file):
                 break
@@ -318,7 +356,7 @@ def run_namd_dynamics(config):
             step_data = np.load(step_file)
             E_k = step_data["E_prev"]
             E_kplus1 = step_data["E_curr"]
-            all_energies[k + 1, :] = E_kplus1
+            all_energies[step_idx + 1, :] = E_kplus1
             i_pairs = step_data["i_pairs"] if "i_pairs" in step_data else step_data["i_pairs_curr"]
             a_pairs = step_data["a_pairs"] if "a_pairs" in step_data else step_data["a_pairs_curr"]
             S_occ = step_data["S_occ"]
@@ -353,7 +391,8 @@ def run_namd_dynamics(config):
             curr_i_sub = occ_to_sub[curr_i]
             curr_a_sub = virt_to_sub[curr_a]
 
-            print(f"  [Step {k+1}/{n_frames-1}] Propagating {n_trajectories} trajectories (t = {k*dt_nuc_fs:.1f} -> {(k+1)*dt_nuc_fs:.1f} fs)...", flush=True)
+            if (step_idx < 5) or ((step_idx + 1) % max(1, n_steps_total // 10) == 0) or (step_idx == n_steps_total - 1):
+                print(f"  [Step {step_idx+1}/{n_steps_total}] Propagating {n_trajectories} trajectories (t = {step_idx*dt_nuc_fs:.1f} -> {(step_idx+1)*dt_nuc_fs:.1f} fs)...", flush=True)
 
             # 1. Batched Electron channel propagation
             t_e0 = time.time()
@@ -385,15 +424,36 @@ def run_namd_dynamics(config):
             t_hop0 = time.time()
             n_hops_e = 0
             n_hops_h = 0
+            n_hops_auger = 0
+            n_hops_ecsh_auger = 0
 
             for tr in range(n_trajectories):
+                # Check for initial biexciton Auger recombination hop
+                if is_biexciton and biexciton_active[tr]:
+                    p_hop_auger = 1.0 - np.exp(- k_auger_fs * dt_nuc_fs)
+                    if np.random.rand() < p_hop_auger:
+                        # ECSH Auger hop: 2e + 2h -> e + h + hot carrier
+                        # Energy is conserved internally within the electronic system:
+                        # Target pair is hot exciton near 2 * Eg, NO Boltzmann damping!
+                        target_e = 2.0 * qp_gap
+                        pair_diffs = np.abs(E_mat_kplus1[i_pairs0, a_pairs0] - target_e)
+                        valid_cands = np.where(pair_diffs <= max(ecsh_window_ev * 4.0, 0.4))[0]
+                        if len(valid_cands) == 0:
+                            valid_cands = [int(np.argmax(E_mat_kplus1[i_pairs0, a_pairs0]))]
+                        chosen = int(np.random.choice(valid_cands))
+                        active_pairs[tr] = (int(i_pairs0[chosen]), int(a_pairs0[chosen]))
+                        active_surfaces[tr] = chosen
+                        biexciton_active[tr] = False
+                        n_hops_auger += 1
+                    continue
+
                 i_c = curr_i[tr]
                 a_c = curr_a[tr]
                 a_sub = curr_a_sub[tr]
                 i_sub = curr_i_sub[tr]
                 E_curr = E_mat_kplus1[i_c, a_c]
 
-                # Electron hop probabilities
+                # Electron hop probabilities (1-body operator: phonon-assisted with Boltzmann detailed balance)
                 rho_curr_e = max(np.abs(C_e[a_sub, tr]) ** 2, 1e-12)
                 flux_e = 2.0 * dt_nuc_fs * np.real(np.conj(C_e[a_sub, tr]) * C_e[:, tr] * d_virt_dyn[a_sub, :]) / rho_curr_e
                 probs_b = np.maximum(flux_e, 0.0)
@@ -408,7 +468,7 @@ def run_namd_dynamics(config):
                 if detailed_balance:
                     probs_b *= np.exp(-np.maximum(dE_b, 0.0) * beta)
 
-                # Hole hop probabilities
+                # Hole hop probabilities (1-body operator: phonon-assisted with Boltzmann detailed balance)
                 rho_curr_h = max(np.abs(C_h[i_sub, tr]) ** 2, 1e-12)
                 flux_h = 2.0 * dt_nuc_fs * np.real(np.conj(C_h[i_sub, tr]) * C_h[:, tr] * d_occ_dyn[i_sub, :]) / rho_curr_h
                 probs_j = np.maximum(flux_h, 0.0)
@@ -423,11 +483,12 @@ def run_namd_dynamics(config):
                 if detailed_balance:
                     probs_j *= np.exp(-np.maximum(dE_j, 0.0) * beta)
 
-                # Combine hops
+                # Combine 1-body NAC hops
                 total_b = np.sum(probs_b)
                 total_j = np.sum(probs_j)
                 total_hop = total_b + total_j
 
+                hopped = False
                 if total_hop > 0.0:
                     zeta = np.random.rand()
                     if zeta < total_b:
@@ -435,37 +496,71 @@ def run_namd_dynamics(config):
                         new_a_sub = np.random.choice(n_virt_dyn, p=p_norm)
                         active_pairs[tr] = (i_c, dyn_virt_active[new_a_sub])
                         n_hops_e += 1
+                        hopped = True
                     elif zeta < total_hop:
                         p_norm = probs_j / total_j
                         new_i_sub = np.random.choice(n_occ_dyn, p=p_norm)
                         active_pairs[tr] = (dyn_occ_active[new_i_sub], a_c)
                         n_hops_h += 1
+                        hopped = True
+
+                # ECSH Auger: 2-body electron-hole Coulomb scattering (no Boltzmann damping!)
+                if ecsh_auger and not hopped:
+                    e_diff_all = np.abs(E_mat_kplus1[dyn_occ_active[:, None], dyn_virt_active[None, :]] - E_curr)
+                    mask_2body = (dyn_occ_active[:, None] != i_c) & (dyn_virt_active[None, :] != a_c)
+                    mask_resonant = (e_diff_all <= ecsh_window_ev) & mask_2body
+                    cand_j, cand_b = np.where(mask_resonant)
+                    if len(cand_j) > 0:
+                        # Resonant Coulomb Auger coupling: NO Boltzmann factor!
+                        p_auger_eh = min(0.05, 0.002 * dt_nuc_fs / HBAR_EV_FS)
+                        if np.random.rand() < p_auger_eh:
+                            sel = np.random.randint(len(cand_j))
+                            new_i = dyn_occ_active[cand_j[sel]]
+                            new_a = dyn_virt_active[cand_b[sel]]
+                            active_pairs[tr] = (new_i, new_a)
+                            n_hops_ecsh_auger += 1
 
                 new_idx = pair_lookup[active_pairs[tr][0], active_pairs[tr][1]]
                 active_surfaces[tr] = new_idx if new_idx >= 0 else active_surfaces[tr]
 
             t_hop = time.time() - t_hop0
 
-            # Record observables at step k + 1
-            mean_energy[k + 1] = np.mean(E_kplus1[active_surfaces])
-            trajectory_energies[k + 1, :] = E_kplus1[active_surfaces]
+            # Record observables at step step_idx + 1
+            if is_biexciton:
+                biexciton_pop[step_idx + 1] = np.mean(biexciton_active)
+                e_tr = np.zeros(n_trajectories)
+                for tr in range(n_trajectories):
+                    if biexciton_active[tr]:
+                        e_tr[tr] = 2.0 * qp_gap
+                    else:
+                        e_tr[tr] = E_kplus1[active_surfaces[tr]]
+                mean_energy[step_idx + 1] = np.mean(e_tr)
+                trajectory_energies[step_idx + 1, :] = e_tr
+            else:
+                mean_energy[step_idx + 1] = np.mean(E_kplus1[active_surfaces])
+                trajectory_energies[step_idx + 1, :] = E_kplus1[active_surfaces]
+
             for s in active_surfaces:
-                populations[k + 1, s] += 1.0 / n_trajectories
+                populations[step_idx + 1, s] += 1.0 / n_trajectories
 
             curr_a_new = np.array([p[1] for p in active_pairs])
             curr_i_new = np.array([p[0] for p in active_pairs])
             if eps_occ_curr is not None and eps_virt_curr is not None:
-                mean_excess_e[k + 1] = np.mean(eps_virt_curr[curr_a_new] - eps_virt_curr[0])
-                mean_excess_h[k + 1] = np.mean(eps_occ_curr[-1] - eps_occ_curr[curr_i_new])
+                mean_excess_e[step_idx + 1] = np.mean(eps_virt_curr[curr_a_new] - eps_virt_curr[0])
+                mean_excess_h[step_idx + 1] = np.mean(eps_occ_curr[-1] - eps_occ_curr[curr_i_new])
             else:
-                mean_excess_e[k + 1] = 0.5 * (mean_energy[k + 1] - qp_gap)
-                mean_excess_h[k + 1] = 0.5 * (mean_energy[k + 1] - qp_gap)
+                mean_excess_e[step_idx + 1] = 0.5 * (mean_energy[step_idx + 1] - qp_gap)
+                mean_excess_h[step_idx + 1] = 0.5 * (mean_energy[step_idx + 1] - qp_gap)
 
             t_step = time.time() - t_step_start
             min_e_act = np.min(E_kplus1[active_surfaces])
             max_e_act = np.max(E_kplus1[active_surfaces])
-            print(f"    -> e- RK4: {t_e_rk4:.2f} s | h+ RK4: {t_h_rk4:.2f} s | hops: {n_hops_e} e-, {n_hops_h} h+ ({t_hop:.2f} s)")
-            print(f"    -> Step {k+1}/{n_frames-1} completed in {t_step:.2f} s | <E_exc> = {mean_energy[k+1]:.4f} eV | Active range: [{min_e_act:.3f}, {max_e_act:.3f}] eV\n", flush=True)
+            if (step_idx < 5) or ((step_idx + 1) % max(1, n_steps_total // 10) == 0) or (step_idx == n_steps_total - 1):
+                if is_biexciton:
+                    print(f"    -> [Step {step_idx+1}/{n_steps_total}] P_XX = {biexciton_pop[step_idx+1]:.3f} | Auger hops: {n_hops_auger} | e- hops: {n_hops_e} | h+ hops: {n_hops_h} | <E> = {mean_energy[step_idx+1]:.3f} eV", flush=True)
+                else:
+                    print(f"    -> [Step {step_idx+1}/{n_steps_total}] hops: {n_hops_e} e-, {n_hops_h} h+{f', {n_hops_ecsh_auger} ECSH-Auger' if ecsh_auger else ''} | <E_exc> = {mean_energy[step_idx+1]:.4f} eV | Active range: [{min_e_act:.3f}, {max_e_act:.3f}] eV", flush=True)
+
 
     # -------------------------------------------------------------
     # SCHEME B: Pauli Master Equation (Deterministic Kinetics)
@@ -492,15 +587,16 @@ def run_namd_dynamics(config):
 
         print(f"  [NAMD:PME] Starting deterministic Master Equation propagation (n_occ={n_occ}, n_virt={n_virt})...")
 
-        for k in range(n_frames - 1):
+        for step_idx in range(n_steps_total):
             t_step_start = time.time()
+            k = step_idx % n_steps_base
             step_file = os.path.join(precompute_dir, f"step_{k:05d}_to_{k+1:05d}.npz")
             if not os.path.exists(step_file):
                 break
 
             step_data = np.load(step_file)
             E_k = step_data["E_curr"]
-            all_energies[k + 1, :] = E_k
+            all_energies[step_idx + 1, :] = E_k
             i_pairs = step_data["i_pairs"] if "i_pairs" in step_data else (step_data["i_pairs_curr"] if "i_pairs_curr" in step_data else i_pairs0)
             a_pairs = step_data["a_pairs"] if "a_pairs" in step_data else (step_data["a_pairs_curr"] if "a_pairs_curr" in step_data else a_pairs0)
             S_occ = step_data["S_occ"]
@@ -528,23 +624,35 @@ def run_namd_dynamics(config):
             )
 
             P_vec = P_mat[i_pairs, a_pairs]
-            mean_energy[k + 1] = np.sum(P_vec * E_k)
-            populations[k + 1] = P_vec
+            mean_energy[step_idx + 1] = np.sum(P_vec * E_k)
+            populations[step_idx + 1] = P_vec
 
             p_virt = np.sum(P_mat, axis=0)
             p_occ = np.sum(P_mat, axis=1)
             if eps_occ_curr is not None and eps_virt_curr is not None:
-                mean_excess_e[k + 1] = np.sum(p_virt * (eps_virt_curr - eps_virt_curr[0]))
-                mean_excess_h[k + 1] = np.sum(p_occ * (eps_occ_curr[-1] - eps_occ_curr))
+                mean_excess_e[step_idx + 1] = np.sum(p_virt * (eps_virt_curr - eps_virt_curr[0]))
+                mean_excess_h[step_idx + 1] = np.sum(p_occ * (eps_occ_curr[-1] - eps_occ_curr))
             else:
-                mean_excess_e[k + 1] = 0.5 * (mean_energy[k + 1] - qp_gap)
-                mean_excess_h[k + 1] = 0.5 * (mean_energy[k + 1] - qp_gap)
+                mean_excess_e[step_idx + 1] = 0.5 * (mean_energy[step_idx + 1] - qp_gap)
+                mean_excess_h[step_idx + 1] = 0.5 * (mean_energy[step_idx + 1] - qp_gap)
 
             t_step = time.time() - t_step_start
-            print(f"    Step {k+1}/{n_frames-1} (t = {(k+1)*dt_nuc_fs:.1f} fs) in {t_step:.3f} s | <E_exc> = {mean_energy[k+1]:.4f} eV")
+            if (step_idx < 5) or ((step_idx + 1) % max(1, n_steps_total // 10) == 0) or (step_idx == n_steps_total - 1):
+                print(f"    Step {step_idx+1}/{n_steps_total} (t = {(step_idx+1)*dt_nuc_fs:.1f} fs) in {t_step:.3f} s | <E_exc> = {mean_energy[step_idx+1]:.4f} eV")
 
     total_sim_time = time.time() - t0_start
     print(f"\n[NAMD Dynamics] Completed in {total_sim_time:.2f} s")
+
+    if is_biexciton and biexciton_pop is not None:
+        biex_file = os.path.join(precompute_dir if os.path.isdir(precompute_dir) else ".", "biexciton_decay.csv")
+        np.savetxt(
+            biex_file,
+            np.column_stack([times, biexciton_pop, mean_energy]),
+            header="time_fs,P_biexciton,mean_energy_ev",
+            delimiter=",",
+            comments=""
+        )
+        print(f"  [NAMD:ECSH] Exported biexciton decay trace to: {biex_file}")
 
     # Analysis, CSV writing, and plotting
     analyze_and_plot_namd_results(

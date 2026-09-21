@@ -154,12 +154,40 @@ class TestAugerRecombination(unittest.TestCase):
         from qdex.cli import main
         import argparse
 
-        # Verify parser creation
-        parser = argparse.ArgumentParser()
-        # Import arguments from cli
-        from qdex.cli import main
         # Test flag existence via CLI help output or parse_args
         with unittest.mock.patch("sys.argv", ["qdex", "--help"]):
+            try:
+                main()
+            except SystemExit as e:
+                self.assertEqual(e.code, 0)
+
+    def test_extract_auger_kinetics_from_trajectory(self):
+        """Test extraction of Auger rates, survival probability, and initial slope."""
+        from qdex.auger import extract_auger_kinetics_from_trajectory
+
+        times_fs = np.linspace(0, 2000, 101)  # 2 ps
+        # Simulated rate of 0.01 ps^-1 (tau = 100 ps = 0.1 ns) with 10% fluctuations
+        np.random.seed(42)
+        instant_rates = 0.01 + 0.001 * np.sin(times_fs * 0.01)
+
+        res = extract_auger_kinetics_from_trajectory(times_fs, instant_rates, verbose=False)
+
+        self.assertAlmostEqual(res["mean_rate_ps"], 0.01, places=3)
+        self.assertAlmostEqual(res["mean_rate_ns"], 10.0, places=1)
+        self.assertAlmostEqual(res["tau_ps"], 100.0, delta=2.0)
+        self.assertAlmostEqual(res["tau_ns"], 0.1, delta=0.01)
+        self.assertEqual(len(res["survival_prob"]), len(times_fs))
+        self.assertAlmostEqual(res["survival_prob"][0], 1.0, places=5)
+        # At 2 ps, survival should be ~ exp(-0.02) ~ 0.98
+        self.assertAlmostEqual(res["survival_prob"][-1], np.exp(-0.02), delta=0.01)
+
+    def test_ecsh_auger_cli_flags(self):
+        """Verify ECSH Auger CLI flags parse properly."""
+        from qdex.cli import main
+        with unittest.mock.patch("sys.argv", [
+            "qdex", "--namd-ecsh-auger", "--namd-ecsh-window", "0.025",
+            "--namd-trajectory-loops", "5", "--namd-biexciton", "--help"
+        ]):
             try:
                 main()
             except SystemExit as e:
@@ -168,3 +196,4 @@ class TestAugerRecombination(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

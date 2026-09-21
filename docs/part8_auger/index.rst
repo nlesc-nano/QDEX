@@ -350,7 +350,115 @@ This trajectory average naturally samples the true vibronic density of states wi
 
 ---
 
-8. Configuration Reference (YAML & CLI)
+8. Energy-Conserving Surface Hopping (ECSH) for Auger in NAMD
+-------------------------------------------------------------
+
+Physical Foundations: Electron-Phonon vs. Coulomb Transitions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In traditional non-adiabatic molecular dynamics (NAMD), electronic transitions are governed solely by **Non-Adiabatic Couplings (NACs)**:
+
+.. math::
+
+   d_{ij} = \langle \Phi_i | \frac{\partial}{\partial t} | \Phi_j \rangle = \sum_I \mathbf{v}_I \cdot \mathbf{d}_{ij}^I
+
+Because the nuclear derivative :math:`\nabla_I` is a **single-particle operator**, non-adiabatic transitions occur only between many-body Slater determinants that differ by **exactly one orbital** (:math:`\Delta N_{\mathrm{orb}} = 1`). These transitions describe **electron-phonon scattering**, in which electronic energy is dissipated into the classical vibrational degrees of freedom (phonons). To satisfy detailed balance, upward hops are scaled by the Boltzmann factor:
+
+.. math::
+
+   P_{i \to j}^{\mathrm{NAC}} = \max(0, g_{ij}^{\mathrm{NAC}}) \times \begin{cases} 1, & E_j \le E_i \\ \exp\left(-\frac{E_j - E_i}{k_B T}\right), & E_j > E_i \end{cases}
+
+In contrast, **Auger processes** (such as biexciton annihilation :math:`XX \to X + \text{carrier}^*` or Auger-assisted carrier cooling) are mediated by the **two-particle Coulomb operator**:
+
+.. math::
+
+   \hat{V} = \frac{1}{2} \sum_{k \neq l} \frac{e^2}{\epsilon |\mathbf{r}_k - \mathbf{r}_l|}
+
+Coulomb matrix elements :math:`V_{ij} = \langle \Phi_i | \hat{V} | \Phi_j \rangle` couple many-body states that differ by **two orbitals** (:math:`\Delta N_{\mathrm{orb}} = 2`).
+
+The Fundamental Flaw in Previous Approaches (The "Energy Leak" Error)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In earlier NAMD approaches (e.g. Zhou, Lu, & Prezhdo, *Nano Lett.* 2021, 21, 756), Coulomb matrix elements :math:`V_{ij}` were added to the off-diagonal Hamiltonian alongside NACs, but all hops were subjected to the same Boltzmann scaling / velocity readjustment.
+
+**The physical failure**: When an Auger hop occurs, the recombination energy is transferred **entirely within the quantum electronic subsystem** to the spectator carrier. **Zero energy is transferred to lattice vibrations during the Auger hop itself.** Scaling Coulomb hops with the Boltzmann factor caused the huge recombination energy (:math:`\sim 2.5 - 3.5\text{ eV}`) to unphysically leak into classical phonons, leading to artificially accelerated decay rates (up to :math:`2\times` too fast) and distorted kinetics.
+
+The Gumber-Prezhdo ECSH Methodology
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To resolve this issue, Gumber & Prezhdo (*J. Chem. Theory Comput.* 2024, 20, 13, 5408–5418) developed **Energy-Conserving Surface Hopping (ECSH)**, which partitions transitions by orbital permutation count:
+
+1. **Single-orbital hops (:math:`\Delta N_{\mathrm{orb}} = 1`)**:
+   - Mediated by NAC :math:`d_{ij}` (electron-phonon coupling).
+   - Electronic energy is transferred to nuclear vibrations.
+   - Upward hops are scaled by the Boltzmann factor :math:`\exp(-\Delta E / k_B T)`.
+
+2. **Two-orbital hops (:math:`\Delta N_{\mathrm{orb}} = 2`)**:
+   - Mediated by Coulomb coupling :math:`V_{ij}` (Auger processes).
+   - Energy remains strictly within the electronic subsystem.
+   - **NO Boltzmann factor is applied.**
+   - The hop is allowed **only if** the initial and final states are energetically resonant within the thermal window:
+
+.. math::
+
+   P_{i \to j}^{\mathrm{Coul}} = \max(0, g_{ij}^{\mathrm{Coul}}) \times \Theta\left(\Delta E_{\mathrm{window}} - |E_j - E_i|\right)
+
+where :math:`\Delta E_{\mathrm{window}} \approx k_B T` (or :math:`2 k_B T`). Once the hop occurs to the hot-carrier state, the newly created hot carrier subsequently relaxes down its band via standard single-particle NACs, correctly dissipating its energy to lattice heat as phonons.
+
+Relation with Static Trions (:math:`eeh` and :math:`hhe`)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+How does dynamic ECSH NAMD relate to the static trion picture used in Section 1?
+
+* **Identical Microscopic Matrix Elements**:
+  In ECSH NAMD, the transition from a biexciton state :math:`\Phi_{XX}` to a hot single exciton :math:`\Phi_{X^*}` is driven by the **exact same Resta-screened Coulomb integrals** :math:`V_{\mathrm{dir}} - V_{\mathrm{exch}}` computed for the :math:`eeh` (electron-ejected) and :math:`hhe` (hole-ejected) trion channels:
+  
+  .. math::
+  
+     \langle \Phi_{XX} | \hat{V} | \Phi_{X^*} \rangle = \begin{cases} V^{eeh}(e'), & \text{spectator electron promoted} \\ V^{hhe}(h'), & \text{spectator hole promoted} \end{cases}
+
+* **Dynamic Fluctuations vs. Static Golden Rule**:
+  In the static picture, Fermi's Golden Rule applies a static Gaussian broadening :math:`\sigma` to an equilibrium geometry. In ECSH NAMD, the nuclear vibrations :math:`\mathbf{R}(t)` continually modulate the orbital energies and wavefunctions :math:`C(t)`, sweeping states into and out of resonance dynamically.
+* **Complete Kinetic Cascade**:
+  The static calculation outputs only the single instantaneous rate :math:`\Gamma_{XX}`. ECSH NAMD simulates the **full sequence of events**: the biexciton lives on the :math:`XX` surface, undergoes an Auger hop to a hot single exciton, and then emits phonons through the single-particle NAC manifold as it cools to the band edge. In Transient Absorption, this reproduces the bi-exponential bleach recovery observed in experiments.
+
+Resolving the Timescale Mismatch (:math:`1 - 10\text{ ps}` MD vs. :math:`100\text{ ps} - 10\text{ ns}` Auger)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+*Ab initio* DFT MD trajectories for nanocrystals typically span only :math:`1 - 10\text{ ps}` due to the high computational cost of DFT forces. However, Auger lifetimes :math:`\tau_{XX}` often range from **tens of picoseconds to several nanoseconds**. If :math:`\tau_{XX} = 500\text{ ps}`, the probability of observing an Auger hop within a :math:`2\text{ ps}` trajectory is only :math:`\sim 0.4\%`.
+
+``QDEX`` provides three complementary solutions to bridge this timescale gap:
+
+1. **Trajectory Looping under the Classical Path Approximation (CPA)**:
+   Under the CPA, the ground-state MD trajectory represents an ergodic thermal bath at equilibrium. The electronic Hamiltonian and surface hopping can be propagated over times :math:`t \gg T_{\mathrm{MD}}` (e.g. 50–100 ps) by looping the precomputed MD frames:
+
+   .. code-block:: bash
+
+      qdex --config test_auger.yaml --namd-run --namd-trajectory-loops 20
+
+   This allows trajectories to reach long timescales, directly observing the exponential decay :math:`P_{XX}(t) = \exp(-t / \tau_{XX})`.
+
+2. **Integrated Survival Probability & Initial Linear Decay Slope**:
+   Even without trajectory looping, for :math:`t \ll \tau_{XX}`, the decay of the biexciton population is linear:
+
+   .. math::
+
+      P_{XX}(t) = \exp\left( -\int_0^t \Gamma_{XX}(t') dt' \right) \approx 1 - \Gamma_{XX}^{(0)} t
+
+   The lifetime is accurately determined from the initial rate of population transfer:
+
+   .. math::
+
+      \tau_{XX} = \frac{1}{\langle \Gamma_{XX} \rangle} = \left( -\left. \frac{d P_{XX}(t)}{dt} \right|_{t=0} \right)^{-1}
+
+   The ``qdex.auger.extract_auger_kinetics_from_trajectory(...)`` function performs this analysis automatically.
+
+3. **Ultrafast Intraband Auger-Assisted Carrier Cooling**:
+   Unlike interband biexciton recombination, **intraband Auger cooling** (where a hot electron cools from :math:`1P_e \to 1S_e` by kicking a valence hole deep into the valence band, bypassing the phonon bottleneck) occurs on an ultrafast timescale of **:math:`50 - 500\text{ fs}`**. This ultrafast process naturally fits well within standard :math:`1 - 2\text{ ps}` AIMD trajectories.
+
+---
+
+9. Configuration Reference (YAML & CLI)
 ---------------------------------------
 
 YAML Configuration Options
@@ -359,19 +467,35 @@ YAML Configuration Options
 .. code-block:: yaml
 
    auger:
-     run: true               # Enable Auger recombination calculation
+     run: true               # Enable static Auger recombination calculation
      sigma: 0.05             # Energy conservation broadening width in eV
      channel: "all"          # "all" (both eeh and hhe), "eeh", or "hhe"
      n_initial_states: 1     # Number of frontier band-edge carriers to consider
      lineshape: "gaussian"   # "gaussian" or "fcwd"
      eps_eff: 1.8            # Dynamic screening at hbar*omega=Eg (default: Resta eps_inf)
 
+   namd:
+     dynamics:
+       method: "cpa_fssh"
+       ecsh_auger: true        # Enable Energy-Conserving Surface Hopping for Auger
+       ecsh_window_ev: 0.026   # Resonance window in eV for Auger transitions (default: k_B*T)
+       initial_state: "biexciton" # "biexciton" (XX -> X) or "ratio_eg" (single exciton)
+       tau_auger_ps: 50.0      # Biexciton Auger lifetime in ps (or estimated from Resta)
+       trajectory_loops: 10    # Number of times to loop MD trajectory to reach long timescales
+
 Command-Line Arguments
 ~~~~~~~~~~~~~~~~~~~~~~
 
+Static Auger Calculation:
 * ``--auger``: Enable Auger recombination rate calculation.
 * ``--auger-sigma <float>``: Energy conservation broadening width in eV (default: ``0.05``).
 * ``--auger-channel {all,eeh,hhe}``: Recombination channel to compute (default: ``all``).
 * ``--auger-states <int>``: Number of band-edge frontier states to consider as initial carriers (default: ``1``).
 * ``--auger-lineshape {gaussian,fcwd}``: Energy conservation line shape (default: ``gaussian``).
 * ``--auger-eps-eff <float>``: Effective dielectric constant for dynamic screening at :math:`\hbar\omega = E_g`.
+
+Dynamic ECSH Auger Simulation:
+* ``--namd-ecsh-auger``: Enable Energy-Conserving Surface Hopping (ECSH) for Auger in NAMD.
+* ``--namd-ecsh-window <float>``: Resonance energy window in eV for ECSH Auger transitions (default: :math:`k_B T`).
+* ``--namd-trajectory-loops <int>``: Number of times to loop precomputed MD trajectory to reach long Auger timescales.
+* ``--namd-biexciton``: Initialize NAMD from a biexciton state (:math:`XX`) to simulate Auger annihilation dynamics.

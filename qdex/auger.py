@@ -13,7 +13,7 @@ Channels:
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -755,3 +755,88 @@ def compute_trajectory_auger_rates(
         print(f"  Trajectory-Averaged hhe Lifetime        : {mean_tau_hhe_ns:.4f} ns ({mean_tau_hhe_ns*1e3:.2f} ps)")
 
     return summary
+
+
+def extract_auger_kinetics_from_trajectory(
+    times_fs: np.ndarray,
+    instantaneous_rates_ps: np.ndarray,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    r"""
+    Extracts Auger recombination rates and lifetimes from time-dependent rates
+    along an MD trajectory, resolving the timescale mismatch problem via:
+
+    #. Trajectory-averaged rate: :math:`\langle \Gamma \rangle = \frac{1}{T} \int_0^T \Gamma(t) dt`
+    #. Integrated survival probability: :math:`P_{XX}(t) = \exp\left(-\int_0^t \Gamma(t') dt'\right)`
+    #. Initial decay slope: :math:`\Gamma_0 = -\left.\frac{dP_{XX}}{dt}\right|_{t=0}`
+
+    Parameters
+    ----------
+    times_fs : ndarray
+        Time points along trajectory in fs.
+    instantaneous_rates_ps : ndarray
+        Instantaneous Auger recombination rates in ps^-1.
+    verbose : bool, optional
+        Print summary report.
+
+    Returns
+    -------
+    dict
+        Rates, lifetimes, and survival probability curves.
+    """
+    times_ps = np.asarray(times_fs, dtype=np.float64) * 1e-3
+    rates_ps = np.asarray(instantaneous_rates_ps, dtype=np.float64)
+
+    # 1. Trajectory-averaged rate
+    mean_rate_ps = float(np.mean(rates_ps))
+    tau_ps = float(1.0 / mean_rate_ps) if mean_rate_ps > 0 else np.inf
+    mean_rate_ns = mean_rate_ps * 1e3
+    tau_ns = tau_ps * 1e-3
+
+    # 2. Integrated cumulative survival probability
+    # P(t) = exp( - int_0^t Gamma(t') dt' )
+    cumulative_int = np.zeros_like(times_ps)
+    for i in range(1, len(times_ps)):
+        dt = times_ps[i] - times_ps[i - 1]
+        cumulative_int[i] = cumulative_int[i - 1] + 0.5 * (rates_ps[i] + rates_ps[i - 1]) * dt
+
+    survival_prob = np.exp(-cumulative_int)
+
+    # 3. Initial slope extraction (first 20% of trajectory or first 5 points)
+    n_pts = max(3, min(len(times_ps), max(5, int(0.2 * len(times_ps)))))
+    if n_pts >= 3 and times_ps[n_pts - 1] > times_ps[0]:
+        # Fit P(t) ~ 1 - Gamma_0 * t
+        poly = np.polyfit(times_ps[:n_pts], survival_prob[:n_pts], 1)
+        slope_rate_ps = float(-poly[0])
+        slope_tau_ps = float(1.0 / slope_rate_ps) if slope_rate_ps > 0 else np.inf
+        slope_tau_ns = slope_tau_ps * 1e-3
+    else:
+        slope_rate_ps = mean_rate_ps
+        slope_tau_ps = tau_ps
+        slope_tau_ns = tau_ns
+
+    result = {
+        "mean_rate_ps": mean_rate_ps,
+        "mean_rate_ns": mean_rate_ns,
+        "tau_ps": tau_ps,
+        "tau_ns": tau_ns,
+        "slope_rate_ps": slope_rate_ps,
+        "slope_tau_ps": slope_tau_ps,
+        "slope_tau_ns": slope_tau_ns,
+        "times_ps": times_ps,
+        "survival_prob": survival_prob,
+    }
+
+    if verbose:
+        print("\n" + "=" * 65)
+        print("  AUGER KINETICS EXTRACTION FROM TRAJECTORY FLUCTUATIONS")
+        print("=" * 65)
+        print(f"  Trajectory Duration          : {times_ps[-1]:.3f} ps ({times_fs[-1]:.1f} fs)")
+        print(f"  Trajectory-Averaged Rate     : {mean_rate_ns:.3e} ns^-1 ({mean_rate_ps:.3e} ps^-1)")
+        print(f"  Trajectory-Averaged Lifetime : {tau_ns:.4f} ns ({tau_ps:.2f} ps)")
+        print(f"  Initial Slope Decay Rate     : {slope_rate_ps * 1e3:.3e} ns^-1 ({slope_rate_ps:.3e} ps^-1)")
+        print(f"  Initial Slope Lifetime       : {slope_tau_ns:.4f} ns ({slope_tau_ps:.2f} ps)")
+        print("=" * 65 + "\n")
+
+    return result
+
