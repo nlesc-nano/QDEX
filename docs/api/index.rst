@@ -107,6 +107,14 @@ qdex.namd.analysis
    :undoc-members:
    :show-inheritance:
 
+qdex.namd.transient_absorption
+------------------------------
+
+.. automodule:: qdex.namd.transient_absorption
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 qdex.io_utils
 -------------
 

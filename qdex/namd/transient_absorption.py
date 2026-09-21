@@ -1,13 +1,14 @@
-"""
+r"""
 QDEX Ultrafast Pump-Probe Transient Absorption (TA) Spectroscopy Module.
 
-Calculates time-resolved differential absorption spectra Delta A(E, t) from
+Calculates time-resolved differential absorption spectra :math:`\Delta A(E, t)` from
 NAMD non-adiabatic dynamics trajectories, modeling:
-  1. Ground-State Bleach (GSB) via dynamic state-filling (Pauli blocking) of conduction
-     and valence orbitals.
-  2. Stimulated Emission (SE) from populated excited states.
-  3. Band-edge 1S bleach kinetic rise profiling to extract carrier cooling rates k_C.
-  4. 2D false-color pump-probe maps and spectral slices at specified delay times.
+
+#. Ground-State Bleach (GSB) via dynamic state-filling (Pauli blocking) of conduction
+   and valence orbitals.
+#. Stimulated Emission (SE) from populated excited states.
+#. Band-edge 1S bleach kinetic rise profiling to extract carrier cooling rates :math:`k_C`.
+#. 2D false-color pump-probe maps and spectral slices at specified delay times.
 """
 
 import os
@@ -232,11 +233,12 @@ def plot_transient_absorption(
     delay_slices_fs: Optional[List[float]] = None,
     material_name: str = "CSPBBR3",
 ) -> None:
-    """
+    r"""
     Generates a publication-quality 3-panel Transient Absorption dashboard:
-      Panel (a): 2D False-Color TA Map Delta A(E, t) (Probe Energy vs Delay Time).
-      Panel (b): 1S Bleach Kinetic Rise Trace with exponential fit and cooling rate k_C.
-      Panel (c): Differential Absorption Spectra Delta A(E) at selected delay times.
+
+    - **Panel (a)**: 2D False-Color TA Map :math:`\Delta A(E, t)` (Probe Energy vs Delay Time).
+    - **Panel (b)**: 1S Bleach Kinetic Rise Trace with exponential fit and cooling rate :math:`k_C`.
+    - **Panel (c)**: Differential Absorption Spectra :math:`\Delta A(E)` at selected delay times.
     """
     probe_e = ta_data["probe_energies_ev"]
     times = ta_data["times_fs"]
