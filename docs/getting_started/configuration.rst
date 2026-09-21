@@ -1,7 +1,7 @@
 Configuration Reference (YAML)
 ==============================
 
-`miniBSE` uses structured YAML files to control calculations. Below is the complete reference of all supported configuration sections and keywords.
+`QDEX` uses structured YAML files to control calculations. Below is the complete reference of all supported configuration sections and keywords.
 
 Complete Example Configuration
 ------------------------------

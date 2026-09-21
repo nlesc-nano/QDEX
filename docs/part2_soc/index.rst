@@ -94,14 +94,14 @@ Multiple methodologies exist in modern quantum chemistry and solid-state physics
    * - **Empirical Tight-Binding (TB)**
      - Low (:math:`O(N^2)`)
      - Introduces empirical atom-centered atomic spin-orbit constants :math:`\lambda_{\mathrm{SO}}`. Lacks *ab initio* wavefunctions and orbital overlap consistency.
-   * - **Separable GTH Pseudopotentials (miniBSE)**
+   * - **Separable GTH Pseudopotentials (QDEX)**
      - Highly Scalable & Fast (:math:`O(N_{\mathrm{act}}^3)`)
      - Fully *ab initio* relativistic core representation using Goedecker-Teter-Hutter (GTH) separable angular momentum projectors. Perfectly compatible with CP2K GPW calculations.
 
-Why miniBSE Chooses GTH SOC Pseudopotentials
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Why QDEX Chooses GTH SOC Pseudopotentials
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``miniBSE`` is tailored for post-processing CP2K calculations. In CP2K Quickstep, the core electrons are integrated out using norm-conserving GTH pseudopotentials. By evaluating SOC within the exact same **separable GTH projector framework**:
+``QDEX`` is tailored for post-processing CP2K calculations. In CP2K Quickstep, the core electrons are integrated out using norm-conserving GTH pseudopotentials. By evaluating SOC within the exact same **separable GTH projector framework**:
 1. **Rigorous Consistency**: The relativistic core potentials match the underlying Kohn-Sham ground state without parameter re-fitting.
 2. **Semi-Local Projector Form**: The SOC Hamiltonian is completely factorized into separable inner products with atom-centered Gaussian projector functions.
 3. **Analytic C++ Evaluation**: Matrix elements of the Gaussian projectors are evaluated analytically via Libint2, eliminating numerical integration grids.
@@ -189,13 +189,13 @@ Here, :math:`\mathbf{B}_{\mathrm{mo}} = \mathbf{C}_{\mathrm{act}}^T \mathbf{B}_{
 
 For large nanocrystals containing :math:`> 10,000` AOs and thousands of molecular orbitals, naively constructing the Cartesian SOC blocks via triple nested loops over all 1,750 atomic projector blocks requires minutes per geometry frame.
 
-``miniBSE`` achieves **sub-second spinor diagonalization** through three architectural optimizations:
+``QDEX`` achieves **sub-second spinor diagonalization** through three architectural optimizations:
 
 1. **Global Sparse CSR Projector Representation**:
    All atom-centered angular projector matrices :math:`k_{ij}^{Il} (L_\kappa)_{mm'}` are pre-assembled once into global sparse Compressed Sparse Row (CSR) matrices :math:`\mathbf{K}_x, \tilde{\mathbf{K}}_y, \mathbf{K}_z`. These sparse structures remain invariant across MD steps and are cached in memory.
 
 2. **Purely Real BLAS DGEMM**:
-   Although the spin-orbit Hamiltonian is complex Hermitian, the Cartesian building blocks :math:`\mathbf{B}_{\mathrm{mo}}`, :math:`\mathbf{K}_x`, :math:`\tilde{\mathbf{K}}_y`, and :math:`\mathbf{K}_z` are **strictly real-valued** (`float64`). ``miniBSE`` executes all intermediate tensor contractions using highly optimized real BLAS Level-3 DGEMM routines, completely bypassing expensive complex matrix multiplications.
+   Although the spin-orbit Hamiltonian is complex Hermitian, the Cartesian building blocks :math:`\mathbf{B}_{\mathrm{mo}}`, :math:`\mathbf{K}_x`, :math:`\tilde{\mathbf{K}}_y`, and :math:`\mathbf{K}_z` are **strictly real-valued** (`float64`). ``QDEX`` executes all intermediate tensor contractions using highly optimized real BLAS Level-3 DGEMM routines, completely bypassing expensive complex matrix multiplications.
 
 3. **In-Place Contiguous Memory Allocation**:
    The four blocks of :math:`\mathbf{H}_{\mathrm{total}}` are populated directly into a single contiguous :math:`(2N_{\mathrm{act}} \times 2N_{\mathrm{act}})` complex array, eliminating auxiliary memory copies before LAPACK ``zheevd`` eigensolving.
@@ -227,7 +227,7 @@ The local spinor probability density is given by:
 UKS Spin-Preserving Framework
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When starting from an Unrestricted Kohn-Sham (UKS) calculation with different molecular orbitals for alpha and beta spins (:math:`\mathbf{C}_\alpha \neq \mathbf{C}_\beta`), ``miniBSE`` maps the active spaces independently:
+When starting from an Unrestricted Kohn-Sham (UKS) calculation with different molecular orbitals for alpha and beta spins (:math:`\mathbf{C}_\alpha \neq \mathbf{C}_\beta`), ``QDEX`` maps the active spaces independently:
 
 .. math::
 

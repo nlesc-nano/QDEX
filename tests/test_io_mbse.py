@@ -3,7 +3,7 @@ import os
 import tempfile
 import numpy as np
 
-from miniBSE.io_utils import read_mos_mbse, write_mos_mbse, read_mos_auto
+from qdex.io_utils import read_mos_mbse, write_mos_mbse, read_mos_auto
 
 
 class TestMBSEIO(unittest.TestCase):

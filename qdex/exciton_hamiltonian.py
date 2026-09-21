@@ -2,8 +2,8 @@ import os
 import numpy as np
 import time
 import sys
-from miniBSE.constants import HA_TO_EV
-from miniBSE.device_utils import is_gpu, to_tensor, to_numpy, has_torch
+from qdex.constants import HA_TO_EV
+from qdex.device_utils import is_gpu, to_tensor, to_numpy, has_torch
 
 class ExcitonHamiltonian:
     def __init__(self, C, eps, overlap, atom_ao_ranges, homo_index, n_occ, n_virt, scissor_ev, gamma_qp, gamma_bse, material=None, 
@@ -242,7 +242,7 @@ class ExcitonHamiltonian:
                 # 3. Exact Vxc Correction from AO Matrix OR HOMO Referencing
                 if vxc_ao_path is not None and os.path.exists(vxc_ao_path):
                     print("\n  [Vxc] Applying Exact State-Dependent Vxc Integrals...")
-                    from miniBSE.io_utils import get_vxc_ao_matrix
+                    from qdex.io_utils import get_vxc_ao_matrix
                     V_ao = get_vxc_ao_matrix(vxc_ao_path, self.overlap.shape[0])
                     
                     # Fully Vectorized Vxc Projection
@@ -440,7 +440,7 @@ class ExcitonHamiltonian:
 
             elif charge_type == 'lowdin':
                 print(f"  Building transition charges (Atom-by-Atom via Lowdin symmetric orthogonalization)...")
-                from miniBSE.lowdin import build_lowdin_transition_charges_flat
+                from qdex.lowdin import build_lowdin_transition_charges_flat
                 S_dense = overlap.toarray() if hasattr(overlap, "toarray") else overlap
                 self.q_flat = build_lowdin_transition_charges_flat(
                     C_occ_act, C_virt_act, S_dense, atom_ao_ranges, self.valid_i, self.valid_a, device=device
@@ -650,7 +650,7 @@ class ExcitonHamiltonian:
 
         elif charge_type == 'lowdin':
             print(f"  Building Löwdin transition charges (alpha + beta channels)...")
-            from miniBSE.lowdin import build_lowdin_transition_charges_flat
+            from qdex.lowdin import build_lowdin_transition_charges_flat
             q_flat_a = build_lowdin_transition_charges_flat(C_occ_a, C_virt_a, S, atom_ao_ranges, vi_a, va_a, device=device) if dim_a else np.zeros((0, n_atoms), dtype=np.float64)
             q_flat_b = build_lowdin_transition_charges_flat(C_occ_b, C_virt_b, S, atom_ao_ranges, vi_b, va_b, device=device) if dim_b else np.zeros((0, n_atoms), dtype=np.float64)
             sc_built = False

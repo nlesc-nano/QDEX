@@ -5,8 +5,8 @@ import sys
 sys.path.insert(0, os.path.abspath(".."))
 
 # -- Project information -----------------------------------------------------
-project = "miniBSE"
-copyright = "2026, miniBSE Developers"
+project = "QDEX"
+copyright = "2026, QDEX Developers"
 author = "Ivan Infante et al."
 release = "1.0.0"
 version = "1.0"
@@ -73,7 +73,7 @@ html_theme_options = {
 html_context = {
     "display_github": True,
     "github_user": "nlesc-nano",
-    "github_repo": "miniBSE",
+    "github_repo": "QDEX",
     "github_version": "main",
     "conf_py_path": "/docs/",
 }

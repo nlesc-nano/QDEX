@@ -5,11 +5,11 @@ from unittest.mock import patch
 
 import numpy as np
 
-from miniBSE.cli import transform_ao_operator
-from miniBSE.exciton_analysis import coherent_mulliken_ao_populations
-from miniBSE.io_utils import parse_basis, read_mos_auto
-from miniBSE.oscillator import compute_oscillator_strengths
-from miniBSE.soc_utils import _ortho_active_coeffs
+from qdex.cli import transform_ao_operator
+from qdex.exciton_analysis import coherent_mulliken_ao_populations
+from qdex.io_utils import parse_basis, read_mos_auto
+from qdex.oscillator import compute_oscillator_strengths
+from qdex.soc_utils import _ortho_active_coeffs
 
 
 class NumericalSafetyTests(unittest.TestCase):
@@ -58,10 +58,10 @@ class NumericalSafetyTests(unittest.TestCase):
                 np.array([-0.2, 0.3]),
                 np.array([2.0, 0.0]),
             )
-            with patch("miniBSE.io_utils.read_mos_txt_cc", return_value=expected) as parser:
+            with patch("qdex.io_utils.read_mos_txt_cc", return_value=expected) as parser:
                 first = read_mos_auto(path, 3, cache=True)
                 self.assertEqual(parser.call_count, 1)
-            with patch("miniBSE.io_utils.read_mos_txt_cc", side_effect=AssertionError("reparsed")):
+            with patch("qdex.io_utils.read_mos_txt_cc", side_effect=AssertionError("reparsed")):
                 second = read_mos_auto(path, 3, cache=True)
             for actual, reference in zip(first, second):
                 np.testing.assert_array_equal(actual, reference)

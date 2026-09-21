@@ -1,30 +1,51 @@
-# miniBSE
+# QDEX: Quantum Dot Excitations & Dynamics
 
-**miniBSE** is a high-performance, lightweight post-DFT exciton solver designed for calculating and analyzing the excited states of molecules and semiconductor nanoclusters. 
+**QDEX** (pronounced *qiu-di-ex*, `/kjuː-diː-ɛks/`, formerly `miniBSE`) is a high-performance, lightweight post-DFT exciton solver and non-adiabatic molecular dynamics (NAMD) engine designed for calculating, analyzing, and propagating the excited states of semiconductor nanoclusters and molecules.
 
-By combining the ease of a Python interface with a lightning-fast C++ backend powered by `Libint2` and `Eigen3`, `miniBSE` offers researchers a scalable tool to investigate light-matter interactions, exciton delocalization, and charge-transfer (CT) characteristics without the overhead of massive quantum chemistry suites.
+By combining the ease of a Python interface with a lightning-fast C++ backend powered by `Libint2` and `Eigen3`, `QDEX` provides researchers with an end-to-end framework—from ground-state Kohn-Sham orbitals to carrier cooling dynamics, trap-assisted recombination, and photoluminescence quantum yields (PLQY)—without the overhead of massive quantum chemistry suites.
 
-## What it Does
+---
 
-At its core, `miniBSE` solves the **Bethe-Salpeter Equation (BSE)** under the Tamm-Dancoff Approximation (TDA). It constructs an active-space electron-hole Hamiltonian using:
-1. **DFT Ground State Data**: Takes Molecular Orbitals (MOs) and orbital energies from a prior ground-state DFT calculation.
-2. **Analytic Integrals**: Uses `Libint2` to instantly compute Gaussian basis set overlaps and dipole transition matrices in real-space.
-3. **Separated BSE/TDA interactions**: Uses unscreened MNOK transition charges for the bare exchange/local-field term and an electronic Resta-MNOK interaction for the screened direct electron-hole attraction.
-4. **Several excitation levels**: Solves the static BSE in the Tamm-Dancoff approximation with Davidson or dense diagonalization, or evaluates uncoupled one-electron transitions without diagonalization.
+## What QDEX Does
 
-Beyond calculating energies, `miniBSE` performs **extensive wavefunction analysis** based on the Dreuw/Plasser framework, outputting physical descriptors such as exciton radii ($d_{eh}$), spatial correlation (Pearson $R$), and volumetric transition densities.
+`QDEX` bridges the gap between static DFT calculations and real-time excited-state dynamics across six integrated modules:
+
+1. **Ground-State Electronic Structure**: 
+   - Projects CP2K Kohn-Sham molecular orbitals (MOs) onto atomic sites via Lowdin and Mulliken population analysis.
+   - Computes Projected Density of States (PDOS), Inverse Participation Ratio (IPR), and Crystal Orbital Overlap Population (COOP).
+   - Unfolds discrete nanocluster states onto bulk crystal $k$-paths using the plane-wave **Fuzzy Bands** algorithm.
+   - Generates 3D volumetric Gaussian `.cube` files with multi-threaded C++ evaluation.
+2. **Relativistic Spin-Orbit Coupling (SOC)**:
+   - Evaluates relativistic SOC using norm-conserving separable Goedecker-Teter-Hutter (GTH) pseudopotential projectors.
+   - Fast sub-second spinor diagonalization via sparse CSR angular momentum matrices and purely real BLAS Level-3 DGEMM contractions.
+3. **Scaled GW Quasiparticle Model**:
+   - Resolves DFT band-gap underestimation via a two-anchor physical scaling model (vacuum monomer anchor $R_0$ and bulk ARPES limit).
+   - Predicts absolute Ionization Potential (IP) and Electron Affinity (EA) with dielectric solvation screening.
+4. **Optical Excitations & BSE**:
+   - Solves the Bethe-Salpeter Equation (BSE) under the Tamm-Dancoff Approximation (TDA) using atom-centered MNOK transition charges and the Resta screened dielectric kernel.
+   - Supports four progressive excitation approximations: `independent_dft`, `independent_qp`, `diagonal_bse`, and full `bse` (sTDA) via an optimized Davidson iterative subspace solver.
+5. **Rigorous Wavefunction Analysis (Plasser-Dreuw)**:
+   - Evaluates real-space exciton descriptors: exciton size ($d_{eh}$), charge-transfer distance ($d_{\mathrm{CT}}$), electron/hole cloud spread ($\sigma_e, \sigma_h$), and spatial Pearson correlation ($R_{eh}$).
+   - Extracts Natural Transition Orbitals (NTOs) with participation ratios and Shannon entropy metrics.
+   - Exports interactive 6-panel Plotly dashboards (`exciton_analysis.html`).
+6. **Non-Adiabatic Molecular Dynamics (NAMD) & Carrier Cooling**:
+   - Operates within the Classical Path Approximation (CPA) along *ab initio* molecular dynamics (AIMD) trajectories.
+   - Computes analytic cross-frame overlaps $S_{IJ}(t, t+\Delta t)$ via Libint2, eliminating gauge phase flips and tracking trivial crossings via Hungarian matching.
+   - Propagates carrier cooling deterministically via the tensorized Pauli Master Equation (PME) or stochastically via Fewest Switches Surface Hopping (CPA-FSSH).
+   - Solves for *ab initio* decoherence times $\tau_{\mathrm{dec}}$ via second-order cumulant expansion of energy gap fluctuations.
+   - Evaluates spontaneous emission rates ($k_{\mathrm{rad}}$), multi-phonon non-radiative rates ($k_{\mathrm{nonrad}}$ via Jortner, Marcus, and SRH defect models), carrier cooling lifetimes ($\tau_{\mathrm{cool}}$), band-edge arrival times, and photoluminescence quantum yields (PLQY).
 
 ---
 
 ## Installation
 
-Because `miniBSE` relies on C++ extensions, **Conda is the highly recommended installation method**. Our `environment.yml` handles the installation of C++ compilers, `CMake`, `Eigen3`, and `Libint2`, saving you the hassle of system-level configurations.
+Because `QDEX` relies on C++ extensions compiled against `Libint2` and `Eigen3`, **Conda / Micromamba** is the recommended installation method.
 
-### Method 1: Conda (Recommended)
+### Method 1: Conda / Micromamba (Recommended)
 
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/nlesc-nano/miniBSE.git](https://github.com/nlesc-nano/miniBSE.git)
+   git clone https://github.com/nlesc-nano/miniBSE.git
    cd miniBSE
    ```
 2. Create and activate the environment:
@@ -32,83 +53,107 @@ Because `miniBSE` relies on C++ extensions, **Conda is the highly recommended in
    micromamba env create -f environment.yml
    micromamba activate minibse_env
    ```
-   *(Note: The `environment.yml` automatically installs the `miniBSE` package in editable mode via pip at the end of the process).*
+   *(Note: The environment file automatically installs `QDEX` in editable mode via pip).*
 
 ### Method 2: Standard Pip
 
 If you already have `CMake` (>= 3.16), a C++17 compiler, `Eigen3`, and `Libint2` installed natively on your OS:
 
 ```bash
-git clone [https://github.com/nlesc-nano/miniBSE.git](https://github.com/nlesc-nano/miniBSE.git)
+git clone https://github.com/nlesc-nano/miniBSE.git
 cd miniBSE
 pip install -r requirements.txt
 pip install -e .
 ```
 
+> **Backward Compatibility**: Any existing scripts importing `miniBSE` (`import miniBSE`) continue to work seamlessly via an automatic redirection hook that maps to `qdex`. Both `qdex` and `minibse` CLI commands are available globally.
+
 ---
 
 ## How to Use It
 
-Once installed, the solver is accessible globally via the `minibse` command-line interface. 
+Once installed, the engine is accessible globally via the `qdex` CLI (or `minibse`).
 
-### Typical Calculation
+### 1. Typical CLI Calculation
 
-Below is a standard example for calculating the excited states of an Indium Arsenide (InAs) semiconductor cluster, computing the lowest states within a 2 eV threshold, and plotting the results:
+Below is a standard example for calculating the excited states of a semiconductor cluster using the scaled GW quasiparticle gap and plotting the results:
 
 ```bash
-minibse \
-  --mo_file MOs_cleaned.txt \
-  --xyz last_opt.xyz \
+qdex \
+  --mo_file MOs.mbse \
+  --xyz structure.xyz \
   --basis_txt BASIS_MOLOPT \
   --basis_name DZVP-MOLOPT-SR-GTH \
-  --e_thresh 2 \
-  --qp_gap 3.0278 \
-  --sigma 0.03 \
+  --e_thresh 2.0 \
+  --qp_gap gw \
+  --material CSPBBR3 \
+  --eps-out 2.4 \
+  --excitation-mode diagonal_bse \
   --plot \
-  --full-diag \
-  --nthreads 8 \
-  --material INAS \
-  --exchange \
-  --alpha 0.2
+  --nthreads 8
 ```
 
-### CLI Argument Breakdown
+### 2. YAML Configuration Workflow
 
-**Inputs & Structure:**
-* `--mo_file`: Path to your molecular orbitals (supports `.txt` or `.npz` arrays).
-* `--xyz`: The Cartesian coordinates of your system.
-* `--basis_txt` & `--basis_name`: The basis set file and the specific basis name (e.g., CP2K MOLOPT format) used to generate the C++ integrals.
+For complex workflows and NAMD trajectories, using a structured YAML configuration file is recommended:
 
-**Physics & Truncation:**
-* `--qp_gap`: The target quasi-particle gap (in eV). `miniBSE` uses this to apply a "scissor shift" to the raw DFT HOMO-LUMO gap.
-* `--e_thresh`: Energy threshold (in eV). Truncates the active space by discarding electron-hole transitions that exceed this gap.
-* `--material`: Uses a built-in material database to estimate dielectric screening.
-* `--eps-out`: External dielectric used by the finite-size QP polarization correction. It does not replace the material electronic dielectric inside the microscopic Resta kernel.
-* `--include-direct-eh` / `--no-direct-eh`: Enables or disables the screened attractive electron-hole direct term. The old `exchange: true` YAML key remains a deprecated compatibility alias.
-* `--alpha`: Scales only the legacy non-Resta kernel. It is ignored, with a warning, when `kernel: resta` is selected.
+```yaml
+# config.yaml
+system:
+  mo_file: "CsPbBr3_MOs.mbse"
+  xyz: "CsPbBr3_QD.xyz"
+  basis_txt: "BASIS_MOLOPT"
+  basis_name: "DZVP-MOLOPT-PBE-GTH"
+  material: "CSPBBR3"
+  nthreads: 8
 
-**Excitation approximations:**
+physics:
+  excitation_mode: "diagonal_bse"
+  qp_gap: "gw"
+  kernel: "resta"
+  eps_out: 2.4
+  soc: true
+  gth_file: "GTH_SOC_POTENTIALS.txt"
+```
 
-* `--excitation-mode bse`: Diagonalize the coupled BSE/TDA Hamiltonian, $D_{QP}+K_x^{bare}-K_d^{screened}$ (the default).
-* `--excitation-mode independent_dft`: Do not diagonalize; use the underlying DFT occupied-to-virtual energy differences.
-* `--excitation-mode independent_qp`: Do not diagonalize; use rigid-scissor or otherwise selected QP occupied-to-virtual energy differences.
-* `--excitation-mode diagonal_bse`: Do not diagonalize; correct each QP transition by its diagonal bare $K_x$ and screened $K_d$ matrix elements. Off-diagonal configuration mixing is omitted.
+Run static calculation:
+```bash
+qdex --config config.yaml
+```
 
-**Solver & Output Controls:**
-* `--full-diag`: Forces full dense diagonalization of the resonant BSE/TDA matrix. This is not a non-TDA BSE calculation. For an independent-transition mode it requests all retained transitions without diagonalizing a matrix.
-* `--nthreads`: Number of CPU threads dedicated to C++ integral generation and PyTorch matrix contractions.
-* `--sigma`: Broadening width (in eV) for the generated UV-Vis spectrum.
-* `--plot`: Generates PNG spectra and an interactive HTML diagnostic dashboard.
-* `--cube`: (Optional) Generates 3D volumetric `.cube` files of the brightest exciton's electron/hole densities.
+Run NAMD carrier cooling precomputation and propagation:
+```bash
+qdex --config config.yaml --namd-precompute
+qdex --config config.yaml --namd-dynamics
+```
 
 ---
 
 ## Outputs
 
-A successful run of `miniBSE` will yield several outputs in your working directory:
+A run of `QDEX` produces rich publication-ready data and interactive dashboards:
 
-1. **Standard Output**: A console table listing the excited states, energies, oscillator strengths, and primary orbital transitions (e.g., `HOMO -> LUMO+1`).
-2. **`spectrum.png` & `spectrum_nm.png`**: UV-Vis absorption spectra utilizing your requested broadening (`--sigma`). 
-3. **`exciton_analysis.html`**: An interactive Plotly dashboard. This visualizes exciton spatial correlations, sizes, and charge-transfer ratios across the energy spectrum.
-4. **`exciton_results.csv`**: (If `--write-csv` is used) Tabular data containing detailed spatial metrics ($d_{CT}$, $\sigma_h$, $\sigma_e$) for post-processing or tracking across MD trajectories.
-5. **Cube Files**: (If `--cube` is used) Volumetric densities ready to be visualized in software like VMD, PyMOL, or ChimeraX.
+1. **Standard Output**: Formatted console tables listing states, energies, transition dipoles, oscillator strengths, cooling lifetimes, band-edge arrival times, and PLQY.
+2. **`spectrum.png` & `spectrum_nm.png`**: UV-Vis absorption spectra with Gaussian broadening.
+3. **`exciton_analysis.html`**: Interactive Plotly dashboard visualizing spatial correlations, exciton radii ($d_{eh}$), and charge-transfer metrics across the spectrum.
+4. **`exciton_results.csv`**: Tabular data with spatial metrics ($d_{\mathrm{CT}}, \sigma_h, \sigma_e, R_{eh}$) for trajectory post-processing.
+5. **`namd_cooling_dashboard.html`**: Coordinated 6-panel NAMD dashboard displaying cooling curves, state population cascades, non-adiabatic coupling heatmaps, gap-law distributions, phonon spectral densities $J(\omega)$, and cumulant decoherence decays.
+6. **Volumetric Cube Files**: Gaussian `.cube` files of frontier orbitals or exciton hole, electron, and difference densities ready for VMD, PyMOL, or ChimeraX.
+
+---
+
+## Documentation
+
+Full documentation with comprehensive mathematical formulations, physical explanations, and step-by-step tutorials is available in the `docs/` folder and can be built using Sphinx:
+
+```bash
+sphinx-build -b html docs docs/_build/html
+```
+
+---
+
+## Citation & License
+
+If you use **QDEX** in your research, please cite:
+* Ivan Infante et al., *QDEX: Quantum Dot Excitations & Dynamics* (2026).
+* Licensed under the Apache License 2.0.

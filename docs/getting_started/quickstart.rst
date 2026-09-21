@@ -1,7 +1,7 @@
 Quickstart Guide
 ================
 
-`miniBSE` can be run either directly via the command-line interface (CLI) or through structured YAML configuration files.
+`QDEX` can be run either directly via the command-line interface (CLI) or through structured YAML configuration files.
 
 1. Static BSE Calculation via CLI
 ---------------------------------
@@ -10,7 +10,7 @@ Below is a standard calculation for the excited states of an Indium Arsenide (In
 
 .. code-block:: bash
 
-   minibse \
+   qdex \
      --mo_file MOs.mbse \
      --xyz structure.xyz \
      --basis_txt BASIS_MOLOPT \
@@ -60,7 +60,7 @@ Run with:
 
 .. code-block:: bash
 
-   minibse --config config.yaml
+   qdex --config config.yaml
 
 3. NAMD Carrier Cooling Workflow
 --------------------------------
@@ -72,7 +72,7 @@ Step 1: Precompute overlaps and exciton states
 
 .. code-block:: bash
 
-   minibse --config config.yaml --namd-precompute
+   qdex --config config.yaml --namd-precompute
 
 This step computes:
 * Quasiparticle energies and diagonal BSE exciton states.
@@ -85,6 +85,6 @@ Step 2: Run Dynamics & Carrier Cooling
 
 .. code-block:: bash
 
-   minibse --config config.yaml --namd-dynamics
+   qdex --config config.yaml --namd-dynamics
 
 Propagates the carrier cooling cascade deterministically via the Pauli Master Equation or stochastically via CPA-FSSH, exporting cooling curves, state populations, and photoluminescence summaries.

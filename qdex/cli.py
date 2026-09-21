@@ -14,25 +14,25 @@ import libint_cpp
 if __package__ is None or __package__ == "":
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from miniBSE.io_utils import (
+from qdex.io_utils import (
     read_xyz, parse_basis, build_shell_dicts,
     count_ao_from_shells, build_atom_ao_ranges, read_mos_auto, read_mos_uks
 )
-from miniBSE.solver import ExcitonSolver
-from miniBSE.constants import HA_TO_EV, BOHR_PER_ANG
-from miniBSE.exciton_analysis import ExcitonAnalyzer, plot_analysis_summary
-from miniBSE.integrals import compute_dipole_ao
-from miniBSE.oscillator import compute_oscillator_strengths
-from miniBSE.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap
-from miniBSE.orbital_analysis import (
+from qdex.solver import ExcitonSolver
+from qdex.constants import HA_TO_EV, BOHR_PER_ANG
+from qdex.exciton_analysis import ExcitonAnalyzer, plot_analysis_summary
+from qdex.integrals import compute_dipole_ao
+from qdex.oscillator import compute_oscillator_strengths
+from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap
+from qdex.orbital_analysis import (
     compute_spin_character, compute_uks_soc_spin_free_channels,
     compute_uks_spin_free_channels, format_uks_soc_spin_free_character,
     format_uks_spin_free_character, infer_reference_spin,
     print_orbital_summary, spin_multiplicity_name
 )
-from miniBSE.fuzzy_bands import run_fuzzy_bands_and_pdos, build_qp_energies, build_qp_energies_vacuum
-from miniBSE.nto import run_nto_analysis
-from miniBSE.profiler import ResourceTracker
+from qdex.fuzzy_bands import run_fuzzy_bands_and_pdos, build_qp_energies, build_qp_energies_vacuum
+from qdex.nto import run_nto_analysis
+from qdex.profiler import ResourceTracker
 
 
 class TeeStream:
@@ -49,7 +49,7 @@ class TeeStream:
             stream.flush()
 
 
-from miniBSE.device_utils import is_gpu, resolve_device
+from qdex.device_utils import is_gpu, resolve_device
 
 def transform_ao_operator(mu_ao, c_left, c_right, device="numpy"):
     """Transform an AO operator without silently reducing reference precision.
@@ -382,7 +382,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     # EXCITON CUBE GENERATION (MOs are now generated globally before this)
     # =========================================================================
     if getattr(args, 'cube', False):
-        from miniBSE.exciton_cube import generate_cubes
+        from qdex.exciton_cube import generate_cubes
         
         bse_states_arg = getattr(args, 'bse_states', None)
         if bse_states_arg:
@@ -443,7 +443,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         print(f"  Saved X_ia coefficients to {npz_filename}")
 
     if args.broadening != "none":
-        from miniBSE.spectrum import generate_spectrum, plot_spectrum
+        from qdex.spectrum import generate_spectrum, plot_spectrum
         e_min, e_max = max(0.0, np.min(energies_ev) - 2.5), np.max(energies_ev) + 2.5
         x_grid, y_grid = generate_spectrum(energies_ev, f_strengths, e_min=e_min, e_max=e_max, sigma=args.sigma, profile=args.broadening)
         spec_file = f"spectrum{suffix}.dat"
@@ -534,7 +534,7 @@ def _select_soc_window_indices(eps_shifted, homo_index, soc_window):
         
 
 def main():
-    parser = argparse.ArgumentParser(description="miniBSE - Lightweight post-DFT exciton solver")
+    parser = argparse.ArgumentParser(description="QDEX - Quantum Dot Excitations & Dynamics exciton solver")
 
     parser.add_argument("--config", type=str, help="Path to a YAML configuration file.")
     parser.add_argument("--mo_file")
@@ -669,7 +669,7 @@ def main():
         config_data.setdefault("system", {})["gth_file"] = args.gth_file
 
     if getattr(args, "namd_compact", None) is not None:
-        from miniBSE.namd import compact_precomputed_data
+        from qdex.namd import compact_precomputed_data
         compact_dir = args.namd_compact
         if compact_dir == "default":
             compact_dir = config_data.get("namd", {}).get("storage", {}).get("precompute_dir", "namd_precomputed")
@@ -677,13 +677,13 @@ def main():
         return
 
     if getattr(args, "namd_precompute", False):
-        from miniBSE.namd import precompute_namd_data
+        from qdex.namd import precompute_namd_data
         setup_run_logging(getattr(args, "log_file", "minibse.log"))
         precompute_namd_data(config_data)
         return
 
     if getattr(args, "namd_run", False):
-        from miniBSE.namd import run_namd_dynamics
+        from qdex.namd import run_namd_dynamics
         setup_run_logging(getattr(args, "log_file", "minibse.log"))
         run_namd_dynamics(config_data)
         return
@@ -706,7 +706,7 @@ def main():
     if missing: parser.error(f"Missing required arguments: {', '.join(missing)}")
 
     print("\n===================================================")
-    print(" miniBSE - Post-DFT Exciton Solver")
+    print(" QDEX - Post-DFT Exciton Solver")
     print("===================================================")
 
     tracker = ResourceTracker()
@@ -1013,7 +1013,7 @@ def main():
         tracker.start_stage("SOC Active Space (BSE)")
         print(f"\n--- Computing SOC Spinor Subspace for BSE (Small Window) ---")
         if is_uks_sp:
-            from miniBSE.soc_utils import compute_spinor_subspace_uks
+            from qdex.soc_utils import compute_spinor_subspace_uks
             C_dense_beta = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
             bse_soc_E, bse_soc_U, soc_overlap_cache = compute_spinor_subspace_uks(
                 atom_symbols=syms, coords_ang=coords_ang, shells=shells,
@@ -1026,7 +1026,7 @@ def main():
             )
             bse_spinor_homo_idx = bse_n_occ + bse_n_occ_beta - 1
         else:
-            from miniBSE.soc_utils import compute_spinor_subspace
+            from qdex.soc_utils import compute_spinor_subspace
             bse_soc_E, bse_soc_U, soc_overlap_cache = compute_spinor_subspace(
                 atom_symbols=syms, coords_ang=coords_ang, shells=shells, 
                 C_AO=C_dense, eps_Ha=eps / HA_TO_EV, S_AO=S, 
@@ -1120,7 +1120,7 @@ def main():
     # -----------------------------------------------------------------
     if getattr(args, 'cube', False):
         tracker.start_stage("Exciton Cube Generation")
-        from miniBSE.exciton_cube import generate_cubes
+        from qdex.exciton_cube import generate_cubes
         print("\n--- Generating Cubes for MOs / Spinors ---")
         
         class DummySolver:
@@ -1184,7 +1184,7 @@ def main():
             if is_uks_sp:
                 print(f"  -> Beta fuzzy SOC active MOs : {len(fuzzy_active_indices_beta)} / {len(eps_beta)}")
             if is_uks_sp:
-                from miniBSE.soc_utils import compute_spinor_subspace_uks
+                from qdex.soc_utils import compute_spinor_subspace_uks
                 C_dense_beta = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
                 fuzzy_soc_E, fuzzy_soc_U, _ = compute_spinor_subspace_uks(
                     atom_symbols=syms, coords_ang=coords_ang, shells=shells,
@@ -1199,7 +1199,7 @@ def main():
                 f_n_occ_beta = np.sum(fuzzy_active_indices_beta <= homo_index_beta)
                 fuzzy_spinor_homo_idx = f_n_occ + f_n_occ_beta - 1
             else:
-                from miniBSE.soc_utils import compute_spinor_subspace
+                from qdex.soc_utils import compute_spinor_subspace
                 fuzzy_soc_E, fuzzy_soc_U, _ = compute_spinor_subspace(
                     atom_symbols=syms, coords_ang=coords_ang, shells=shells,
                     C_AO=C_dense, eps_Ha=eps / HA_TO_EV, S_AO=S,

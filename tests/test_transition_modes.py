@@ -2,8 +2,8 @@ import unittest
 
 import numpy as np
 
-from miniBSE.exciton_hamiltonian import ExcitonHamiltonian
-from miniBSE.solver import ExcitonSolver
+from qdex.exciton_hamiltonian import ExcitonHamiltonian
+from qdex.solver import ExcitonSolver
 
 
 def make_two_transition_hamiltonian():
@@ -60,8 +60,8 @@ class IndependentTransitionModeTests(unittest.TestCase):
         np.testing.assert_allclose(dense, dense.T, atol=1.0e-12)
 
     def test_diagonal_bse_vectors_and_oscillator_strengths(self):
-        from miniBSE.solver import DiagonalBSEVectors
-        from miniBSE.oscillator import compute_oscillator_strengths
+        from qdex.solver import DiagonalBSEVectors
+        from qdex.oscillator import compute_oscillator_strengths
 
         dim = 1000
         order = np.arange(dim)[::-1]
@@ -89,7 +89,7 @@ class IndependentTransitionModeTests(unittest.TestCase):
         f_diag = compute_oscillator_strengths(energies_ev, vecs, mu_ia, is_spinor=False)
         self.assertEqual(len(f_diag), dim)
         # Check first state manually: prefactor=4/3, HA_TO_EV
-        from miniBSE.constants import HA_TO_EV
+        from qdex.constants import HA_TO_EV
         expected_f0 = (4.0 / 3.0) * (energies_ev[0] / HA_TO_EV) * np.sum(mu_ia[order[0]] ** 2)
         self.assertAlmostEqual(f_diag[0], expected_f0, places=10)
 

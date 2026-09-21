@@ -272,7 +272,7 @@ def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_
     print(f"  [Fuzzy-UKS] Exported fuzzy_data_{prefix}.npz with spin polarization overlay in {time.time()-t0:.2f} s")
 
 def _matmul_real_matrix(A_real, B, device="numpy"):
-    from miniBSE.device_utils import is_gpu
+    from qdex.device_utils import is_gpu
     if not np.iscomplexobj(B):
         if is_gpu(device):
             import torch
@@ -295,8 +295,8 @@ def _matmul_real_matrix(A_real, B, device="numpy"):
 def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_index, e_homo, e_lumo, e_fermi_raw, syms, coords_ang, shells, pops_sf, soc_active_indices=None, soc_E_act=None, soc_U_act=None, spinor_homo_idx=None, qp_energies=None, eps_abs=None, qp_energies_abs=None, soc_E_abs_act=None, C_beta_dense=None, eps_beta_shifted=None, eps_beta_abs=None, homo_index_beta=None, qp_energies_beta=None, qp_energies_beta_abs=None, soc_active_indices_beta=None):
     import time
     import numpy as np
-    from miniBSE.device_utils import is_gpu
-    from miniBSE.pdos_coop import compute_pdos_and_coop, export_pdos_coop_data
+    from qdex.device_utils import is_gpu
+    from qdex.pdos_coop import compute_pdos_and_coop, export_pdos_coop_data
     
     print("\n===================================================")
     print(" [ FUZZY BANDS & PDOS ]")
@@ -672,7 +672,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
 
     # --- 3. Generate Multi-Row Interactive Plotly HTML ---
     if getattr(args, 'plot', True) or getattr(args, 'plot_fuzzy', True):
-        from miniBSE.plot_fuzzy import generate_interactive_plot
+        from qdex.plot_fuzzy import generate_interactive_plot
         ef_dict = {"sf": 0.0}; homo_dict = {"sf": e_homo}; lumo_dict = {"sf": e_lumo}
         
         if args.soc_flag:

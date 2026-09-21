@@ -2,20 +2,20 @@ import os
 import time
 import numpy as np
 
-from miniBSE.namd.integrator import (
+from qdex.namd.integrator import (
     propagate_electronic_substeps,
     propagate_channel_rk4,
     propagate_channel_batch_rk4,
     propagate_channel_batch_strang,
     KB_EV
 )
-from miniBSE.namd.initial_condition import sample_initial_states
-from miniBSE.namd.master_equation import (
+from qdex.namd.initial_condition import sample_initial_states
+from qdex.namd.master_equation import (
     compute_rate_matrix,
     run_master_equation_step,
     propagate_pme_tensor
 )
-from miniBSE.namd.analysis import analyze_and_plot_namd_results
+from qdex.namd.analysis import analyze_and_plot_namd_results
 
 
 def build_exciton_coupling_matrix(i_pairs, a_pairs, S_occ, S_virt, dt_nuc_fs):
@@ -134,7 +134,7 @@ def run_namd_dynamics(config):
     if tau_dec_raw is None or str(tau_dec_raw).lower() in ("edc", "none", "auto", "dynamic"):
         tau_dec_fs = "edc"
     elif str(tau_dec_raw).lower() in ("cumulant", "lowest_state", "lowest_exciton", "gap_cumulant"):
-        from miniBSE.namd.analysis import compute_band_gap_dynamics_and_spectral_density
+        from qdex.namd.analysis import compute_band_gap_dynamics_and_spectral_density
         res_cumulant = compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_exciton=True)
         if res_cumulant is not None and not np.isnan(res_cumulant.get("tau_dec_fs", np.nan)):
             tau_dec_fs = float(res_cumulant["tau_dec_fs"])
@@ -196,10 +196,10 @@ def run_namd_dynamics(config):
     pair_lookup[i_pairs0, a_pairs0] = np.arange(len(i_pairs0))
 
     # Recombination & Photoluminescence Rates (Radiative & Non-Radiative)
-    from miniBSE.hardness import (
+    from qdex.hardness import (
         get_refractive_index, compute_radiative_rates, compute_energy_gap_law_rate, MATERIAL_DB
     )
-    from miniBSE.namd.integrator import KB_EV
+    from qdex.namd.integrator import KB_EV
 
     material = config.get("system", {}).get("material", "DEFAULT")
     n_refr = float(dyn_cfg.get("refractive_index", get_refractive_index(material)))
@@ -248,7 +248,7 @@ def run_namd_dynamics(config):
     }
 
     print("=" * 65)
-    print(f" miniBSE - NAMD Carrier Cooling Simulation ({method.upper()})")
+    print(f" QDEX - NAMD Carrier Cooling Simulation ({method.upper()})")
     print("=" * 65)
     print(f"  Precomputed Data     : {precompute_dir} ({n_frames} frames, dt = {dt_nuc_fs} fs)")
     print(f"  Band Gap (Eg)        : DFT = {dft_gap:.3f} eV, QP = {qp_gap:.3f} eV")

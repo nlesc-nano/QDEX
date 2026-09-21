@@ -3,7 +3,7 @@ Part 6: Carrier Cooling Dynamics & Photoluminescence (NAMD)
 
 Following the photoexcitation of a semiconductor nanocrystal or quantum dot by an ultrashort laser pulse, high-energy ("hot") electrons and holes rapidly dissipate their excess energy through electron-phonon scattering and non-adiabatic transitions. Carriers cascade down the dense ladder of excited states, cooling toward the band edges before recombining to the ground state.
 
-``miniBSE`` features an advanced, high-throughput **Non-Adiabatic Molecular Dynamics (NAMD)** engine designed to simulate carrier relaxation, phonon bottleneck phenomena, surface defect trapping/de-trapping, and photoluminescence recombination along *ab initio* molecular dynamics (AIMD) trajectories.
+``QDEX`` features an advanced, high-throughput **Non-Adiabatic Molecular Dynamics (NAMD)** engine designed to simulate carrier relaxation, phonon bottleneck phenomena, surface defect trapping/de-trapping, and photoluminescence recombination along *ab initio* molecular dynamics (AIMD) trajectories.
 
 ---
 
@@ -71,7 +71,7 @@ Attempting to propagate the electronic Schrödinger equation using the coarse nu
 The Classical Path Approximation (CPA)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To solve this timescale separation, ``miniBSE`` operates within the **Classical Path Approximation (CPA)**. 
+To solve this timescale separation, ``QDEX`` operates within the **Classical Path Approximation (CPA)**. 
 
 In semiconductor nanoclusters, the electronic transition involves one or two electrons out of thousands of valence electrons. To first order, the nuclear trajectory :math:`\mathbf{R}(t)` is driven primarily by the ground-state lattice potential, and the back-reaction of single-carrier relaxation on the heavy nuclear motion is negligible compared to thermal kinetic fluctuations at 300 K.
 
@@ -82,7 +82,7 @@ This provides an immense computational advantage:
 Electronic Sub-Stepping in CPA-FSSH
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Within each nuclear time interval :math:`[t_k, t_{k+1}]` of duration :math:`\Delta t_{\mathrm{nuc}}`, ``miniBSE`` divides the interval into :math:`N_{\mathrm{sub}}` fine electronic sub-steps (typically :math:`N_{\mathrm{sub}} = 100 - 500`):
+Within each nuclear time interval :math:`[t_k, t_{k+1}]` of duration :math:`\Delta t_{\mathrm{nuc}}`, ``QDEX`` divides the interval into :math:`N_{\mathrm{sub}}` fine electronic sub-steps (typically :math:`N_{\mathrm{sub}} = 100 - 500`):
 
 .. math::
 
@@ -94,7 +94,7 @@ Along the sub-steps :math:`\tau_m = (m + 0.5) \delta t_{\mathrm{elec}}`, the adi
 
    E_I(\tau_m) = E_I(t_k) + \frac{\tau_m}{\Delta t_{\mathrm{nuc}}} \left( E_I(t_{k+1}) - E_I(t_k) \right)
 
-The effective non-adiabatic Hamiltonian driving electronic evolution is constructed in ``miniBSE.namd.integrator``:
+The effective non-adiabatic Hamiltonian driving electronic evolution is constructed in ``qdex.namd.integrator``:
 
 .. math::
 
@@ -105,7 +105,7 @@ Because the non-adiabatic coupling matrix :math:`\mathbf{d}` is anti-Hermitian (
 Unitary Matrix Exponentiation
 """""""""""""""""""""""""""""
 
-To propagate the electronic amplitudes :math:`\mathbf{c}(\tau)` across each sub-step without any norm drift, ``miniBSE`` diagonalizes :math:`\mathbf{H}_{\mathrm{eff}} = \mathbf{V} \boldsymbol{\Lambda} \mathbf{V}^\dagger` and evaluates the exact unitary matrix exponential:
+To propagate the electronic amplitudes :math:`\mathbf{c}(\tau)` across each sub-step without any norm drift, ``QDEX`` diagonalizes :math:`\mathbf{H}_{\mathrm{eff}} = \mathbf{V} \boldsymbol{\Lambda} \mathbf{V}^\dagger` and evaluates the exact unitary matrix exponential:
 
 .. math::
 
@@ -135,7 +135,7 @@ Although the Pauli Master Equation propagates real-valued populations :math:`P_I
 
 In dense manifolds where non-adiabatic couplings are large, single-step forward Euler integration of :math:`\frac{d\mathbf{P}}{dt} = \mathbf{R} \mathbf{P}` with a coarse step :math:`\Delta t_{\mathrm{nuc}} \sim 1\text{ fs}` can lead to **stiffness instabilities**, causing populations to oscillate or become negative (:math:`P_I < 0`).
 
-In ``miniBSE.namd.master_equation``, two robust solutions are provided:
+In ``qdex.namd.master_equation``, two robust solutions are provided:
 
 1. **Exact Matrix Exponential**:
    For modest state spaces, the population vector is propagated analytically over the nuclear step:
@@ -152,7 +152,7 @@ In ``miniBSE.namd.master_equation``, two robust solutions are provided:
 3. Pauli Master Equation (PME) vs. CPA-FSSH: When to Use Which?
 ---------------------------------------------------------------
 
-A central methodological decision in non-adiabatic dynamics is choosing between a **deterministic Master Equation** and **stochastic Fewest Switches Surface Hopping (FSSH)**. Both frameworks are implemented in ``miniBSE``, and each possesses distinct physical domains of applicability:
+A central methodological decision in non-adiabatic dynamics is choosing between a **deterministic Master Equation** and **stochastic Fewest Switches Surface Hopping (FSSH)**. Both frameworks are implemented in ``QDEX``, and each possesses distinct physical domains of applicability:
 
 .. list-table::
    :widths: 22 38 40
@@ -310,14 +310,14 @@ Along the classical nuclear trajectory :math:`\mathbf{R}(t)`, the non-adiabatic 
 
    d_{IJ}(t + \frac{\Delta t}{2}) = \langle \psi_I(t) | \frac{\partial}{\partial t} | \psi_J(t) \rangle \approx \frac{S_{IJ}(t, t+\Delta t) - S_{JI}(t, t+\Delta t)}{2 \Delta t}
 
-where :math:`S_{IJ}(t, t+\Delta t) = \langle \psi_I(t) | \psi_J(t+\Delta t) \rangle` is the cross-frame state overlap. In ``miniBSE``, the underlying atomic orbital cross-overlaps :math:`S_{\mu \nu}(t, t+\Delta t) = \int \chi_\mu(\mathbf{r}; \mathbf{R}(t)) \chi_\nu(\mathbf{r}; \mathbf{R}(t+\Delta t)) d\mathbf{r}` are evaluated analytically via Libint2.
+where :math:`S_{IJ}(t, t+\Delta t) = \langle \psi_I(t) | \psi_J(t+\Delta t) \rangle` is the cross-frame state overlap. In ``QDEX``, the underlying atomic orbital cross-overlaps :math:`S_{\mu \nu}(t, t+\Delta t) = \int \chi_\mu(\mathbf{r}; \mathbf{R}(t)) \chi_\nu(\mathbf{r}; \mathbf{R}(t+\Delta t)) d\mathbf{r}` are evaluated analytically via Libint2.
 
 Eliminating Gauge Phase Discontinuities
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Standard electronic eigensolvers determine eigenvectors up to an arbitrary global phase factor :math:`e^{i \theta_I(t)}`. If left uncorrected, random sign flips between successive MD frames cause :math:`S_{II}(t, t+\Delta t) \approx -1`, producing spurious non-adiabatic couplings that are orders of magnitude too large.
 
-``miniBSE`` eliminates gauge discontinuities by applying a phase rotation:
+``QDEX`` eliminates gauge discontinuities by applying a phase rotation:
 
 .. math::
 
@@ -334,7 +334,7 @@ Hungarian Matching for Trivial Avoided Crossings
 
 When nuclear vibrations bring two states close in energy, their adiabatic energy curves may cross. Sorting states strictly by instantaneous energy causes their physical identities to abruptly swap, introducing artificial spikes into :math:`d_{IJ}`.
 
-``miniBSE`` tracks states across time by solving the bipartite matching problem using the **Hungarian algorithm** on the cost matrix:
+``QDEX`` tracks states across time by solving the bipartite matching problem using the **Hungarian algorithm** on the cost matrix:
 
 .. math::
 
@@ -374,7 +374,7 @@ A quantum dot possesses thousands of vibrational normal modes. Each phonon mode 
 Automated Ab Initio Cumulant Decoherence
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Rather than guessing an empirical decoherence time (e.g. :math:`\tau_{\mathrm{dec}} = 10\text{ fs}`), ``miniBSE`` computes :math:`\tau_{\mathrm{dec}}` *ab initio* from the second-order cumulant expansion of energy gap fluctuations.
+Rather than guessing an empirical decoherence time (e.g. :math:`\tau_{\mathrm{dec}} = 10\text{ fs}`), ``QDEX`` computes :math:`\tau_{\mathrm{dec}}` *ab initio* from the second-order cumulant expansion of energy gap fluctuations.
 
 Let :math:`\delta E_1(t) = E_1(t) - \langle E_1 \rangle` be the instantaneous fluctuation of the lowest excited state gap along the trajectory. The normalized gap autocorrelation function is:
 
@@ -396,7 +396,7 @@ The electronic dephasing decay function is:
 
    D(t) = \exp\left( -g(t) \right)
 
-``miniBSE`` solves for the characteristic decoherence time :math:`\tau_{\mathrm{dec}}` satisfying:
+``QDEX`` solves for the characteristic decoherence time :math:`\tau_{\mathrm{dec}}` satisfying:
 
 .. math::
 
@@ -422,7 +422,7 @@ The **Phonon Spectral Density** :math:`J(\omega)` is the Fourier transform of th
 
    J(\omega) = \frac{1}{2\pi} \int_{-\infty}^{\infty} C(t) \, e^{i \omega t} \, dt
 
-In ``miniBSE``, :math:`J(\omega)` is evaluated numerically using a Hann-windowed Fast Fourier Transform (FFT) of :math:`C(t)` and expressed in wavenumbers (:math:`\text{cm}^{-1}`).
+In ``QDEX``, :math:`J(\omega)` is evaluated numerically using a Hann-windowed Fast Fourier Transform (FFT) of :math:`C(t)` and expressed in wavenumbers (:math:`\text{cm}^{-1}`).
 
 Physical Meaning
 ~~~~~~~~~~~~~~~~
@@ -447,7 +447,7 @@ By inspecting the peaks in :math:`J(\omega)`, researchers can directly identify 
 8. Radiative & Non-Radiative Recombination Mechanisms
 -----------------------------------------------------
 
-Once photoexcited hot carriers have cooled to the band edge (forming the lowest :math:`1S` exciton state), they recombine to the electronic ground state :math:`|S_0\rangle` on longer timescales (nanoseconds). In ``miniBSE``, carrier recombination is coupled directly to the population dynamics:
+Once photoexcited hot carriers have cooled to the band edge (forming the lowest :math:`1S` exciton state), they recombine to the electronic ground state :math:`|S_0\rangle` on longer timescales (nanoseconds). In ``QDEX``, carrier recombination is coupled directly to the population dynamics:
 
 .. math::
 
@@ -518,7 +518,7 @@ Spontaneous photon emission into the vacuum radiation field inside a dielectric 
 
    k_{I \to 0}^{\mathrm{rad}} = \left[ \frac{2 e^2}{4\pi \epsilon_0 m_e c^3 \hbar^2} \right] n_{\mathrm{r}} \, E_I^2 \, f_I = C_{\mathrm{rad}} \, n_{\mathrm{r}} \, E_I^2 \, f_I
 
-where :math:`C_{\mathrm{rad}} = 4.3391988 \times 10^7\text{ s}^{-1}\text{ eV}^{-2}` (:math:`4.3391988 \times 10^{-8}\text{ fs}^{-1}\text{ eV}^{-2}`) and :math:`n_{\mathrm{r}}` is loaded from ``REFRACTIVE_INDEX_DICT`` in ``miniBSE.hardness`` (e.g. :math:`n_{\mathrm{r}} = 2.19` for :math:`\text{CsPbBr}_3`, :math:`n_{\mathrm{r}} = 3.30` for :math:`\text{GaAs}`).
+where :math:`C_{\mathrm{rad}} = 4.3391988 \times 10^7\text{ s}^{-1}\text{ eV}^{-2}` (:math:`4.3391988 \times 10^{-8}\text{ fs}^{-1}\text{ eV}^{-2}`) and :math:`n_{\mathrm{r}}` is loaded from ``REFRACTIVE_INDEX_DICT`` in ``qdex.hardness`` (e.g. :math:`n_{\mathrm{r}} = 2.19` for :math:`\text{CsPbBr}_3`, :math:`n_{\mathrm{r}} = 3.30` for :math:`\text{GaAs}`).
 
 Single-Frame vs. Trajectory Ensemble Averaging
 """"""""""""""""""""""""""""""""""""""""""""""
@@ -577,7 +577,7 @@ where:
 4. Non-Empirical Extraction of Optical Phonon Energy from NAMD Spectral Density
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Rather than relying on empirical phonon frequencies, ``miniBSE`` extracts :math:`\hbar \omega_{\mathrm{LO}}` directly from the **Phonon Spectral Density** :math:`J(\omega)` of the NAMD trajectory:
+Rather than relying on empirical phonon frequencies, ``QDEX`` extracts :math:`\hbar \omega_{\mathrm{LO}}` directly from the **Phonon Spectral Density** :math:`J(\omega)` of the NAMD trajectory:
 
 1. The instantaneous energy gap fluctuation of the lowest transition along the MD trajectory is tracked:
 
@@ -614,7 +614,7 @@ Rather than relying on empirical phonon frequencies, ``miniBSE`` extracts :math:
 5. Derivation of Huang-Rhys Factor S and Reorganization Energy λ from Trajectory Data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A central parameter in multi-phonon transitions is the **Huang-Rhys factor** :math:`S`, which quantifies the average number of phonons emitted during electronic transition. In ``miniBSE``, :math:`S` and the nuclear reorganization energy :math:`\lambda` are determined non-empirically via the **Fluctuation-Dissipation Theorem / Marcus linear response theory**:
+A central parameter in multi-phonon transitions is the **Huang-Rhys factor** :math:`S`, which quantifies the average number of phonons emitted during electronic transition. In ``QDEX``, :math:`S` and the nuclear reorganization energy :math:`\lambda` are determined non-empirically via the **Fluctuation-Dissipation Theorem / Marcus linear response theory**:
 
 1. **Thermal Gap Variance**:
    Along the ab initio trajectory at temperature :math:`T`, the classical variance of the energy gap is computed directly:
@@ -683,14 +683,14 @@ Every variable in this rate expression is evaluated directly from the NAMD traje
 
       V_{\mathrm{el}} = \hbar \, \langle |d_{10}(t)| \rangle
 
-   where :math:`\langle |d_{10}| \rangle` is the trajectory-averaged non-adiabatic coupling magnitude between frontier orbitals, precomputed and stored in ``miniBSE``'s step files.
+   where :math:`\langle |d_{10}| \rangle` is the trajectory-averaged non-adiabatic coupling magnitude between frontier orbitals, precomputed and stored in ``QDEX``'s step files.
 
 7. Defect Trap-Assisted Recombination (Shockley-Read-Hall)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In real quantum dots with unpassivated surfaces or vacancies, non-radiative recombination is overwhelmingly accelerated by **Shockley-Read-Hall (SRH) mid-gap traps**. Instead of bridging a single large gap of :math:`2.0\text{ eV}`, carriers drop into an intermediate trap state (:math:`\Delta E \approx 0.5 - 1.0\text{ eV}`), where multi-phonon tunneling is orders of magnitude faster.
 
-In ``miniBSE``, trap-assisted recombination can be configured via the YAML input:
+In ``QDEX``, trap-assisted recombination can be configured via the YAML input:
 
 .. code-block:: yaml
 
@@ -716,7 +716,7 @@ The total Photoluminescence Quantum Yield (PLQY) represents the branching ratio 
 9. In-Depth Analysis of NAMD Simulations
 ----------------------------------------
 
-``miniBSE`` includes a dedicated analysis module (``miniBSE.namd.analysis``) that automatically processes precomputed and dynamic trajectory data.
+``QDEX`` includes a dedicated analysis module (``qdex.namd.analysis``) that automatically processes precomputed and dynamic trajectory data.
 
 1. Carrier Cooling Curves, Lifetimes, and Band Edge Arrival Times
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -783,7 +783,7 @@ Transient populations :math:`P_I(t)` are exported to ``carrier_cooling_populatio
 3. NAC vs. Energy Gap Distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To verify whether non-adiabatic transitions obey the energy-gap law, ``miniBSE`` samples pairs of states across trajectory frames and plots non-adiabatic coupling magnitudes :math:`|d_{IJ}|` against energy differences :math:`|E_J - E_I|`. This distinguishes smooth exponential decay from resonant vibronic enhancements.
+To verify whether non-adiabatic transitions obey the energy-gap law, ``QDEX`` samples pairs of states across trajectory frames and plots non-adiabatic coupling magnitudes :math:`|d_{IJ}|` against energy differences :math:`|E_J - E_I|`. This distinguishes smooth exponential decay from resonant vibronic enhancements.
 
 4. 6-Panel Publication Figures & Dashboards
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

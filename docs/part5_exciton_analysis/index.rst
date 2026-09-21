@@ -3,7 +3,7 @@ Part 5: Excited-State Wavefunction Analysis (Plasser-Dreuw)
 
 Solving the Bethe-Salpeter Equation yields excitation energies :math:`\Omega_S` and eigenvectors :math:`\mathbf{X}_S = (X_{ia}^S)`. However, understanding the physical nature of an exciton—whether it is a tightly bound Wannier-Mott exciton, a localized Frenkel exciton, a surface-trap state, or a spatial charge-transfer (CT) excitation—requires quantitative real-space wavefunction analysis.
 
-``miniBSE`` incorporates the rigorous **Plasser-Dreuw exciton analysis framework** along with **Natural Transition Orbitals (NTOs)** to decompose complex multi-configurational exciton wavefunctions into intuitive, publication-ready physical descriptors.
+``QDEX`` incorporates the rigorous **Plasser-Dreuw exciton analysis framework** along with **Natural Transition Orbitals (NTOs)** to decompose complex multi-configurational exciton wavefunctions into intuitive, publication-ready physical descriptors.
 
 ---
 
@@ -44,7 +44,7 @@ where the single-particle reduced density matrices are:
 Vectorized Low-Memory Mulliken Population
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In standard implementations, computing :math:`\rho_h` and :math:`\rho_e` requires forming full :math:`N_{\mathrm{ao}} \times N_{\mathrm{ao}}` AO density matrices. In ``miniBSE``, atomic populations are evaluated directly in the active molecular orbital subspace:
+In standard implementations, computing :math:`\rho_h` and :math:`\rho_e` requires forming full :math:`N_{\mathrm{ao}} \times N_{\mathrm{ao}}` AO density matrices. In ``QDEX``, atomic populations are evaluated directly in the active molecular orbital subspace:
 
 .. math::
 
@@ -61,7 +61,7 @@ This vectorized reduction avoids large intermediate arrays and runs in milliseco
 2. Rigorous Plasser-Dreuw Spatial Descriptors
 ---------------------------------------------
 
-From the normalized atomic hole populations :math:`q_A^h` and electron populations :math:`q_A^e`, ``miniBSE`` computes eight rigorous physical metrics:
+From the normalized atomic hole populations :math:`q_A^h` and electron populations :math:`q_A^e`, ``QDEX`` computes eight rigorous physical metrics:
 
 1. Spatial Centroids (:math:`\langle \mathbf{r}_h \rangle, \langle \mathbf{r}_e \rangle`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -185,7 +185,7 @@ In most semiconductor quantum dots, **a single NTO pair accounts for :math:`> 85
 NTO Compactness Metrics
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-``miniBSE`` outputs comprehensive NTO statistics:
+``QDEX`` outputs comprehensive NTO statistics:
 * **Lead Weight (:math:`\lambda_1^2`)**: Fraction of the transition described by the dominant NTO pair.
 * **NTO Participation Ratio**: :math:`\mathrm{PR}_{\mathrm{NTO}} = \frac{1}{\sum_k \lambda_k^4}`.
 * **NTO Shannon Entropy**: :math:`S_{\mathrm{NTO}} = -\sum_k \lambda_k^2 \ln(\lambda_k^2)`.
@@ -196,7 +196,7 @@ NTO Compactness Metrics
 4. 3D Volumetric Visualization (.cube Files)
 --------------------------------------------
 
-``miniBSE`` generates 3D volumetric Gaussian ``.cube`` files for direct visualization in VMD, PyMOL, or ChimeraX:
+``QDEX`` generates 3D volumetric Gaussian ``.cube`` files for direct visualization in VMD, PyMOL, or ChimeraX:
 
 * **Hole Density**: ``exciton_S1_hole.cube``: :math:`\rho_h(\mathbf{r}) = \sum_{ia} |X_{ia}^1|^2 |\phi_i(\mathbf{r})|^2`
 * **Electron Density**: ``exciton_S1_elec.cube``: :math:`\rho_e(\mathbf{r}) = \sum_{ia} |X_{ia}^1|^2 |\phi_a(\mathbf{r})|^2`
@@ -209,7 +209,7 @@ Positive values in the difference cube indicate regions of net electron accumula
 5. Interactive Plotly 6-Panel Dashboard
 ---------------------------------------
 
-When running with ``--plot``, ``miniBSE`` exports a self-contained, interactive HTML dashboard (``exciton_analysis.html``) featuring six coordinated subplots:
+When running with ``--plot``, ``QDEX`` exports a self-contained, interactive HTML dashboard (``exciton_analysis.html``) featuring six coordinated subplots:
 
 1. **Participation Ratio (PR)** vs. Energy (identifying multiconfigurational states).
 2. **True Exciton Size (:math:`d_{eh}`)** vs. Energy (characterizing Bohr radius scaling).
