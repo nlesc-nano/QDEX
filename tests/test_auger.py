@@ -115,13 +115,15 @@ class TestAugerRecombination(unittest.TestCase):
         self.assertGreaterEqual(res.rate_biexciton_fs, 0.0)
         self.assertEqual(res.fundamental_gap_ev, 3.0)
 
-        # Biexciton rate = 2 * eeh + 2 * hhe
-        self.assertAlmostEqual(res.rate_biexciton_fs, 2.0 * res.rate_eeh_fs + 2.0 * res.rate_hhe_fs, places=12)
+        # Biexciton rate = 4 * eeh + 4 * hhe (universal statistical scaling: 2e x 2h = 4 channels)
+        self.assertAlmostEqual(res.rate_biexciton_fs, 4.0 * res.rate_eeh_fs + 4.0 * res.rate_hhe_fs, places=12)
+        self.assertAlmostEqual(res.rate_biexciton_ns, 4.0 * res.rate_eeh_ns + 4.0 * res.rate_hhe_ns, places=6)
 
         # Summary table formatting check
         table_str = res.summary_table()
         self.assertIn("AUGER RECOMBINATION REPORT", table_str)
         self.assertIn("Biexciton (XX)", table_str)
+        self.assertIn("ns", table_str)
 
     def test_spinor_auger_rates(self):
         """Test calculate_auger_rates with two-component spinors."""

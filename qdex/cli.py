@@ -503,6 +503,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             spinor=is_spinor,
             U_spinor_alpha=U_spinor_alpha,
             U_spinor_beta=U_spinor_beta,
+            eps_eff=getattr(args, "auger_eps_eff", None),
             verbose=True,
         )
 
@@ -559,6 +560,8 @@ def _apply_config(args, config_data):
                 setattr(args, "auger_states", int(parameters["n_initial_states"]))
             if "lineshape" in parameters:
                 setattr(args, "auger_lineshape", str(parameters["lineshape"]))
+            if "eps_eff" in parameters and parameters["eps_eff"] is not None:
+                setattr(args, "auger_eps_eff", float(parameters["eps_eff"]))
             continue
 
         if isinstance(parameters, dict):
@@ -688,6 +691,7 @@ def main():
     parser.add_argument("--auger-channel", choices=["all", "eeh", "hhe"], default="all", help="Auger channel to compute: all, eeh, or hhe (default: all).")
     parser.add_argument("--auger-states", type=int, default=1, help="Number of band-edge frontier states to consider as initial carriers (default: 1).")
     parser.add_argument("--auger-lineshape", choices=["gaussian", "fcwd"], default="gaussian", help="Energy conservation line shape for Auger rates (default: gaussian).")
+    parser.add_argument("--auger-eps-eff", type=float, default=None, help="Effective dielectric constant for dynamic screening at energy transfer hbar*omega=Eg (e.g. 1.8; default: Resta eps_inf).")
 
     # Fuzzy arguments
     parser.add_argument("--run_fuzzy", action="store_true")
