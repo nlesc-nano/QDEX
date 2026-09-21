@@ -262,6 +262,7 @@ def calculate_auger_rates(
     U_spinor_beta: Optional[np.ndarray] = None,
     lambda_reorg_ev: Optional[float] = None,
     temperature_k: float = 300.0,
+    eps_eff: Optional[float] = None,
     verbose: bool = True,
 ) -> AugerResult:
     """
@@ -310,6 +311,8 @@ def calculate_auger_rates(
         Nuclear reorganization energy in eV for FCWD line shape.
     temperature_k : float, optional
         Temperature in Kelvin (default: 300 K).
+    eps_eff : float, optional
+        Effective dielectric constant for dynamic screening scaling.
     verbose : bool, optional
         Print diagnostic progress and summary table.
 
@@ -332,6 +335,16 @@ def calculate_auger_rates(
             material_name=material_name or "DEFAULT",
             eps_out=eps_out,
         )
+
+    if eps_eff is not None and eps_eff > 0:
+        from qdex.hardness import MATERIAL_DB
+        m_name = material_name.upper() if material_name else "DEFAULT"
+        eps_inf = MATERIAL_DB.get(m_name, MATERIAL_DB["DEFAULT"])[0]
+        if eps_inf > 0:
+            scale_factor = eps_inf / eps_eff
+            W_resta = W_resta * scale_factor
+            if verbose:
+                print(f"  [Auger: Dynamic Screening] Scaled kernel from eps_inf={eps_inf:.2f} to eps_eff={eps_eff:.2f} (rate factor x{scale_factor**2:.2f})")
 
     # 2. Identify Active Frontier States
     lumo_idx = homo_idx + 1
@@ -438,8 +451,8 @@ def calculate_auger_rates(
                         m_sq_vec = np.abs(m_eff_vec) ** 2
                     else:
                         # Spatial closed-shell spin statistics for 2e in conduction edge:
-                        # 1 channel with parallel spins (V_dir - V_exch) and 1 with anti-parallel (V_dir)
-                        m_sq_vec = 0.5 * ((v_dir_vec - v_exch_vec) ** 2 + v_dir_vec ** 2)
+                        # Sum of 1 channel with parallel spins (V_dir - V_exch) and 1 with anti-parallel (V_dir)
+                        m_sq_vec = (v_dir_vec - v_exch_vec) ** 2 + v_dir_vec ** 2
 
                     for idx, ep in enumerate(cand_e_prime):
                         dE_mismatch = (eps[ep] - eps[e1]) - dE_recomb
@@ -524,7 +537,7 @@ def calculate_auger_rates(
                         m_eff_vec = v_dir_vec - v_exch_vec
                         m_sq_vec = np.abs(m_eff_vec) ** 2
                     else:
-                        m_sq_vec = 0.5 * ((v_dir_vec - v_exch_vec) ** 2 + v_dir_vec ** 2)
+                        m_sq_vec = (v_dir_vec - v_exch_vec) ** 2 + v_dir_vec ** 2
 
                     for idx, hp in enumerate(cand_h_prime):
                         dE_mismatch = (eps[h1] - eps[hp]) - dE_recomb
@@ -554,8 +567,9 @@ def calculate_auger_rates(
     hhe_details.sort(key=lambda d: d.rate_contrib_fs, reverse=True)
 
     # 4. Total Biexciton Auger Rate & Lifetimes
-    # In a neutral biexciton (2e + 2h): Gamma_XX = 2 * Gamma_eeh + 2 * Gamma_hhe
-    rate_xx_fs = 2.0 * rate_eeh_fs + 2.0 * rate_hhe_fs
+    # In a neutral biexciton (2e + 2h): 2 electrons x 2 holes = 4 independent recombination channels
+    # Universal multiexciton statistical scaling: Gamma_XX = 4 * Gamma_eeh + 4 * Gamma_hhe (tau_X^- = 4 * tau_XX)
+    rate_xx_fs = 4.0 * rate_eeh_fs + 4.0 * rate_hhe_fs
 
     rate_eeh_ps = rate_eeh_fs * 1.0e3
     rate_hhe_ps = rate_hhe_fs * 1.0e3
