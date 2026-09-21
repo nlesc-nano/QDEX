@@ -718,6 +718,9 @@ def main():
     parser.add_argument("--namd-run", action="store_true", help="Run NAMD carrier cooling simulation from precomputed data.")
     parser.add_argument("--namd-compact", type=str, nargs="?", const="default", default=None, help="Compact precomputed NAMD directory (compresses and removes redundant arrays).")
     parser.add_argument("--namd-soc", action="store_true", help="Enable Spin-Orbit Coupling (SOC) for NAMD precomputation.")
+    parser.add_argument("--namd-ta", action="store_true", help="Compute ultrafast pump-probe transient absorption (TA) spectra from NAMD dynamics.")
+    parser.add_argument("--namd-ta-sigma", type=float, default=0.03, help="Gaussian line broadening in eV for transient absorption probe spectra (default: 0.03).")
+    parser.add_argument("--namd-ta-plot", action="store_true", help="Generate 2D false-color TA map and 1S bleach rise kinetics plot.")
 
     args = parser.parse_args()
 
@@ -733,6 +736,14 @@ def main():
         config_data.setdefault("physics", {})["soc"] = True
     if getattr(args, "gth_file", None):
         config_data.setdefault("system", {})["gth_file"] = args.gth_file
+
+    if getattr(args, "namd_ta", False):
+        ta_dict = config_data.setdefault("namd", {}).setdefault("transient_absorption", {})
+        ta_dict["run"] = True
+        if getattr(args, "namd_ta_sigma", None) is not None:
+            ta_dict["sigma"] = args.namd_ta_sigma
+        if getattr(args, "namd_ta_plot", False):
+            ta_dict["plot"] = True
 
     if getattr(args, "namd_compact", None) is not None:
         from qdex.namd import compact_precomputed_data
