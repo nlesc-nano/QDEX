@@ -508,9 +508,10 @@ def analyze_and_plot_namd_results(
         if np.isfinite(plqy):
             print(f"  Predicted PL Quantum Yield   : {plqy:.1f} %")
         if "tau_auger_ps" in recombination_info and np.isfinite(recombination_info["tau_auger_ps"]):
-            tau_aug = recombination_info["tau_auger_ps"]
-            k_aug_s = recombination_info.get("k_auger_s", 1e12 / max(tau_aug, 1e-12))
-            print(f"  Biexciton Auger Lifetime     : {tau_aug:.2f} ps (k_Auger = {k_aug_s:.2e} s^-1)")
+            tau_aug_ps = recombination_info["tau_auger_ps"]
+            tau_aug_ns = tau_aug_ps * 1.0e-3
+            k_aug_s = recombination_info.get("k_auger_s", 1e12 / max(tau_aug_ps, 1e-12))
+            print(f"  Biexciton Auger Lifetime     : {tau_aug_ns:.4f} ns ({tau_aug_ps:.2f} ps, k_Auger = {k_aug_s:.2e} s^-1)")
 
         if bg_data is not None and "recomb_params" in bg_data:
             rp = bg_data["recomb_params"]
