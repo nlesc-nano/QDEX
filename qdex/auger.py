@@ -48,17 +48,25 @@ class AugerResult:
     rate_hhe_fs: float = 0.0
     rate_biexciton_fs: float = 0.0
 
-    # Rates in ps^-1
+    # Rates in ps^-1 and ns^-1
     rate_eeh_ps: float = 0.0
     rate_hhe_ps: float = 0.0
     rate_biexciton_ps: float = 0.0
+
+    rate_eeh_ns: float = 0.0
+    rate_hhe_ns: float = 0.0
+    rate_biexciton_ns: float = 0.0
 
     # Rates in s^-1
     rate_eeh_s: float = 0.0
     rate_hhe_s: float = 0.0
     rate_biexciton_s: float = 0.0
 
-    # Lifetimes in ps
+    # Lifetimes in ns and ps
+    tau_eeh_ns: float = np.inf
+    tau_hhe_ns: float = np.inf
+    tau_biexciton_ns: float = np.inf
+
     tau_eeh_ps: float = np.inf
     tau_hhe_ps: float = np.inf
     tau_biexciton_ps: float = np.inf
@@ -74,44 +82,46 @@ class AugerResult:
     computation_time_s: float = 0.0
 
     def summary_table(self) -> str:
-        """Returns a formatted ASCII summary of the Auger recombination results."""
+        """Returns a formatted ASCII summary of the Auger recombination results in ns and ps."""
         lines = [
-            "================================================================================",
-            "                     QDEX AUGER RECOMBINATION REPORT                           ",
-            "================================================================================",
+            "=======================================================================================================",
+            "                                   QDEX AUGER RECOMBINATION REPORT                                     ",
+            "=======================================================================================================",
             f"  Fundamental Bandgap (E_g)       : {self.fundamental_gap_ev:8.4f} eV",
             f"  Energy Conservation Line Shape  : {self.broadening_mode.upper()} (sigma = {self.sigma_ev*1e3:.1f} meV)",
             f"  Evaluated Active Pathways       : {self.n_eeh_pathways} (eeh) | {self.n_hhe_pathways} (hhe)",
-            "--------------------------------------------------------------------------------",
-            "  Channel                 Rate (fs^-1)        Rate (ps^-1)         Lifetime (ps)",
-            "--------------------------------------------------------------------------------",
-            f"  Negative Trion (eeh)   {self.rate_eeh_fs:14.4e}    {self.rate_eeh_ps:14.4e}    {self.tau_eeh_ps:14.3f} ps",
-            f"  Positive Trion (hhe)   {self.rate_hhe_fs:14.4e}    {self.rate_hhe_ps:14.4e}    {self.tau_hhe_ps:14.3f} ps",
-            f"  Biexciton (XX)         {self.rate_biexciton_fs:14.4e}    {self.rate_biexciton_ps:14.4e}    {self.tau_biexciton_ps:14.3f} ps",
-            "--------------------------------------------------------------------------------",
+            "-------------------------------------------------------------------------------------------------------",
+            "  Channel                 Rate (s^-1)        Rate (ns^-1)        Lifetime (ns)          Lifetime (ps)  ",
+            "-------------------------------------------------------------------------------------------------------",
+            f"  Negative Trion (eeh)   {self.rate_eeh_s:14.4e}    {self.rate_eeh_ns:14.4e}    {self.tau_eeh_ns:14.4f} ns    {self.tau_eeh_ps:12.2f} ps",
+            f"  Positive Trion (hhe)   {self.rate_hhe_s:14.4e}    {self.rate_hhe_ns:14.4e}    {self.tau_hhe_ns:14.4f} ns    {self.tau_hhe_ps:12.2f} ps",
+            f"  Biexciton (XX)         {self.rate_biexciton_s:14.4e}    {self.rate_biexciton_ns:14.4e}    {self.tau_biexciton_ns:14.4f} ns    {self.tau_biexciton_ps:12.2f} ps",
+            "-------------------------------------------------------------------------------------------------------",
         ]
 
         if self.dominant_eeh:
             lines.append("  Dominant eeh Pathways (Spectator e1 + [e2 -> h] -> e'):")
-            lines.append("    e1   e2    h ->   e' |  Delta E_recomb |  E_mismatch |   |M_eff|   |  tau_path (ps)")
+            lines.append("    e1   e2    h ->   e' |  Delta E_recomb |  E_mismatch |   |M_eff|   |  tau_path (ns) [ps]")
             for d in self.dominant_eeh[:5]:
-                tau_path = 1.0 / (d.rate_contrib_fs * 1e3) if d.rate_contrib_fs > 0 else np.inf
+                tau_path_ps = 1.0 / (d.rate_contrib_fs * 1e3) if d.rate_contrib_fs > 0 else np.inf
+                tau_path_ns = tau_path_ps * 1e-3
                 lines.append(
                     f"   {d.carrier_e1:3d}  {d.carrier_recomb1:3d}  {d.carrier_recomb2:3d} -> {d.continuum_state:4d} | "
-                    f"   {d.energy_recomb_ev:7.3f} eV  |  {d.energy_mismatch_ev:8.4f} eV | {d.m_eff_ev*1e3:7.2f} meV | {tau_path:10.2f} ps"
+                    f"   {d.energy_recomb_ev:7.3f} eV  |  {d.energy_mismatch_ev:8.4f} eV | {d.m_eff_ev*1e3:7.2f} meV | {tau_path_ns:9.4f} ns [{tau_path_ps:8.1f} ps]"
                 )
 
         if self.dominant_hhe:
             lines.append("  Dominant hhe Pathways (Spectator h1 + [h2 -> e] -> h'):")
-            lines.append("    h1   h2    e ->   h' |  Delta E_recomb |  E_mismatch |   |M_eff|   |  tau_path (ps)")
+            lines.append("    h1   h2    e ->   h' |  Delta E_recomb |  E_mismatch |   |M_eff|   |  tau_path (ns) [ps]")
             for d in self.dominant_hhe[:5]:
-                tau_path = 1.0 / (d.rate_contrib_fs * 1e3) if d.rate_contrib_fs > 0 else np.inf
+                tau_path_ps = 1.0 / (d.rate_contrib_fs * 1e3) if d.rate_contrib_fs > 0 else np.inf
+                tau_path_ns = tau_path_ps * 1e-3
                 lines.append(
                     f"   {d.carrier_e1:3d}  {d.carrier_recomb1:3d}  {d.carrier_recomb2:3d} -> {d.continuum_state:4d} | "
-                    f"   {d.energy_recomb_ev:7.3f} eV  |  {d.energy_mismatch_ev:8.4f} eV | {d.m_eff_ev*1e3:7.2f} meV | {tau_path:10.2f} ps"
+                    f"   {d.energy_recomb_ev:7.3f} eV  |  {d.energy_mismatch_ev:8.4f} eV | {d.m_eff_ev*1e3:7.2f} meV | {tau_path_ns:9.4f} ns [{tau_path_ps:8.1f} ps]"
                 )
 
-        lines.append("================================================================================")
+        lines.append("=======================================================================================================")
         return "\n".join(lines)
 
 
@@ -555,9 +565,17 @@ def calculate_auger_rates(
     rate_hhe_s = rate_hhe_fs * 1.0e15
     rate_xx_s = rate_xx_fs * 1.0e15
 
+    rate_eeh_ns = rate_eeh_s * 1.0e-9
+    rate_hhe_ns = rate_hhe_s * 1.0e-9
+    rate_xx_ns = rate_xx_s * 1.0e-9
+
     tau_eeh_ps = 1.0 / rate_eeh_ps if rate_eeh_ps > 0.0 else np.inf
     tau_hhe_ps = 1.0 / rate_hhe_ps if rate_hhe_ps > 0.0 else np.inf
     tau_xx_ps = 1.0 / rate_xx_ps if rate_xx_ps > 0.0 else np.inf
+
+    tau_eeh_ns = 1.0 / rate_eeh_ns if rate_eeh_ns > 0.0 else np.inf
+    tau_hhe_ns = 1.0 / rate_hhe_ns if rate_hhe_ns > 0.0 else np.inf
+    tau_xx_ns = 1.0 / rate_xx_ns if rate_xx_ns > 0.0 else np.inf
 
     res = AugerResult(
         rate_eeh_fs=rate_eeh_fs,
@@ -566,9 +584,15 @@ def calculate_auger_rates(
         rate_eeh_ps=rate_eeh_ps,
         rate_hhe_ps=rate_hhe_ps,
         rate_biexciton_ps=rate_xx_ps,
+        rate_eeh_ns=rate_eeh_ns,
+        rate_hhe_ns=rate_hhe_ns,
+        rate_biexciton_ns=rate_xx_ns,
         rate_eeh_s=rate_eeh_s,
         rate_hhe_s=rate_hhe_s,
         rate_biexciton_s=rate_xx_s,
+        tau_eeh_ns=tau_eeh_ns,
+        tau_hhe_ns=tau_hhe_ns,
+        tau_biexciton_ns=tau_xx_ns,
         tau_eeh_ps=tau_eeh_ps,
         tau_hhe_ps=tau_hhe_ps,
         tau_biexciton_ps=tau_xx_ps,
@@ -687,17 +711,33 @@ def compute_trajectory_auger_rates(
     std_xx_ps = float(np.std(rates_xx_ps))
     mean_tau_xx_ps = float(1.0 / mean_xx_ps) if mean_xx_ps > 0 else np.inf
 
+    mean_xx_ns = mean_xx_ps * 1.0e3
+    std_xx_ns = std_xx_ps * 1.0e3
+    mean_tau_xx_ns = mean_tau_xx_ps * 1.0e-3
+
+    mean_eeh_ps = float(np.mean(rates_eeh_ps))
+    mean_hhe_ps = float(np.mean(rates_hhe_ps))
+    mean_tau_eeh_ns = (1.0 / (mean_eeh_ps * 1.0e3)) if mean_eeh_ps > 0 else np.inf
+    mean_tau_hhe_ns = (1.0 / (mean_hhe_ps * 1.0e3)) if mean_hhe_ps > 0 else np.inf
+
     summary = {
         "mean_rate_xx_ps": mean_xx_ps,
         "std_rate_xx_ps": std_xx_ps,
         "mean_tau_xx_ps": mean_tau_xx_ps,
-        "mean_rate_eeh_ps": float(np.mean(rates_eeh_ps)),
-        "mean_rate_hhe_ps": float(np.mean(rates_hhe_ps)),
+        "mean_rate_xx_ns": mean_xx_ns,
+        "std_rate_xx_ns": std_xx_ns,
+        "mean_tau_xx_ns": mean_tau_xx_ns,
+        "mean_tau_eeh_ns": mean_tau_eeh_ns,
+        "mean_tau_hhe_ns": mean_tau_hhe_ns,
+        "mean_rate_eeh_ps": mean_eeh_ps,
+        "mean_rate_hhe_ps": mean_hhe_ps,
         "rates_xx_ps": rates_xx_ps,
     }
 
     if verbose:
-        print(f"  Trajectory-Averaged Biexciton Auger Rate : {mean_xx_ps:.3e} +/- {std_xx_ps:.3e} ps^-1")
-        print(f"  Trajectory-Averaged Biexciton Lifetime  : {mean_tau_xx_ps:.2f} ps")
+        print(f"  Trajectory-Averaged Biexciton Auger Rate : {mean_xx_ns:.3e} +/- {std_xx_ns:.3e} ns^-1 ({mean_xx_ps:.3e} ps^-1)")
+        print(f"  Trajectory-Averaged Biexciton Lifetime  : {mean_tau_xx_ns:.4f} ns ({mean_tau_xx_ps:.2f} ps)")
+        print(f"  Trajectory-Averaged eeh Lifetime        : {mean_tau_eeh_ns:.4f} ns ({mean_tau_eeh_ns*1e3:.2f} ps)")
+        print(f"  Trajectory-Averaged hhe Lifetime        : {mean_tau_hhe_ns:.4f} ns ({mean_tau_hhe_ns*1e3:.2f} ps)")
 
     return summary
