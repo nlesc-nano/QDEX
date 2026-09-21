@@ -191,7 +191,11 @@ class ExcitonSolver:
                   excitation_mode="bse"):
 
         self.C = C
+        self.eps = eps
+        self.occ = occ
         self.overlap = overlap
+        self.atom_symbols = atom_symbols
+        self.coords = atom_coords
         self.atom_ao_ranges = atom_ao_ranges
         self.n_occ = n_occ
         self.n_virt = n_virt
