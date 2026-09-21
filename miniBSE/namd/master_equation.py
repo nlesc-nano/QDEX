@@ -4,13 +4,17 @@ from miniBSE.namd.integrator import HBAR_EV_FS, KB_EV
 
 def compute_rate_matrix(E_vec, d_mat, temp_k=300.0, tau_dec_fs=15.0):
     """
-    Computes the transition rate matrix R for the Pauli Master Equation:
+    Computes the transition rate matrix R for the Pauli Master Equation::
+
       k_{I -> J} = 2 * |d_IJ|^2 * [tau_dec / (1 + (dE * tau_dec / hbar)^2)] * B_{IJ}
+
     where B_{IJ} = min(1, exp(-max(0, E_J - E_I) / (kB * T))) enforces detailed balance.
     
-    The rate matrix R satisfies:
+    The rate matrix R satisfies::
+
       dP_I / dt = sum_J (k_{J -> I} * P_J - k_{I -> J} * P_I)
       dP / dt = R @ P
+
     where R[I, J] = k_{J -> I} for I != J, and R[I, I] = - sum_{J != I} k_{I -> J}.
     """
     n_states = len(E_vec)
@@ -44,7 +48,8 @@ def compute_rate_matrix(E_vec, d_mat, temp_k=300.0, tau_dec_fs=15.0):
 
 def run_master_equation_step(P_current, R_matrix, dt_fs):
     """
-    Propagates population vector P over dt_fs using matrix exponential:
+    Propagates population vector P over dt_fs using matrix exponential::
+
       P(t + dt) = expm(R * dt) @ P(t)
     """
     prop = expm(R_matrix * dt_fs)
@@ -74,7 +79,7 @@ def propagate_pme_tensor(
     """
     Propagates exciton population matrix P_mat of shape (n_occ, n_virt) via the Pauli Master Equation.
     Fully vectorized using BLAS matrix operations: runs in ~0.2 s per step.
-    Supports on-the-fly state-dependent EDC decoherence: tau_kj = hbar / |dE_kj| * (1 + C / E_kin).
+    Supports on-the-fly state-dependent EDC decoherence: ``tau_kj = hbar / |dE_kj| * (1 + C / E_kin)``.
     """
     n_occ, n_virt = P_mat.shape
     dt = dt_fs / n_substeps

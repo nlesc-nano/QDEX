@@ -139,9 +139,11 @@ def get_refractive_index(material_name):
 def compute_radiative_rates(E_ev, f_osc, refractive_index=2.0):
     """
     Computes Einstein A spontaneous emission rates (s^-1 and fs^-1) from exciton energies (eV)
-    and oscillator strengths f_osc in a dielectric medium of refractive index n_r:
+    and oscillator strengths f_osc in a dielectric medium of refractive index n_r::
+
       k_rad = (2 * n_r * e^4 * E^2 * f) / (4 * pi * eps_0 * m_e * c^3 * hbar^2)
             = C_rad * n_r * E^2 * f
+
     where C_rad = 4.3391988e7 s^-1 eV^-2 (4.3391988e-8 fs^-1 eV^-2).
     """
     C_RAD_S = 4.3391988e7  # s^-1 * eV^-2
@@ -154,8 +156,10 @@ def compute_radiative_rates(E_ev, f_osc, refractive_index=2.0):
 
 def compute_energy_gap_law_rate(E_gap_ev, E_LO_ev=0.018, S_hr=1.0, A_nr=1e13):
     """
-    Computes multi-phonon non-radiative recombination rate via the Englman-Jortner Energy Gap Law:
+    Computes multi-phonon non-radiative recombination rate via the Englman-Jortner Energy Gap Law::
+
       k_nr = A_nr * exp(-gamma * (E_gap / E_LO))
+
     where gamma = ln(E_gap / (S * E_LO)) - 1.
     """
     if E_gap_ev <= 0.0 or E_LO_ev <= 0.0:
