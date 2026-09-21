@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from miniBSE.hardness import (
+from qdex.hardness import (
     MATERIAL_DB,
     build_resta_mnok,
     estimate_gw_qp_gap,
@@ -72,7 +72,7 @@ class GeometryAndQPModelTests(unittest.TestCase):
             "radius_definition_version": "test",
             "surface_offset_ang": 0.0,
         }
-        with patch("miniBSE.hardness.get_cluster_size_metrics", return_value=metrics):
+        with patch("qdex.hardness.get_cluster_size_metrics", return_value=metrics):
             return estimate_gw_qp_gap(
                 self.coords, self.symbols, "CDSE", eps_out=eps_out, return_details=True
             )
@@ -136,7 +136,7 @@ class RecombinationModelTests(unittest.TestCase):
         self.assertAlmostEqual(k_s2 / k_s, 4.0, places=5)
 
     def test_band_edge_arrival_times(self):
-        from miniBSE.namd.analysis import compute_band_edge_arrival_times
+        from qdex.namd.analysis import compute_band_edge_arrival_times
         times = np.linspace(0, 1000, 1001)
         tau = 100.0
         # Ideal exponential decay: excess(t) = 1.0 * exp(-t / 100)

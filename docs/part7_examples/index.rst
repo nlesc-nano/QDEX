@@ -1,7 +1,7 @@
 Part 7: Step-by-Step Tutorials & Workflows
 ===========================================
 
-This tutorial series walks you through the entire ``miniBSE`` workflow using a representative :math:`\text{CsPbBr}_3` perovskite quantum dot. The tutorials mirror the exact progressive curriculum from Parts 1 through 6:
+This tutorial series walks you through the entire ``QDEX`` workflow using a representative :math:`\text{CsPbBr}_3` perovskite quantum dot. The tutorials mirror the exact progressive curriculum from Parts 1 through 6:
 
 1. Ground-state electronic structure (PDOS, IPR, COOP, Fuzzy Bands, Cube orbitals).
 2. Relativistic Spin-Orbit Coupling (SOC).
@@ -60,7 +60,7 @@ Run the calculation from the terminal:
 
 .. code-block:: bash
 
-   minibse --config tutorial1_ground_state.yaml
+   qdex --config tutorial1_ground_state.yaml
 
 Generated Output Files
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -110,7 +110,7 @@ Execution
 
 .. code-block:: bash
 
-   minibse --config tutorial2_soc.yaml
+   qdex --config tutorial2_soc.yaml
 
 What to Observe
 ~~~~~~~~~~~~~~~
@@ -156,7 +156,7 @@ Execution
 
 .. code-block:: bash
 
-   minibse --config tutorial3_gw.yaml
+   qdex --config tutorial3_gw.yaml
 
 Key Output
 ~~~~~~~~~~
@@ -188,25 +188,25 @@ Compare via CLI
    
    .. code-block:: bash
 
-      minibse --config tutorial3_gw.yaml --excitation-mode independent_dft --nroots 10
+      qdex --config tutorial3_gw.yaml --excitation-mode independent_dft --nroots 10
 
 2. **Quasiparticle Transitions (Independent QP)**:
 
    .. code-block:: bash
 
-      minibse --config tutorial3_gw.yaml --excitation-mode independent_qp --nroots 10
+      qdex --config tutorial3_gw.yaml --excitation-mode independent_qp --nroots 10
 
 3. **Diagonal BSE**:
 
    .. code-block:: bash
 
-      minibse --config tutorial3_gw.yaml --excitation-mode diagonal_bse --kernel resta --nroots 10
+      qdex --config tutorial3_gw.yaml --excitation-mode diagonal_bse --kernel resta --nroots 10
 
 4. **Full BSE (sTDA with Davidson Solver)**:
 
    .. code-block:: bash
 
-      minibse --config tutorial3_gw.yaml --excitation-mode bse --kernel resta --nroots 10
+      qdex --config tutorial3_gw.yaml --excitation-mode bse --kernel resta --nroots 10
 
 Comparison Summary
 ~~~~~~~~~~~~~~~~~~
@@ -261,7 +261,7 @@ Execution
 
 .. code-block:: bash
 
-   minibse --config tutorial5_analysis.yaml
+   qdex --config tutorial5_analysis.yaml
 
 Analysis Results
 ~~~~~~~~~~~~~~~~
@@ -326,7 +326,7 @@ Step 1: Trajectory Precomputation
 
 .. code-block:: bash
 
-   minibse --config tutorial6_namd.yaml --namd-precompute
+   qdex --config tutorial6_namd.yaml --namd-precompute
 
 This step computes cross-frame overlaps :math:`S_{IJ}(t, t+\Delta t)`, applies gauge phase corrections, and tracks trivial state crossings via the Hungarian algorithm.
 
@@ -335,7 +335,7 @@ Step 2: Carrier Cooling Simulation
 
 .. code-block:: bash
 
-   minibse --config tutorial6_namd.yaml --namd-run
+   qdex --config tutorial6_namd.yaml --namd-run
 
 Results & Visualizations
 ~~~~~~~~~~~~~~~~~~~~~~~~

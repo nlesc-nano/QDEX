@@ -3,8 +3,8 @@ import numpy as np
 import os
 import shutil
 import tempfile
-from miniBSE.pdos_coop import compute_pdos_and_coop, export_pdos_coop_data
-from miniBSE.fuzzy_bands import _matmul_real_matrix
+from qdex.pdos_coop import compute_pdos_and_coop, export_pdos_coop_data
+from qdex.fuzzy_bands import _matmul_real_matrix
 
 class TestPdosCoop(unittest.TestCase):
     def setUp(self):

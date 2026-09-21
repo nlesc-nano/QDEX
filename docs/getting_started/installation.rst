@@ -1,7 +1,7 @@
 Installation Guide
 ==================
 
-Because `miniBSE` relies on C++ extensions compiled against `Libint2` and `Eigen3`, **Conda / Micromamba** is the recommended installation method.
+Because `QDEX` relies on C++ extensions compiled against `Libint2` and `Eigen3`, **Conda / Micromamba** is the recommended installation method.
 
 Method 1: Conda / Micromamba (Recommended)
 ------------------------------------------
@@ -22,7 +22,7 @@ Our `environment.yml` handles the installation of C++ compilers, `CMake`, `Eigen
       micromamba env create -f environment.yml
       micromamba activate minibse_env
 
-   *(Note: The environment file automatically installs `miniBSE` in editable mode via pip).*
+   *(Note: The environment file automatically installs `QDEX` in editable mode via pip).*
 
 Method 2: Manual Pip Installation
 ---------------------------------
@@ -46,11 +46,13 @@ If you already have `CMake` (>= 3.16), a C++17 compiler, `Eigen3`, and `Libint2`
 Verifying the Installation
 --------------------------
 
-To verify that `miniBSE` is correctly installed, run the CLI help command:
+To verify that `QDEX` is correctly installed, run the CLI help command:
 
 .. code-block:: bash
 
-   minibse --help
+   qdex --help
+
+*(Note: The legacy command `minibse --help` is also retained as a backward-compatible alias).*
 
 You can also run the built-in test suite:
 

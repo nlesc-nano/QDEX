@@ -1,11 +1,11 @@
-.. miniBSE documentation master file
+.. QDEX documentation master file
 
-Welcome to miniBSE's Documentation!
-===================================
+Welcome to QDEX's Documentation!
+================================
 
-**miniBSE** is a high-performance, lightweight post-DFT exciton solver and non-adiabatic molecular dynamics (NAMD) engine designed for calculating, analyzing, and propagating the excited states of molecules and semiconductor nanoclusters.
+**QDEX** (*pronounced "qiu-di-ex"*, :math:`/\text{kjuː-diː-ɛks}/`, formerly `miniBSE`) is a high-performance, lightweight post-DFT exciton solver and non-adiabatic molecular dynamics (NAMD) engine designed for calculating, analyzing, and propagating the excited states of molecules and semiconductor nanoclusters.
 
-By combining the flexibility of a Python interface with a fast C++ backend powered by `Libint2` and `Eigen3`, `miniBSE` provides researchers with an end-to-end framework from ground-state Kohn-Sham orbitals to carrier cooling dynamics and photoluminescence quantum yields.
+By combining the flexibility of a Python interface with a fast C++ backend powered by `Libint2` and `Eigen3`, `QDEX` provides researchers with an end-to-end framework from ground-state Kohn-Sham orbitals to carrier cooling dynamics and photoluminescence quantum yields.
 
 Pedagogical Structure (From Easiest to Most Complex)
 ----------------------------------------------------

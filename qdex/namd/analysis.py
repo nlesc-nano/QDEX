@@ -36,7 +36,7 @@ def compute_band_edge_arrival_times(times, values, tau, temp_k=300.0):
       - Actual trajectory time to dissipate 99% of initial excess: first t where Delta E(t) <= 0.01 * Delta E(0).
       - Actual trajectory time to reach thermal energy threshold: first t where Delta E(t) <= k_B * T.
     """
-    from miniBSE.namd.integrator import KB_EV
+    from qdex.namd.integrator import KB_EV
 
     times_arr = np.asarray(times, dtype=np.float64)
     val_arr = np.asarray(values, dtype=np.float64)
@@ -181,7 +181,7 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
     5. Pure electronic dephasing time tau_dec where D(tau_dec) = 1/e.
     """
     import glob
-    from miniBSE.namd.integrator import HBAR_EV_FS
+    from qdex.namd.integrator import HBAR_EV_FS
 
     step_files = sorted(glob.glob(os.path.join(precompute_dir, "step_*.npz")))
     lowest_exc_ens = []
@@ -275,7 +275,7 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
     else:
         dominant_freq_cm1 = 150.0
 
-    from miniBSE.hardness import extract_recombination_parameters_from_namd
+    from qdex.hardness import extract_recombination_parameters_from_namd
     recomb_params = extract_recombination_parameters_from_namd(
         var_E_gap_ev2=var_g,
         dominant_freq_cm1=dominant_freq_cm1,
@@ -510,8 +510,8 @@ def analyze_and_plot_namd_results(
 
         if bg_data is not None and "recomb_params" in bg_data:
             rp = bg_data["recomb_params"]
-            from miniBSE.hardness import compute_energy_gap_law_rate, compute_fcwd_rate
-            from miniBSE.namd.integrator import HBAR_EV_FS
+            from qdex.hardness import compute_energy_gap_law_rate, compute_fcwd_rate
+            from qdex.namd.integrator import HBAR_EV_FS
             if mean_nac_fs is not None and rp.get("V_el_ev") is None:
                 rp["V_el_ev"] = float(HBAR_EV_FS * mean_nac_fs)
 
@@ -1069,7 +1069,7 @@ def generate_interactive_plotly_dashboard(
     fig.update_layout(
         height=880,
         width=1500,
-        title_text="<b>miniBSE — NAMD Hot Carrier Cooling & Exciton Relaxation (CsPbBr3)</b>",
+        title_text="<b>QDEX — NAMD Hot Carrier Cooling & Exciton Relaxation (CsPbBr3)</b>",
         title_font=dict(size=18, family="sans-serif"),
         template="plotly_white",
         hovermode="closest",

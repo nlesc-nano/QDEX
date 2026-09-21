@@ -1,7 +1,7 @@
 Part 1: Ground-State Electronic Structure Analysis
 ===================================================
 
-The starting point of any ``miniBSE`` calculation is the ground-state electronic structure of the nanocluster or quantum dot (QD), obtained from a Density Functional Theory (DFT) calculation performed with **CP2K / Quickstep**.
+The starting point of any ``QDEX`` calculation is the ground-state electronic structure of the nanocluster or quantum dot (QD), obtained from a Density Functional Theory (DFT) calculation performed with **CP2K / Quickstep**.
 
 This section details the theoretical foundation of molecular orbital expansion, population analysis, Projected Density of States (PDOS), Inverse Participation Ratio (IPR), Crystal Orbital Overlap Population (COOP), supercell unfolding (Fuzzy Bands), and 3D volumetric orbital visualization via Gaussian ``.cube`` files.
 
@@ -27,7 +27,7 @@ The overlap between non-orthogonal atomic orbitals is defined by the symmetric o
 
    S_{\mu \nu} = \langle \chi_\mu | \chi_\nu \rangle = \int \chi_\mu^*(\mathbf{r}) \chi_\nu(\mathbf{r}) \, d\mathbf{r}
 
-In ``miniBSE``, :math:`\mathbf{S}` is computed analytically using the high-performance C++ backend powered by **Libint2**.
+In ``QDEX``, :math:`\mathbf{S}` is computed analytically using the high-performance C++ backend powered by **Libint2**.
 
 MO Orthonormality and Diagnostics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,7 +38,7 @@ The set of Kohn-Sham molecular orbitals must satisfy strict orthonormality:
 
    \langle \phi_m | \phi_n \rangle = \sum_{\mu \nu} C_{\mu m}^* S_{\mu \nu} C_{\nu n} = (\mathbf{C}^\dagger \mathbf{S} \mathbf{C})_{mn} = \delta_{mn}
 
-Before performing any further analysis or excited-state calculations, ``miniBSE`` automatically computes the matrix product :math:`\mathbf{S} \mathbf{C}` and checks the Frobenius norm and maximum element-wise deviation from identity:
+Before performing any further analysis or excited-state calculations, ``QDEX`` automatically computes the matrix product :math:`\mathbf{S} \mathbf{C}` and checks the Frobenius norm and maximum element-wise deviation from identity:
 
 .. math::
 
@@ -51,7 +51,7 @@ If :math:`\Delta_{\mathrm{orth}} > 10^{-5}`, the run is halted to avoid propagat
 2. Projected Density of States (PDOS)
 -------------------------------------
 
-To understand the chemical character of states near the band gap (e.g. distinguishing Pb :math:`6s` and Br :math:`4p` valence band states from Pb :math:`6p` conduction band states), ``miniBSE`` projects the total density of states onto individual atomic species or specific atomic centers.
+To understand the chemical character of states near the band gap (e.g. distinguishing Pb :math:`6s` and Br :math:`4p` valence band states from Pb :math:`6p` conduction band states), ``QDEX`` projects the total density of states onto individual atomic species or specific atomic centers.
 
 Mulliken Population Weights
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -94,7 +94,7 @@ where :math:`g_s = 2` for spin-restricted systems (accounting for Kramers spin d
 Surface vs. Core Spatial Partitioning
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In colloidal semiconductor quantum dots, surface reconstruction, ligand termination, and dangling bonds frequently introduce in-gap defect states. ``miniBSE`` automatically partitions atoms into **core** and **surface** subsets based on their radial distance from the center of mass:
+In colloidal semiconductor quantum dots, surface reconstruction, ligand termination, and dangling bonds frequently introduce in-gap defect states. ``QDEX`` automatically partitions atoms into **core** and **surface** subsets based on their radial distance from the center of mass:
 
 .. math::
 
@@ -112,7 +112,7 @@ The **Inverse Participation Ratio (IPR)** provides a quantitative metric of wave
 Mathematical Formulation
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-In ``miniBSE``, the orbital IPR for molecular orbital :math:`m` is defined in terms of its Mulliken atomic orbital weights :math:`P_{\mu, m}`:
+In ``QDEX``, the orbital IPR for molecular orbital :math:`m` is defined in terms of its Mulliken atomic orbital weights :math:`P_{\mu, m}`:
 
 .. math::
 
@@ -173,7 +173,7 @@ In lead halide perovskites, the valence band maximum consists of an antibonding 
 
 Because quantum dots and nanocrystals are finite non-periodic clusters, they have discrete energy levels rather than continuous dispersion relations :math:`E(\mathbf{k})`. However, researchers frequently need to compare nanocrystal states against the parent bulk band structure (e.g., to observe quantum confinement shifts at the :math:`R`- or :math:`\Gamma`-point).
 
-``miniBSE`` implements the **Fuzzy Band** plane-wave projection algorithm to unfold cluster molecular orbitals onto effective bulk crystal wavevectors :math:`\mathbf{k}`.
+``QDEX`` implements the **Fuzzy Band** plane-wave projection algorithm to unfold cluster molecular orbitals onto effective bulk crystal wavevectors :math:`\mathbf{k}`.
 
 Plane-Wave Fourier Projection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -195,7 +195,7 @@ The spectral weight (fuzzy intensity) of state :math:`m` at wavevector :math:`\m
 Brillouin Zone Folding
 ~~~~~~~~~~~~~~~~~~~~~~
 
-For a finite nanocluster, momentum conservation is relaxed, spreading the spectral weight across reciprocal space. To reconstruct an effective band structure within the first Brillouin zone, ``miniBSE`` allows summing over reciprocal lattice vectors :math:`\mathbf{G}` of the reference bulk cell:
+For a finite nanocluster, momentum conservation is relaxed, spreading the spectral weight across reciprocal space. To reconstruct an effective band structure within the first Brillouin zone, ``QDEX`` allows summing over reciprocal lattice vectors :math:`\mathbf{G}` of the reference bulk cell:
 
 .. math::
 
@@ -209,7 +209,7 @@ where :math:`\mathcal{S}_g` denotes reciprocal shells controlled by the keyword 
 Automated High-Symmetry Paths & PCA Alignment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Given a reference crystal structure (``.cif`` file), ``miniBSE``:
+Given a reference crystal structure (``.cif`` file), ``QDEX``:
 1. Determines the space group and high-symmetry :math:`k`-path using ``pymatgen`` (e.g., :math:`\Gamma \to X \to M \to \Gamma \to R`).
 2. Scales the reciprocal lattice to match the core bond distances of the relaxed quantum dot.
 3. Performs Principal Component Analysis (PCA) on the inertia tensors of the CIF and cluster geometries to automatically align rotational coordinate axes.
@@ -219,7 +219,7 @@ Given a reference crystal structure (``.cif`` file), ``miniBSE``:
 6. Visualizing Orbitals via 3D Gaussian .cube Files
 ---------------------------------------------------
 
-To inspect spatial orbital distributions, HOMO/LUMO wavefunctions, and surface states, ``miniBSE`` generates standard volumetric Gaussian ``.cube`` files.
+To inspect spatial orbital distributions, HOMO/LUMO wavefunctions, and surface states, ``QDEX`` generates standard volumetric Gaussian ``.cube`` files.
 
 Grid Discretization
 ~~~~~~~~~~~~~~~~~~~
@@ -235,7 +235,7 @@ Given the Cartesian bounding box of the system :math:`[\mathbf{r}_{\min} - \Delt
 C++ Libint Acceleration
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Evaluating :math:`\phi_m(\mathbf{r}_g) = \sum_\mu C_{\mu m} \chi_\mu(\mathbf{r}_g)` across :math:`10^6` grid points in Python is computationally slow. ``miniBSE`` uses an optimized multithreaded C++ evaluator (``libint_cpp.evaluate_mos_on_grid``) that processes the grid in contiguous chunks:
+Evaluating :math:`\phi_m(\mathbf{r}_g) = \sum_\mu C_{\mu m} \chi_\mu(\mathbf{r}_g)` across :math:`10^6` grid points in Python is computationally slow. ``QDEX`` uses an optimized multithreaded C++ evaluator (``libint_cpp.evaluate_mos_on_grid``) that processes the grid in contiguous chunks:
 
 .. math::
 

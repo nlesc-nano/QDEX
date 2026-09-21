@@ -2,7 +2,7 @@ import os
 import re
 import sys
 import subprocess
-from setuptools import setup, Extension
+from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
 
@@ -47,14 +47,17 @@ class CMakeBuild(build_ext):
 
 
 setup(
-    name="miniBSE",
-    version="0.1.0",
-    packages=["miniBSE"],
+    name="qdex",
+    version="1.0.0",
+    description="QDEX: Quantum Dot Excitations & Dynamics",
+    author="Ivan Infante et al.",
+    packages=find_packages(),
     ext_modules=[CMakeExtension("libint_cpp", sourcedir="libint")],
     cmdclass={"build_ext": CMakeBuild},
     entry_points={
         "console_scripts": [
-            "minibse=miniBSE.cli:main",
+            "qdex=qdex.cli:main",
+            "minibse=qdex.cli:main",
         ],
     },
     zip_safe=False,

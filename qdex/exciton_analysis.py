@@ -258,7 +258,7 @@ def plot_analysis_summary(analysis_results, physics_metrics=None, filename=None,
     # --- 6. Simulated Spectrum Overlay ---
     if broadening != "none" and len(energies) > 0:
         # Import dynamically to avoid circular dependencies if any exist
-        from miniBSE.spectrum import generate_spectrum
+        from qdex.spectrum import generate_spectrum
         
         e_min = max(0.0, np.min(energies) - 2.5)
         e_max = np.max(energies) + 2.5

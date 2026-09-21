@@ -4,9 +4,9 @@ import numpy as np
 from scipy.linalg import eigh
 
 import libint_cpp
-from miniBSE.constants import BOHR_PER_ANG, HA_TO_EV, valence_electrons
-from miniBSE.io_utils import parse_gth_soc_potentials
-from miniBSE.device_utils import is_gpu
+from qdex.constants import BOHR_PER_ANG, HA_TO_EV, valence_electrons
+from qdex.io_utils import parse_gth_soc_potentials
+from qdex.device_utils import is_gpu
 
 _L_CACHE = {}
 

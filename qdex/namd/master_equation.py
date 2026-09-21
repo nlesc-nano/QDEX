@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.linalg import expm
-from miniBSE.namd.integrator import HBAR_EV_FS, KB_EV
+from qdex.namd.integrator import HBAR_EV_FS, KB_EV
 
 def compute_rate_matrix(E_vec, d_mat, temp_k=300.0, tau_dec_fs=15.0):
     """

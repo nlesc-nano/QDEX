@@ -1,5 +1,5 @@
 import numpy as np
-from miniBSE.device_utils import is_gpu, to_tensor, to_numpy
+from qdex.device_utils import is_gpu, to_tensor, to_numpy
 
 def lowdin_sqrt(S, device="numpy"):
     if is_gpu(device):

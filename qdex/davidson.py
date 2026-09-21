@@ -1,5 +1,5 @@
 import numpy as np
-from miniBSE.device_utils import is_gpu, to_tensor, to_numpy
+from qdex.device_utils import is_gpu, to_tensor, to_numpy
 
 def davidson(matvec, diag, nroots, max_iter=500, tol=1e-6, max_subspace=None, device="numpy"):
     

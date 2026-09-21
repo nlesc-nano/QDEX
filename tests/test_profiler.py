@@ -2,7 +2,7 @@ import unittest
 import io
 import sys
 import numpy as np
-from miniBSE.profiler import get_memory_info_mb, ResourceTracker
+from qdex.profiler import get_memory_info_mb, ResourceTracker
 
 class TestProfiler(unittest.TestCase):
     def test_get_memory_info(self):

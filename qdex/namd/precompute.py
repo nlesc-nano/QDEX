@@ -5,14 +5,14 @@ import time
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from miniBSE.io_utils import (
+from qdex.io_utils import (
     read_xyz, parse_basis, build_shell_dicts,
     build_atom_ao_ranges, count_ao_from_shells, read_mos_mbse
 )
-from miniBSE.integrals import compute_dipole_ao, compute_cross_overlap_ao
+from qdex.integrals import compute_dipole_ao, compute_cross_overlap_ao
 import libint_cpp
-from miniBSE.hardness import estimate_gw_qp_gap, estimate_brus_qp_gap, build_resta_mnok, build_gamma
-from miniBSE.constants import BOHR_PER_ANG, HA_TO_EV
+from qdex.hardness import estimate_gw_qp_gap, estimate_brus_qp_gap, build_resta_mnok, build_gamma
+from qdex.constants import BOHR_PER_ANG, HA_TO_EV
 
 
 def natural_sort_key(s):
@@ -218,7 +218,7 @@ def compute_frame_diagonal_bse(
 
     else:
         # SOC 2-component spinor calculation
-        from miniBSE.soc_utils import compute_spinor_subspace
+        from qdex.soc_utils import compute_spinor_subspace
 
         act_idx = np.concatenate([occ_idx, virt_idx])
         C_act = C_all[:, act_idx]
@@ -428,7 +428,7 @@ def precompute_namd_data(config):
     scissor = 0.0
     cluster_radius = None
     if str(qp_model).lower() == "gw":
-        from miniBSE.hardness import estimate_gw_qp_gap
+        from qdex.hardness import estimate_gw_qp_gap
         res = estimate_gw_qp_gap(
             np.array(coords0), syms0, material, eps_out, return_details=True
         )
@@ -438,7 +438,7 @@ def precompute_namd_data(config):
         else:
             raise ValueError(f"GW QP estimation failed for material '{material}'.")
     elif str(qp_model).lower() == "brus":
-        from miniBSE.hardness import estimate_brus_qp_gap
+        from qdex.hardness import estimate_brus_qp_gap
         C0, eps0, occ0 = read_mos_mbse(os.path.join(frame_dirs[0], mo_name), n_ao)
         eps0 = eps0 * HA_TO_EV
         n_occ_tot = int(np.sum(occ0 > 0.5))
@@ -462,7 +462,7 @@ def precompute_namd_data(config):
             scissor = 0.0
 
     # Split scissor between valence and conduction bands using anchor asymmetry
-    from miniBSE.hardness import MATERIAL_DB
+    from qdex.hardness import MATERIAL_DB
     entry = MATERIAL_DB.get(str(material).upper(), None) if material else None
     if entry is not None and len(entry) >= 14:
         pbe_h_mono, pbe_l_mono, gw_h_mono, gw_l_mono = entry[10], entry[11], entry[12], entry[13]
@@ -481,16 +481,16 @@ def precompute_namd_data(config):
     w_resta = None
     if excitation_mode == "diagonal_bse" and include_exchange:
         if str(kernel).lower() == "resta":
-            from miniBSE.hardness import build_resta_mnok
+            from qdex.hardness import build_resta_mnok
             _, w_resta = build_resta_mnok(
                 atom_symbols=syms0, coords=coords0, alpha=alpha, material_name=material, eps_out=eps_out
             )
         else:
-            from miniBSE.hardness import build_gamma
+            from qdex.hardness import build_gamma
             w_resta = build_gamma(atom_symbols=syms0, coords=coords0, alpha=alpha, beta=0.0)
 
     print("=" * 65)
-    print(" miniBSE - NAMD Precomputation Pipeline")
+    print(" QDEX - NAMD Precomputation Pipeline")
     print("=" * 65)
     print(f"  Trajectory directory : {traj_dir}")
     print(f"  Frames to process    : {n_frames} (dt = {dt_nuc_fs:.2f} fs)")
@@ -739,7 +739,7 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
     size_before_mb = get_dir_size_mb(precompute_dir)
     if verbose:
         print("=" * 65)
-        print(f" miniBSE - Compacting Precomputed Data: {precompute_dir}")
+        print(f" QDEX - Compacting Precomputed Data: {precompute_dir}")
         print("=" * 65)
         print(f"  Initial Directory Size : {size_before_mb / 1024.0:.2f} GB ({size_before_mb:.1f} MB)")
 

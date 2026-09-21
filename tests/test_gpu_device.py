@@ -1,12 +1,12 @@
 import unittest
 import numpy as np
 
-from miniBSE.device_utils import (
+from qdex.device_utils import (
     has_torch, resolve_device, to_tensor, to_numpy, is_gpu
 )
-from miniBSE.solver import _assemble_truncated_exchange
-from miniBSE.lowdin import lowdin_sqrt
-from miniBSE.davidson import davidson
+from qdex.solver import _assemble_truncated_exchange
+from qdex.lowdin import lowdin_sqrt
+from qdex.davidson import davidson
 
 
 class DeviceUtilsTests(unittest.TestCase):

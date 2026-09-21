@@ -1,11 +1,11 @@
 import numpy as np
 import time
-from miniBSE.davidson import davidson
-from miniBSE.exciton_hamiltonian import ExcitonHamiltonian
-from miniBSE.device_utils import is_gpu, to_tensor, to_numpy
+from qdex.davidson import davidson
+from qdex.exciton_hamiltonian import ExcitonHamiltonian
+from qdex.device_utils import is_gpu, to_tensor, to_numpy
 
 # --- UPDATED IMPORTS ---
-from miniBSE.hardness import build_gamma, build_resta_mnok
+from qdex.hardness import build_gamma, build_resta_mnok
 
 
 def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_full_elements=12_000_000, device="numpy"):

@@ -1,8 +1,8 @@
 import numpy as np
 import csv
 import time
-from miniBSE.io_utils import count_ao_from_shells
-from miniBSE.device_utils import is_gpu
+from qdex.io_utils import count_ao_from_shells
+from qdex.device_utils import is_gpu
 
 PDOS_PALETTE = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3", "#FF6692"]
 TAG_PALETTE = ["#111111", "#8C564B", "#17BECF", "#D62728", "#2CA02C", "#9467BD", "#FF7F0E"]

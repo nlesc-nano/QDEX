@@ -9,7 +9,7 @@ from scipy.integrate import simps
 KB_EV = 8.617333262145e-5  # Boltzmann constant in eV/K
 
 def main():
-    parser = argparse.ArgumentParser(description="miniBSE MD Trajectory Post-Processor")
+    parser = argparse.ArgumentParser(description="QDEX MD Trajectory Post-Processor")
     parser.add_argument("--pattern", type=str, default="frame_*/exciton_results.csv", help="Glob pattern for CSVs")
     parser.add_argument("--dt", type=float, default=2.5, help="Time step between frames in fs")
     parser.add_argument("--sigma", type=float, default=0.05, help="Broadening for ensemble spectrum (eV)")
@@ -86,7 +86,7 @@ def main():
     # 4. COMPREHENSIVE CONSOLE OUTPUT
     # ---------------------------------------------------------
     print("==========================================================")
-    print(f" miniBSE MD Trajectory Analysis (@ {args.temp} K)")
+    print(f" QDEX MD Trajectory Analysis (@ {args.temp} K)")
     print("==========================================================")
     print(f"[Trajectory Data]")
     print(f"  Frames processed : {n_frames}")

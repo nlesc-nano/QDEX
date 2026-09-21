@@ -8,7 +8,7 @@ from scipy.sparse import issparse, csr_matrix
 import libint_cpp
 
 
-from miniBSE.constants import BOHR_PER_ANG
+from qdex.constants import BOHR_PER_ANG
 
 BOHR_PER_ANGSTROM = BOHR_PER_ANG
 

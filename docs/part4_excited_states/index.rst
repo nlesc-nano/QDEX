@@ -3,7 +3,7 @@ Part 4: Optical Excitations & Four Excited-State Frameworks
 
 The description of neutral optical excitations in semiconductor nanostructures requires treating the two-particle correlated motion of an electron promoted to the conduction band and the hole left behind in the valence band.
 
-``miniBSE`` provides four distinct theoretical frameworks for computing excited states, ranging from non-interacting single-particle transitions to the fully coupled **Bethe-Salpeter Equation (BSE)** under the Tamm-Dancoff Approximation (TDA).
+``QDEX`` provides four distinct theoretical frameworks for computing excited states, ranging from non-interacting single-particle transitions to the fully coupled **Bethe-Salpeter Equation (BSE)** under the Tamm-Dancoff Approximation (TDA).
 
 ---
 
@@ -69,7 +69,7 @@ The bare exchange term :math:`K_{ia, jb}^x` is strictly absent in triplet states
 2. In-Depth Examination of the Four Frameworks
 ----------------------------------------------
 
-``miniBSE`` enables selecting among four progressive levels of physical theory via ``--excitation-mode``:
+``QDEX`` enables selecting among four progressive levels of physical theory via ``--excitation-mode``:
 
 .. list-table::
    :widths: 20 25 55
@@ -114,7 +114,7 @@ Evaluating these integrals requires transforming four-center two-electron atomic
 The Atom-Centered MNOK / Resta Approximation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To achieve high efficiency without sacrificing dielectric physics, ``miniBSE`` contracts transition densities into atom-centered point charges using Mulliken population analysis:
+To achieve high efficiency without sacrificing dielectric physics, ``QDEX`` contracts transition densities into atom-centered point charges using Mulliken population analysis:
 
 .. math::
 
@@ -147,7 +147,7 @@ The Resta Screened Dielectric Kernel
 
 In semiconductor nanoclusters, dielectric screening varies continuously from the bulk optical dielectric constant :math:`\epsilon_\infty` at large distances down to unscreened vacuum interaction (:math:`\epsilon = 1`) at short, intra-atomic distances.
 
-``miniBSE`` implements the **Resta model of electronic screening**:
+``QDEX`` implements the **Resta model of electronic screening**:
 
 .. math::
 
@@ -199,7 +199,7 @@ Why Diagonal BSE Works in Nanocrystals
 5. Full BSE (sTDA) & The Davidson Iterative Solver
 --------------------------------------------------
 
-When accurate oscillator strength borrowing, state mixing, or fine excitonic splittings are required, ``miniBSE`` employs the full **sTDA** framework.
+When accurate oscillator strength borrowing, state mixing, or fine excitonic splittings are required, ``QDEX`` employs the full **sTDA** framework.
 
 Transition Dipole Redistribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -229,7 +229,7 @@ This coherent summation describes **superradiance** and intensity borrowing, whe
 The Davidson Eigensolver
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-To solve for the lowest :math:`k` roots without dense :math:`O(N_{\mathrm{pairs}}^3)` matrix diagonalization, ``miniBSE`` implements an optimized **Davidson iterative subspace solver**:
+To solve for the lowest :math:`k` roots without dense :math:`O(N_{\mathrm{pairs}}^3)` matrix diagonalization, ``QDEX`` implements an optimized **Davidson iterative subspace solver**:
 
 1. Projects :math:`\mathbf{A}` into a small trial subspace :math:`\mathbf{V} = [\mathbf{v}_1, \dots, \mathbf{v}_m]`.
 2. Computes the matrix-vector product :math:`\mathbf{w}_j = \mathbf{A} \mathbf{v}_j` on-the-fly.

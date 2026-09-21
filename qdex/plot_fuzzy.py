@@ -419,7 +419,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     <html>
     <head>
         <meta charset="utf-8">
-        <title>miniBSE {lbl} Electronic Structure Analysis - {energy_label}</title>
+        <title>QDEX {lbl} Electronic Structure Analysis - {energy_label}</title>
         <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
         <style>
             body {{ font-family: 'Helvetica', 'Arial', sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px; color: #333; }}

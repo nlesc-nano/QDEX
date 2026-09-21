@@ -1,132 +1,132 @@
 API Reference
 =============
 
-This section documents the Python application programming interface (API) for `miniBSE`.
+This section documents the Python application programming interface (API) for `QDEX`.
 
-miniBSE.solver
+qdex.solver
+-----------
+
+.. automodule:: qdex.solver
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.cli
+--------
+
+.. automodule:: qdex.cli
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.pdos_coop
 --------------
 
-.. automodule:: miniBSE.solver
+.. automodule:: qdex.pdos_coop
    :members:
    :undoc-members:
    :show-inheritance:
 
-miniBSE.cli
------------
-
-.. automodule:: miniBSE.cli
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.pdos_coop
------------------
-
-.. automodule:: miniBSE.pdos_coop
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.fuzzy_bands
--------------------
-
-.. automodule:: miniBSE.fuzzy_bands
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.soc_utils
------------------
-
-.. automodule:: miniBSE.soc_utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.hardness
+qdex.fuzzy_bands
 ----------------
 
-.. automodule:: miniBSE.hardness
+.. automodule:: qdex.fuzzy_bands
    :members:
    :undoc-members:
    :show-inheritance:
 
-miniBSE.exciton_analysis
-------------------------
+qdex.soc_utils
+--------------
 
-.. automodule:: miniBSE.exciton_analysis
+.. automodule:: qdex.soc_utils
    :members:
    :undoc-members:
    :show-inheritance:
 
-miniBSE.nto
------------
+qdex.hardness
+-------------
 
-.. automodule:: miniBSE.nto
+.. automodule:: qdex.hardness
    :members:
    :undoc-members:
    :show-inheritance:
 
-miniBSE.exciton_cube
---------------------
-
-.. automodule:: miniBSE.exciton_cube
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.namd.precompute
------------------------
-
-.. automodule:: miniBSE.namd.precompute
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.namd.master_equation
-----------------------------
-
-.. automodule:: miniBSE.namd.master_equation
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.namd.surface_hopping
-----------------------------
-
-.. automodule:: miniBSE.namd.surface_hopping
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-miniBSE.namd.analysis
+qdex.exciton_analysis
 ---------------------
 
-.. automodule:: miniBSE.namd.analysis
+.. automodule:: qdex.exciton_analysis
    :members:
    :undoc-members:
    :show-inheritance:
 
-miniBSE.io_utils
-----------------
+qdex.nto
+--------
 
-.. automodule:: miniBSE.io_utils
+.. automodule:: qdex.nto
    :members:
    :undoc-members:
    :show-inheritance:
 
-miniBSE.device_utils
+qdex.exciton_cube
+-----------------
+
+.. automodule:: qdex.exciton_cube
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.namd.precompute
 --------------------
 
-.. automodule:: miniBSE.device_utils
+.. automodule:: qdex.namd.precompute
    :members:
    :undoc-members:
    :show-inheritance:
 
-miniBSE.profiler
-----------------
+qdex.namd.master_equation
+-------------------------
 
-.. automodule:: miniBSE.profiler
+.. automodule:: qdex.namd.master_equation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.namd.surface_hopping
+-------------------------
+
+.. automodule:: qdex.namd.surface_hopping
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.namd.analysis
+------------------
+
+.. automodule:: qdex.namd.analysis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.io_utils
+-------------
+
+.. automodule:: qdex.io_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.device_utils
+-----------------
+
+.. automodule:: qdex.device_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.profiler
+-------------
+
+.. automodule:: qdex.profiler
    :members:
    :undoc-members:
    :show-inheritance:

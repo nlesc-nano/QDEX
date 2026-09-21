@@ -1,5 +1,5 @@
 """
-Computational Resource Usage Profiler for miniBSE.
+Computational Resource Usage Profiler for QDEX.
 Tracks wall-clock time, memory (RAM), and GPU VRAM across calculation modules.
 """
 
@@ -184,7 +184,7 @@ class ResourceTracker:
         dev_str = str(device) if device else "numpy (CPU)"
 
         print("\n" + "=" * 90)
-        print(" miniBSE COMPUTATIONAL RESOURCE USAGE SUMMARY")
+        print(" QDEX COMPUTATIONAL RESOURCE USAGE SUMMARY")
         print("=" * 90)
         print(f" Platform: {os_name} | Threads/Cores: {cpu_cores} | Device: {dev_str}")
         print("-" * 90)

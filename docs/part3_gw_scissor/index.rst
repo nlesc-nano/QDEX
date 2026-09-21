@@ -3,7 +3,7 @@ Part 3: Quasiparticle Corrections & The Scaled GW Model
 
 Standard semi-local Kohn-Sham Density Functional Theory (DFT) using functionals like PBE severely underestimates the fundamental band gap of semiconductor nanostructures. For instance, PBE predicts a band gap of :math:`\approx 1.5\text{ eV}` for bulk :math:`\text{CsPbBr}_3`, whereas the experimental quasiparticle gap is :math:`\approx 2.35\text{ eV}`.
 
-In ``miniBSE``, single-particle excitation energies are corrected via an analytical, physically grounded **Scaled GW Quasiparticle Model** that incorporates quantum confinement, dielectric solvation screening, and absolute energy level alignment.
+In ``QDEX``, single-particle excitation energies are corrected via an analytical, physically grounded **Scaled GW Quasiparticle Model** that incorporates quantum confinement, dielectric solvation screening, and absolute energy level alignment.
 
 ---
 
@@ -76,7 +76,7 @@ Although full :math:`G_0W_0` calculations resolve the band gap problem for small
 4. Rationale for the Two-Anchor Model
 -------------------------------------
 
-To overcome this bottleneck while maintaining quantitative accuracy, ``miniBSE`` introduces the **Two-Anchor Scaled GW Model**. 
+To overcome this bottleneck while maintaining quantitative accuracy, ``QDEX`` introduces the **Two-Anchor Scaled GW Model**. 
 
 Instead of guessing empirical parameters or running prohibitively expensive calculations for every nanocrystal size, the model anchors the quasiparticle gap between two rigorously computed physical limits:
 
@@ -147,7 +147,7 @@ In standard electronic structure calculations, a constant scissor operator simpl
 Frontier Splitting Fractions (:math:`f_{\mathrm{homo}}, f_{\mathrm{lumo}}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From the high-level vacuum GW calculation on the monomer anchor, ``miniBSE`` extracts the individual self-energy corrections for the HOMO and LUMO levels:
+From the high-level vacuum GW calculation on the monomer anchor, ``QDEX`` extracts the individual self-energy corrections for the HOMO and LUMO levels:
 
 .. math::
 
@@ -188,7 +188,7 @@ The quasiparticle energies are computed by applying the partitioned scissor oper
 Dynamic Prediction of Absolute IP & EA
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In standard CP2K cluster calculations, the raw eigenvalues float with respect to an arbitrary electrostatic reference potential. By anchoring the levels to the vacuum-calibrated monomer data stored in ``MATERIAL_DB``, ``miniBSE`` reconstructs the true absolute **Ionization Potential (IP)** and **Electron Affinity (EA)**:
+In standard CP2K cluster calculations, the raw eigenvalues float with respect to an arbitrary electrostatic reference potential. By anchoring the levels to the vacuum-calibrated monomer data stored in ``MATERIAL_DB``, ``QDEX`` reconstructs the true absolute **Ionization Potential (IP)** and **Electron Affinity (EA)**:
 
 .. math::
 
@@ -220,7 +220,7 @@ Limitations
 8. Combining Electronic Structure Analysis with QP Shifts
 ---------------------------------------------------------
 
-``miniBSE`` seamlessly integrates QP corrections into ground-state electronic structure analyses:
+``QDEX`` seamlessly integrates QP corrections into ground-state electronic structure analyses:
 
 * **QP-Corrected PDOS**: Convolves the projected density of states on the corrected quasiparticle energy axis :math:`\varepsilon^{\mathrm{QP}}`, opening the gap to experimental values while preserving Mulliken orbital weights.
 * **QP-Corrected Fuzzy Bands**: Unfolds nanocrystal orbitals onto bulk :math:`k`-paths using the quasiparticle dispersion:

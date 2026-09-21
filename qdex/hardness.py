@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.spatial.distance import pdist, squareform
 from scipy.spatial import ConvexHull, distance_matrix
-from miniBSE.constants import (
+from qdex.constants import (
     HA_TO_EV, ANG_PER_BOHR, BOHR_PER_ANG,
     IMAGE_CHARGE_CONST_EV_ANG, BRUS_KINETIC_EV_ANG2, VDW_SURFACE_ANG
 )
