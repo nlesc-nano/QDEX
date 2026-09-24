@@ -74,15 +74,18 @@ def propagate_pme_tensor(
     eps_occ=None,
     eps_virt=None,
     n_atoms=775,
-    k_loss=None
+    k_loss=None,
+    return_flux=False
 ):
     """
     Propagates exciton population matrix P_mat of shape (n_occ, n_virt) via the Pauli Master Equation.
     Fully vectorized using BLAS matrix operations: runs in ~0.2 s per step.
     Supports on-the-fly state-dependent EDC decoherence: ``tau_kj = hbar / |dE_kj| * (1 + C / E_kin)``.
+    If return_flux=True, also returns instantaneous transition probability fluxes (flux_virt, flux_occ).
     """
     n_occ, n_virt = P_mat.shape
     dt = dt_fs / n_substeps
+
     beta = 1.0 / (KB_EV * max(temp_k, 1e-3))
     P = np.array(P_mat, dtype=np.float64, copy=True)
 
@@ -136,22 +139,62 @@ def propagate_pme_tensor(
     np.fill_diagonal(k_occ, 0.0)
     loss_occ = np.sum(k_occ, axis=1)  # (n_occ,)
 
-    # Vectorized Substep Propagation via BLAS matrix multiplications
+    def _row_stochastic(k_from_to, dt_sub):
+        """Transition matrix T[i, j] = probability of i -> j. Rows sum to 1."""
+        n = k_from_to.shape[0]
+        T = dt_sub * np.array(k_from_to, dtype=np.float64, copy=True)
+        np.fill_diagonal(T, 0.0)
+        loss = np.sum(T, axis=1)
+        stay = 1.0 - loss
+        overflow = stay < 0.0
+        if np.any(overflow):
+            scale = 1.0 / np.maximum(loss[overflow], 1e-30)
+            T[overflow] *= scale[:, np.newaxis]
+            stay[overflow] = 0.0
+        T[np.arange(n), np.arange(n)] = np.maximum(stay, 0.0)
+        return T
+
+    # Positivity-preserving channel updates. Each row-stochastic step
+    # conserves probability. Recombination is applied once afterwards.
+    T_virt = _row_stochastic(k_virt, dt)
+    T_occ = _row_stochastic(k_occ, dt)
     for step in range(n_substeps):
-        # Electron flux: gain from all virtuals + loss from current virtual
-        flux_e = (P @ k_virt) - (P * loss_virt[np.newaxis, :])
+        P = P @ T_virt
+        P = T_occ.T @ P
 
-        # Hole flux: gain from all holes + loss from current hole
-        flux_h = (k_occ.T @ P) - (loss_occ[:, np.newaxis] * P)
+    flux_virt = None
+    flux_occ = None
+    if return_flux:
+        p_virt_init = np.sum(P_mat, axis=0)
+        p_occ_init = np.sum(P_mat, axis=1)
 
-        P += dt * (flux_e + flux_h)
-        P = np.maximum(P, 0.0)
-        norm = np.sum(P)
-        if norm > 1e-12:
-            P /= norm
+        def _extract_sparse_flux(p_vec, k_mat, max_transitions=50):
+            pop_idx = np.where(p_vec > 1e-6)[0]
+            if len(pop_idx) == 0:
+                return []
+            sub_flux = p_vec[pop_idx, np.newaxis] * (k_mat[pop_idx, :] * dt_fs)
+            tot_flux = np.sum(sub_flux)
+            if tot_flux < 1e-14:
+                return []
+            thresh = 1e-4 * tot_flux
+            r, c = np.where(sub_flux >= thresh)
+            orig_r = pop_idx[r]
+            off_diag = orig_r != c
+            orig_r = orig_r[off_diag]
+            c = c[off_diag]
+            v = sub_flux[r[off_diag], c]
+            if len(v) > max_transitions:
+                top_k = np.argpartition(v, -max_transitions)[-max_transitions:]
+                orig_r, c, v = orig_r[top_k], c[top_k], v[top_k]
+            return [(int(i), int(j), float(val)) for i, j, val in zip(orig_r, c, v)]
 
-    # Ground state recombination loss (radiative + non-radiative)
+        flux_virt = _extract_sparse_flux(p_virt_init, k_virt, max_transitions=50)
+        flux_occ = _extract_sparse_flux(p_occ_init, k_occ, max_transitions=50)
+
     if k_loss is not None:
         P *= np.exp(-k_loss * dt_fs)
 
+    if return_flux:
+        return P, flux_virt, flux_occ
     return P
+

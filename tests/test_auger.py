@@ -75,15 +75,17 @@ class TestAugerRecombination(unittest.TestCase):
         q_eject_1 = np.array([0.3, 0.7], dtype=np.float64)
         q_eject_2 = np.array([0.5, 0.2], dtype=np.float64)
 
+        q_recomb_alt = np.array([-0.2, 0.55], dtype=np.float64)
         v_dir, v_exch, m_eff = compute_auger_matrix_element(
             q_recomb=q_recomb,
             q_eject_1=q_eject_1,
             q_eject_2=q_eject_2,
             W_resta=self.W_resta,
+            q_recomb_alt=q_recomb_alt,
         )
 
         expected_dir = float(q_eject_1 @ self.W_resta @ q_recomb)
-        expected_exch = float(q_recomb @ self.W_resta @ q_eject_2)
+        expected_exch = float(q_eject_2 @ self.W_resta @ q_recomb_alt)
 
         self.assertAlmostEqual(v_dir, expected_dir, places=10)
         self.assertAlmostEqual(v_exch, expected_exch, places=10)
@@ -115,9 +117,10 @@ class TestAugerRecombination(unittest.TestCase):
         self.assertGreaterEqual(res.rate_biexciton_fs, 0.0)
         self.assertEqual(res.fundamental_gap_ev, 3.0)
 
-        # Biexciton rate = 4 * eeh + 4 * hhe (universal statistical scaling: 2e x 2h = 4 channels)
-        self.assertAlmostEqual(res.rate_biexciton_fs, 4.0 * res.rate_eeh_fs + 4.0 * res.rate_hhe_fs, places=12)
-        self.assertAlmostEqual(res.rate_biexciton_ns, 4.0 * res.rate_eeh_ns + 4.0 * res.rate_hhe_ns, places=6)
+        # Reported trion rates already include the twofold 1S factor.
+        # Superposition: k_XX = 2 k_X- + 2 k_X+.
+        self.assertAlmostEqual(res.rate_biexciton_fs, 2.0 * res.rate_eeh_fs + 2.0 * res.rate_hhe_fs, places=12)
+        self.assertAlmostEqual(res.rate_biexciton_ns, 2.0 * res.rate_eeh_ns + 2.0 * res.rate_hhe_ns, places=6)
 
         # Summary table formatting check
         table_str = res.summary_table()

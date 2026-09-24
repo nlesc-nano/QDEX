@@ -29,3 +29,5 @@ CMakeScripts/
 *.log
 namd_precomputed*/
 docs/_build/
+NAMD_STUDY
+

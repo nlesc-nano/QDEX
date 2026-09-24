@@ -183,7 +183,7 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
     import glob
     from qdex.namd.integrator import HBAR_EV_FS
 
-    step_files = sorted(glob.glob(os.path.join(precompute_dir, "step_*.npz")))
+    step_files = sorted(glob.glob(os.path.join(precompute_dir, "step_*.npz")), key=natural_sort_key)
     lowest_exc_ens = []
     if not step_files:
         # Fallback to frame_*.npz if step files are not present
@@ -205,8 +205,16 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
         times = [float(d0["time_prev_fs"])]
         homo_ens = [float(d0["eps_occ_prev"][-1])]
         lumo_ens = [float(d0["eps_virt_prev"][0])]
-        if "E_curr" in d0:
-            lowest_exc_ens.append(float(np.min(d0["E_curr"])))
+        # E_curr belongs at time_curr. The t = 0 exciton is the frame-0 pair list.
+        frame0_path = os.path.join(precompute_dir, "frame_00000.npz")
+        if os.path.exists(frame0_path):
+            f0 = np.load(frame0_path)
+            if "E_pairs" in f0.files and len(f0["E_pairs"]) > 0:
+                lowest_exc_ens.append(float(np.min(f0["E_pairs"])))
+            else:
+                lowest_exc_ens.append(float(lumo_ens[0] - homo_ens[0]))
+        else:
+            lowest_exc_ens.append(float(lumo_ens[0] - homo_ens[0]))
 
         for sf in step_files:
             d = np.load(sf)
@@ -244,9 +252,11 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
     freqs_fs = np.fft.rfftfreq(n_fft, d=dt_fs)
     c_cm_per_fs = 2.99792458e-5
     wavenumbers_cm = freqs_fs / c_cm_per_fs
-    psd = np.abs(fft_vals) ** 2
+    # J(omega) is the cosine transform of C(t), not the power of that transform.
+    psd = np.maximum(np.real(fft_vals), 0.0)
     if np.max(psd) > 0:
         psd /= np.max(psd)
+    rayleigh_cm = (1.0 / max((N - 1) * dt_fs, 1e-6)) / c_cm_per_fs
 
     # 3. Second-Order Cumulant Expansion for Pure Dephasing D(t)
     # g(t) = (var_g / hbar^2) * int_0^t dt1 int_0^t1 dt2 C(t2)
@@ -295,6 +305,7 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
         "D_t": D_t,
         "tau_dec_fs": tau_dec_fs,
         "dominant_freq_cm1": dominant_freq_cm1,
+        "rayleigh_cm": float(rayleigh_cm),
         "recomb_params": recomb_params,
     }
 
@@ -325,7 +336,7 @@ def compute_spectral_density(signal, dt_fs):
     c_cm_per_fs = 2.99792458e-5
     wavenumbers_cm = freqs_fs / c_cm_per_fs
 
-    psd = np.abs(fft_vals) ** 2
+    psd = np.maximum(np.real(fft_vals), 0.0)
     if np.max(psd) > 0:
         psd /= np.max(psd)
 
@@ -344,12 +355,16 @@ def analyze_and_plot_namd_results(
     trajectory_energies=None,
     all_energies=None,
     precompute_dir=None,
-    recombination_info=None
+    recombination_info=None,
+    std_energies_ev=None,
+    std_excess_e=None,
+    std_excess_h=None,
+    n_origins=1
 ):
     """
     Comprehensive NAMD analysis module producing:
       1. Carrier cooling curve & trajectory traces (Exciton Cascade).
-      2. Electron vs hole cooling decomposition.
+      2. Electron vs hole cooling decomposition with thermal confidence intervals.
       3. State-resolved 1Se (LUMO), 1Sh (HOMO), and 1S exciton populations vs time.
       4. Non-adiabatic coupling vs transition energy gap (Energy-Gap Law).
       5. Phonon spectral density J(omega) showing Pb-Br and cation modes.
@@ -403,6 +418,13 @@ def analyze_and_plot_namd_results(
         "Excess_Electron_eV": mean_excess_e,
         "Excess_Hole_eV": mean_excess_h
     }
+    if std_energies_ev is not None:
+        csv_dict["E_exc_std_eV"] = std_energies_ev
+    if std_excess_e is not None:
+        csv_dict["Excess_Electron_std_eV"] = std_excess_e
+    if std_excess_h is not None:
+        csv_dict["Excess_Hole_std_eV"] = std_excess_h
+
     if pop_se is not None:
         csv_dict["Pop_1S_e"] = pop_se
         csv_dict["Pop_Hot_e"] = pop_hot_e
@@ -422,6 +444,10 @@ def analyze_and_plot_namd_results(
         excess_total=excess_total,
         mean_excess_e=mean_excess_e,
         mean_excess_h=mean_excess_h,
+        std_energies_ev=std_energies_ev if std_energies_ev is not None else np.array([]),
+        std_excess_e=std_excess_e if std_excess_e is not None else np.array([]),
+        std_excess_h=std_excess_h if std_excess_h is not None else np.array([]),
+        n_origins=int(n_origins),
         populations=populations,
         pop_se=pop_se if pop_se is not None else np.array([]),
         pop_sh=pop_sh if pop_sh is not None else np.array([]),
@@ -471,6 +497,12 @@ def analyze_and_plot_namd_results(
     print(f"  Exciton                      : Actual = {format_time_fs(arr_tot['act_therm_fs'], times_fs[-1])}")
     print(f"  Electron                     : Actual = {format_time_fs(arr_e['act_therm_fs'], times_fs[-1])}")
     print(f"  Hole                         : Actual = {format_time_fs(arr_h['act_therm_fs'], times_fs[-1])}")
+    if n_origins > 1 and std_energies_ev is not None and len(std_energies_ev) > 0:
+        print()
+        print(f"  --- Multi-Origin Thermal Ensemble ({n_origins} AIMD Initial Conditions) ---")
+        mean_spd = np.mean(std_energies_ev) * 1e3
+        max_spd = np.max(std_energies_ev) * 1e3
+        print(f"  Mean Thermal Spread (sigma)  : {mean_spd:.2f} meV (max = {max_spd:.2f} meV)")
     print("=" * 68 + "\n")
 
     bg_data = None
@@ -516,14 +548,13 @@ def analyze_and_plot_namd_results(
         if bg_data is not None and "recomb_params" in bg_data:
             rp = bg_data["recomb_params"]
             from qdex.hardness import compute_energy_gap_law_rate, compute_fcwd_rate
-            from qdex.namd.integrator import HBAR_EV_FS
-            if mean_nac_fs is not None and rp.get("V_el_ev") is None:
-                rp["V_el_ev"] = float(HBAR_EV_FS * mean_nac_fs)
-
+            # Intraband RMS NACs are not the exciton-to-ground coupling.
             k_jort_s, _ = compute_energy_gap_law_rate(qp_gap_ev, E_LO_ev=rp["E_LO_ev"], S_hr=rp["S_hr"])
             print()
             print("  --- Trajectory-Derived Parameters (Non-Empirical from NAMD) ---")
-            print(f"  Dominant Optical Phonon      : {rp['dominant_freq_cm1']:.1f} cm^-1 (hbar*omega_LO = {rp['E_LO_ev']*1e3:.1f} meV)")
+            rayleigh = bg_data.get("rayleigh_cm", np.nan)
+            rayleigh_txt = f", resolution {rayleigh:.0f} cm^-1" if np.isfinite(rayleigh) else ""
+            print(f"  Dominant Optical Phonon      : {rp['dominant_freq_cm1']:.1f} cm^-1 (hbar*omega_LO = {rp['E_LO_ev']*1e3:.1f} meV{rayleigh_txt})")
             print(f"  Nuclear Reorganization (lam) : {rp['lambda_ev']*1e3:.1f} meV")
             print(f"  Huang-Rhys Factor (S)        : {rp['S_hr']:.3f}")
             print(f"  Thermal Gap Fluctuation (sig): {rp['sigma_ev']*1e3:.1f} meV")
@@ -588,6 +619,17 @@ def analyze_and_plot_namd_results(
             for tr in range(n_traj_plot):
                 ax1.plot(times_fs, trajectory_energies[:, tr], color="#F59E0B", lw=0.8, alpha=0.25)
 
+        if std_energies_ev is not None and np.any(std_energies_ev > 1e-6):
+            orig_lbl = f" (±1σ thermal, {n_origins} origins)" if n_origins > 1 else " (±1σ thermal)"
+            ax1.fill_between(
+                times_fs,
+                mean_energies_ev - std_energies_ev,
+                mean_energies_ev + std_energies_ev,
+                color="#1D4ED8",
+                alpha=0.22,
+                label=r"Thermal Spread" + orig_lbl
+            )
+
         ax1.plot(times_fs, mean_energies_ev, color="#1D4ED8", lw=3.0, label=r"$\langle E_{\mathrm{exc}}(t) \rangle$")
         ax1.axhline(pump_energy_ev, color="#DC2626", linestyle="--", lw=1.8, label=f"Pump ({pump_energy_ev:.2f} eV)")
         ax1.axhline(qp_gap_ev, color="#111827", linestyle=":", lw=1.8, label=f"$E_g$ ({qp_gap_ev:.2f} eV)")
@@ -605,6 +647,13 @@ def analyze_and_plot_namd_results(
         lbl_e = r"Electron $\Delta E_e(t)$" + (f" ($\\tau_e \\approx {tau_e:.1f}$ fs)" if np.isfinite(tau_e) else "")
         lbl_h = r"Hole $\Delta E_h(t)$" + (f" ($\\tau_h \\approx {tau_h:.1f}$ fs)" if np.isfinite(tau_h) else "")
         lbl_tot = r"Total $\Delta E_{\mathrm{exc}}(t)$" + (f" ($\\tau \\approx {tau_total:.1f}$ fs)" if np.isfinite(tau_total) else "")
+
+        if std_excess_e is not None and np.any(std_excess_e > 1e-6):
+            ax2.fill_between(times_fs, mean_excess_e - std_excess_e, mean_excess_e + std_excess_e, color="#2563EB", alpha=0.18)
+        if std_excess_h is not None and np.any(std_excess_h > 1e-6):
+            ax2.fill_between(times_fs, mean_excess_h - std_excess_h, mean_excess_h + std_excess_h, color="#EA580C", alpha=0.18)
+        if std_energies_ev is not None and np.any(std_energies_ev > 1e-6):
+            ax2.fill_between(times_fs, excess_total - std_energies_ev, excess_total + std_energies_ev, color="#374151", alpha=0.15)
 
         ax2.plot(times_fs, mean_excess_e, color="#2563EB", lw=2.4, label=lbl_e)
         ax2.plot(times_fs, mean_excess_h, color="#EA580C", lw=2.4, label=lbl_h)
@@ -1082,5 +1131,885 @@ def generate_interactive_plotly_dashboard(
     )
 
     fig.write_html(html_file, include_plotlyjs=True)
+
+
+# =============================================================================
+# Time-Resolved Vibrational Action Spectrum / Dynamical Phonon Spectrogram
+# =============================================================================
+
+def load_trajectory_orbital_energies(precompute_dir):
+    """
+    Extracts orbital energy trajectories eps_occ(t) and eps_virt(t) across all frames.
+    Caches results in precompute_dir/orbital_energies.npz for instantaneous subsequent loading.
+    """
+    cache_path = os.path.join(precompute_dir, "orbital_energies.npz")
+    if os.path.exists(cache_path):
+        try:
+            data = np.load(cache_path)
+            return data["times_fs"], data["eps_occ_traj"], data["eps_virt_traj"]
+        except Exception:
+            pass
+
+    step_files = sorted(glob.glob(os.path.join(precompute_dir, "step_*.npz")), key=natural_sort_key)
+    if step_files:
+        s0 = np.load(step_files[0])
+        n_steps = len(step_files)
+        n_occ = len(s0["eps_occ_curr"])
+        n_virt = len(s0["eps_virt_curr"])
+        times_fs = np.zeros(n_steps + 1, dtype=np.float64)
+        eps_occ_traj = np.zeros((n_steps + 1, n_occ), dtype=np.float32)
+        eps_virt_traj = np.zeros((n_steps + 1, n_virt), dtype=np.float32)
+
+        times_fs[0] = float(s0["time_prev_fs"])
+        eps_occ_traj[0] = s0["eps_occ_prev"]
+        eps_virt_traj[0] = s0["eps_virt_prev"]
+
+        for k, sf in enumerate(step_files):
+            d = np.load(sf)
+            times_fs[k + 1] = float(d["time_curr_fs"])
+            eps_occ_traj[k + 1] = d["eps_occ_curr"]
+            eps_virt_traj[k + 1] = d["eps_virt_curr"]
+    else:
+        frame_files = sorted(glob.glob(os.path.join(precompute_dir, "frame_*.npz")), key=natural_sort_key)
+        if not frame_files:
+            raise FileNotFoundError(f"No step or frame npz files found in '{precompute_dir}'")
+        f0 = np.load(frame_files[0])
+        n_frames = len(frame_files)
+        n_occ = len(f0["eps_occ"])
+        n_virt = len(f0["eps_virt"])
+        times_fs = np.zeros(n_frames, dtype=np.float64)
+        eps_occ_traj = np.zeros((n_frames, n_occ), dtype=np.float32)
+        eps_virt_traj = np.zeros((n_frames, n_virt), dtype=np.float32)
+        for k, ff in enumerate(frame_files):
+            d = np.load(ff)
+            times_fs[k] = float(d["time_fs"])
+            eps_occ_traj[k] = d["eps_occ"]
+            eps_virt_traj[k] = d["eps_virt"]
+
+    try:
+        np.savez_compressed(
+            cache_path,
+            times_fs=times_fs,
+            eps_occ_traj=eps_occ_traj,
+            eps_virt_traj=eps_virt_traj
+        )
+    except Exception:
+        pass
+
+    return times_fs, eps_occ_traj, eps_virt_traj
+
+
+def compute_pair_spectral_density(eps_1, eps_2, dt_fs, n_fft=None, w_max_cm=400.0):
+    r"""
+    Computes the phonon spectral density J_{uv}(omega) in cm^-1 for a pair of electronic states
+    with time-dependent orbital energy trajectories eps_1(t) and eps_2(t):
+
+      Delta eps_{uv}(t) = eps_1(t) - eps_2(t)
+      delta Delta eps_{uv}(t) = Delta eps_{uv}(t) - <Delta eps_{uv}>
+      sigma_{uv}^2 = Var(Delta eps_{uv})
+      C_{uv}(tau) = <delta Delta eps_{uv}(0) delta Delta eps_{uv}(tau)> / sigma_{uv}^2
+      J_{uv}(omega) = sigma_{uv}^2 * max(Re FFT[C_{uv}(tau) * W(tau)], 0)
+
+    Returns:
+      wavenumbers_cm: 1D array of frequencies in cm^-1 (0 to w_max_cm).
+      psd: 1D array of spectral density values.
+      var_d: variance of the energy difference fluctuation in eV^2.
+    """
+    eps_1 = np.asarray(eps_1, dtype=np.float64)
+    eps_2 = np.asarray(eps_2, dtype=np.float64)
+    N = len(eps_1)
+    diff = eps_1 - eps_2
+    delta_diff = diff - np.mean(diff)
+    var_d = float(np.var(delta_diff))
+
+    if n_fft is None:
+        n_fft = max(2048, N * 16)
+
+    freqs_fs = np.fft.rfftfreq(n_fft, d=dt_fs)
+    c_cm_per_fs = 2.99792458e-5
+    wavenumbers_cm = freqs_fs / c_cm_per_fs
+    mask = (wavenumbers_cm >= 0) & (wavenumbers_cm <= w_max_cm)
+    wn_sub = wavenumbers_cm[mask]
+
+    if var_d < 1e-16 or N < 4:
+        return wn_sub, np.zeros(len(wn_sub), dtype=np.float64), var_d
+
+    raw_corr = np.correlate(delta_diff, delta_diff, mode="full")[N - 1:]
+    norm_factors = np.arange(N, 0, -1) * var_d
+    autocorr = raw_corr / np.maximum(norm_factors, 1e-20)
+
+    window = np.hanning(N)
+    fft_vals = np.fft.rfft(autocorr * window, n=n_fft)
+    psd_full = np.maximum(np.real(fft_vals), 0.0)
+    psd = var_d * psd_full[mask]
+
+    return wn_sub, psd, var_d
+
+
+def compute_time_resolved_spectral_density(
+    times_fs,
+    eps_occ_traj,
+    eps_virt_traj,
+    hop_records=None,
+    pme_flux_records=None,
+    n_trajectories=1000,
+    sigma_t_fs=15.0,
+    w_max_cm=400.0,
+    bg_data=None,
+    method_name="PME"
+):
+    r"""
+    Synthesizes the Time-Resolved Vibrational Action Spectrum / Dynamical Phonon Spectrogram
+    J(omega, t) during hot carrier cooling.
+
+    Parameters:
+      times_fs: 1D array of simulation time points (fs).
+      eps_occ_traj: 2D array of occupied orbital energies (n_frames, n_occ).
+      eps_virt_traj: 2D array of virtual orbital energies (n_frames, n_virt).
+      hop_records: List of discrete hop dicts from stochastic surface hopping (FSSH/DISH/GDC).
+      pme_flux_records: List of probability flux dicts from Pauli Master Equation (PME).
+      n_trajectories: Number of trajectories (for FSSH/DISH normalization).
+      sigma_t_fs: Temporal Gaussian broadening in fs.
+      w_max_cm: Maximum phonon frequency in cm^-1 to include in the spectrogram.
+      bg_data: Optional band-gap dynamics dict from compute_band_gap_dynamics_and_spectral_density.
+      method_name: String label for the simulation method.
+
+    Returns:
+      Dictionary containing 2D arrays J_total, J_electron, J_hole, 1D frequency and time axes,
+      time-integrated spectra, and metadata.
+    """
+    times_fs = np.asarray(times_fs, dtype=np.float64)
+    N_t = len(times_fs)
+    dt_fs = times_fs[1] - times_fs[0] if N_t > 1 else 2.0
+
+    # Determine frequency grid from first virtual orbital
+    sample_wn, _, _ = compute_pair_spectral_density(
+        eps_virt_traj[:, 0], eps_virt_traj[:, 0], dt_fs, w_max_cm=w_max_cm
+    )
+    N_w = len(sample_wn)
+
+    J_elec = np.zeros((N_w, N_t), dtype=np.float64)
+    J_hole = np.zeros((N_w, N_t), dtype=np.float64)
+
+    pair_cache = {}
+    visited_pairs = {"electron": set(), "hole": set()}
+
+    def _get_pair_psd(channel, u, v):
+        key = (channel, min(u, v), max(u, v))
+        if key not in pair_cache:
+            if channel == "electron":
+                e1 = eps_virt_traj[:, u]
+                e2 = eps_virt_traj[:, v]
+            else:
+                e1 = eps_occ_traj[:, u]
+                e2 = eps_occ_traj[:, v]
+            _, psd, _ = compute_pair_spectral_density(e1, e2, dt_fs, w_max_cm=w_max_cm)
+            pair_cache[key] = psd
+        return pair_cache[key]
+
+    sigma_t = max(float(sigma_t_fs), 1.0)
+    # 1D Gaussian kernel for smoothing discrete transitions/fluxes along the time axis
+    half_width = max(int(np.ceil(4.0 * sigma_t / max(dt_fs, 0.1))), 2)
+    t_win = np.arange(-half_width, half_width + 1) * dt_fs
+    gauss_kernel = np.exp(-0.5 * (t_win / sigma_t) ** 2)
+    gauss_kernel /= np.maximum(np.sum(gauss_kernel) * dt_fs, 1e-30)
+
+    pair_weights_e = {}
+    pair_weights_h = {}
+
+    # --- Mode A: Stochastic Surface Hopping (CPA-FSSH, DISH, CPA-FSSH-GDC) ---
+    if hop_records is not None and len(hop_records) > 0:
+        n_traj = max(int(n_trajectories), 1)
+        for h in hop_records:
+            t_hop = float(h["time_fs"])
+            ch = str(h["channel"]).lower()
+            u = int(h["from"])
+            v = int(h["to"])
+            if u == v:
+                continue
+            pair_key = (min(u, v), max(u, v))
+            k_idx = int(np.clip(round((t_hop - times_fs[0]) / dt_fs), 0, N_t - 1))
+            weight = 1.0 / n_traj
+
+            if ch == "electron":
+                if pair_key not in pair_weights_e:
+                    pair_weights_e[pair_key] = np.zeros(N_t, dtype=np.float64)
+                pair_weights_e[pair_key][k_idx] += weight
+                visited_pairs["electron"].add(pair_key)
+            else:
+                if pair_key not in pair_weights_h:
+                    pair_weights_h[pair_key] = np.zeros(N_t, dtype=np.float64)
+                pair_weights_h[pair_key][k_idx] += weight
+                visited_pairs["hole"].add(pair_key)
+
+    # --- Mode B: Deterministic Master Equation (PME) ---
+    elif pme_flux_records is not None and len(pme_flux_records) > 0:
+        for rec in pme_flux_records:
+            t_rec = float(rec["time_fs"])
+            k_idx = int(np.clip(round((t_rec - times_fs[0]) / dt_fs), 0, N_t - 1))
+            flux_v = rec.get("flux_virt", None)
+            flux_o = rec.get("flux_occ", None)
+
+            if flux_v is not None:
+                if isinstance(flux_v, list):
+                    for a, b, phi in flux_v:
+                        pair_key = (min(a, b), max(a, b))
+                        if pair_key not in pair_weights_e:
+                            pair_weights_e[pair_key] = np.zeros(N_t, dtype=np.float64)
+                        pair_weights_e[pair_key][k_idx] += phi
+                        visited_pairs["electron"].add(pair_key)
+                elif isinstance(flux_v, np.ndarray):
+                    n_v = flux_v.shape[0]
+                    np.fill_diagonal(flux_v, 0.0)
+                    tot_v = np.sum(flux_v)
+                    if tot_v > 1e-12:
+                        thresh = 1e-4 * tot_v
+                        r, c = np.where(flux_v >= thresh)
+                        v_vals = flux_v[r, c]
+                        if len(v_vals) > 50:
+                            top_k = np.argpartition(v_vals, -50)[-50:]
+                            r, c, v_vals = r[top_k], c[top_k], v_vals[top_k]
+                        for a, b, phi in zip(r, c, v_vals):
+                            pair_key = (min(a, b), max(a, b))
+                            if pair_key not in pair_weights_e:
+                                pair_weights_e[pair_key] = np.zeros(N_t, dtype=np.float64)
+                            pair_weights_e[pair_key][k_idx] += phi
+                            visited_pairs["electron"].add(pair_key)
+
+            if flux_o is not None:
+                if isinstance(flux_o, list):
+                    for i, j, phi in flux_o:
+                        pair_key = (min(i, j), max(i, j))
+                        if pair_key not in pair_weights_h:
+                            pair_weights_h[pair_key] = np.zeros(N_t, dtype=np.float64)
+                        pair_weights_h[pair_key][k_idx] += phi
+                        visited_pairs["hole"].add(pair_key)
+                elif isinstance(flux_o, np.ndarray):
+                    n_o = flux_o.shape[0]
+                    np.fill_diagonal(flux_o, 0.0)
+                    tot_o = np.sum(flux_o)
+                    if tot_o > 1e-12:
+                        thresh = 1e-4 * tot_o
+                        r, c = np.where(flux_o >= thresh)
+                        v_vals = flux_o[r, c]
+                        if len(v_vals) > 50:
+                            top_k = np.argpartition(v_vals, -50)[-50:]
+                            r, c, v_vals = r[top_k], c[top_k], v_vals[top_k]
+                        for i, j, phi in zip(r, c, v_vals):
+                            pair_key = (min(i, j), max(i, j))
+                            if pair_key not in pair_weights_h:
+                                pair_weights_h[pair_key] = np.zeros(N_t, dtype=np.float64)
+                            pair_weights_h[pair_key][k_idx] += phi
+                            visited_pairs["hole"].add(pair_key)
+
+    # Convolve 1D weights along time and synthesize 2D action spectrograms
+    for (a, b), w_series in pair_weights_e.items():
+        w_smooth = np.convolve(w_series, gauss_kernel, mode="same")
+        psd = _get_pair_psd("electron", a, b)
+        J_elec += np.outer(psd, w_smooth)
+
+    for (i, j), w_series in pair_weights_h.items():
+        w_smooth = np.convolve(w_series, gauss_kernel, mode="same")
+        psd = _get_pair_psd("hole", i, j)
+        J_hole += np.outer(psd, w_smooth)
+
+    J_total = J_elec + J_hole
+    max_amp = float(np.max(J_total)) if np.max(J_total) > 0 else 1.0
+
+    # Normalized 2D spectrograms [0, 1]
+    J_total_norm = J_total / max_amp
+    J_elec_norm = J_elec / max_amp
+    J_hole_norm = J_hole / max_amp
+
+    # Time-integrated vibrational action spectra
+    _trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
+    J_int_total = _trapz(J_total, x=times_fs, axis=1)
+    J_int_elec = _trapz(J_elec, x=times_fs, axis=1)
+    J_int_hole = _trapz(J_hole, x=times_fs, axis=1)
+
+    peak_int = float(np.max(J_int_total)) if np.max(J_int_total) > 0 else 1.0
+    J_int_total_norm = J_int_total / peak_int
+    J_int_elec_norm = J_int_elec / peak_int
+    J_int_hole_norm = J_int_hole / peak_int
+
+    # Band-gap excitation spectral density comparison
+    J_bg_interp = None
+    if bg_data is not None and "wavenumbers_cm" in bg_data and "psd" in bg_data:
+        bg_wn = bg_data["wavenumbers_cm"]
+        bg_psd = bg_data["psd"]
+        J_bg_interp = np.interp(sample_wn, bg_wn, bg_psd, left=0.0, right=0.0)
+        max_bg = float(np.max(J_bg_interp)) if np.max(J_bg_interp) > 0 else 1.0
+        J_bg_interp /= max_bg
+
+    return {
+        "times_fs": times_fs,
+        "wavenumbers_cm": sample_wn,
+        "J_total": J_total_norm,
+        "J_electron": J_elec_norm,
+        "J_hole": J_hole_norm,
+        "J_total_raw": J_total,
+        "J_int_total": J_int_total_norm,
+        "J_int_elec": J_int_elec_norm,
+        "J_int_hole": J_int_hole_norm,
+        "J_bandgap": J_bg_interp,
+        "n_unique_pairs": len(visited_pairs["electron"]) + len(visited_pairs["hole"]),
+        "visited_pairs": visited_pairs,
+        "method": method_name,
+    }
+
+
+def plot_time_resolved_spectral_density(
+    tr_sd_data,
+    plot_file="time_resolved_spectral_density.png",
+    html_file="time_resolved_spectral_density.html",
+    material_name="CsPbBr3",
+    method_name="PME"
+):
+    r"""
+    Generates a 4-panel publication-quality Matplotlib figure (PNG) and an interactive Plotly HTML
+    visualization of the Time-Resolved Vibrational Action Spectrum J(omega, t).
+    """
+    times = tr_sd_data["times_fs"]
+    wn = tr_sd_data["wavenumbers_cm"]
+    J_tot = tr_sd_data["J_total"]
+    J_e = tr_sd_data["J_electron"]
+    J_h = tr_sd_data["J_hole"]
+    J_int_tot = tr_sd_data["J_int_total"]
+    J_int_e = tr_sd_data["J_int_elec"]
+    J_int_h = tr_sd_data["J_int_hole"]
+    J_bg = tr_sd_data["J_bandgap"]
+    method_lbl = tr_sd_data.get("method", method_name).upper()
+
+    # -------------------------------------------------------------
+    # 1. Matplotlib Figure (PNG)
+    # -------------------------------------------------------------
+    fig, axes = plt.subplots(2, 2, figsize=(15, 11), constrained_layout=True)
+
+    # Panel (a): Total Phonon Spectrogram
+    im0 = axes[0, 0].pcolormesh(times, wn, J_tot, cmap="inferno", shading="auto", vmin=0, vmax=1.0)
+    axes[0, 0].set_title(f"(a) Total Vibrational Spectrogram $J_{{\\mathrm{{tot}}}}(\\omega, t)$ [{method_lbl}]", fontsize=13, fontweight="bold")
+    axes[0, 0].set_xlabel("Delay Time $t$ (fs)", fontsize=11)
+    axes[0, 0].set_ylabel("Phonon Frequency $\\omega$ (cm$^{-1}$)", fontsize=11)
+    cbar0 = fig.colorbar(im0, ax=axes[0, 0], fraction=0.046, pad=0.04)
+    cbar0.set_label("Action Density (norm.)", fontsize=10)
+
+    # Panel (b): Time-Integrated Footprint vs Band-Edge Exciton PSD
+    axes[0, 1].plot(wn, J_int_tot, color="#111827", lw=2.4, label="Cooling Total $J_{\\mathrm{int}}(\\omega)$")
+    axes[0, 1].plot(wn, J_int_e, color="#2563EB", lw=1.8, ls="--", label="Electron Cooling $J_e$")
+    axes[0, 1].plot(wn, J_int_h, color="#DC2626", lw=1.8, ls="--", label="Hole Cooling $J_h$")
+    if J_bg is not None:
+        axes[0, 1].plot(wn, J_bg, color="#059669", lw=2.2, ls=":", label="Band-Gap Exciton $J_{\\mathrm{gap}}(\\omega)$")
+        axes[0, 1].fill_between(wn, J_bg, color="#10B981", alpha=0.15)
+
+    # Identify dominant peak in cooling spectrum (excluding DC < 30 cm^-1)
+    mask_opt = wn >= 30.0
+    if np.any(mask_opt):
+        p_opt = np.where(mask_opt)[0][np.argmax(J_int_tot[mask_opt])]
+        axes[0, 1].annotate(
+            f"Active Mode ({wn[p_opt]:.0f} cm$^{{-1}}$)",
+            xy=(wn[p_opt], J_int_tot[p_opt]),
+            xytext=(wn[p_opt] + 25, J_int_tot[p_opt] * 0.85),
+            arrowprops=dict(facecolor="#111827", shrink=0.08, width=1.5, headwidth=6),
+            fontsize=10, fontweight="semibold"
+        )
+
+    axes[0, 1].set_title("(b) Dynamical Action Footprint vs. Band-Gap PSD", fontsize=13, fontweight="bold")
+    axes[0, 1].set_xlabel("Phonon Frequency $\\omega$ (cm$^{-1}$)", fontsize=11)
+    axes[0, 1].set_ylabel("Spectral Density (arb. units)", fontsize=11)
+    axes[0, 1].set_ylim(-0.02, 1.08)
+    axes[0, 1].legend(loc="upper right", frameon=True, fontsize=10)
+    axes[0, 1].grid(True, ls=":", alpha=0.6)
+
+    # Panel (c): Electron Cooling Channel
+    im1 = axes[1, 0].pcolormesh(times, wn, J_e, cmap="viridis", shading="auto", vmin=0, vmax=max(0.01, np.max(J_e)))
+    axes[1, 0].set_title("(c) Electron Cooling Channel $J_e(\\omega, t)$", fontsize=13, fontweight="bold")
+    axes[1, 0].set_xlabel("Delay Time $t$ (fs)", fontsize=11)
+    axes[1, 0].set_ylabel("Phonon Frequency $\\omega$ (cm$^{-1}$)", fontsize=11)
+    cbar1 = fig.colorbar(im1, ax=axes[1, 0], fraction=0.046, pad=0.04)
+    cbar1.set_label("Action Density", fontsize=10)
+
+    # Panel (d): Hole Cooling Channel
+    im2 = axes[1, 1].pcolormesh(times, wn, J_h, cmap="plasma", shading="auto", vmin=0, vmax=max(0.01, np.max(J_h)))
+    axes[1, 1].set_title("(d) Hole Cooling Channel $J_h(\\omega, t)$", fontsize=13, fontweight="bold")
+    axes[1, 1].set_xlabel("Delay Time $t$ (fs)", fontsize=11)
+    axes[1, 1].set_ylabel("Phonon Frequency $\\omega$ (cm$^{-1}$)", fontsize=11)
+    cbar2 = fig.colorbar(im2, ax=axes[1, 1], fraction=0.046, pad=0.04)
+    cbar2.set_label("Action Density", fontsize=10)
+
+    fig.suptitle(
+        f"QDEX — Time-Resolved Vibrational Action Spectrum $J(\\omega, t)$ ({material_name} | {method_lbl})",
+        fontsize=16, fontweight="bold", y=1.02
+    )
+
+    fig.savefig(plot_file, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  [NAMD:Spectrogram] Saved publication plot to: {plot_file}")
+
+    # -------------------------------------------------------------
+    # 2. Interactive Plotly Figure (HTML)
+    # -------------------------------------------------------------
+    try:
+        from plotly.subplots import make_subplots
+        import plotly.graph_objects as go
+
+        fig_plotly = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=[
+                f"<b>(a) Total Vibrational Spectrogram J(w, t) [{method_lbl}]</b>",
+                "<b>(b) Time-Integrated Action Footprint vs Bandgap PSD</b>",
+                "<b>(c) Electron Cooling Channel J_e(w, t)</b>",
+                "<b>(d) Hole Cooling Channel J_h(w, t)</b>"
+            ],
+            horizontal_spacing=0.09,
+            vertical_spacing=0.12
+        )
+
+        fig_plotly.add_trace(
+            go.Heatmap(
+                x=times, y=wn, z=J_tot,
+                colorscale="Inferno", zmin=0.0, zmax=1.0,
+                colorbar=dict(title="Action Density", x=0.45, len=0.45, y=0.8),
+                hovertemplate="Time: %{x:.1f} fs<br>Freq: %{y:.1f} cm^-1<br>J_tot: %{z:.4f}<extra></extra>"
+            ), row=1, col=1
+        )
+
+        fig_plotly.add_trace(
+            go.Scatter(
+                x=wn, y=J_int_tot,
+                mode="lines", name="Total Cooling Footprint",
+                line=dict(color="#111827", width=2.6),
+                hovertemplate="Freq: %{x:.1f} cm^-1<br>J_int: %{y:.4f}<extra></extra>"
+            ), row=1, col=2
+        )
+        fig_plotly.add_trace(
+            go.Scatter(
+                x=wn, y=J_int_e,
+                mode="lines", name="Electron Cooling Footprint",
+                line=dict(color="#2563EB", width=2.0, dash="dash"),
+                hovertemplate="Freq: %{x:.1f} cm^-1<br>J_e: %{y:.4f}<extra></extra>"
+            ), row=1, col=2
+        )
+        fig_plotly.add_trace(
+            go.Scatter(
+                x=wn, y=J_int_h,
+                mode="lines", name="Hole Cooling Footprint",
+                line=dict(color="#DC2626", width=2.0, dash="dash"),
+                hovertemplate="Freq: %{x:.1f} cm^-1<br>J_h: %{y:.4f}<extra></extra>"
+            ), row=1, col=2
+        )
+        if J_bg is not None:
+            fig_plotly.add_trace(
+                go.Scatter(
+                    x=wn, y=J_bg,
+                    mode="lines", name="Band-Gap Exciton PSD",
+                    line=dict(color="#059669", width=2.2, dash="dot"),
+                    fill="tozeroy", fillcolor="rgba(16, 185, 129, 0.15)",
+                    hovertemplate="Freq: %{x:.1f} cm^-1<br>J_gap: %{y:.4f}<extra></extra>"
+                ), row=1, col=2
+            )
+
+        fig_plotly.add_trace(
+            go.Heatmap(
+                x=times, y=wn, z=J_e,
+                colorscale="Viridis",
+                colorbar=dict(title="J_e", x=0.45, len=0.45, y=0.2),
+                hovertemplate="Time: %{x:.1f} fs<br>Freq: %{y:.1f} cm^-1<br>J_e: %{z:.4f}<extra></extra>"
+            ), row=2, col=1
+        )
+
+        fig_plotly.add_trace(
+            go.Heatmap(
+                x=times, y=wn, z=J_h,
+                colorscale="Plasma",
+                colorbar=dict(title="J_h", x=1.02, len=0.45, y=0.2),
+                hovertemplate="Time: %{x:.1f} fs<br>Freq: %{y:.1f} cm^-1<br>J_h: %{z:.4f}<extra></extra>"
+            ), row=2, col=2
+        )
+
+        fig_plotly.update_xaxes(title_text="Delay Time t (fs)", row=1, col=1)
+        fig_plotly.update_yaxes(title_text="Phonon Frequency (cm^-1)", row=1, col=1)
+
+        fig_plotly.update_xaxes(title_text="Phonon Frequency (cm^-1)", row=1, col=2)
+        fig_plotly.update_yaxes(title_text="Spectral Density (arb. units)", row=1, col=2)
+
+        fig_plotly.update_xaxes(title_text="Delay Time t (fs)", row=2, col=1)
+        fig_plotly.update_yaxes(title_text="Phonon Frequency (cm^-1)", row=2, col=1)
+
+        fig_plotly.update_xaxes(title_text="Delay Time t (fs)", row=2, col=2)
+        fig_plotly.update_yaxes(title_text="Phonon Frequency (cm^-1)", row=2, col=2)
+
+        fig_plotly.update_layout(
+            height=900,
+            width=1500,
+            title_text=f"<b>QDEX — Time-Resolved Vibrational Action Spectrum J(w, t) ({material_name} | {method_lbl})</b>",
+            title_font=dict(size=18, family="sans-serif"),
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
+        )
+
+        fig_plotly.write_html(html_file, include_plotlyjs=True)
+        print(f"  [NAMD:Spectrogram] Saved interactive HTML to: {html_file}")
+    except Exception as e:
+        print(f"  [NAMD:Warn] Failed to create Plotly HTML widget: {e}")
+
+
+def export_time_resolved_spectral_density(
+    tr_sd_data,
+    output_npz="time_resolved_spectral_density.npz",
+    output_csv="time_resolved_spectral_density.csv"
+):
+    """
+    Exports 2D spectrogram matrices and 1D time-integrated spectra to compressed NPZ and CSV.
+    """
+    np.savez_compressed(
+        output_npz,
+        times_fs=tr_sd_data["times_fs"],
+        wavenumbers_cm=tr_sd_data["wavenumbers_cm"],
+        J_total=tr_sd_data["J_total"],
+        J_electron=tr_sd_data["J_electron"],
+        J_hole=tr_sd_data["J_hole"],
+        J_int_total=tr_sd_data["J_int_total"],
+        J_int_elec=tr_sd_data["J_int_elec"],
+        J_int_hole=tr_sd_data["J_int_hole"],
+        J_bandgap=tr_sd_data["J_bandgap"] if tr_sd_data["J_bandgap"] is not None else np.zeros_like(tr_sd_data["wavenumbers_cm"]),
+        method=str(tr_sd_data.get("method", "NAMD"))
+    )
+    print(f"  [NAMD:Spectrogram] Exported 2D spectrogram arrays to: {output_npz}")
+
+    # Export 1D time-integrated spectrum to CSV
+    cols = [
+        tr_sd_data["wavenumbers_cm"],
+        tr_sd_data["J_int_total"],
+        tr_sd_data["J_int_elec"],
+        tr_sd_data["J_int_hole"]
+    ]
+    hdr = "wavenumber_cm,J_int_total,J_int_electron,J_int_hole"
+    if tr_sd_data["J_bandgap"] is not None:
+        cols.append(tr_sd_data["J_bandgap"])
+        hdr += ",J_bandgap"
+
+    np.savetxt(
+        output_csv,
+        np.column_stack(cols),
+        header=hdr,
+        delimiter=",",
+        comments=""
+    )
+    print(f"  [NAMD:Spectrogram] Exported 1D integrated spectra to: {output_csv}")
+
+
+def compute_2d_vibronic_action_map(
+    tr_sd_data,
+    n_fft=2048,
+    detrend_mode="linear",
+    wmax_acc=250.0,
+    wmax_prom=350.0
+):
+    r"""
+    Decomposes the time-resolved vibrational action spectrum J(omega_acc, t)
+    along the delay time axis t into coherent promoting / driving phonon frequencies:
+    S(omega_acc, Omega_prom) = abs(FFT_t[ J_osc(omega_acc, t) * W(t) ])
+
+    Parameters
+    ----------
+    tr_sd_data : dict
+        Output dictionary from compute_time_resolved_spectral_density.
+    n_fft : int
+        Zero-padded FFT points for high promoting mode frequency resolution.
+    detrend_mode : str
+        'linear' for standard linear detrending or 'savgol' for Savitzky-Golay baseline subtraction.
+    wmax_acc : float
+        Maximum frequency cut-off (cm^-1) for accepting modes.
+    wmax_prom : float
+        Maximum frequency cut-off (cm^-1) for promoting modes.
+
+    Returns
+    -------
+    dict
+        Contains:
+          - 'wavenumbers_acc_cm': 1D array of accepting frequencies
+          - 'wavenumbers_prom_cm': 1D array of promoting frequencies
+          - 'S_2d_total': 2D array [n_acc, n_prom]
+          - 'S_2d_elec': 2D array [n_acc, n_prom]
+          - 'S_2d_hole': 2D array [n_acc, n_prom]
+          - 'proj_acc': 1D marginal accepting action
+          - 'proj_prom': 1D marginal promoting action
+          - 'dominant_promoting_modes': list of peak tuples (freq_cm, amplitude)
+          - 'J_bandgap': 1D array of optical exciton spectral density
+          - 'method': method name string
+    """
+    from scipy.signal import detrend, savgol_filter, find_peaks
+
+    times_fs = tr_sd_data["times_fs"]
+    wn_acc_full = tr_sd_data["wavenumbers_cm"]
+    J_tot = tr_sd_data["J_total"]
+    J_e = tr_sd_data["J_electron"]
+    J_h = tr_sd_data["J_hole"]
+    J_bg_full = tr_sd_data.get("J_bandgap")
+
+    dt_fs = float(times_fs[1] - times_fs[0]) if len(times_fs) > 1 else 1.0
+    n_times = len(times_fs)
+
+    # Filter accepting frequency range
+    mask_acc = (wn_acc_full >= 0.0) & (wn_acc_full <= wmax_acc)
+    wn_acc = wn_acc_full[mask_acc]
+    J_tot_sub = J_tot[mask_acc, :]
+    J_e_sub = J_e[mask_acc, :]
+    J_h_sub = J_h[mask_acc, :]
+
+    # Detrend along the time axis (axis=1) to isolate coherent oscillations from macroscopic cooling decay
+    if detrend_mode == "savgol" and n_times > 15:
+        win_len = min(n_times if n_times % 2 != 0 else n_times - 1, max(7, int(150.0 / dt_fs) | 1))
+        J_tot_osc = J_tot_sub - savgol_filter(J_tot_sub, window_length=win_len, polyorder=2, axis=1)
+        J_e_osc = J_e_sub - savgol_filter(J_e_sub, window_length=win_len, polyorder=2, axis=1)
+        J_h_osc = J_h_sub - savgol_filter(J_h_sub, window_length=win_len, polyorder=2, axis=1)
+    else:
+        J_tot_osc = detrend(J_tot_sub, axis=1)
+        J_e_osc = detrend(J_e_sub, axis=1)
+        J_h_osc = detrend(J_h_sub, axis=1)
+
+    # Windowing along time axis
+    w_hann = np.hanning(n_times)[None, :]
+    S_2d_tot_full = np.abs(np.fft.rfft(J_tot_osc * w_hann, n=n_fft, axis=1))
+    S_2d_e_full = np.abs(np.fft.rfft(J_e_osc * w_hann, n=n_fft, axis=1))
+    S_2d_h_full = np.abs(np.fft.rfft(J_h_osc * w_hann, n=n_fft, axis=1))
+
+    # Frequency axis for promoting modes
+    freqs_thz = np.fft.rfftfreq(n_fft, d=dt_fs * 1e-15) * 1e-12
+    wn_prom_full = freqs_thz * 33.35641
+
+    mask_prom = (wn_prom_full >= 5.0) & (wn_prom_full <= wmax_prom)
+    wn_prom = wn_prom_full[mask_prom]
+
+    S_2d_tot = S_2d_tot_full[:, mask_prom]
+    S_2d_e = S_2d_e_full[:, mask_prom]
+    S_2d_h = S_2d_h_full[:, mask_prom]
+
+    # Marginal 1D projections
+    proj_acc = np.sum(S_2d_tot, axis=1)
+    proj_prom = np.sum(S_2d_tot, axis=0)
+
+    # Detect dominant promoting peaks
+    pks, _ = find_peaks(proj_prom, height=np.max(proj_prom) * 0.15, distance=max(1, int(15.0 / (wn_prom[1] - wn_prom[0]))))
+    dom_modes = [(float(wn_prom[p]), float(proj_prom[p])) for p in pks]
+
+    # Interpolate bandgap PSD onto accepting frequencies
+    J_bg_acc = np.interp(wn_acc, wn_acc_full, J_bg_full) if J_bg_full is not None else None
+
+    return {
+        "wavenumbers_acc_cm": wn_acc,
+        "wavenumbers_prom_cm": wn_prom,
+        "S_2d_total": S_2d_tot,
+        "S_2d_elec": S_2d_e,
+        "S_2d_hole": S_2d_h,
+        "proj_acc": proj_acc,
+        "proj_prom": proj_prom,
+        "dominant_promoting_modes": dom_modes,
+        "J_bandgap": J_bg_acc,
+        "J_bandgap_full": J_bg_full,
+        "wavenumbers_full": wn_acc_full,
+        "method": tr_sd_data.get("method", "NAMD")
+    }
+
+
+def plot_2d_vibronic_action_map(
+    vib2d_data,
+    output_png="2d_vibronic_action_map.png",
+    output_html="2d_vibronic_action_map.html",
+    material_name="CsPbBr3",
+    method_name=None
+):
+    """
+    Renders publication-grade 2D Vibronic Action Map with marginal projections and Plotly HTML widget.
+    """
+    wn_acc = vib2d_data["wavenumbers_acc_cm"]
+    wn_prom = vib2d_data["wavenumbers_prom_cm"]
+    S_tot = vib2d_data["S_2d_total"]
+    proj_acc = vib2d_data["proj_acc"]
+    proj_prom = vib2d_data["proj_prom"]
+    J_bg_full = vib2d_data.get("J_bandgap_full")
+    wn_full = vib2d_data.get("wavenumbers_full", wn_acc)
+    method_lbl = method_name or vib2d_data.get("method", "NAMD").upper()
+    dom_modes = vib2d_data.get("dominant_promoting_modes", [])
+
+    fig = plt.figure(figsize=(10, 9))
+    gs = fig.add_gridspec(2, 2, width_ratios=[4, 1.25], height_ratios=[1.25, 4],
+                           hspace=0.08, wspace=0.08)
+
+    ax_main = fig.add_subplot(gs[1, 0])
+    ax_top = fig.add_subplot(gs[0, 0], sharex=ax_main)
+    ax_right = fig.add_subplot(gs[1, 1], sharey=ax_main)
+
+    norm_max = np.max(S_tot) if np.max(S_tot) > 0 else 1.0
+    c = ax_main.pcolormesh(
+        wn_acc, wn_prom, S_tot.T / norm_max,
+        shading="gouraud", cmap="magma", vmin=0, vmax=1
+    )
+    ax_main.set_xlabel(r"Accepting Mode Frequency $\omega_{\mathrm{acc}}$ (cm$^{-1}$)", fontsize=12, fontweight="bold")
+    ax_main.set_ylabel(r"Promoting Mode Frequency $\Omega_{\mathrm{prom}}$ (cm$^{-1}$)", fontsize=12, fontweight="bold")
+    ax_main.set_xlim(wn_acc[0], wn_acc[-1])
+    ax_main.set_ylim(wn_prom[0], wn_prom[-1])
+    ax_main.grid(True, ls=":", alpha=0.5)
+
+    # Highlight dominant dual-phonon cross peak if available
+    if len(dom_modes) > 0:
+        opt_modes = [m for m in dom_modes if 120.0 <= m[0] <= 180.0]
+        ref_mode = opt_modes[0] if len(opt_modes) > 0 else dom_modes[0]
+        pk_acc = wn_acc[np.argmax(proj_acc)]
+        pk_prom = ref_mode[0]
+        ax_main.scatter([pk_acc], [pk_prom], color="cyan", s=90, marker="+", lw=2, zorder=5)
+        ax_main.annotate(
+            f"Dual-Phonon Cross-Peak\n({pk_acc:.0f} cm$^{{-1}}$ acc, {pk_prom:.0f} cm$^{{-1}}$ prom)",
+            xy=(pk_acc, pk_prom), xytext=(pk_acc + 30, pk_prom + 20),
+            arrowprops=dict(facecolor="cyan", shrink=0.05, width=1.5, headwidth=6),
+            fontweight="bold", fontsize=9, color="white",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="black", alpha=0.8, edgecolor="cyan")
+        )
+
+    # Top Panel: Accepting Mode Projection
+    p_acc_norm = proj_acc / np.max(proj_acc) if np.max(proj_acc) > 0 else proj_acc
+    ax_top.plot(wn_acc, p_acc_norm, color="#DC2626", lw=2.2)
+    ax_top.fill_between(wn_acc, 0, p_acc_norm, color="#DC2626", alpha=0.2)
+    ax_top.set_ylabel("Accepting\nAction", fontsize=10, fontweight="bold")
+    ax_top.set_title(
+        rf"QDEX — 2D Non-Adiabatic Vibronic Action Map ({material_name} | {method_lbl})",
+        fontsize=13, fontweight="bold", pad=12
+    )
+    ax_top.grid(True, ls=":", alpha=0.5)
+    plt.setp(ax_top.get_xticklabels(), visible=False)
+
+    # Right Panel: Promoting Mode Projection overlaid with Optical Band-Gap Spectrum
+    p_prom_norm = proj_prom / np.max(proj_prom) if np.max(proj_prom) > 0 else proj_prom
+    ax_right.plot(p_prom_norm, wn_prom, color="#2563EB", lw=2.2, label=r"Promoting $\Omega_{\mathrm{prom}}$")
+
+    if J_bg_full is not None:
+        j_bg_interp = np.interp(wn_prom, wn_full, J_bg_full)
+        j_bg_norm = j_bg_interp / np.max(j_bg_interp) if np.max(j_bg_interp) > 0 else j_bg_interp
+        ax_right.plot(j_bg_norm, wn_prom, color="#059669", lw=1.8, ls="--", label=r"Optical $J_{\mathrm{gap}}$")
+        ax_right.fill_betweenx(wn_prom, 0, j_bg_norm, color="#059669", alpha=0.15)
+
+    ax_right.set_xlabel("Promoting\nAction", fontsize=10, fontweight="bold")
+    ax_right.grid(True, ls=":", alpha=0.5)
+    ax_right.legend(loc="upper right", fontsize=8)
+    plt.setp(ax_right.get_yticklabels(), visible=False)
+
+    fig.savefig(output_png, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  [NAMD:2D-Map] Saved publication plot to: {output_png}")
+
+    # Plotly interactive widget
+    try:
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
+
+        fig_p = make_subplots(
+            rows=2, cols=2,
+            column_widths=[0.75, 0.25],
+            row_heights=[0.25, 0.75],
+            vertical_spacing=0.04,
+            horizontal_spacing=0.04,
+            shared_xaxes=True,
+            shared_yaxes=True
+        )
+
+        fig_p.add_trace(
+            go.Scatter(
+                x=wn_acc, y=p_acc_norm,
+                mode="lines", fill="tozeroy",
+                line=dict(color="#DC2626", width=2.5),
+                name="Accepting Modes (Cooling)",
+                hovertemplate="w_acc: %{x:.1f} cm^-1<br>Action: %{y:.3f}<extra></extra>"
+            ), row=1, col=1
+        )
+
+        fig_p.add_trace(
+            go.Heatmap(
+                x=wn_acc, y=wn_prom, z=(S_tot.T / norm_max),
+                colorscale="Magma",
+                colorbar=dict(title="Action", x=1.02, len=0.75, y=0.38),
+                hovertemplate="w_acc: %{x:.1f} cm^-1<br>Omega_prom: %{y:.1f} cm^-1<br>Coupling: %{z:.3f}<extra></extra>"
+            ), row=2, col=1
+        )
+
+        fig_p.add_trace(
+            go.Scatter(
+                x=p_prom_norm, y=wn_prom,
+                mode="lines",
+                line=dict(color="#2563EB", width=2.5),
+                name="Promoting Modes (NAC Driving)",
+                hovertemplate="Omega_prom: %{y:.1f} cm^-1<br>Promoting Action: %{x:.3f}<extra></extra>"
+            ), row=2, col=2
+        )
+
+        if J_bg_full is not None:
+            fig_p.add_trace(
+                go.Scatter(
+                    x=j_bg_norm, y=wn_prom,
+                    mode="lines", fill="tozerox",
+                    line=dict(color="#059669", width=2, dash="dash"),
+                    name="Bandgap Optical Phonon PSD",
+                    hovertemplate="Omega: %{y:.1f} cm^-1<br>J_gap: %{x:.3f}<extra></extra>"
+                ), row=2, col=2
+            )
+
+        fig_p.update_xaxes(title_text="Accepting Mode Frequency (cm^-1)", row=2, col=1)
+        fig_p.update_yaxes(title_text="Promoting Mode Frequency (cm^-1)", row=2, col=1)
+        fig_p.update_yaxes(title_text="Accepting Action", row=1, col=1)
+        fig_p.update_xaxes(title_text="Promoting Action", row=2, col=2)
+
+        fig_p.update_layout(
+            width=1000, height=900,
+            title_text=f"<b>QDEX — 2D Non-Adiabatic Vibronic Action Map ({material_name} | {method_lbl})</b>",
+            template="plotly_white",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
+        )
+        fig_p.write_html(output_html, include_plotlyjs=True)
+        print(f"  [NAMD:2D-Map] Saved interactive HTML to: {output_html}")
+    except Exception as e:
+        print(f"  [NAMD:Warn] Failed to create Plotly HTML 2D map: {e}")
+
+
+def export_2d_vibronic_action_map(
+    vib2d_data,
+    output_npz="2d_vibronic_action_map.npz",
+    output_csv="2d_vibronic_action_projections.csv"
+):
+    """
+    Exports 2D vibronic action matrices and 1D marginal projections to NPZ and CSV.
+    """
+    np.savez_compressed(
+        output_npz,
+        wavenumbers_acc_cm=vib2d_data["wavenumbers_acc_cm"],
+        wavenumbers_prom_cm=vib2d_data["wavenumbers_prom_cm"],
+        S_2d_total=vib2d_data["S_2d_total"],
+        S_2d_elec=vib2d_data["S_2d_elec"],
+        S_2d_hole=vib2d_data["S_2d_hole"],
+        proj_acc=vib2d_data["proj_acc"],
+        proj_prom=vib2d_data["proj_prom"],
+        method=str(vib2d_data.get("method", "NAMD"))
+    )
+    print(f"  [NAMD:2D-Map] Exported 2D vibronic arrays to: {output_npz}")
+
+    # Export 1D marginal projections to CSV
+    # Pad to equal length if needed
+    len_acc = len(vib2d_data["wavenumbers_acc_cm"])
+    len_prom = len(vib2d_data["wavenumbers_prom_cm"])
+    max_len = max(len_acc, len_prom)
+
+    w_acc_col = np.pad(vib2d_data["wavenumbers_acc_cm"], (0, max_len - len_acc), constant_values=np.nan)
+    p_acc_col = np.pad(vib2d_data["proj_acc"], (0, max_len - len_acc), constant_values=np.nan)
+    w_prom_col = np.pad(vib2d_data["wavenumbers_prom_cm"], (0, max_len - len_prom), constant_values=np.nan)
+    p_prom_col = np.pad(vib2d_data["proj_prom"], (0, max_len - len_prom), constant_values=np.nan)
+
+    np.savetxt(
+        output_csv,
+        np.column_stack([w_acc_col, p_acc_col, w_prom_col, p_prom_col]),
+        header="wavenumber_acc_cm,action_acc,wavenumber_prom_cm,action_prom",
+        delimiter=",",
+        comments=""
+    )
+    print(f"  [NAMD:2D-Map] Exported 1D marginal projections to: {output_csv}")
+
+
 
 

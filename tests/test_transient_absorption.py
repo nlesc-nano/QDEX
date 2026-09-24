@@ -81,6 +81,27 @@ class TestTransientAbsorption(unittest.TestCase):
         self.assertTrue(fit["success"])
         self.assertAlmostEqual(fit["tau_rise_fs"], self.expected_tau_rise_fs, delta=20.0)
 
+    def test_state_filling_uses_degeneracy(self):
+        """One carrier in a spatial orbital blocks half of each shell, not three oscillator strengths."""
+        pop = np.array([[1.0]])
+        res = compute_transient_absorption(
+            times_fs=np.array([0.0]),
+            populations=pop,
+            E_pairs=np.array([2.0]),
+            f_pairs=np.array([1.0]),
+            i_pairs=np.array([0]),
+            a_pairs=np.array([0]),
+            sigma_ev=0.02,
+            e_range=(2.0, 2.0),
+            n_e_points=1,
+            state_degeneracy=2.0,
+            include_se=False,
+        )
+        # Peak of a unit Gaussian is 1/(sigma sqrt(2 pi)). delta_f = -1 * (0.5+0.5) = -1.
+        sigma = 0.02
+        peak = 1.0 / (np.sqrt(2.0 * np.pi) * sigma)
+        self.assertAlmostEqual(res["delta_A"][0, 0], -peak, places=6)
+
     def test_plot_and_export_transient_absorption(self):
         """Verify plot generation and data export."""
         res = compute_transient_absorption(

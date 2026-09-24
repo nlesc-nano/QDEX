@@ -76,7 +76,7 @@ Step 1: Precompute overlaps and exciton states
 
 This step computes:
 * Quasiparticle energies and diagonal BSE exciton states.
-* Cross-frame non-adiabatic overlaps $S(t, t+\Delta t)$.
+* Cross-frame non-adiabatic overlaps :math:`S(t, t+\Delta t)`.
 * Spinor phase alignment and Hungarian crossing tracking.
 * Compact caching into `.npz` step files.
 
@@ -85,6 +85,7 @@ Step 2: Run Dynamics & Carrier Cooling
 
 .. code-block:: bash
 
-   qdex --config config.yaml --namd-dynamics
+   qdex --config config.yaml --namd-run
 
-Propagates the carrier cooling cascade deterministically via the Pauli Master Equation or stochastically via CPA-FSSH, exporting cooling curves, state populations, and photoluminescence summaries.
+Propagates the carrier cooling cascade deterministically via the Pauli Master Equation or stochastically via CPA-FSSH or DISH, exporting cooling curves, state populations, and photoluminescence summaries.
+

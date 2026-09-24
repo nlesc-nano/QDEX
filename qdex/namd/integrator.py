@@ -60,12 +60,14 @@ def step_rk4(c, H_eff, dt_elec):
     return c_next
 
 
-def apply_edc_decoherence(c, active_surface, E_vec, dt_elec, c_param=0.1):
+def apply_edc_decoherence(c, active_surface, E_vec, dt_elec, c_param=0.1, n_atoms=1, temp_k=300.0, decay_type="exponential"):
     """
     Energy-based Decoherence Correction (EDC / Granucci-Persico):
     Damp off-diagonal coefficients J != K:
-      c_J -> c_J * exp(-dt_elec / tau_KJ)
+      c_J -> c_J * exp(-dt_elec / tau_KJ)       [exponential / EDC]
+      c_J -> c_J * exp(-0.5 * (dt_elec / tau_KJ)^2)  [gaussian / GDC]
       tau_KJ = hbar / |E_K - E_J| * (1 + C / E_kin)
+    C is c_param in Hartree. E_kin is the classical nuclear kinetic energy.
     Then renormalize active state c_K.
     """
     if active_surface is None or active_surface < 0:
@@ -74,13 +76,22 @@ def apply_edc_decoherence(c, active_surface, E_vec, dt_elec, c_param=0.1):
     K = active_surface
     n = len(c)
     dE = np.abs(E_vec - E_vec[K])
+    # 0.1 Ha -> eV. E_kin = (3/2) N_atoms kT, same convention as the master equation.
+    HA_TO_EV = 27.211386245988
+    E_kin = 1.5 * max(int(n_atoms), 1) * KB_EV * max(float(temp_k), 1e-3)
+    edc_factor = 1.0 + (float(c_param) * HA_TO_EV) / max(E_kin, 1e-8)
+
+    is_gaussian = str(decay_type).lower() in ("gaussian", "gdc")
 
     for J in range(n):
         if J == K:
             continue
         if dE[J] > 1e-4:
-            tau_KJ = HBAR_EV_FS / dE[J]
-            damp = np.exp(-dt_elec / tau_KJ)
+            tau_KJ = (HBAR_EV_FS / dE[J]) * edc_factor
+            if is_gaussian:
+                damp = np.exp(-0.5 * (dt_elec / max(tau_KJ, 1e-6)) ** 2)
+            else:
+                damp = np.exp(-dt_elec / tau_KJ)
             c[J] *= damp
 
     # Renormalize active state K so total norm is 1
@@ -95,6 +106,212 @@ def apply_edc_decoherence(c, active_surface, E_vec, dt_elec, c_param=0.1):
             c /= norm
 
     return c
+
+
+def apply_gdc_decoherence(c, active_surface, E_vec, dt_elec, c_param=0.1, n_atoms=1, temp_k=300.0):
+    """
+    Gaussian Decoherence Correction (GDC / Granucci-Persico-Zoccante 2010):
+    Damps off-diagonal coefficients via Gaussian factor exp(-0.5 * (dt / tau)^2).
+    """
+    return apply_edc_decoherence(
+        c, active_surface, E_vec, dt_elec,
+        c_param=c_param, n_atoms=n_atoms, temp_k=temp_k,
+        decay_type="gaussian"
+    )
+
+
+def apply_edc_decoherence_batch(
+    C,
+    active_surfaces,
+    E_batch,
+    dt_fs,
+    tau_mat=None,
+    c_param=0.1,
+    n_atoms=775,
+    temp_k=300.0,
+    min_tau_fs=1.0,
+    max_tau_fs=500.0,
+    decay_type="exponential"
+):
+    """
+    Vectorized Energy-based Decoherence Correction (EDC / Granucci-Persico)
+    or Gaussian Decoherence Correction (GDC / Granucci-Persico-Zoccante 2010)
+    for an ensemble of trajectories C of shape (n_states, n_trajectories).
+
+    For each trajectory tr with active state K = active_surfaces[tr]:
+      c_J -> c_J * exp(-dt_fs / tau_KJ)             [decay_type="exponential"]
+      c_J -> c_J * exp(-0.5 * (dt_fs / tau_KJ)^2)   [decay_type="gaussian"]
+      for all J != K, then renormalize c_K so that sum_J |c_J|^2 = 1.
+
+    If tau_mat of shape (n_states, n_states) is given, tau_KJ is taken from tau_mat[K, J].
+    Otherwise, tau_KJ is computed via instantaneous EDC:
+      tau_KJ = (hbar / |E_K - E_J|) * (1 + C / E_kin).
+    """
+    n_states, n_traj = C.shape
+    active_surfaces = np.asarray(active_surfaces, dtype=int)
+    tr_idx = np.arange(n_traj)
+    is_gaussian = str(decay_type).lower() in ("gaussian", "gdc")
+
+    if tau_mat is not None:
+        tau_KJ = np.maximum(tau_mat[active_surfaces, :].T, min_tau_fs)  # shape: (n_states, n_traj)
+        if is_gaussian:
+            damp = np.exp(-0.5 * (dt_fs / tau_KJ) ** 2)
+        else:
+            damp = np.exp(-dt_fs / tau_KJ)
+    else:
+        E_act = E_batch[active_surfaces, tr_idx]  # shape: (n_traj,)
+        dE = np.abs(E_batch - E_act[np.newaxis, :])  # shape: (n_states, n_traj)
+        HA_TO_EV = 27.211386245988
+        E_kin = 1.5 * max(int(n_atoms), 1) * KB_EV * max(float(temp_k), 1e-3)
+        edc_factor = 1.0 + (float(c_param) * HA_TO_EV) / max(E_kin, 1e-8)
+        tau_KJ = (HBAR_EV_FS / np.maximum(dE, 1e-4)) * edc_factor
+        tau_KJ = np.clip(tau_KJ, min_tau_fs, max_tau_fs)
+        if is_gaussian:
+            damp = np.exp(-0.5 * (dt_fs / tau_KJ) ** 2)
+        else:
+            damp = np.exp(-dt_fs / tau_KJ)
+
+    # Apply damping to non-active states
+    C_damped = C * damp
+    # Preserve active amplitude
+    C_damped[active_surfaces, tr_idx] = C[active_surfaces, tr_idx]
+
+    # Renormalize active state so sum_J |c_J|^2 = 1
+    other_pop = np.sum(np.abs(C_damped)**2, axis=0) - np.abs(C[active_surfaces, tr_idx])**2
+    other_pop = np.maximum(other_pop, 0.0)
+    valid = other_pop < 1.0
+    new_mag = np.sqrt(np.maximum(1.0 - other_pop, 0.0))
+    orig_phase = np.angle(C[active_surfaces, tr_idx])
+    C_damped[active_surfaces[valid], np.where(valid)[0]] = new_mag[valid] * np.exp(1j * orig_phase[valid])
+
+    invalid = ~valid
+    if np.any(invalid):
+        norms = np.linalg.norm(C_damped[:, invalid], axis=0)
+        C_damped[:, invalid] /= np.maximum(norms, 1e-12)[np.newaxis, :]
+
+    return C_damped
+
+
+def apply_gdc_decoherence_batch(
+    C,
+    active_surfaces,
+    E_batch,
+    dt_fs,
+    tau_mat=None,
+    c_param=0.1,
+    n_atoms=775,
+    temp_k=300.0,
+    min_tau_fs=1.0,
+    max_tau_fs=500.0
+):
+    """
+    Vectorized Gaussian Decoherence Correction (GDC / Granucci-Persico-Zoccante 2010; Prezhdo & Rossky 1997)
+    for an ensemble of trajectories C of shape (n_states, n_trajectories).
+    Damping is Gaussian: c_J -> c_J * exp(-0.5 * (dt_fs / tau_KJ)^2).
+    """
+    return apply_edc_decoherence_batch(
+        C,
+        active_surfaces,
+        E_batch,
+        dt_fs,
+        tau_mat=tau_mat,
+        c_param=c_param,
+        n_atoms=n_atoms,
+        temp_k=temp_k,
+        min_tau_fs=min_tau_fs,
+        max_tau_fs=max_tau_fs,
+        decay_type="gaussian"
+    )
+
+
+
+def step_dish_batch(
+    C,
+    active_surfaces,
+    E_batch,
+    dt_fs,
+    tau_mat=None,
+    beta=None,
+    detailed_balance=True,
+    min_tau_fs=1.0,
+):
+    """
+    Decoherence-Induced Surface Hopping (DISH, Jaeger, Fischer, Prezhdo, JCP 2012)
+    step for an ensemble of trajectories C of shape (n_states, n_trajectories).
+
+    For each trajectory tr in active state K = active_surfaces[tr]:
+      1. For each non-active state J != K:
+         A dephasing event occurs with probability P_dec = 1 - exp(-dt_fs / tau_KJ).
+      2. If a dephasing event occurs for J:
+         A hop K -> J is attempted with probability:
+           P_hop = |c_J|^2 * min(1, exp(-beta * max(E_J - E_K, 0)))
+         - If accepted: active surface switches to J, and wavepacket collapses to J:
+           c_J = 1.0, c_{L != J} = 0.
+         - If rejected: state J is quenched (c_J -> 0).
+      3. If no hop occurred, renormalize the remaining non-zero amplitudes of trajectory tr.
+
+    Returns:
+      C_new : updated complex ndarray of shape (n_states, n_trajectories)
+      active_surfaces_new : updated int ndarray of shape (n_trajectories,)
+      hops_occurred : bool ndarray of shape (n_trajectories,) indicating which hopped
+    """
+    n_states, n_traj = C.shape
+    active_surfaces = np.asarray(active_surfaces, dtype=int).copy()
+    C_out = np.array(C, dtype=np.complex128, copy=True)
+    hops_occurred = np.zeros(n_traj, dtype=bool)
+
+    if tau_mat is not None:
+        tau_KJ = tau_mat[active_surfaces, :].T  # shape: (n_states, n_traj)
+    else:
+        tau_KJ = np.full((n_states, n_traj), 20.0)
+
+    P_dec = 1.0 - np.exp(-dt_fs / np.maximum(tau_KJ, min_tau_fs))
+    P_dec[active_surfaces, np.arange(n_traj)] = 0.0
+
+    R1 = np.random.rand(n_states, n_traj)
+    dec_events = R1 < P_dec
+
+    E_act = E_batch[active_surfaces, np.arange(n_traj)]
+    dE = E_batch - E_act[np.newaxis, :]
+    if detailed_balance and beta is not None and beta > 0:
+        boltz = np.exp(-np.maximum(dE, 0.0) * beta)
+    else:
+        boltz = np.ones((n_states, n_traj), dtype=np.float64)
+
+    pop = np.abs(C_out)**2
+    P_hop = pop * boltz
+
+    R2 = np.random.rand(n_states, n_traj)
+    hop_cands = dec_events & (R2 < P_hop)
+
+    for tr in range(n_traj):
+        K = active_surfaces[tr]
+        cands = np.where(hop_cands[:, tr])[0]
+        if len(cands) > 0:
+            if len(cands) == 1:
+                new_K = cands[0]
+            else:
+                p_cands = P_hop[cands, tr]
+                sum_p = np.sum(p_cands)
+                if sum_p > 0:
+                    new_K = np.random.choice(cands, p=p_cands / sum_p)
+                else:
+                    new_K = np.random.choice(cands)
+            active_surfaces[tr] = new_K
+            C_out[:, tr] = 0.0
+            C_out[new_K, tr] = 1.0
+            hops_occurred[tr] = True
+        else:
+            decs = np.where(dec_events[:, tr])[0]
+            if len(decs) > 0:
+                C_out[decs, tr] = 0.0
+                norm = np.linalg.norm(C_out[:, tr])
+                if norm > 1e-12:
+                    C_out[:, tr] /= norm
+                else:
+                    C_out[K, tr] = 1.0
+
+    return C_out, active_surfaces, hops_occurred
 
 
 def propagate_electronic_substeps(
@@ -162,10 +379,10 @@ def propagate_electronic_substeps(
         if active_surface is not None and d_mat is not None:
             K = active_surface
             rho_KK = max(rho[K, K].real, 1e-12)
-            # 2 * dt_elec / rho_KK * Im(rho_KJ* * d_KJ)
+            # g_{K->J} = max(0, 2 dt Re(c_K* c_J d_KJ) / |c_K|^2), d_KJ = <K|d/dt|J>
             for J in range(n_states):
                 if J != K:
-                    val = 2.0 * dt_elec * (rho[K, J].conj() * d_mat[K, J]).imag / rho_KK
+                    val = 2.0 * dt_elec * np.real(np.conj(c[K]) * c[J] * d_mat[K, J]) / rho_KK
                     if val > 0.0:
                         flux_KJ[J] += val
 
@@ -201,7 +418,27 @@ def propagate_channel_rk4(c, E_k, E_kplus1, d_mat, dt_nuc_fs, n_substeps=50):
     return c
 
 
-def propagate_channel_batch_rk4(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_fs, n_substeps=50):
+def accumulate_fssh_flux(C, active_idx, d_mat, dt_sub, flux):
+    """
+    Add one substep of fewest-switches probability onto flux.
+
+    g_{a->j} = max(0, 2 dt Re(c_a* c_j d_aj) / |c_a|^2)
+    with d_aj = <a | d/dt | j>. C has shape (n_states, n_traj).
+    """
+    n_tr = C.shape[1]
+    tr = np.arange(n_tr)
+    active_idx = np.asarray(active_idx, dtype=int)
+    c_a = C[active_idx, tr]
+    pop = np.maximum(np.abs(c_a) ** 2, 1e-12)
+    d_rows = d_mat[active_idx, :]
+    term = np.conj(c_a)[np.newaxis, :] * C * d_rows.T
+    incr = 2.0 * dt_sub * np.real(term) / pop[np.newaxis, :]
+    np.maximum(incr, 0.0, out=incr)
+    incr[active_idx, tr] = 0.0
+    flux += incr
+
+
+def propagate_channel_batch_rk4(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_fs, n_substeps=50, active_idx=None):
     """
     Batched RK4 propagator for an ensemble of trajectories:
       dC/dt = -i/hbar * (E_mid * C) - d_mat @ C
@@ -209,11 +446,17 @@ def propagate_channel_batch_rk4(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_fs, 
       C: state amplitudes of shape (n_states, n_trajectories)
       E_k_batch, E_kplus1_batch: energies of shape (n_states, n_trajectories)
       d_mat: non-adiabatic coupling matrix of shape (n_states, n_states)
+
+    If active_idx is given, also return the substep-integrated hop flux
+    of shape (n_states, n_trajectories).
     """
     dt_elec = dt_nuc_fs / n_substeps
     fac = -1j / HBAR_EV_FS
     C = np.array(C, dtype=np.complex128, copy=True)
     dE = E_kplus1_batch - E_k_batch
+    flux = None
+    if active_idx is not None:
+        flux = np.zeros(C.shape, dtype=np.float64)
 
     for step in range(n_substeps):
         s = (step + 0.5) / n_substeps
@@ -227,14 +470,18 @@ def propagate_channel_batch_rk4(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_fs, 
         C4 = C + dt_elec * k3
         k4 = fac * (E_mid * C4) - (d_mat @ C4)
         C += (dt_elec / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+        if flux is not None:
+            accumulate_fssh_flux(C, active_idx, d_mat, dt_elec, flux)
 
     norms = np.linalg.norm(C, axis=0, keepdims=True)
     norms = np.maximum(norms, 1e-12)
     C /= norms
-    return C
+    if flux is None:
+        return C
+    return C, flux
 
 
-def propagate_channel_batch_strang(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_fs, n_substeps=2, device="auto"):
+def propagate_channel_batch_strang(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_fs, n_substeps=2, device="auto", active_idx=None):
     """
     Second-order Strang splitting (Trotter) unitary propagator for an ensemble of trajectories:
       U(tau) = exp(-i E tau / 2hbar) * exp(-d tau) * exp(-i E tau / 2hbar)
@@ -242,6 +489,10 @@ def propagate_channel_batch_strang(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_f
       C: state amplitudes of shape (n_states, n_trajectories)
       E_k_batch, E_kplus1_batch: energies of shape (n_states, n_trajectories)
       d_mat: skew-symmetric non-adiabatic coupling matrix of shape (n_states, n_states)
+
+    If active_idx is given, the fewest-switches flux is integrated in float64
+    and (C, flux) is returned. GPU propagation is skipped so the flux reads
+    the same amplitudes that are propagated.
     """
     from scipy.linalg import expm
     dt_sub = dt_nuc_fs / n_substeps
@@ -252,6 +503,8 @@ def propagate_channel_batch_strang(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_f
     O_mat = expm(-d_mat * dt_sub)
 
     use_gpu = False
+    if active_idx is not None:
+        device = "cpu"
     if device in ("gpu", "mps", "cuda") or (device == "auto"):
         try:
             import torch
@@ -284,10 +537,15 @@ def propagate_channel_batch_strang(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_f
 
     # CPU path with NumPy
     C = np.array(C, dtype=np.complex128, copy=True)
+    flux = np.zeros(C.shape, dtype=np.float64) if active_idx is not None else None
     for step in range(n_substeps):
         s = (step + 0.5) / n_substeps
         E_mid = E_k_batch + s * dE
         D_half = np.exp(-1j * E_mid * (dt_sub / (2.0 * HBAR_EV_FS)))
         C = D_half * (O_mat @ (D_half * C))
+        if flux is not None:
+            accumulate_fssh_flux(C, active_idx, d_mat, dt_sub, flux)
 
-    return C
+    if flux is None:
+        return C
+    return C, flux

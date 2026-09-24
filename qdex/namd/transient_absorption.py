@@ -29,8 +29,12 @@ def compute_transient_absorption(
     sigma_ev: float = 0.03,
     e_range: Optional[Tuple[float, float]] = None,
     n_e_points: int = 300,
-    include_se: bool = True,
+    include_se: bool = False,
     all_energies: Optional[np.ndarray] = None,
+    state_degeneracy: float = 2.0,
+    include_esa: bool = False,
+    f_elec_esa: Optional[np.ndarray] = None,
+    e_elec_esa: Optional[np.ndarray] = None,
 ) -> Dict[str, Any]:
     """
     Computes time-resolved differential absorption spectra Delta A(E, t).
@@ -45,8 +49,15 @@ def compute_transient_absorption(
       sigma_ev: Gaussian spectral line broadening in eV (default: 0.03 eV).
       e_range: (E_min, E_max) probe photon energy window in eV.
       n_e_points: Number of probe energy grid points.
-      include_se: Whether to include stimulated emission (default: True).
+      include_se: Add an extra -f P_ia term. Off by default: for incoherent
+        populations the degeneracy-normalized state filling already contains
+        the stimulated-emission contribution used in quantum-dot TA.
       all_energies: Optional (n_times, n_pairs) instantaneous pair energies.
+      state_degeneracy: Shell degeneracy g. Use 2 for a closed-shell spatial
+        orbital and 1 for a spinor. One carrier then blocks a fraction 1/g.
+      include_esa: Add positive orbital excited-state absorption when
+        f_elec_esa and e_elec_esa are supplied. Left off when only pair
+        oscillator strengths were stored.
 
     Returns:
       dict with keys:
@@ -119,16 +130,14 @@ def compute_transient_absorption(
         n_a = np.bincount(a_arr, weights=p_k, minlength=n_virt_max)
         p_i = np.bincount(i_arr, weights=p_k, minlength=n_occ_max)
 
-        # Ground-State Bleach (GSB): Pauli blocking reduces absorption
-        # Delta f_ia^GSB = - f_0 * (n_a + p_i)
-        blocking_factor = n_a[a_arr] + p_i[i_arr]
-
+        # State filling with shell degeneracy. One carrier in a spatial
+        # orbital (g = 2) blocks half of that transition. Net gain requires
+        # n/g + p/g > 1. The pair population is not added again.
+        g_shell = max(float(state_degeneracy), 1e-8)
+        blocking_factor = n_a[a_arr] / g_shell + p_i[i_arr] / g_shell
+        delta_f = - f_base * blocking_factor
         if include_se:
-            # Stimulated Emission (SE): populated pairs emit coherently
-            # Delta f_ia^SE = - f_0 * P_ia
-            delta_f = - f_base * (blocking_factor + p_k)
-        else:
-            delta_f = - f_base * blocking_factor
+            delta_f = delta_f - f_base * p_k
 
         # Gaussian spectral convolution
         # delta_A[k, :] = sum_ia delta_f_ia * G(E - E_ia)
@@ -142,6 +151,23 @@ def compute_transient_absorption(
             delta_A[k, :] = np.dot(df_active, gauss_profiles)
         else:
             delta_A[k, :] = 0.0
+
+        # Orbital excited-state absorption. Positive, and only when the
+        # caller supplies the a -> a' oscillator strengths and energies.
+        if include_esa and f_elec_esa is not None and e_elec_esa is not None:
+            f_esa = np.asarray(f_elec_esa, dtype=np.float64)
+            e_esa = np.asarray(e_elec_esa, dtype=np.float64)
+            n_v = min(len(n_a), f_esa.shape[0])
+            for a in range(n_v):
+                if n_a[a] <= 1e-12:
+                    continue
+                weight = (n_a[a] / g_shell) * f_esa[a, :n_v]
+                keep = np.abs(weight) > 1e-12
+                if not np.any(keep):
+                    continue
+                diff_sq = (probe_energies[np.newaxis, :] - e_esa[a, keep][:, np.newaxis]) ** 2
+                gauss = inv_sqrt2pi_sigma * np.exp(-diff_sq / two_sigma_sq)
+                delta_A[k, :] += weight[keep] @ gauss
 
     # 4. Extract 1S Bleach Kinetic Profile
     # Find probe grid point closest to the 1S transition

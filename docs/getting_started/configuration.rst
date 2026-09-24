@@ -168,8 +168,9 @@ namd
 * **trajectory_dir** (*str*): Path to folder containing trajectory MD frames.
 * **dt_fs** (*float*): Nuclear time step in femtoseconds between frames.
 * **temperature_k** (*float*): Lattice temperature in Kelvin for detailed balance.
-* **engine** (*str*): ``"master_equation"`` (deterministic tensorized PME) or ``"surface_hopping"`` (CPA-FSSH).
-* **tau_dec_fs** (*str or float*): ``"cumulant"`` (*ab initio* from energy gap fluctuations) or fixed float in fs.
+* **method** / **engine** (*str*): ``"master_equation"`` (deterministic tensorized PME), ``"cpa_fssh"`` (CPA-FSSH with continuous EDC), or ``"dish"`` (Decoherence-Induced Surface Hopping).
+* **tau_dec_fs** (*str or float*): ``"edc"`` / ``"cumulant"`` (*ab initio* from energy gap fluctuations) or fixed float in fs.
+* **decoherence** (*str*): Decoherence scheme for FSSH (``"edc"`` for Granucci-Persico continuous energy-based damping).
 * **recombination.include_ground_state** (*bool*): Couple excited states to the ground state.
 * **recombination.radiative** (*bool*): Use *ab initio* Einstein spontaneous emission formula for :math:`k_{\mathrm{rad}}`.
 * **recombination.tau_nr_ns** (*float, optional*): Defect trap non-radiative lifetime in nanoseconds for PLQY computation.

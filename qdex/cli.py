@@ -717,6 +717,7 @@ def main():
     parser.add_argument("--namd-precompute", action="store_true", help="Run NAMD precomputation (cross-overlaps, tracking, caching).")
     parser.add_argument("--namd-run", action="store_true", help="Run NAMD carrier cooling simulation from precomputed data.")
     parser.add_argument("--namd-compact", type=str, nargs="?", const="default", default=None, help="Compact precomputed NAMD directory (compresses and removes redundant arrays).")
+    parser.add_argument("--namd-decoherence", type=str, nargs="?", const="default", default=None, help="Compute state-pair pure-dephasing decoherence times from trajectory fluctuations.")
     parser.add_argument("--namd-soc", action="store_true", help="Enable Spin-Orbit Coupling (SOC) for NAMD precomputation.")
     parser.add_argument("--namd-ta", action="store_true", help="Compute ultrafast pump-probe transient absorption (TA) spectra from NAMD dynamics.")
     parser.add_argument("--namd-ta-sigma", type=float, default=0.03, help="Gaussian line broadening in eV for transient absorption probe spectra (default: 0.03).")
@@ -725,6 +726,17 @@ def main():
     parser.add_argument("--namd-ecsh-window", type=float, default=None, help="Resonance energy window in eV for ECSH Auger transitions (default: k_B * T).")
     parser.add_argument("--namd-trajectory-loops", type=int, default=1, help="Number of times to loop precomputed MD trajectory to reach long Auger timescales (default: 1).")
     parser.add_argument("--namd-biexciton", action="store_true", help="Initialize NAMD from a biexciton state (XX) to simulate Auger annihilation dynamics.")
+    parser.add_argument("--namd-method", type=str, default=None, choices=["cpa_fssh", "fssh", "dish", "cpa_fssh_edc", "cpa_fssh_gdc", "fssh_gdc", "pme", "master_equation"], help="NAMD simulation method (cpa_fssh, cpa_fssh_gdc, dish, pme).")
+    parser.add_argument("--namd-tr-sd", action="store_true", help="Compute time-resolved vibrational action spectrum / dynamical phonon spectrogram J(omega, t).")
+    parser.add_argument("--namd-tr-sd-plot", action="store_true", help="Generate multi-panel 2D false-color heatmap of frequency vs time.")
+    parser.add_argument("--namd-tr-sd-wmax", type=float, default=400.0, help="Maximum phonon frequency in cm^-1 for time-resolved spectral density (default: 400.0).")
+    parser.add_argument("--namd-tr-sd-sigma", type=float, default=15.0, help="Gaussian time broadening in fs for discrete surface hops in J(omega, t) (default: 15.0).")
+    parser.add_argument("--namd-2d-map", action="store_true", help="Compute 2D non-adiabatic vibronic action map S(omega_acc, Omega_prom).")
+    parser.add_argument("--namd-2d-plot", action="store_true", help="Generate publication-grade 2D contour map of promoting vs accepting modes.")
+    parser.add_argument("--namd-initial-conditions", type=str, default=None, choices=["single", "multiple", "multi"], help="Initial condition sampling mode: 'single' (t0 = 0) or 'multiple' (automated multi-origin ensemble).")
+    parser.add_argument("--namd-multi-init", action="store_true", help="Enable automated multi-origin ensemble sampling across the MD trajectory.")
+    parser.add_argument("--namd-origins", type=int, default=None, help="Number of independent initial condition origins for multi-origin NAMD (default: auto-calibrated).")
+    parser.add_argument("--namd-window-fs", type=float, default=None, help="Simulation window duration in fs for each multi-origin sub-trajectory (default: auto-calibrated).")
 
     args = parser.parse_args()
 
@@ -741,6 +753,35 @@ def main():
     if getattr(args, "gth_file", None):
         config_data.setdefault("system", {})["gth_file"] = args.gth_file
 
+    if getattr(args, "namd_method", None):
+        config_data.setdefault("namd", {}).setdefault("dynamics", {})["method"] = args.namd_method
+
+    if getattr(args, "namd_multi_init", False):
+        config_data.setdefault("namd", {}).setdefault("dynamics", {})["initial_conditions"] = "multiple"
+    elif getattr(args, "namd_initial_conditions", None):
+        config_data.setdefault("namd", {}).setdefault("dynamics", {})["initial_conditions"] = args.namd_initial_conditions
+
+    if getattr(args, "namd_origins", None) is not None:
+        config_data.setdefault("namd", {}).setdefault("dynamics", {})["n_origins"] = args.namd_origins
+    if getattr(args, "namd_window-fs", None) is not None:
+        config_data.setdefault("namd", {}).setdefault("dynamics", {})["window_fs"] = args.namd_window_fs
+    elif getattr(args, "namd_window_fs", None) is not None:
+        config_data.setdefault("namd", {}).setdefault("dynamics", {})["window_fs"] = args.namd_window_fs
+
+    if getattr(args, "namd_tr_sd", False) or getattr(args, "namd_tr_sd_plot", False):
+        tr_dict = config_data.setdefault("namd", {}).setdefault("time_resolved_spectral_density", {})
+        tr_dict["run"] = True
+        if getattr(args, "namd_tr_sd_plot", False):
+            tr_dict["plot"] = True
+        if getattr(args, "namd_tr_sd_wmax", None) is not None:
+            tr_dict["w_max_cm"] = args.namd_tr_sd_wmax
+        if getattr(args, "namd_tr_sd_sigma", None) is not None:
+            tr_dict["sigma_t_fs"] = args.namd_tr_sd_sigma
+        if getattr(args, "namd_2d_map", False):
+            tr_dict["compute_2d_vibronic"] = True
+        if getattr(args, "namd_2d_plot", False):
+            tr_dict["plot_2d"] = True
+
     if getattr(args, "namd_ta", False):
         ta_dict = config_data.setdefault("namd", {}).setdefault("transient_absorption", {})
         ta_dict["run"] = True
@@ -751,7 +792,8 @@ def main():
 
     if getattr(args, "namd_ecsh_auger", False) or getattr(args, "namd_biexciton", False):
         dyn_dict = config_data.setdefault("namd", {}).setdefault("dynamics", {})
-        dyn_dict["ecsh_auger"] = True
+        if getattr(args, "namd_ecsh_auger", False):
+            dyn_dict["ecsh_auger"] = True
         if getattr(args, "namd_ecsh_window", None) is not None:
             dyn_dict["ecsh_window_ev"] = args.namd_ecsh_window
         if getattr(args, "namd_trajectory_loops", 1) > 1:
@@ -768,6 +810,14 @@ def main():
         if compact_dir == "default":
             compact_dir = config_data.get("namd", {}).get("storage", {}).get("precompute_dir", "namd_precomputed")
         compact_precomputed_data(compact_dir)
+        return
+
+    if getattr(args, "namd_decoherence", None) is not None:
+        from qdex.namd.precompute import compute_trajectory_decoherence_times
+        dec_dir = args.namd_decoherence
+        if dec_dir == "default":
+            dec_dir = config_data.get("namd", {}).get("storage", {}).get("precompute_dir", "namd_precomputed")
+        compute_trajectory_decoherence_times(dec_dir)
         return
 
     if getattr(args, "namd_precompute", False):

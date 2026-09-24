@@ -20,9 +20,30 @@ def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
 
 
-def align_phases_and_crossings(S_mat, C_next, track_crossings=True):
+def _trivial_crossing_permutation(S_mat, lock_above=0.5):
     """
-    Aligns global signs and tracks orbital crossings using the Hungarian algorithm.
+    Hungarian assignment that relabels only trivial crossings.
+
+    A state whose diagonal overlap is still at least lock_above stays on
+    itself. Those are avoided crossings, which surface hopping propagates
+    in the adiabatic basis. States with a collapsed diagonal are free to
+    match the partner that actually carries their character.
+    """
+    cost = 1.0 - np.abs(S_mat) ** 2
+    diag_mag = np.abs(np.diag(S_mat))
+    locked = diag_mag >= lock_above
+    if np.any(locked):
+        cost = np.array(cost, copy=True)
+        cost[locked, :] = 1.0e6
+        idx = np.where(locked)[0]
+        cost[idx, idx] = 0.0
+    _rows, col_ind = linear_sum_assignment(cost)
+    return col_ind
+
+
+def align_phases_and_crossings(S_mat, C_next, track_crossings=True, lock_above=0.5):
+    """
+    Aligns global signs and tracks trivial orbital crossings.
     S_mat: overlap <phi(t) | phi(t+dt)>, shape (N, N)
     C_next: MO coefficients at t+dt, shape (N_AO, N)
     
@@ -35,10 +56,7 @@ def align_phases_and_crossings(S_mat, C_next, track_crossings=True):
     perm = np.arange(N)
 
     if track_crossings:
-        # Cost matrix: 1 - |S_ij|^2 (minimizing cost maximizes overlap squared)
-        cost = 1.0 - np.abs(S_mat) ** 2
-        row_ind, col_ind = linear_sum_assignment(cost)
-        perm = col_ind
+        perm = _trivial_crossing_permutation(S_mat, lock_above=lock_above)
         S_mat = S_mat[:, perm]
         C_next = C_next[:, perm]
 
@@ -55,7 +73,7 @@ def align_phases_and_crossings(S_mat, C_next, track_crossings=True):
     return S_mat, C_next, perm, phases
 
 
-def align_spinor_phases_and_crossings(S_mat, U_list, track_crossings=True):
+def align_spinor_phases_and_crossings(S_mat, U_list, track_crossings=True, lock_above=0.5):
     """
     Aligns global U(1) phases and tracks spinor crossings using the Hungarian algorithm.
     S_mat: overlap <psi(t) | psi(t+dt)>, shape (N, N), complex128
@@ -70,16 +88,17 @@ def align_spinor_phases_and_crossings(S_mat, U_list, track_crossings=True):
     perm = np.arange(N)
 
     if track_crossings:
-        cost = 1.0 - np.abs(S_mat) ** 2
-        row_ind, col_ind = linear_sum_assignment(cost)
-        perm = col_ind
+        perm = _trivial_crossing_permutation(S_mat, lock_above=lock_above)
         S_mat = S_mat[:, perm]
         for idx in range(len(U_list)):
             U_list[idx] = U_list[idx][:, perm]
 
-    # U(1) phase alignment: ensure diagonal S_kk is real and positive
+    # U(1) phase alignment: ensure a well-defined diagonal is real and positive.
+    # A near-zero diagonal has a meaningless argument and is left alone.
     diag = np.diagonal(S_mat)
-    phases = np.exp(-1j * np.angle(diag))
+    phases = np.ones(N, dtype=np.complex128)
+    ok = np.abs(diag) > 1e-8
+    phases[ok] = np.exp(-1j * np.angle(diag[ok]))
 
     S_mat = S_mat * phases[np.newaxis, :]
     for idx in range(len(U_list)):
@@ -176,7 +195,8 @@ def compute_frame_diagonal_bse(
             mu_mo_z = C_occ.T @ (mu_ao_z @ C_virt)
             mu_sq_grid = mu_mo_x**2 + mu_mo_y**2 + mu_mo_z**2
             mu_sq = mu_sq_grid[i_indices, a_indices]
-            f_osc = (2.0 / 3.0) * E_diag * mu_sq
+            # Closed-shell singlet: 4/3, energy in Hartree, dipole in ea0.
+            f_osc = (4.0 / 3.0) * (E_diag / HA_TO_EV) * mu_sq
         else:
             mu_sq_grid = None
             f_osc = np.zeros_like(E_diag)
@@ -307,7 +327,8 @@ def compute_frame_diagonal_bse(
             mu_sp_z = U_occ_alpha.conj().T @ (M_z @ U_virt_alpha) + U_occ_beta.conj().T @ (M_z @ U_virt_beta)
             mu_sq_grid = np.abs(mu_sp_x)**2 + np.abs(mu_sp_y)**2 + np.abs(mu_sp_z)**2
             mu_sq = mu_sq_grid[i_indices, a_indices]
-            f_osc = (2.0 / 3.0) * E_diag * mu_sq
+            # Spinors already carry both components: 2/3, energy in Hartree.
+            f_osc = (2.0 / 3.0) * (E_diag / HA_TO_EV) * mu_sq
         else:
             mu_sq_grid = None
             f_osc = np.zeros_like(E_diag)
@@ -599,7 +620,7 @@ def precompute_namd_data(config):
                     if curr_data["mu_sq_grid"] is not None:
                         mu_sq_grid = curr_data["mu_sq_grid"][np.ix_(perm_occ, perm_virt)]
                         curr_data["mu_sq_grid"] = mu_sq_grid
-                        curr_data["f_pairs"] = (2.0 / 3.0) * curr_data["E_pairs"] * mu_sq_grid[curr_data["i_pairs"], curr_data["a_pairs"]]
+                        curr_data["f_pairs"] = (2.0 / 3.0) * (curr_data["E_pairs"] / HA_TO_EV) * mu_sq_grid[curr_data["i_pairs"], curr_data["a_pairs"]]
 
             else:
                 # Contract to active MOs
@@ -633,7 +654,7 @@ def precompute_namd_data(config):
                     if curr_data["mu_sq_grid"] is not None:
                         mu_sq_grid = curr_data["mu_sq_grid"][np.ix_(perm_occ, perm_virt)]
                         curr_data["mu_sq_grid"] = mu_sq_grid
-                        curr_data["f_pairs"] = (2.0 / 3.0) * curr_data["E_pairs"] * mu_sq_grid[curr_data["i_pairs"], curr_data["a_pairs"]]
+                        curr_data["f_pairs"] = (4.0 / 3.0) * (curr_data["E_pairs"] / HA_TO_EV) * mu_sq_grid[curr_data["i_pairs"], curr_data["a_pairs"]]
 
             # Completeness and tracking quality check
             min_diag_occ = np.min(np.real(np.diag(S_occ)))
@@ -644,6 +665,12 @@ def precompute_namd_data(config):
 
             if min_diag_occ < 0.3 or min_diag_virt < 0.3:
                 print(f" [Warn: Low overlap S_diag: occ={min_diag_occ:.3f}, virt={min_diag_virt:.3f}]", end="", flush=True)
+            if max_loss > (1.0 - completeness_thresh):
+                print(
+                    f" [Warn: active-space norm loss {max_loss:.3f} exceeds "
+                    f"{1.0 - completeness_thresh:.3f}]",
+                    end="", flush=True,
+                )
 
             # Save interval data for step k-1 -> k
             out_file = os.path.join(precompute_dir, f"step_{k-1:05d}_to_{k:05d}.npz")
@@ -675,7 +702,8 @@ def precompute_namd_data(config):
                 eps_occ=curr_data["eps_occ"],
                 eps_virt=curr_data["eps_virt"],
                 dft_gap=curr_data["dft_gap"],
-                scissor=curr_data["scissor"]
+                scissor=curr_data["scissor"],
+                f_convention=np.array("au_hartree"),
             )
 
         dt_f = time.time() - t0_frame
@@ -704,7 +732,8 @@ def precompute_namd_data(config):
         qp_gaps=np.array(qp_gaps),
         lowest_exc_energies=np.array(lowest_exc_energies),
         scissor=scissor,
-        soc=soc
+        soc=soc,
+        f_convention=np.array("au_hartree"),
     )
 
     total_time = time.time() - t0_all
@@ -813,4 +842,140 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
         print("=" * 65 + "\n")
 
     return size_before_mb, size_after_mb
+
+
+def compute_trajectory_decoherence_times(
+    precompute_dir,
+    out_file="decoherence_times.npz",
+    min_tau_fs=1.0,
+    max_tau_fs=500.0,
+    update_metadata=True,
+    verbose=True
+):
+    """
+    Computes state-pair pure-dephasing decoherence times from MD trajectory energy gap fluctuations
+    (Prezhdo et al. JCP 111, 8366 (1999); JPCL 5, 4172 (2014); Akimov & Prezhdo, JCP 138, 124102 (2013)).
+
+    The optical dephasing function between states i and j is::
+
+        D_ij(t) = exp( - 1/(2 hbar^2) * var(Delta E_ij) * t^2 )
+
+    yielding the pure-dephasing decoherence time::
+
+        tau_ij = hbar / sigma_ij
+
+    where ``sigma_ij^2 = var(Delta E_ij) = var(E_i) + var(E_j) - 2 * cov(E_i, E_j)``.
+
+    Parameters
+    ----------
+    precompute_dir : str
+        Path to directory containing precomputed NAMD frames/steps.
+    out_file : str, optional
+        Filename for the saved NPZ archive (default: 'decoherence_times.npz').
+    min_tau_fs : float, optional
+        Minimum clamp for dephasing time in fs.
+    max_tau_fs : float, optional
+        Maximum clamp for dephasing time in fs (applied to diagonal and near-degenerate states).
+    update_metadata : bool, optional
+        Whether to also store tau_occ and tau_virt directly in namd_metadata.npz.
+    verbose : bool, optional
+        Print summary statistics.
+
+    Returns
+    -------
+    tau_occ : ndarray
+        (n_occ, n_occ) hole dephasing times in fs.
+    tau_virt : ndarray
+        (n_virt, n_virt) electron dephasing times in fs.
+    """
+    HBAR_EV_FS = 0.6582119569
+
+    if not os.path.isdir(precompute_dir):
+        raise FileNotFoundError(f"Precompute directory '{precompute_dir}' does not exist.")
+
+    step_files = sorted(glob.glob(os.path.join(precompute_dir, "step_*.npz")), key=natural_sort_key)
+    f0_path = os.path.join(precompute_dir, "frame_00000.npz")
+    if not os.path.exists(f0_path):
+        raise FileNotFoundError(f"frame_00000.npz not found in '{precompute_dir}'.")
+
+    f0 = np.load(f0_path)
+    eps_occ_0 = f0["eps_occ"]
+    eps_virt_0 = f0["eps_virt"]
+
+    occ_history = [eps_occ_0]
+    virt_history = [eps_virt_0]
+
+    for sf in step_files:
+        d = np.load(sf)
+        if "eps_occ_curr" in d and "eps_virt_curr" in d:
+            occ_history.append(d["eps_occ_curr"])
+            virt_history.append(d["eps_virt_curr"])
+
+    occ_arr = np.array(occ_history, dtype=np.float64)   # shape: (n_frames, n_occ)
+    virt_arr = np.array(virt_history, dtype=np.float64) # shape: (n_frames, n_virt)
+    n_frames = occ_arr.shape[0]
+
+    if verbose:
+        print("=" * 65)
+        print(f" QDEX - Computing State-Pair Decoherence Times ({n_frames} frames)")
+        print("=" * 65)
+        print(f"  Target Directory : {precompute_dir}")
+        print(f"  Occupied States  : {occ_arr.shape[1]}")
+        print(f"  Virtual States   : {virt_arr.shape[1]}")
+
+    # 1. Hole channel: cov(eps_i, eps_j)
+    cov_occ = np.cov(occ_arr, rowvar=False)
+    var_occ = np.diag(cov_occ)
+    var_diff_occ = np.maximum(var_occ[:, None] + var_occ[None, :] - 2.0 * cov_occ, 0.0)
+    sigma_occ = np.sqrt(var_diff_occ)
+
+    tau_occ = np.zeros_like(sigma_occ)
+    mask_occ = sigma_occ > 1e-6
+    tau_occ[mask_occ] = HBAR_EV_FS / sigma_occ[mask_occ]
+    tau_occ[~mask_occ] = max_tau_fs
+    tau_occ = np.clip(tau_occ, min_tau_fs, max_tau_fs)
+    np.fill_diagonal(tau_occ, max_tau_fs)
+
+    # 2. Electron channel: cov(eps_a, eps_b)
+    cov_virt = np.cov(virt_arr, rowvar=False)
+    var_virt = np.diag(cov_virt)
+    var_diff_virt = np.maximum(var_virt[:, None] + var_virt[None, :] - 2.0 * cov_virt, 0.0)
+    sigma_virt = np.sqrt(var_diff_virt)
+
+    tau_virt = np.zeros_like(sigma_virt)
+    mask_virt = sigma_virt > 1e-6
+    tau_virt[mask_virt] = HBAR_EV_FS / sigma_virt[mask_virt]
+    tau_virt[~mask_virt] = max_tau_fs
+    tau_virt = np.clip(tau_virt, min_tau_fs, max_tau_fs)
+    np.fill_diagonal(tau_virt, max_tau_fs)
+
+    # Save to dedicated npz
+    out_path = os.path.join(precompute_dir, out_file)
+    np.savez_compressed(
+        out_path,
+        tau_occ=tau_occ,
+        tau_virt=tau_virt,
+        sigma_occ=sigma_occ,
+        sigma_virt=sigma_virt,
+        n_frames=n_frames
+    )
+
+    if update_metadata:
+        meta_path = os.path.join(precompute_dir, "namd_metadata.npz")
+        if os.path.exists(meta_path):
+            m = np.load(meta_path)
+            m_dict = {k: m[k] for k in m.files}
+            m_dict["tau_occ"] = tau_occ
+            m_dict["tau_virt"] = tau_virt
+            np.savez_compressed(meta_path, **m_dict)
+
+    if verbose:
+        offdiag_occ = tau_occ[~np.eye(tau_occ.shape[0], dtype=bool)]
+        offdiag_virt = tau_virt[~np.eye(tau_virt.shape[0], dtype=bool)]
+        print(f"  Hole Dephasing   (tau_occ)  : min={np.min(offdiag_occ):.2f} fs, median={np.median(offdiag_occ):.2f} fs, max={np.max(offdiag_occ):.2f} fs")
+        print(f"  Electron Dephasing (tau_virt): min={np.min(offdiag_virt):.2f} fs, median={np.median(offdiag_virt):.2f} fs, max={np.max(offdiag_virt):.2f} fs")
+        print(f"  Cached to: {out_path}")
+        print("=" * 65 + "\n")
+
+    return tau_occ, tau_virt
 
