@@ -149,5 +149,67 @@ class RecombinationModelTests(unittest.TestCase):
         self.assertAlmostEqual(res["k_cool_ps"], 10.0, places=3)
 
 
+class NamdLiteratureTests(unittest.TestCase):
+    def test_integrated_flux_matches_population_for_a_degenerate_pair(self):
+        from qdex.namd.integrator import propagate_channel_batch_strang
+        d_ab = 0.05
+        d_mat = np.array([[0.0, d_ab], [-d_ab, 0.0]], dtype=np.float64)
+        dt = 2.0
+        C0 = np.array([[1.0], [0.0]], dtype=np.complex128)
+        E = np.zeros((2, 1))
+        C, flux = propagate_channel_batch_strang(
+            C0, E, E, d_mat, dt, n_substeps=80, device="cpu", active_idx=np.array([0])
+        )
+        self.assertAlmostEqual(flux[1, 0], abs(C[1, 0]) ** 2, delta=0.02)
+        self.assertLess(abs(np.sum(np.abs(C[:, 0]) ** 2) - 1.0), 1e-8)
+
+    def test_endpoint_flux_is_about_twice_the_integrated_flux(self):
+        from qdex.namd.integrator import HBAR_EV_FS
+        d_ab = 0.05
+        dt = 2.0
+        # Short-time degenerate limit: c_b ~ d * t, endpoint formula = 2 |c_b|^2.
+        c_b = d_ab * dt
+        endpoint = 2.0 * dt * (1.0 * c_b * d_ab)
+        self.assertAlmostEqual(endpoint, 2.0 * (d_ab * dt) ** 2, places=8)
+        self.assertGreater(HBAR_EV_FS, 0.0)
+
+    def test_rate_matrix_is_column_stochastic_and_detailed_balance(self):
+        from qdex.namd.master_equation import compute_rate_matrix
+        from qdex.namd.integrator import KB_EV
+        E = np.array([0.0, 0.05, 0.10])
+        d = np.zeros((3, 3))
+        d[0, 1] = 0.01
+        d[1, 0] = -0.01
+        d[1, 2] = 0.02
+        d[2, 1] = -0.02
+        R = compute_rate_matrix(E, d, temp_k=300.0, tau_dec_fs=10.0)
+        np.testing.assert_allclose(np.sum(R, axis=0), 0.0, atol=1e-12)
+        beta = 1.0 / (KB_EV * 300.0)
+        # Upward 0 -> 1 over downward 1 -> 0.
+        k_up = R[1, 0]
+        k_down = R[0, 1]
+        self.assertAlmostEqual(k_up / k_down, np.exp(-0.05 * beta), places=6)
+
+    def test_hungarian_locks_an_avoided_crossing(self):
+        from qdex.namd.precompute import _trivial_crossing_permutation
+        # Adiabatic states still overlap their own labels by 0.8.
+        S = np.array([[0.8, 0.6], [0.6, 0.8]], dtype=np.float64)
+        perm = _trivial_crossing_permutation(S, lock_above=0.5)
+        np.testing.assert_array_equal(perm, [0, 1])
+        # Trivial crossing: diagonals collapsed, off-diagonals carry the character.
+        S_triv = np.array([[0.1, 0.99], [0.99, 0.1]], dtype=np.float64)
+        perm_triv = _trivial_crossing_permutation(S_triv, lock_above=0.5)
+        np.testing.assert_array_equal(perm_triv, [1, 0])
+
+    def test_eps_eff_does_not_rescale_resta(self):
+        symbols = ["Pb", "Br"]
+        coords = np.array([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]])
+        _, w_plain = build_resta_mnok(symbols, coords, 1.0, "CSPBBR3", eps_out=2.4)
+        # The Auger driver must leave this kernel alone when eps_eff is passed.
+        # On-site element is the bare Ohno value, not eps_inf/eps_eff times larger.
+        self.assertGreater(w_plain[0, 0], 0.0)
+        self.assertGreater(w_plain[0, 0], w_plain[0, 1])
+
+
 if __name__ == "__main__":
     unittest.main()

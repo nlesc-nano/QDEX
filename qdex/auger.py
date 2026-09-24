@@ -8,7 +8,8 @@ microscopic Resta-screened dielectric kernel.
 Channels:
   - Negative Trion / Biexciton eeh: e2 + h -> recombine, ejecting e1 -> e' (conduction continuum)
   - Positive Trion / Biexciton hhe: h2 + e -> recombine, ejecting h1 -> h' (valence continuum)
-  - Neutral Biexciton XX: Gamma_XX = 2 * Gamma_eeh + 2 * Gamma_hhe, tau_XX = 1 / Gamma_XX
+  - Neutral Biexciton XX: k_XX = 2 * k_X- + 2 * k_X+, with k_X the physical trion rates.
+    When the two trion rates are equal, tau_trion = 4 * tau_XX.
 """
 
 import time
@@ -208,33 +209,23 @@ def compute_auger_matrix_element(
     q_eject_1: np.ndarray,
     q_eject_2: np.ndarray,
     W_resta: np.ndarray,
+    q_recomb_alt: Optional[np.ndarray] = None,
 ) -> Tuple[float, float, float]:
     """
-    Computes direct, exchange, and effective net Auger matrix elements:
-      V_dir  = (q_recomb)^T @ W_resta @ q_eject_1
-      V_exch = (q_recomb_alt)^T @ W_resta @ q_eject_2
+    Direct and exchange Auger matrix elements:
+      V_dir  = q(e', e1) · W · q(e2, h)
+      V_exch = q(e', e2) · W · q(e1, h)
       M_eff  = V_dir - V_exch
 
-    Parameters
-    ----------
-    q_recomb : ndarray of shape (N_atoms,)
-        Transition charge for carrier annihilation (e.g. e2 -> h).
-    q_eject_1 : ndarray of shape (N_atoms,)
-        Transition charge for spectator carrier excitation (e.g. e1 -> e').
-    q_eject_2 : ndarray of shape (N_atoms,)
-        Alternative transition charge for exchange channel (e.g. e2 -> e').
-    W_resta : ndarray of shape (N_atoms, N_atoms)
-        Resta screened Coulomb kernel in eV.
-
-    Returns
-    -------
-    v_dir, v_exch, m_eff : float (in eV)
+    q_recomb is q(e2, h), q_eject_1 is q(e', e1), q_eject_2 is q(e', e2).
+    q_recomb_alt is q(e1, h). When it is omitted, q_recomb is used, which is
+    correct only for the identical-orbital case e1 = e2.
     """
     W_q_recomb = W_resta @ q_recomb
     v_dir = float(np.vdot(q_eject_1, W_q_recomb).real)
 
-    W_q_alt = W_resta @ q_eject_2
-    v_exch = float(np.vdot(q_recomb, W_q_alt).real)
+    q_ex = q_recomb if q_recomb_alt is None else q_recomb_alt
+    v_exch = float(np.vdot(q_eject_2, W_resta @ q_ex).real)
 
     m_eff = v_dir - v_exch
     return v_dir, v_exch, m_eff
@@ -336,15 +327,12 @@ def calculate_auger_rates(
             eps_out=eps_out,
         )
 
-    if eps_eff is not None and eps_eff > 0:
-        from qdex.hardness import MATERIAL_DB
-        m_name = material_name.upper() if material_name else "DEFAULT"
-        eps_inf = MATERIAL_DB.get(m_name, MATERIAL_DB["DEFAULT"])[0]
-        if eps_inf > 0:
-            scale_factor = eps_inf / eps_eff
-            W_resta = W_resta * scale_factor
-            if verbose:
-                print(f"  [Auger: Dynamic Screening] Scaled kernel from eps_inf={eps_inf:.2f} to eps_eff={eps_eff:.2f} (rate factor x{scale_factor**2:.2f})")
+    if eps_eff is not None and eps_eff > 0 and verbose:
+        print(
+            "  [Auger] eps_eff is not applied. Resta already interpolates from the bare "
+            "on-site interaction to 1/(eps_inf R). A constant eps_eff replaces eps_inf "
+            "in a uniform-screening model; it is not a second factor on this kernel."
+        )
 
     # 2. Identify Active Frontier States
     lumo_idx = homo_idx + 1
@@ -566,10 +554,23 @@ def calculate_auger_rates(
     eeh_details.sort(key=lambda d: d.rate_contrib_fs, reverse=True)
     hhe_details.sort(key=lambda d: d.rate_contrib_fs, reverse=True)
 
-    # 4. Total Biexciton Auger Rate & Lifetimes
-    # In a neutral biexciton (2e + 2h): 2 electrons x 2 holes = 4 independent recombination channels
-    # Universal multiexciton statistical scaling: Gamma_XX = 4 * Gamma_eeh + 4 * Gamma_hhe (tau_X^- = 4 * tau_XX)
-    rate_xx_fs = 4.0 * rate_eeh_fs + 4.0 * rate_hhe_fs
+    # Physical trion rates and the biexciton superposition principle.
+    # With one spatial orbital per band edge the golden-rule sum is one pathway r_0.
+    # A twofold 1S shell has two choices of which carrier recombines, so k_X = 2 r_0.
+    # Klimov and co-workers: k_XX = 2 k_X- + 2 k_X+. When the channels are equal
+    # this is tau_trion = 4 tau_XX. If n_initial > 1 the loop already enumerates
+    # distinct carriers and the extra factor of 2 is not applied.
+    shell = 2.0 if ((not spinor) and int(n_initial_elec) == 1 and int(n_initial_hole) == 1) else 1.0
+    rate_eeh_fs *= shell
+    rate_hhe_fs *= shell
+    if shell != 1.0:
+        for detail in eeh_details:
+            detail.rate_contrib_fs *= shell
+        for detail in hhe_details:
+            detail.rate_contrib_fs *= shell
+        eeh_details.sort(key=lambda d: d.rate_contrib_fs, reverse=True)
+        hhe_details.sort(key=lambda d: d.rate_contrib_fs, reverse=True)
+    rate_xx_fs = 2.0 * rate_eeh_fs + 2.0 * rate_hhe_fs
 
     rate_eeh_ps = rate_eeh_fs * 1.0e3
     rate_hhe_ps = rate_hhe_fs * 1.0e3
@@ -624,6 +625,88 @@ def calculate_auger_rates(
         print(res.summary_table())
 
     return res
+
+
+def auger_rates_from_config(config: Dict[str, Any]) -> AugerResult:
+    """
+    One-shot golden-rule Auger rates from the full MO file named in the config.
+
+    Used only when a biexciton clock or ECSH has been requested and no
+    tau_auger_ps / k_auger_fs override is set. A plain cooling run never
+    calls this. eps_eff is not forwarded: Resta is already r-dependent.
+    """
+    import os
+    from qdex.constants import HA_TO_EV
+    from qdex.io_utils import (
+        read_xyz, parse_basis, build_shell_dicts, build_atom_ao_ranges,
+        count_ao_from_shells, read_mos_mbse,
+    )
+    from qdex.integrals import compute_cross_overlap_ao
+
+    sys_cfg = config.get("system", {})
+    phys = config.get("physics", {})
+    aug = config.get("auger", {})
+    namd = config.get("namd", {})
+    xyz_path = sys_cfg.get("xyz")
+    mo_path = sys_cfg.get("mo_file")
+    basis_txt = sys_cfg.get("basis_txt")
+    basis_name = sys_cfg.get("basis_name")
+    if not xyz_path or not mo_path or not os.path.exists(str(mo_path)):
+        raise RuntimeError(
+            "Auger dynamics were requested but system.mo_file is missing. "
+            "Set namd.dynamics.tau_auger_ps, or provide the full MO file. "
+            "A cooling run does not need either."
+        )
+    if not basis_txt or not basis_name:
+        raise RuntimeError(
+            "Auger dynamics need system.basis_txt and system.basis_name "
+            "to build the overlap. Set namd.dynamics.tau_auger_ps to skip this."
+        )
+
+    syms, coords = read_xyz(xyz_path)
+    basis_dict = parse_basis(basis_txt, basis_name, required_elements=set(syms))
+    shells = build_shell_dicts(syms, coords, basis_dict)
+    n_ao = count_ao_from_shells(shells)
+    atom_ao_ranges = build_atom_ao_ranges(shells)
+    nthreads = int(sys_cfg.get("nthreads", 1))
+    C, eps, occ = read_mos_mbse(mo_path, n_ao)
+    eps = np.asarray(eps, dtype=np.float64) * HA_TO_EV
+    homo_idx = int(np.sum(np.asarray(occ) > 0.5)) - 1
+    if homo_idx < 0 or homo_idx >= len(eps) - 1:
+        raise RuntimeError("Could not identify a HOMO/LUMO pair in the MO file.")
+
+    scissor = 0.0
+    pre_dir = namd.get("storage", {}).get("precompute_dir")
+    if pre_dir:
+        meta_path = os.path.join(pre_dir, "namd_metadata.npz")
+        if os.path.exists(meta_path):
+            meta = np.load(meta_path)
+            if "scissor" in meta.files:
+                scissor = float(meta["scissor"])
+    if scissor != 0.0:
+        eps[:homo_idx + 1] -= 0.5 * scissor
+        eps[homo_idx + 1:] += 0.5 * scissor
+
+    S = compute_cross_overlap_ao(shells, shells, nthreads=nthreads)
+    n_init = int(aug.get("n_initial_states", 1))
+    return calculate_auger_rates(
+        C=C,
+        eps=eps,
+        S=S,
+        atom_ao_ranges=atom_ao_ranges,
+        coords=np.asarray(coords, dtype=np.float64),
+        atom_symbols=list(syms),
+        homo_idx=homo_idx,
+        material_name=sys_cfg.get("material", "DEFAULT"),
+        eps_out=float(phys.get("eps_out", 2.0)),
+        sigma_ev=float(aug.get("sigma", 0.05)),
+        broadening_mode=str(aug.get("lineshape", "gaussian")),
+        channel=str(aug.get("channel", "all")),
+        n_initial_elec=n_init,
+        n_initial_hole=n_init,
+        eps_eff=None,
+        verbose=False,
+    )
 
 
 def compute_trajectory_auger_rates(

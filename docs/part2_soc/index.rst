@@ -115,7 +115,7 @@ In the GTH relativistic pseudopotential formalism, the spin-orbit potential :mat
 
 .. math::
 
-   \hat{V}_{\mathrm{SO}} = \sum_I \sum_{l=1}^{l_{\max}} \sum_{m=-l}^{l} \sum_{i=1}^{N_{\mathrm{proj}}} \sum_{j=1}^{N_{\mathrm{proj}}} |p_i^{Ilm}\rangle \, k_{ij}^{Il} \, \left( \mathbf{L} \cdot \mathbf{S} \right)_{mm'} \, \langle p_j^{Ilm'}|
+   \hat{V}_{\mathrm{SO}} = \sum_I \sum_{l=1}^{l_{\max}} \sum_{m, m'=-l}^{l} \sum_{i=1}^{N_{\mathrm{proj}}} \sum_{j=1}^{N_{\mathrm{proj}}} |p_i^{Ilm}\rangle \, k_{ij}^{Il} \, \left( \mathbf{L} \cdot \mathbf{S} \right)_{mm'} \, \langle p_j^{Ilm'}|
 
 where:
 * :math:`|p_i^{Ilm}\rangle` are atom-centered Gaussian-type projector functions with angular momentum :math:`(l, m)` and radial index :math:`i`.

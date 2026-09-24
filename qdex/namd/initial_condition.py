@@ -8,7 +8,8 @@ def sample_initial_states(
     n_trajectories=1000,
     filter_dark_states=True,
     min_f_thresh=1e-5,
-    random_seed=None
+    random_seed=None,
+    mask=None
 ):
     """
     Samples initial exciton states based on laser pulse excitation:
@@ -23,6 +24,7 @@ def sample_initial_states(
       filter_dark_states: whether to weight by oscillator strength
       min_f_thresh: threshold below which oscillator strength is treated as dark
       random_seed: optional integer for reproducible sampling
+      mask: optional boolean mask restricting states eligible for photoexcitation
     
     Returns:
       sampled_states: 1D array of length n_trajectories containing state indices
@@ -37,6 +39,10 @@ def sample_initial_states(
     sigma = pulse_fwhm_ev / (2.0 * np.sqrt(2.0 * np.log(2.0)))
     spectral_profile = np.exp(-0.5 * ((energies - pump_energy_ev) / sigma) ** 2)
 
+    if mask is not None:
+        mask = np.asarray(mask, dtype=bool)
+        spectral_profile = spectral_profile * mask
+
     if filter_dark_states:
         weights = np.maximum(f_osc, 0.0) * spectral_profile
         weights[weights < min_f_thresh * np.max(spectral_profile)] = 0.0
@@ -45,8 +51,12 @@ def sample_initial_states(
 
     total_weight = np.sum(weights)
     if total_weight <= 1e-15:
-        # Fallback: choose the closest state in energy to pump_energy_ev
-        idx_closest = np.argmin(np.abs(energies - pump_energy_ev))
+        # Fallback: choose the closest state in energy to pump_energy_ev within the mask
+        if mask is not None and np.any(mask):
+            cand_indices = np.where(mask)[0]
+            idx_closest = cand_indices[np.argmin(np.abs(energies[cand_indices] - pump_energy_ev))]
+        else:
+            idx_closest = np.argmin(np.abs(energies - pump_energy_ev))
         P_norm = np.zeros_like(energies)
         P_norm[idx_closest] = 1.0
         sampled_states = np.full(n_trajectories, idx_closest, dtype=int)
@@ -57,3 +67,4 @@ def sample_initial_states(
     sampled_states = np.random.choice(state_indices, size=n_trajectories, p=P_norm)
 
     return sampled_states, P_norm
+

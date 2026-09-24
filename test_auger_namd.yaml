@@ -50,7 +50,7 @@ namd:
     completeness_threshold: 0.99
 
   integration:
-    integrator: "unitary_matrix_exp"
+    integrator: "strang"
     n_substeps: 100
 
   dynamics:

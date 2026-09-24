@@ -3,7 +3,7 @@ Part 6: Carrier Cooling Dynamics & Photoluminescence (NAMD)
 
 Following the photoexcitation of a semiconductor nanocrystal or quantum dot by an ultrashort laser pulse, high-energy ("hot") electrons and holes rapidly dissipate their excess energy through electron-phonon scattering and non-adiabatic transitions. Carriers cascade down the dense ladder of excited states, cooling toward the band edges before recombining to the ground state.
 
-``QDEX`` features an advanced, high-throughput **Non-Adiabatic Molecular Dynamics (NAMD)** engine designed to simulate carrier relaxation, phonon bottleneck phenomena, surface defect trapping/de-trapping, and photoluminescence recombination along *ab initio* molecular dynamics (AIMD) trajectories.
+``QDEX`` features an advanced, high-throughput **Non-Adiabatic Molecular Dynamics (NAMD)** engine designed to simulate carrier relaxation, phonon bottleneck phenomena, surface defect trapping/de-trapping, and photoluminescence recombination along *ab initio* molecular dynamics (AIMD) trajectories. ``--namd-run`` is a cooling calculation. Auger recombination, energy-conserving two-body hops, and a biexciton initial state are off unless ``--auger``, ``--namd-ecsh-auger``, or ``--namd-biexciton`` is set.
 
 ---
 
@@ -22,7 +22,7 @@ The NAMD simulation workflow is decoupled into three modular stages:
      ├─ Compute Cross-Frame Overlaps S(t, t+Δt) analytically via Libint2
      ├─ Extract Non-Adiabatic Couplings (NAC) d_IJ(t) via finite differences
      ├─ Eliminate Random Phase Jumps e^{iθ} via Geometric Phase Alignment
-     ├─ Preserve Diabatic State Character via Hungarian Crossing Tracking
+     ├─ Repair trivial crossings only (|S_ii| < 0.5); avoided crossings stay adiabatic
      └─ Compress & Cache Precomputed Data into step_*.npz
                  │
                  ▼
@@ -102,20 +102,22 @@ The effective non-adiabatic Hamiltonian driving electronic evolution is construc
 
 Because the non-adiabatic coupling matrix :math:`\mathbf{d}` is anti-Hermitian (:math:`d_{IJ} = -d_{JI}^*`), the product :math:`-i\hbar \mathbf{d}` is **strictly Hermitian**, ensuring that :math:`\mathbf{H}_{\mathrm{eff}}` is Hermitian.
 
-Unitary Matrix Exponentiation
-"""""""""""""""""""""""""""""
+Ensemble propagator
+"""""""""""""""""""
 
-To propagate the electronic amplitudes :math:`\mathbf{c}(\tau)` across each sub-step without any norm drift, ``QDEX`` diagonalizes :math:`\mathbf{H}_{\mathrm{eff}} = \mathbf{V} \boldsymbol{\Lambda} \mathbf{V}^\dagger` and evaluates the exact unitary matrix exponential:
+The single-wavefunction routine ``step_unitary_matrix_exp`` diagonalizes :math:`\mathbf{H}_{\mathrm{eff}} = \mathbf{V} \boldsymbol{\Lambda} \mathbf{V}^\dagger` and applies the exact unitary exponential
 
 .. math::
 
    \mathbf{c}(\tau + \delta t_{\mathrm{elec}}) = \mathbf{V} \, \exp\left( -i \boldsymbol{\Lambda} \frac{\delta t_{\mathrm{elec}}}{\hbar} \right) \mathbf{V}^\dagger \, \mathbf{c}(\tau)
 
-This guarantees that total electronic probability is conserved to machine precision:
+which conserves :math:`\sum_I |c_I|^2` to the accuracy of the diagonalization. The ensemble path used by surface hopping does not call that routine. It uses second-order Strang splitting,
 
 .. math::
 
-   \sum_{I} |c_I(\tau)|^2 = 1.000000000000000
+   \mathbf{U}(\delta t) = e^{-i E \delta t / 2\hbar} \, e^{-\mathbf{d}\, \delta t} \, e^{-i E \delta t / 2\hbar}
+
+with :math:`E` the diagonal-BSE pair energy, binding :math:`K_d` included. Because :math:`\mathbf{d}` is anti-Hermitian, :math:`e^{-\mathbf{d}\,\delta t}` is unitary. Set ``integrator: strang``. The name ``unitary_matrix_exp`` is rejected on the ensemble path.
 
 Tully Hopping Flux Accumulation
 """""""""""""""""""""""""""""""
@@ -124,9 +126,9 @@ Tully's fewest switches hopping probabilities are accumulated incrementally acro
 
 .. math::
 
-   g_{I \to J} = \sum_{m=1}^{N_{\mathrm{sub}}} \max\left( 0, \, \frac{-2 \delta t_{\mathrm{elec}} \, \operatorname{Re}\left( c_I^*(\tau_m) c_J(\tau_m) d_{IJ} \right)}{|c_I(\tau_m)|^2} \right) \times B_{IJ}(T)
+   g_{I \to J} = \sum_{m=1}^{N_{\mathrm{sub}}} \max\left( 0, \, \frac{2 \delta t_{\mathrm{elec}} \, \operatorname{Re}\left( c_I^*(\tau_m) c_J(\tau_m) d_{IJ} \right)}{|c_I(\tau_m)|^2} \right) \times B_{IJ}(T)
 
-A stochastic hopping decision is then made using the net accumulated probability over the nuclear step :math:`\Delta t_{\mathrm{nuc}}`.
+The sum is the hop probability for that nuclear step. If the electron and hole channels together exceed 1, they are scaled so the total is 1 and the event is counted. Each nuclear step of a surface-hopping trajectory starts from the active orbital. The cumulant time :math:`\tau_{\mathrm{dec}}` is computed and printed. It is not applied again inside a step that already begins in a pure active state. Upward one-body hops are multiplied by :math:`B_{IJ}` after the flux is accumulated. That factor is the classical-path stand-in for a rejected velocity rescaling (Parandekar and Tully, J. Chem. Phys. 2005; Jain, Alguire, and Subotnik, J. Chem. Phys. 2016). Two-body Auger hops, when requested, do not carry it.
 
 Electronic Sub-Stepping in the Pauli Master Equation (PME)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -144,38 +146,44 @@ In ``qdex.namd.master_equation``, two robust solutions are provided:
 
       \mathbf{P}(t + \Delta t_{\mathrm{nuc}}) = \exp\left( \mathbf{R} \, \Delta t_{\mathrm{nuc}} \right) \mathbf{P}(t)
 
-2. **Tensorized Sub-Stepping (Diagonal BSE)**:
-   For huge manifolds (:math:`10^6` exciton pairs), the tensorized rate equations are sub-stepped with :math:`N_{\mathrm{sub}} = 20 - 50` steps (:math:`\delta t = \Delta t_{\mathrm{nuc}} / N_{\mathrm{sub}} \approx 0.02 - 0.05\text{ fs}`). Within each sub-step, loss vectors :math:`\mathbf{L}_e` and :math:`\mathbf{L}_h` continuously remove population while electron and hole transition matrices inject population, preserving strict positivity (:math:`P_{ia} \ge 0`) and probability normalization (:math:`\sum_{ia} P_{ia} = 1.0`).
+2. **Tensorized row-stochastic step (Diagonal BSE)**:
+   For the pair manifold actually propagated, each sub-step builds a row-stochastic matrix :math:`T = I + \delta t K` from the electron channel and from the hole channel. A row whose leaving probability would exceed 1 is renormalized onto its outgoing transitions. Applying :math:`\mathbf{P} \leftarrow \mathbf{P} T_e` and then :math:`\mathbf{P} \leftarrow T_h^\mathsf{T} \mathbf{P}` keeps every entry non-negative and conserves probability. Recombination :math:`\exp(-k_{\mathrm{loss}}\Delta t)` is applied once after the sub-steps, without putting that lost population back.
 
 ---
 
-3. Pauli Master Equation (PME) vs. CPA-FSSH: When to Use Which?
----------------------------------------------------------------
+3. Method Selection: PME vs. CPA-FSSH-EDC vs. DISH
+--------------------------------------------------
 
-A central methodological decision in non-adiabatic dynamics is choosing between a **deterministic Master Equation** and **stochastic Fewest Switches Surface Hopping (FSSH)**. Both frameworks are implemented in ``QDEX``, and each possesses distinct physical domains of applicability:
+A central methodological decision in non-adiabatic dynamics is choosing among a **deterministic Master Equation (PME)**, **stochastic Fewest Switches Surface Hopping with continuous Energy-Based Decoherence (CPA-FSSH-EDC)**, and **Decoherence-Induced Surface Hopping (DISH)**. All three frameworks are implemented in ``QDEX``, and each possesses distinct physical domains of applicability:
 
 .. list-table::
-   :widths: 22 38 40
+   :widths: 18 26 28 28
    :header-rows: 1
 
    * - Criterion / Regime
      - Pauli Master Equation (PME)
-     - Fewest Switches Surface Hopping (FSSH)
+     - CPA-FSSH with EDC
+     - Decoherence-Induced Surface Hopping (DISH)
    * - **Density of States (DOS)**
-     - Dense, quasi-continuous manifolds (e.g. :math:`> 10^3 - 10^6` exciton states in large QDs).
-     - Sparse or discrete level manifolds (e.g. frontier :math:`1S_e, 1P_e` states, small molecules).
+     - Dense, quasi-continuous manifolds (:math:`> 10^3 - 10^6` exciton states in large QDs).
+     - Discrete or sparse frontier level manifolds (:math:`1S_e, 1P_e` states, small molecules).
+     - Dense or intermediate manifolds where single-trajectory hopping events and dwell times are needed.
    * - **Quantum Coherence**
      - Fast dephasing regime: :math:`\tau_{\mathrm{dec}} \ll \tau_{\mathrm{transfer}}`. Coherences decay before population builds up.
      - Coherent regime: quantum interference, state superpositions, and phase memory persist.
+     - Fast dephasing with stochastic decoherence-driven wavepacket bifurcation and collapse.
    * - **Phonon Bottleneck**
-     - May overestimate relaxation if multi-phonon wavepacket dynamics are approximated by simple broad rates.
+     - May overestimate relaxation if multi-phonon wavepacket dynamics are approximated by broad rates.
      - **Essential**: captures discrete quantum transitions and coherent vibrational wavepacket motion.
+     - **Accurate**: captures rare stochastic transitions and discrete dwell times without Quantum Zeno freezing.
    * - **Surface Traps**
      - Provides average, memoryless Markovian trapping rates; cannot capture stochastic residence times.
      - **Essential**: tracks explicit hopping and de-hopping fluctuations, barrier crossings, and bifurcation.
+     - **Essential**: tracks explicit trajectory bifurcation, dwell times, and thermally activated de-trapping.
    * - **Computational Cost**
      - **Ultra-fast**: Tensor decomposition propagates :math:`10^6` states in :math:`< 0.2\text{ s}` per step.
-     - **Heavy**: Requires averaging over :math:`10^3 - 10^4` stochastic trajectories per initial condition.
+     - **Heavy**: Requires sub-stepping and averaging over :math:`10^3 - 10^4` stochastic trajectories.
+     - **Fast Stochastic**: Unitary sub-stepping without continuous damping, with vectorized Poisson branching.
 
 The Phonon Bottleneck Case (:math:`1P_e \to 1S_e`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -188,7 +196,7 @@ In quantum-confined semiconductor nanocrystals, quantum confinement shifts atomi
 
 Because this energy gap greatly exceeds the energy of a single longitudinal optical (LO) phonon (:math:`\hbar \omega_{\mathrm{LO}} \approx 15 - 35\text{ meV}`), relaxation cannot occur through single-phonon scattering. This phenomenon is known as the **phonon bottleneck**.
 
-* **Why FSSH is Recommended for Bottlenecks**: The :math:`1P_e \to 1S_e` transition is mediated by rare multi-phonon wavepacket coincidences, non-adiabatic surface crossings, or Auger-type electron-hole energy exchange. CPA-FSSH explicitly evolves the time-dependent Schrödinger equation, capturing coherent quantum interference between the discrete electronic states and vibrational wavepackets, and resolving whether the bottleneck persists or is bypassed.
+* **Why FSSH or DISH is Recommended for Bottlenecks**: The :math:`1P_e \to 1S_e` transition is mediated by rare multi-phonon wavepacket coincidences, non-adiabatic surface crossings, or Auger-type electron-hole energy exchange. CPA-FSSH and DISH explicitly evolve the time-dependent Schrödinger equation, capturing quantum interference between discrete electronic states and vibrational wavepackets, and resolving whether the bottleneck persists or is bypassed.
 
 Surface Trap States: Hopping & De-Hopping Kinetics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -199,13 +207,15 @@ When a hot carrier cools to the band edge:
 1. **Carrier Trapping (Hopping into Trap)**: The carrier transitions from a delocalized core state (:math:`1S`) into a spatially localized defect level. This is accompanied by strong local lattice distortion (large polaron or Jahn-Teller rearrangement).
 2. **Carrier De-Trapping (Hopping out of Trap)**: Thermal fluctuations from the nuclear bath can impart sufficient energy to kick the carrier back from the defect into the delocalized band states (thermally activated de-trapping).
 
-* **Why FSSH is Recommended for Traps**: Trapping and de-trapping are stochastic, trajectory-dependent barrier-crossing events. A deterministic rate equation (PME) treats trapping as an irreversible, memoryless Markovian decay that washes out individual carrier dwell times and trapping/detrapping equilibrium fluctuations. FSSH tracks individual stochastic trajectories: some trajectories get trapped permanently, while others hop into the trap, reside there for several picoseconds, and subsequently de-hop back into the band. Capturing this physics accurately requires both **FSSH** and **extended AIMD trajectories** (typically :math:`> 10 - 50\text{ ps}`).
+* **Why Stochastic Methods (FSSH / DISH) are Recommended for Traps**: Trapping and de-trapping are stochastic, trajectory-dependent barrier-crossing events. A deterministic rate equation (PME) treats trapping as an irreversible, memoryless Markovian decay that washes out individual carrier dwell times and trapping/detrapping equilibrium fluctuations. Surface hopping tracks individual stochastic trajectories: some trajectories get trapped permanently, while others hop into the trap, reside there for several picoseconds, and subsequently de-hop back into the band. Capturing this physics accurately requires either **CPA-FSSH-EDC** or **DISH** along **extended AIMD trajectories** (typically :math:`> 10 - 50\text{ ps}`).
 
 Summary Decision Rule
 ~~~~~~~~~~~~~~~~~~~~~
 
-* Choose **``engine: "master_equation"``** when screening carrier cooling lifetimes across dense manifolds in medium-to-large quantum dots (:math:`> 500` atoms) where the density of states is high and fast dephasing dominates.
-* Choose **``engine: "surface_hopping"``** when investigating discrete frontier level transitions (:math:`1P \to 1S`), quantum coherence, or stochastic hopping/de-hopping between band edges and localized surface defect traps.
+* Choose **``method: "master_equation"``** when screening carrier cooling lifetimes across dense manifolds in medium-to-large quantum dots (:math:`> 500` atoms) where the density of states is high and fast dephasing dominates.
+* Choose **``method: "cpa_fssh"``** (with continuous EDC) when investigating discrete frontier level transitions (:math:`1P \to 1S`), quantum coherence, or strong non-adiabatic coupling spikes near avoided crossings.
+* Choose **``method: "dish"``** when simulating dense nanocrystals where Tully's derivative flux causes overcoherence or stiffness, recovering PME cooling rates while preserving single-trajectory stochastic statistics, dwell times, and trap residence kinetics.
+
 
 ---
 
@@ -249,8 +259,8 @@ where :math:`d_{IJ}(t) = \langle \psi_I | \frac{\partial}{\partial t} | \psi_J \
 .. math::
 
    B_{IJ}(T) = \begin{cases}
-     1 & \text{for downward transitions } (E_J \ge E_I) \\
-     \exp\left( -\frac{E_I - E_J}{k_B T} \right) & \text{for upward thermal activation } (E_J < E_I)
+     1 & \text{for downward transitions } (E_J \le E_I) \\
+     \exp\left( -\frac{E_J - E_I}{k_B T} \right) & \text{for upward thermal activation } (E_J > E_I)
    \end{cases}
 
 Vectorized Tensor Decomposition for Diagonal BSE
@@ -268,33 +278,298 @@ In matrix notation, this decomposes into an exact **BLAS Level-3 tensor product*
 
 .. math::
 
-   \frac{\partial \mathbf{P}}{\partial t} = \left( \mathbf{P} \, \mathbf{K}_e^T - \mathbf{P} \operatorname{diag}(\mathbf{L}_e) \right) + \left( \mathbf{K}_h \, \mathbf{P} - \operatorname{diag}(\mathbf{L}_h) \, \mathbf{P} \right)
+   \frac{\partial \mathbf{P}}{\partial t} = \left( \mathbf{P} \, \mathbf{K}_e - \mathbf{P} \operatorname{diag}(\mathbf{L}_e) \right) + \left( \mathbf{K}_h^\mathsf{T} \, \mathbf{P} - \operatorname{diag}(\mathbf{L}_h) \, \mathbf{P} \right)
 
 where :math:`\mathbf{L}_e = \sum_b K_e(a \to b)` and :math:`\mathbf{L}_h = \sum_j K_h(i \to j)` are the total state loss vectors.
 
 This breakthrough reduces the computational scaling from :math:`O(N_{\mathrm{pairs}}^2)` to :math:`O(N_{\mathrm{occ}}^2 + N_{\mathrm{virt}}^2)`. A million exciton configurations are propagated in **less than 0.2 seconds per nuclear time step**.
 
-2. Classical Path Approximation Surface Hopping (CPA-FSSH)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2. Classical Path Approximation Surface Hopping with Energy-Based Decoherence (CPA-FSSH-EDC)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In CPA-FSSH, the classical nuclei follow a precomputed ground-state molecular dynamics trajectory :math:`\mathbf{R}(t)`. The quantum electronic wavefunction evolves according to the Time-Dependent Schrödinger Equation:
+In CPA-FSSH, the classical nuclei follow a precomputed ground-state molecular dynamics trajectory :math:`\mathbf{R}(t)`. The quantum electronic wavefunction :math:`|\Psi(t)\rangle` evolves according to the Time-Dependent Schrödinger Equation (TDSE):
+
+.. math::
+
+   i\hbar \frac{\partial |\Psi(t)\rangle}{\partial t} = \hat{H}_{\mathrm{elec}}(\mathbf{r}; \mathbf{R}(t)) |\Psi(t)\rangle
+
+Expanding the electronic state in the instantaneous adiabatic Kohn-Sham or diagonal-BSE pair basis :math:`|\psi_I(\mathbf{R}(t))\rangle`:
+
+.. math::
+
+   |\Psi(t)\rangle = \sum_I c_I(t) |\psi_I(\mathbf{R}(t))\rangle
+
+Substituting this expansion into the TDSE and projecting onto :math:`\langle \psi_I|` yields the coupled equations of motion for the complex amplitudes :math:`c_I(t)`:
 
 .. math::
 
    i\hbar \frac{d c_I(t)}{dt} = E_I(t) c_I(t) - i\hbar \sum_J d_{IJ}(t) c_J(t)
 
-where :math:`c_I(t)` is the complex quantum amplitude of adiabatic state :math:`I`.
+where :math:`E_I(t) = \langle \psi_I | \hat{H}_{\mathrm{elec}} | \psi_I \rangle` is the instantaneous adiabatic energy and :math:`d_{IJ}(t) = \langle \psi_I | \frac{\partial}{\partial t} | \psi_J \rangle` is the non-adiabatic coupling matrix element.
+
+In matrix notation, this forms the effective non-adiabatic Schrödinger equation:
+
+.. math::
+
+   \frac{d \mathbf{c}(t)}{dt} = -\frac{i}{\hbar} \mathbf{H}_{\mathrm{eff}}(t) \mathbf{c}(t), \qquad \mathbf{H}_{\mathrm{eff}}(t) = \operatorname{diag}\left(\mathbf{E}(t)\right) - i\hbar \mathbf{d}(t)
+
+Because :math:`\mathbf{d}` is anti-Hermitian (:math:`d_{IJ} = -d_{JI}^*`), the off-diagonal coupling term :math:`-i\hbar \mathbf{d}` is **strictly Hermitian**, ensuring that :math:`\mathbf{H}_{\mathrm{eff}}` is Hermitian and the total electronic probability is conserved:
+
+.. math::
+
+   \sum_I |c_I(t)|^2 = 1
+
+Unitary Time Evolution via Second-Order Strang Splitting
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+To propagate the electronic coefficients across the nuclear time step :math:`[t_k, t_{k+1}]`, ``QDEX`` divides the interval into fine sub-steps :math:`\delta t = \Delta t_{\mathrm{nuc}} / N_{\mathrm{sub}}`. Within each sub-step, the propagator is evaluated using second-order Strang splitting:
+
+.. math::
+
+   \mathbf{U}(\delta t) = \exp\left( -i \mathbf{E}(\tau_m) \frac{\delta t}{2\hbar} \right) \exp\left( -\mathbf{d}(t_k) \, \delta t \right) \exp\left( -i \mathbf{E}(\tau_m) \frac{\delta t}{2\hbar} \right)
+
+where :math:`\mathbf{E}(\tau_m)` is linearly interpolated between :math:`\mathbf{E}(t_k)` and :math:`\mathbf{E}(t_{k+1})`. Because :math:`\mathbf{d}` is anti-Hermitian, :math:`\exp(-\mathbf{d}\,\delta t)` is an exact unitary rotation, preserving norm conservation to machine precision.
 
 Tully's Fewest Switches Hopping Probability
 """""""""""""""""""""""""""""""""""""""""""
 
-At each time step :math:`\Delta t`, an ensemble of classical trajectories is propagated. The probability for a trajectory currently residing on surface :math:`I` to switch to surface :math:`J` is given by Tully's formula:
+In Fewest Switches Surface Hopping (Tully, *J. Chem. Phys.* 93, 1061, 1990), an ensemble of :math:`N_{\mathrm{traj}}` classical trajectories is propagated. Each trajectory :math:`tr` resides on a specific "active surface" :math:`K(t)`.
+
+At each time step, the probability for a trajectory on active surface :math:`K` to switch to an inactive surface :math:`J \neq K` is determined by the outward probability flux accumulated across the electronic sub-steps:
 
 .. math::
 
-   g_{I \to J}(t) = \max\left( 0, \, \frac{-2 \Delta t \, \operatorname{Re}\left( c_I^*(t) c_J(t) d_{IJ}(t) \right)}{|c_I(t)|^2} \right) \times B_{IJ}(T)
+   g_{K \to J} = \sum_{m=1}^{N_{\mathrm{sub}}} \max\left( 0, \, \frac{2 \delta t \, \operatorname{Re}\left( c_K^*(\tau_m) c_J(\tau_m) d_{KJ}(t_k) \right)}{|c_K(\tau_m)|^2} \right) \times B_{KJ}(T)
 
-A uniform random number :math:`\xi \in [0, 1]` is generated; if :math:`\sum_{K=1}^{J-1} g_{I \to K} < \xi \le \sum_{K=1}^J g_{I \to K}`, the trajectory hops to state :math:`J`.
+where :math:`B_{KJ}(T)` enforces detailed balance at lattice temperature :math:`T`:
+
+.. math::
+
+   B_{KJ}(T) = \min\left( 1, \, \exp\left( -\frac{\max(E_J - E_K, 0)}{k_B T} \right) \right)
+
+In standard molecular dynamics, detailed balance is maintained through momentum rescaling along the non-adiabatic coupling vector :math:`\mathbf{d}_{KJ}` (rejecting upward hops if nuclear kinetic energy is insufficient). In the Classical Path Approximation, nuclear velocities follow a fixed ground-state trajectory; multiplying upward hops by :math:`B_{KJ}(T)` provides the rigorous classical-path counterpart to velocity rescaling (Parandekar & Tully, *J. Chem. Phys.* 122, 094102, 2005; Jain, Alguire, & Subotnik, *J. Chem. Phys.* 144, 214110, 2016).
+
+Hopping Decision & Wavepacket Collapse
+""""""""""""""""""""""""""""""""""""""
+
+A uniform random number :math:`\xi \in [0, 1)` is generated:
+* If :math:`\sum_{L=1}^{J-1} g_{K \to L} < \xi \le \sum_{L=1}^J g_{K \to L}`, trajectory :math:`tr` hops to state :math:`J`.
+* The active surface is reassigned: :math:`K \leftarrow J`.
+* The electronic wavepacket undergoes **projective collapse** onto the new active state:
+
+  .. math::
+
+     c_J \leftarrow 1.0, \qquad c_{L \neq J} \leftarrow 0.0
+
+This projective collapse models the immediate decoherence of the trajectory as it separates along the newly occupied potential surface.
+
+The Overcoherence Problem & Continuous Energy-Based Decoherence (EDC)
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+In standard FSSH, when a trajectory does **not** hop, electronic amplitudes :math:`c_J` remain populated indefinitely because classical nuclei in the CPA follow a shared trajectory. In dense quantum-dot manifolds with hundreds of states, this causes artificial state superpositions to linger, producing unphysical hopping loops (**overcoherence**).
+
+Conversely, if the wavepacket is reset to a pure state at every nuclear step (:math:`c_K = 1, c_{J \neq K} = 0`), frequent projective measurements collapse the wavepacket before transitions can develop, completely freezing carrier relaxation—a pathological numerical artifact known as the **Quantum Zeno effect**.
+
+To resolve both problems, ``QDEX`` implements the **Energy-Based Decoherence (EDC)** scheme (Granucci & Persico, *J. Chem. Phys.* 126, 134114, 2007). 
+
+In EDC, electronic wavepacket amplitudes persist continuously across nuclear steps. When no hop occurs, inactive states :math:`J \neq K` are continuously damped over the nuclear step :math:`\Delta t`:
+
+.. math::
+
+   c_J(t + \Delta t) \leftarrow c_J(t + \Delta t) \, \exp\left( -\frac{\Delta t}{\tau_{KJ}} \right), \qquad \forall J \neq K
+
+where :math:`\tau_{KJ}` is the state-pair pure-dephasing time. To strictly preserve total probability conservation (:math:`\sum_L |c_L|^2 = 1`) without altering the quantum phase of the active state, the active amplitude :math:`c_K` is renormalized:
+
+.. math::
+
+   c_K(t + \Delta t) \leftarrow \sqrt{ 1 - \sum_{J \neq K} |c_J(t + \Delta t)|^2 } \; \frac{c_K(t + \Delta t)}{|c_K(t + \Delta t)|}
+
+This continuous damping smoothly suppresses off-diagonal coherences on physical dephasing timescales (:math:`10 - 40\text{ fs}`) while allowing short-time quantum interference to drive hopping.
+
+State-Pair Dephasing Times: Ab Initio Covariance vs. Granucci-Persico
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+``QDEX`` supports two rigorous evaluations of :math:`\tau_{KJ}`:
+
+1. **Ab Initio Pure-Dephasing Covariance Matrix**:
+   Evaluated from the trajectory energy fluctuations:
+
+   .. math::
+
+      \tau_{KJ} = \min\left( \tau_{\max}, \, \frac{\hbar \sqrt{2}}{\sigma_{KJ}} \right), \qquad \sigma_{KJ}^2 = \operatorname{Var}\left( E_K(t) - E_J(t) \right)
+
+   Diagonal elements are capped at :math:`\tau_{\max} = 500\text{ fs}`. Precomputed across all orbital pairs and cached in ``decoherence_times.npz``.
+
+2. **Granucci-Persico Energy-Gap Formula**:
+   Evaluated instantaneously from the energy gap and nuclear kinetic energy:
+
+   .. math::
+
+      \tau_{KJ} = \frac{\hbar}{|E_K - E_J|} \left( 1 + \frac{C}{E_{\mathrm{kin}}} \right)
+
+   where :math:`C = 0.1\text{ Hartree} = 2.721\text{ eV}`, and :math:`E_{\mathrm{kin}} = \frac{3}{2} N_{\mathrm{atoms}} k_B T` is the classical thermal kinetic energy of the nuclear lattice.
+
+---
+
+3. Decoherence-Induced Surface Hopping (DISH)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+While CPA-FSSH with EDC uses Tully's derivative coupling flux to drive transitions and applies decoherence as an extrinsic damping correction, **Decoherence-Induced Surface Hopping (DISH)** (Jaeger, Fischer, & Prezhdo, *J. Chem. Phys.* 137, 22A545, 2012; Akimov & Prezhdo, *J. Chem. Phys.* 138, 124102, 2013) introduces a fundamentally different physical paradigm.
+
+Physical Foundations of DISH
+""""""""""""""""""""""""""""
+
+In condensed matter systems (colloidal quantum dots, perovskite nanocrystals, organic semiconductors), an electronic excitation couples to thousands of nuclear vibrational degrees of freedom. Thermal phonon fluctuations destroy electronic phase coherence within :math:`5 - 25\text{ fs}`.
+
+In this fast-dephasing regime, electronic transitions are **not driven by instantaneous derivative coupling spikes**, but rather by **environment-induced decoherence (wavepacket branching into the bath)**. DISH operationalizes this insight by formulating surface hopping directly in terms of quantum measurement theory and stochastic wavepacket collapse.
+
+Piecewise Unitary Electronic Propagation
+""""""""""""""""""""""""""""""""""""""""
+
+Between stochastic collapse events, the electronic wavepacket :math:`\mathbf{c}(t)` evolves **strictly unitarily** according to the Time-Dependent Schrödinger Equation:
+
+.. math::
+
+   \mathbf{c}(t + \Delta t) = \mathbf{U}(t, t + \Delta t) \, \mathbf{c}(t)
+
+Crucially, **no artificial continuous exponential damping** is applied to :math:`\mathbf{c}(t)` during unitary propagation. Quantum superpositions and phase interference evolve naturally.
+
+Step 1: Poisson Stochastic Dephasing
+""""""""""""""""""""""""""""""""""""
+
+At each nuclear step :math:`\Delta t`, for every inactive state :math:`J \neq K` (where :math:`K` is the active surface of trajectory :math:`tr`), the occurrence of a decoherence event is governed by a Poisson arrival process:
+
+.. math::
+
+   P_{\mathrm{dec}, J} = 1 - \exp\left( -\frac{\Delta t}{\tau_{KJ}} \right)
+
+where :math:`\tau_{KJ}` is the state-pair pure-dephasing time (loaded from ``decoherence_times.npz``).
+
+For each state :math:`J \neq K`, a uniform random number :math:`R_1 \in [0, 1)` is sampled:
+* If :math:`R_1 \ge P_{\mathrm{dec}, J}`: State :math:`J` remains coherent with active state :math:`K`. No collapse attempt is made for state :math:`J`.
+* If :math:`R_1 < P_{\mathrm{dec}, J}`: A dephasing event has occurred. The nuclear wavepacket associated with state :math:`J` has spatially separated from the wavepacket on surface :math:`K`. The trajectory must now undergo stochastic branching!
+
+Step 2: Stochastic Branching (Collapse vs. Quenching)
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+When state :math:`J` dephases, the trajectory reaches a quantum bifurcation point. In accordance with the Born rule, the probability that the system collapses into state :math:`J` is given by its instantaneous electronic population :math:`|c_J|^2`, scaled by detailed balance:
+
+
+
+.. math::
+
+   P_{\mathrm{hop}, J} = |c_J|^2 \times \min\left( 1, \, \exp\left( -\frac{\max(E_J - E_K, 0)}{k_B T} \right) \right)
+
+A second independent uniform random number :math:`R_2 \in [0, 1)` is sampled:
+
+* **Case A: Hop Accepted (:math:`R_2 < P_{\mathrm{hop}, J}`)**:
+  The trajectory successfully transitions to state :math:`J`. The active surface switches :math:`K \leftarrow J`, and the wavepacket undergoes complete projective collapse onto state :math:`J`:
+
+  .. math::
+
+     c_J \leftarrow 1.0, \qquad c_{L \neq J} \leftarrow 0.0
+
+  If multiple states simultaneously qualify for a hop in a single time step, one state is selected with probability proportional to :math:`P_{\mathrm{hop}, J}`.
+
+* **Case B: Hop Rejected (:math:`R_2 \ge P_{\mathrm{hop}, J}`)**:
+  The trajectory remains on active surface :math:`K`. Because a dephasing event did occur, coherence between state :math:`J` and active state :math:`K` has been irreversibly lost to the nuclear bath. Consequently, state :math:`J` is **quenched**:
+
+  .. math::
+
+     c_J \leftarrow 0.0
+
+  The remaining surviving amplitudes are renormalized to conserve total probability:
+
+  .. math::
+
+     \mathbf{c} \leftarrow \frac{\mathbf{c}}{\sqrt{\sum_L |c_L|^2}}
+
+This stochastic quenching removes off-diagonal population without continuous damping, completely preventing overcoherence and avoiding the Quantum Zeno effect.
+
+Analytical Equivalence of DISH to the Pauli Master Equation
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+A profound theoretical property of DISH is that in the condensed-phase limit where dephasing is fast compared to electronic transitions (:math:`\tau_{KJ} \ll \tau_{\mathrm{transfer}}`), DISH **analytically converges to the Pauli Master Equation with Lorentzian line broadening**!
+
+*Proof Sketch*:
+Consider a two-level system initialized in active state :math:`K` (:math:`c_K(0) = 1`, :math:`c_J(0) = 0`). Over a short nuclear interval :math:`\Delta t`, first-order perturbation theory on the TDSE gives:
+
+.. math::
+
+   c_J(\Delta t) \approx - \frac{d_{KJ} \, \Delta t}{1 + i \frac{\Delta E_{KJ} \Delta t}{2\hbar}}
+
+The population amplitude built up in state :math:`J` during interval :math:`\Delta t` is:
+
+.. math::
+
+   |c_J(\Delta t)|^2 \approx \frac{|d_{KJ}|^2 \Delta t^2}{1 + \left( \frac{\Delta E_{KJ} \Delta t}{2\hbar} \right)^2}
+
+In DISH, the transition rate :math:`k_{K \to J}^{\mathrm{DISH}}` is the product of the dephasing frequency :math:`\Gamma_{\mathrm{dec}} = 1/\tau_{KJ}` and the branching probability :math:`P_{\mathrm{hop}, J} \approx |c_J|^2`:
+
+.. math::
+
+   k_{K \to J}^{\mathrm{DISH}} = \frac{P_{\mathrm{dec}, J} \cdot P_{\mathrm{hop}, J}}{\Delta t} \approx \frac{1}{\tau_{KJ}} \left[ \frac{|d_{KJ}|^2 \tau_{KJ}^2}{1 + \left( \frac{\Delta E_{KJ} \tau_{KJ}}{\hbar} \right)^2} \right] = |d_{KJ}|^2 \left[ \frac{\tau_{KJ}}{1 + \left( \frac{\Delta E_{KJ} \tau_{KJ}}{\hbar} \right)^2} \right]
+
+Apart from a standard factor of 2 arising from the full two-sided integration of the bath autocorrelation function, this expression is **mathematically identical to Fermi's Golden Rule with Lorentzian broadening** used in the Pauli Master Equation:
+
+.. math::
+
+   k_{K \to J}^{\mathrm{PME}} = 2 |d_{KJ}|^2 \left[ \frac{\tau_{\mathrm{dec}}}{1 + \left( \frac{\Delta E_{KJ} \tau_{\mathrm{dec}}}{\hbar} \right)^2} \right] \times B_{KJ}(T)
+
+**Conclusion**: DISH provides a rigorous theoretical unification of wavepacket quantum dynamics and statistical master equations. It recovers PME cooling rates in dense manifolds while retaining single-trajectory stochastic statistics, individual dwell times, and branching kinetics.
+
+---
+
+4. Comparative Synthesis: PME vs. CPA-FSSH-EDC vs. DISH
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following comprehensive comparison synthesizes the mathematical foundations, computational characteristics, and physical applicability of the three dynamical engines in ``QDEX``:
+
+.. list-table::
+   :widths: 20 26 27 27
+   :header-rows: 1
+
+   * - Theoretical Dimension
+     - Pauli Master Equation (PME)
+     - CPA-FSSH with EDC
+     - Decoherence-Induced Surface Hopping (DISH)
+   * - **Primary Dynamical Variable**
+     - Real-valued population vector :math:`\mathbf{P}(t) \in \mathbb{R}^{N}`.
+     - Complex amplitude vector :math:`\mathbf{c}(t) \in \mathbb{C}^{N}` plus active surface index :math:`K(t)`.
+     - Complex amplitude vector :math:`\mathbf{c}(t) \in \mathbb{C}^{N}` plus active surface index :math:`K(t)`.
+   * - **Electronic Equation of Motion**
+     - Markovian rate equation: :math:`\frac{d\mathbf{P}}{dt} = \mathbf{K} \mathbf{P}`.
+     - Continuous TDSE: :math:`i\hbar \dot{\mathbf{c}} = \mathbf{H}_{\mathrm{eff}} \mathbf{c}` with continuous EDC damping.
+     - Piecewise unitary TDSE: :math:`\mathbf{c}(t+\Delta t) = \mathbf{U} \mathbf{c}(t)` (no continuous damping).
+   * - **Hopping / Transition Mechanism**
+     - Continuous probability flux between populations via FGR rate matrix.
+     - Tully's Fewest Switches non-adiabatic coupling flux: :math:`g_{K \to J} \propto \operatorname{Re}(c_K^* c_J d_{KJ})`.
+     - Environment-driven stochastic branching: Poisson dephasing followed by Born-rule collapse :math:`P_{\mathrm{hop}} \propto |c_J|^2`.
+   * - **Decoherence Treatment**
+     - Implicit: Lorentzian broadening of energy conservation delta function.
+     - Continuous exponential damping of inactive states: :math:`c_J \leftarrow c_J e^{-\Delta t / \tau_{KJ}}`.
+     - Discrete stochastic quenching of inactive states: :math:`c_J \leftarrow 0` upon rejected dephasing.
+   * - **Detailed Balance Enforcement**
+     - Transition rates scaled by Boltzmann factor :math:`B_{IJ}(T) = \exp(-\Delta E / k_B T)`.
+     - Hopping fluxes scaled by Boltzmann factor :math:`B_{IJ}(T)` (classical-path velocity rescaling stand-in).
+     - Hopping probabilities scaled by Boltzmann factor :math:`B_{IJ}(T)`.
+   * - **Quantum Zeno Vulnerability**
+     - **Immune**: Propagates macroscopic populations; no wavepacket resetting.
+     - **Immune**: Wavepacket amplitudes persist across steps; EDC damps smoothly without abrupt collapse.
+     - **Immune**: Decoherence events are stochastic and Poisson-distributed; active state remains untouched.
+   * - **Equivalence in Dense Limit**
+     - Canonical baseline (Lorentzian FGR).
+     - Diverges if dephasing times are miscalibrated or couplings are stiff.
+     - **Analytically proves equivalence** to Lorentzian FGR in the fast-dephasing limit.
+   * - **Computational Complexity**
+     - :math:`O(N_{\mathrm{occ}}^2 + N_{\mathrm{virt}}^2)` via BLAS-3 tensor contraction (< 0.2 s per step for :math:`10^6` pairs).
+     - :math:`O(N_{\mathrm{traj}} \cdot N_{\mathrm{sub}} \cdot N_{\mathrm{dyn}}^2)` (heavy; requires fine sub-stepping).
+     - :math:`O(N_{\mathrm{traj}} \cdot N_{\mathrm{sub}} \cdot N_{\mathrm{dyn}}^2)` (vectorized batching across trajectories).
+   * - **Recommended Regime**
+     - Ultrafast screening across huge state manifolds (:math:`> 1,000` states), high DOS.
+     - Discrete frontier states (:math:`1P \to 1S`), persistent quantum coherence, small systems.
+     - Nanocrystals with dense bands, avoided crossings, defect trapping, and single-carrier dwell times.
+
 
 ---
 
@@ -308,7 +583,7 @@ Along the classical nuclear trajectory :math:`\mathbf{R}(t)`, the non-adiabatic 
 
 .. math::
 
-   d_{IJ}(t + \frac{\Delta t}{2}) = \langle \psi_I(t) | \frac{\partial}{\partial t} | \psi_J(t) \rangle \approx \frac{S_{IJ}(t, t+\Delta t) - S_{JI}(t, t+\Delta t)}{2 \Delta t}
+   d_{IJ}(t + \frac{\Delta t}{2}) = \langle \psi_I(t) | \frac{\partial}{\partial t} | \psi_J(t) \rangle \approx \frac{S_{IJ}(t, t+\Delta t) - S_{JI}^*(t, t+\Delta t)}{2 \Delta t}
 
 where :math:`S_{IJ}(t, t+\Delta t) = \langle \psi_I(t) | \psi_J(t+\Delta t) \rangle` is the cross-frame state overlap. In ``QDEX``, the underlying atomic orbital cross-overlaps :math:`S_{\mu \nu}(t, t+\Delta t) = \int \chi_\mu(\mathbf{r}; \mathbf{R}(t)) \chi_\nu(\mathbf{r}; \mathbf{R}(t+\Delta t)) d\mathbf{r}` are evaluated analytically via Libint2.
 
@@ -329,18 +604,18 @@ where :math:`\theta_I = \operatorname{arg}(S_{II}(t, t+\Delta t))`. This guarant
 
    \operatorname{Re}(S_{II}(t, t+\Delta t)) \ge 0, \quad \operatorname{Im}(S_{II}(t, t+\Delta t)) = 0
 
-Hungarian Matching for Trivial Avoided Crossings
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Hungarian Matching for Trivial Crossings
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When nuclear vibrations bring two states close in energy, their adiabatic energy curves may cross. Sorting states strictly by instantaneous energy causes their physical identities to abruptly swap, introducing artificial spikes into :math:`d_{IJ}`.
+A trivial crossing is a label swap between two orbitals that do not interact. Inside one nuclear step their diagonal overlap collapses and the character sits on an off-diagonal element. Following the old energy label then puts a numerical spike into :math:`d_{IJ}`.
 
-``QDEX`` tracks states across time by solving the bipartite matching problem using the **Hungarian algorithm** on the cost matrix:
+``QDEX`` repairs only that case. The Hungarian assignment uses the cost matrix
 
 .. math::
 
    C_{IJ} = 1 - |S_{IJ}(t, t+\Delta t)|^2
 
-This guarantees diabatic tracking and preserves the physical identity of frontier orbitals throughout the trajectory.
+and a state is allowed to leave its own column only when :math:`|S_{II}| < 0.5`. An avoided crossing that still overlaps its own adiabatic label stays in the adiabatic basis that surface hopping propagates. The assignment is not a global diabatization.
 
 ---
 
@@ -408,6 +683,105 @@ Why We Compute It This Way
 1. **Parameter-Free**: Eliminates arbitrary empirical fitting parameters from NAMD simulations.
 2. **Temperature & Lattice Sensitive**: Soft, anharmonic lattices (such as lead halide perovskites) exhibit large thermal gap fluctuations (:math:`\sigma_E \approx 50 - 100\text{ meV}`), correctly yielding short dephasing times (:math:`\tau_{\mathrm{dec}} \approx 7 - 12\text{ fs}`), whereas rigid covalent quantum dots (like InAs or Si) yield longer dephasing times (:math:`\tau_{\mathrm{dec}} \approx 20 - 40\text{ fs}`).
 
+State-Pair Pure-Dephasing Matrices (tau_ij)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In multi-state quantum dynamics, electronic dephasing times vary substantially across orbital pairs depending on energy gaps, orbital spatial localization, and lattice phonon coupling. Rather than assuming an arbitrary uniform dephasing time, ``QDEX`` precomputes the complete state-pair pure-dephasing matrices :math:`\boldsymbol{\tau}_{\mathrm{occ}} \in \mathbb{R}^{N_{\mathrm{occ}} \times N_{\mathrm{occ}}}` and :math:`\boldsymbol{\tau}_{\mathrm{virt}} \in \mathbb{R}^{N_{\mathrm{virt}} \times N_{\mathrm{virt}}}` directly from the AIMD trajectory energy fluctuations.
+
+Microscopic Derivation from Short-Time Cumulant Expansion
+"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+For any pair of adiabatic states :math:`(i, j)`, the instantaneous energy difference along the trajectory is:
+
+.. math::
+
+   \Delta \varepsilon_{ij}(t) = \varepsilon_i(t) - \varepsilon_j(t)
+
+The thermal fluctuation around its equilibrium trajectory mean is:
+
+.. math::
+
+   \delta \Delta \varepsilon_{ij}(t) = \Delta \varepsilon_{ij}(t) - \langle \Delta \varepsilon_{ij} \rangle
+
+with variance:
+
+.. math::
+
+   \sigma_{ij}^2 = \operatorname{Var}\left( \Delta \varepsilon_{ij} \right) = \langle \left( \delta \Delta \varepsilon_{ij}(t) \right)^2 \rangle
+
+In second-order cumulant expansion of the reduced density operator, the pure-dephasing decay function :math:`D_{ij}(t)` is driven by the bath line-shape function :math:`g_{ij}(t)`:
+
+.. math::
+
+   D_{ij}(t) = \exp\left( -g_{ij}(t) \right), \qquad g_{ij}(t) = \frac{1}{\hbar^2} \int_0^t dt_1 \int_0^{t_1} dt_2 \, \langle \delta \Delta \varepsilon_{ij}(0) \delta \Delta \varepsilon_{ij}(t_2) \rangle
+
+On timescales shorter than the characteristic nuclear phonon correlation time (:math:`t \ll \tau_{\mathrm{bath}} \sim 50\text{ fs}`), the energy fluctuation autocorrelation is essentially static: :math:`\langle \delta \Delta \varepsilon_{ij}(0) \delta \Delta \varepsilon_{ij}(t_2) \rangle \approx \sigma_{ij}^2`.
+
+The double time integral simplifies analytically to:
+
+.. math::
+
+   g_{ij}(t) \approx \frac{\sigma_{ij}^2}{\hbar^2} \int_0^t dt_1 \, t_1 = \frac{\sigma_{ij}^2 \, t^2}{2 \hbar^2}
+
+yielding a Gaussian dephasing profile:
+
+.. math::
+
+   D_{ij}(t) \approx \exp\left( -\frac{\sigma_{ij}^2 \, t^2}{2 \hbar^2} \right) = \exp\left( - \left(\frac{t}{\tau_{ij}}\right)^2 \right)
+
+Defining the characteristic dephasing time :math:`\tau_{ij}` at the standard :math:`1/e` decay threshold (:math:`D_{ij}(\tau_{ij}) = 1/e`):
+
+.. math::
+
+   \frac{\sigma_{ij}^2 \, \tau_{ij}^2}{2 \hbar^2} = 1 \implies \tau_{ij} = \frac{\hbar \sqrt{2}}{\sigma_{ij}}
+
+To prevent numerical singularities along the diagonal (:math:`i = j` where :math:`\sigma_{ii} = 0`), the diagonal elements are set to a maximum physical cutoff :math:`\tau_{\max} = 500\text{ fs}`:
+
+.. math::
+
+   \tau_{ij} = \min\left( \tau_{\max}, \, \frac{\hbar \sqrt{2}}{\sigma_{ij}} \right)
+
+The resulting pairwise dephasing matrices are precomputed via ``qdex --namd-decoherence`` and cached in ``decoherence_times.npz``, where both **CPA-FSSH-EDC** and **DISH** dynamically consume them at run time.
+
+
+Surface Hopping Schemes: FSSH-EDC vs. DISH
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To prevent the Quantum Zeno effect (where resetting wavepackets at every nuclear step freezes carrier cooling) while curing FSSH overcoherence, ``QDEX`` provides two physically rigorous stochastic algorithms:
+
+1. **Continuous CPA-FSSH with Energy-Based Decoherence Correction (EDC)**
+   (Granucci & Persico, *J. Chem. Phys.* 126, 134114, 2007)
+   Electronic amplitudes :math:`\mathbf{C}(t)` persist continuously across nuclear steps. At each nuclear step:
+   * Electronic TDSE is integrated over the nuclear interval to accumulate Tully's Fewest Switches flux :math:`g_{I \to J}`.
+   * If a hop occurs: the active state switches to :math:`J` and the wavepacket collapses onto state :math:`J` (:math:`c_J = 1`, :math:`c_{K \neq J} = 0`).
+   * If no hop occurs: off-diagonal amplitudes are continuously damped by the state-pair dephasing factor:
+     
+     .. math::
+     
+        c_J \leftarrow c_J \exp\left( -\frac{\Delta t}{\tau_{IJ}} \right), \quad \forall J \neq I
+        
+     and the active amplitude :math:`c_I` is renormalized to conserve total probability :math:`\sum_K |c_K|^2 = 1`.
+
+2. **Decoherence-Induced Surface Hopping (DISH)**
+   (Jaeger, Fischer, Prezhdo, *J. Chem. Phys.* 137, 22A545, 2012; Akimov & Prezhdo, *J. Chem. Phys.* 138, 124102, 2013)
+   In DISH, electronic propagation is strictly unitary between stochastic collapse events (no continuous artificial damping). At each nuclear step:
+   * For each state :math:`J \neq I`, a Poisson dephasing event occurs with probability:
+     
+     .. math::
+     
+        P_{\mathrm{dec}, J} = 1 - \exp\left( -\frac{\Delta t}{\tau_{IJ}} \right)
+        
+   * If a dephasing event occurs for state :math:`J`, the system attempts a collapse (hop) to state :math:`J` with probability:
+     
+     .. math::
+     
+        P_{\mathrm{hop}, J} = |c_J|^2 \times \min\left( 1, \, e^{-\beta \max(E_J - E_I, 0)} \right)
+        
+   * If accepted, the trajectory hops to state :math:`J` and collapses into a pure state (:math:`c_J = 1`).
+   * If rejected, the coherence with state :math:`J` is quenched (:math:`c_J \to 0`) and the remaining states are renormalized.
+
+In dense semiconductor nanocrystals, DISH analytically recovers the Pauli Master Equation cooling rates while maintaining individual trajectory statistics.
+
 ---
 
 7. Phonon Spectral Density J(ω): Mapping Electron-Phonon Coupling
@@ -422,7 +796,7 @@ The **Phonon Spectral Density** :math:`J(\omega)` is the Fourier transform of th
 
    J(\omega) = \frac{1}{2\pi} \int_{-\infty}^{\infty} C(t) \, e^{i \omega t} \, dt
 
-In ``QDEX``, :math:`J(\omega)` is evaluated numerically using a Hann-windowed Fast Fourier Transform (FFT) of :math:`C(t)` and expressed in wavenumbers (:math:`\text{cm}^{-1}`).
+``QDEX`` stores the non-negative real part of a Hann-windowed Fourier transform of :math:`C(t)`, in :math:`\mathrm{cm}^{-1}`. That is the cosine transform of a real, even autocorrelation. It is not :math:`|\mathrm{FFT}|^2`. On a record of length :math:`T` the Rayleigh spacing is :math:`1/T` (about :math:`33\,\mathrm{cm}^{-1}` for a 1 ps trajectory at 2 fs), and that spacing is printed next to the peak.
 
 Physical Meaning
 ~~~~~~~~~~~~~~~~
@@ -507,7 +881,12 @@ To avoid empirical approximations, all transition energies and optical matrix el
 
    .. math::
 
-      f_I = \frac{2}{3} \frac{m_e}{\hbar^2} E_I |\boldsymbol{\mu}_I|^2
+      f = \begin{cases}
+      \dfrac{4}{3}\, E_{\mathrm{Ha}} \, |\boldsymbol{\mu}|^2 & \text{closed-shell spatial orbital} \\
+      \dfrac{2}{3}\, E_{\mathrm{Ha}} \, |\boldsymbol{\mu}|^2 & \text{spinor}
+      \end{cases}
+
+   with the excitation energy in Hartree and the dipole in :math:`ea_0`. This is the atomic-unit reduction of :math:`f = (2/3)(m_e/\hbar^2) E |\mu|^2` per spin-orbital, doubled for a singlet that uses a spatial orbital. Older precomputes that stored :math:`(2/3) E_{\mathrm{eV}} |\mu|^2` are rescaled when the dynamics read them.
 
 2. Einstein Radiative Rate: Single-Frame vs. NAMD Trajectory Averaging
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -534,18 +913,8 @@ A critical question is whether :math:`f_I` and :math:`E_I` should be taken from 
 
       k_{\mathrm{rad}}^{\mathrm{therm}}(t=0) = \frac{\sum_I k_{\mathrm{rad}, I}(0) \, \exp\left( -\frac{E_I(0) - E_0(0)}{k_B T} \right)}{\sum_I \exp\left( -\frac{E_I(0) - E_0(0)}{k_B T} \right)}
 
-3. **Trajectory Ensemble-Averaged Radiative Rate (:math:`\langle k_{\mathrm{rad}} \rangle_{\mathrm{MD}}`)**:
-   When precomputed step data is available along the ab initio MD trajectory, the rate is averaged across all sampled nuclear configurations:
-
-   .. math::
-
-      \langle k_{\mathrm{rad}} \rangle_{\mathrm{MD}} = \frac{1}{N_{\mathrm{frames}}} \sum_{k=1}^{N_{\mathrm{frames}}} k_{\mathrm{rad}}^{\mathrm{therm}}(t_k)
-
-Why Trajectory Averaging is Physically Crucial
-""""""""""""""""""""""""""""""""""""""""""""""
-
-* **Timescale Separation**: Carrier thermalization occurs on the femtosecond timescale (:math:`\tau_{\mathrm{cooling}} \sim 100 - 500\text{ fs}`), while radiative recombination takes nanoseconds (:math:`\tau_{\mathrm{rad}} \sim 1 - 50\text{ ns}`, over 10,000 times longer!). During this long waiting time, the nanocrystal explores its canonical thermal phase space.
-* **Dynamic Symmetry Breaking & Herzberg-Teller Coupling**: At 0 K, high-symmetry nanocrystals (such as cubic perovskites or octahedral dots) often exhibit strictly dipole-forbidden dark ground excitons (:math:`f(0) = 0`). Thermal lattice vibrations dynamically break instantaneous inversion symmetry, mixing optically bright character into the ground exciton (*vibronic intensity borrowing*). Evaluating :math:`f` only at frame 0 would artificially predict an infinite radiative lifetime, whereas the trajectory ensemble average :math:`\langle f(t) \rangle_{\mathrm{MD}} > 0` correctly reproduces experimental nanosecond photoluminescence.
+3. **What the dynamics actually use**:
+   Dipoles are computed on frame 0. The photoluminescence yield uses the frame-0 thermal average above, with the lowest-exciton lifetime taken from :math:`\arg\min E_I`, not from pair index 0. A trajectory average :math:`\langle k_{\mathrm{rad}}\rangle_{\mathrm{MD}}` would require the dipole on every frame. That average is not computed. A dark band-edge exciton at the first geometry therefore stays dark for the reported yield. Herzberg–Teller intensity borrowing along the trajectory is a real physical effect and is not yet in the rate.
 
 3. Non-Radiative Decay Across Large Gaps: Englman-Jortner Energy Gap Law
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -591,7 +960,7 @@ Rather than relying on empirical phonon frequencies, ``QDEX`` extracts :math:`\h
 
       C(t) = \frac{\langle \delta E_g(0) \delta E_g(t) \rangle}{\sigma_E^2}
 
-3. A Hann-windowed Fast Fourier Transform computes the power spectral density :math:`J(\omega)` in wavenumbers (:math:`\text{cm}^{-1}`):
+3. A Hann-windowed Fourier transform stores :math:`\max(\mathrm{Re}\,\mathrm{FFT}[C], 0)` as :math:`J(\omega)` in wavenumbers (:math:`\text{cm}^{-1}`). The spacing of an independent frequency bin is :math:`1/T`:
 
    .. math::
 
@@ -670,20 +1039,8 @@ Every variable in this rate expression is evaluated directly from the NAMD traje
 
 2. **Nuclear Reorganization Energy (:math:`\lambda`)**:
    Computed from the trajectory variance: :math:`\lambda = \frac{\sigma_E^2}{2 k_B T}`.
-3. **Electronic Coupling (:math:`V_{\mathrm{el}}`)**:
-   In non-adiabatic transition theory, :math:`V_{\mathrm{el}}` is the effective off-diagonal electronic coupling between the initial excited state :math:`|1\rangle` and the ground state :math:`|0\rangle`. Via the Hellmann-Feynman theorem, the non-adiabatic coupling vector along nuclear velocity :math:`\dot{\mathbf{R}}` is:
-
-   .. math::
-
-      d_{10}(t) = \left\langle \psi_1(t) \middle| \frac{\partial}{\partial t} \middle| \psi_0(t) \right\rangle = \sum_A \dot{\mathbf{R}}_A \cdot \langle \psi_1 | \boldsymbol{\nabla}_A | \psi_0 \rangle
-
-   In the time-derivative coupling representation, the effective electronic coupling matrix element is:
-
-   .. math::
-
-      V_{\mathrm{el}} = \hbar \, \langle |d_{10}(t)| \rangle
-
-   where :math:`\langle |d_{10}| \rangle` is the trajectory-averaged non-adiabatic coupling magnitude between frontier orbitals, precomputed and stored in ``QDEX``'s step files.
+3. **Electronic prefactor**:
+   The wide-gap loss uses the Englman–Jortner law with the trajectory Huang–Rhys factor :math:`S`, the phonon energy taken from the peak of :math:`J(\omega)`, and a configured prefactor :math:`A_{\mathrm{nr}}` (default :math:`10^{13}\,\mathrm{s}^{-1}`). The root-mean-square intraband coupling :math:`\hbar\langle|d|\rangle` connects excited states to each other. It is not the exciton-to-ground matrix element, and it is not inserted as :math:`V_{\mathrm{el}}`. The Marcus–Levich Gaussian is appropriate only when the gap is a few :math:`\sigma`. It is not the loss used for a :math:`\mathrm{CsPbBr}_3` gap of about 3 eV.
 
 7. Defect Trap-Assisted Recombination (Shockley-Read-Hall)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -834,23 +1191,13 @@ At delay time :math:`t_k`, the single-particle fractional electron occupation in
 
    n_a(t_k) = \sum_{i} P_{ia}(t_k), \qquad p_i(t_k) = \sum_{a} P_{ia}(t_k)
 
-In the unexcited ground state, each transition :math:`(i \to a)` has an intrinsic oscillator strength :math:`f_{ia}^{(0)}`. Under excitation, the effective oscillator strength is reduced by Pauli blocking of both carrier manifolds:
+In the unexcited ground state, each transition :math:`(i \to a)` has an intrinsic oscillator strength :math:`f_{ia}^{(0)}`. For incoherent populations the differential strength is the degeneracy-normalized state-filling signal used for quantum-dot transient absorption (Grimaldi et al., Nano Lett. 2019). A closed-shell spatial orbital holds two carriers, so :math:`g = 2`; a spinor has :math:`g = 1`. One carrier then blocks a fraction :math:`1/g` of that shell. Net optical gain requires :math:`n_a/g_a + p_i/g_i > 1`.
 
 .. math::
 
-   \Delta f_{ia}^{\mathrm{GSB}}(t_k) = - f_{ia}^{(0)} \left( n_a(t_k) + p_i(t_k) \right)
+   \Delta f_{ia}(t_k) = - f_{ia}^{(0)} \left( \frac{n_a(t_k)}{g_a} + \frac{p_i(t_k)}{g_i} \right)
 
-Including the coherent Stimulated Emission (SE) term from populated exciton pairs:
-
-.. math::
-
-   \Delta f_{ia}^{\mathrm{SE}}(t_k) = - f_{ia}^{(0)} P_{ia}(t_k)
-
-The total time-dependent differential oscillator strength is:
-
-.. math::
-
-   \Delta f_{ia}(t_k) = - f_{ia}^{(0)} \left( n_a(t_k) + p_i(t_k) + P_{ia}(t_k) \right)
+An extra :math:`-f P_{ia}` term is available only through ``include_se`` and is not the default. Adding it on top of state filling counts stimulated emission twice.
 
 The continuous differential absorption spectrum :math:`\Delta A(E, t_k)` is then evaluated by convolving with a Gaussian probe spectral broadening :math:`\sigma`:
 
@@ -919,11 +1266,11 @@ The optical mechanisms (GSB, SE, ESA) and dynamical carrier relaxation cascade u
            └────────────────────────►               └────────────────────────►               └────────────────────────►
 
       Formula Mapping:                         Formula Mapping:                         Formula Mapping:
-        • Electron fill: n_a = Σ_i P_ia          • Exciton pop:   P_ia(t)                 • ESA strength:  Δf_aa'^ESA = +f_aa'^(0) n_a
-        • Hole fill:     p_i = Σ_a P_ia          • Stim. emission:                        • Net signal:    ΔA_ESA(E, t) > 0
-        • Bleach strength:                         Δf_ia^SE = -f_ia^(0) P_ia(t)
-          Δf_ia^GSB = -f_ia^(0) (n_a + p_i)      • Coherent probe amplification
-        • Net signal:    ΔA_GSB(E, t) < 0        • Net signal:    ΔA_SE(E, t) < 0
+        • n_a = Σ_i P_ia                         • Default signal is state filling        • Optional, if orbital dipoles exist
+        • p_i = Σ_a P_ia                         • already. include_se adds -f P_ia      • Δf_aa' = +f_aa' n_a / g
+        • Δf = -f (n_a/g + p_i/g)                • and double-counts emission.           • ΔA_ESA > 0
+        • g = 2 spatial, g = 1 spinor            • Net gain only if n/g + p/g > 1
+        • One spatial exciton: Δf = -f
 
 **2. Hot-Carrier Relaxation Cascade & 1S Bleach Kinetic Rise Profile**
 
@@ -1030,6 +1377,9 @@ Command-Line Arguments
    * - ``--namd-run``
      - ``False``
      - Execute Stage 2 NAMD carrier cooling simulation from precomputed data.
+   * - ``--namd-decoherence [dir]``
+     - ``None``
+     - Compute and cache state-pair pure-dephasing matrices (:math:`\tau_{ij}`) into ``decoherence_times.npz``.
    * - ``--namd-compact [dir]``
      - ``None``
      - Compress precomputed directory, eliminating redundant duplicate arrays.
@@ -1045,6 +1395,24 @@ Command-Line Arguments
    * - ``--namd-ta-plot``
      - ``False``
      - Generate 2D false-color TA map and 1S bleach rise kinetics plot.
+   * - ``--namd-ecsh-auger``
+     - ``False``
+     - Enable Energy-Conserving Surface Hopping (ECSH) for two-body Auger processes during NAMD.
+   * - ``--namd-biexciton``
+     - ``False``
+     - Initialize NAMD from a biexciton state (XX) to simulate Auger annihilation dynamics.
+   * - ``--namd-initial-conditions <mode>``
+     - ``"single"``
+     - Set initial condition sampling: ``"single"`` (start from :math:`t_0 = 0`) or ``"multiple"`` (automated ensemble sampling across uncorrelated trajectory origins).
+   * - ``--namd-multi-init``
+     - ``False``
+     - Convenience shortcut for ``--namd-initial-conditions multiple``.
+   * - ``--namd-origins <int>``
+     - ``None`` (auto)
+     - Explicit number of ensemble origins (when unset, calibrated automatically from :math:`\Delta t_0 \ge 2\tau_{\mathrm{corr}}`).
+   * - ``--namd-window-fs <float>``
+     - ``None`` (auto)
+     - Simulation window duration in fs per origin (when unset, calibrated automatically from pilot cooling :math:`3\tau_{\mathrm{cool}}`).
 
 YAML Configuration Example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1059,13 +1427,22 @@ YAML Configuration Example
        end_frame: 500
 
      dynamics:
-       method: "master_equation"         # "master_equation" (PME) or "cpa_fssh"
-       temperature_k: 300.0             # Lattice temperature for detailed balance
-       tau_dec_fs: "cumulant"           # "cumulant" (ab initio), "edc", or fixed float in fs
-       
+       method: "dish"                    # "master_equation" (PME), "dish" (DISH), or "cpa_fssh" (FSSH-EDC)
+       initial_conditions: "multiple"    # "single" (t0 = 0) or "multiple" (auto-calibrated ensemble)
+       temperature_k: 300.0              # Lattice temperature for detailed balance
+       tau_dec_fs: "cumulant"            # "cumulant" (ab initio), "edc", or fixed float in fs
+       decoherence: "edc"                # Decoherence scheme for FSSH (continuous EDC)
+       n_trajectories: 1000              # Trajectory count (split evenly across origins in multi-mode)
+       detailed_balance: true            # Enforce Boltzmann detailed balance factor
+
+     integration:
+       integrator: "strang"              # Unitary Strang operator splitting
+       n_substeps: 2                     # Electronic sub-steps per nuclear interval
+
      transient_absorption:
        run: true                         # Enable pump-probe transient absorption calculation
        sigma: 0.03                       # Probe spectral broadening in eV
        plot: true                        # Generate 2D TA map and kinetics figure
        plot_file: "transient_absorption_map.png"
        csv_file: "ta_bleach_kinetics.csv"
+

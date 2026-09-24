@@ -29,7 +29,7 @@ Auger recombination is a three-carrier Coulomb scattering process wherein an ele
      - Hot hole deep in valence band continuum (:math:`\sim \varepsilon_{\mathrm{HOMO}} - E_g`)
    * - **Neutral Biexciton (:math:`XX`)**
      - Simultaneous presence of 2 electrons and 2 holes
-     - Net decay: :math:`\Gamma_{XX} = 4 \Gamma_{eeh} + 4 \Gamma_{hhe}`, :math:`\tau_{XX} = 1 / \Gamma_{XX}`
+     - Net decay: :math:`k_{XX} = 2 k_{X^-} + 2 k_{X^+}`
 
 Breakdown of Momentum Conservation & :math:`1/V` Volume Scaling
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -128,13 +128,13 @@ In a neutral biexciton containing :math:`2e + 2h`:
 * Either of the 2 conduction electrons can recombine with either of the 2 valence holes, giving :math:`2 \times 2 = 4` independent electron-hole recombination channels.
 * Energy can be transferred to either the remaining spectator electron (:math:`eeh`) or the remaining spectator hole (:math:`hhe`).
 
-According to the universal multiexciton scaling relation (*Klimov et al., Science 2000; Efros & Nesbitt, Nat. Nanotechnol. 2016*):
+The relation tested against single-dot and ensemble lifetimes is the superposition principle (Park, Lim, Klimov et al., ACS Nano 2017; Hou, Peng et al., Nat. Commun. 2019):
 
 .. math::
 
-   \Gamma_{XX} = 4 \, \Gamma_{eeh} + 4 \, \Gamma_{hhe} \qquad \implies \qquad \tau_{X^-} = 4 \, \tau_{XX}
+   k_{XX} = 2 k_{X^-} + 2 k_{X^+} \qquad \Longleftrightarrow \qquad \frac{1}{\tau_{XX}} = 2\left(\frac{1}{\tau_{X^-}} + \frac{1}{\tau_{X^+}}\right)
 
-where :math:`\Gamma_{eeh}` is the single negative trion rate and :math:`\Gamma_{hhe}` is the single positive trion rate.
+Here :math:`k_{X^-}` and :math:`k_{X^+}` are the physical trion rates. For a twofold 1S shell each of those rates is twice the elementary three-carrier pathway, because either of the two identical carriers can recombine. When the two trion rates are equal this is :math:`\tau_{\mathrm{trion}} = 4 \tau_{XX}`. It is not an identity if one channel dominates.
 
 Schematic Diagrams of the Auger Processes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -329,7 +329,7 @@ This corresponds to a short collision impact parameter :math:`r_{\mathrm{Auger}}
 
    \frac{1}{\epsilon(1.8\text{ \AA})} = \frac{1}{4.8} + \left(1 - \frac{1}{4.8}\right) e^{-0.65 \times 1.8} \approx 0.454 \implies \epsilon(r_{\mathrm{Auger}}) \approx 2.20
 
-Because Auger rates scale quadratically with the screened Coulomb kernel (:math:`\Gamma \propto |W|^2 \propto 1/\epsilon^2`), local short-range screening enhances the rate by a factor of :math:`(4.8 / 2.0)^2 \approx 5.8\times` over the purely macroscopic bulk value. ``QDEX`` supports the ``--auger-eps-eff`` parameter (or ``eps_eff: 1.8 - 2.2`` in YAML) to account for this dynamical scaling.
+That local dielectric, about :math:`2.2` rather than :math:`\epsilon_\infty = 4.8`, is already the Resta kernel. It is not applied a second time. A constant :math:`\epsilon_{\mathrm{eff}} \approx 0.4\,\epsilon_{\mathrm{bulk}}` is the alternative used when the whole interaction is scaled by one number (Efros, as cited by Hou et al., Nat. Commun. 2019). Passing ``eps_eff`` does not multiply the Resta matrix.
 
 ---
 
@@ -533,14 +533,14 @@ Relation with Static Trions (:math:`eeh` and :math:`hhe`)
 How does dynamic ECSH NAMD relate to the static trion picture used in Section 1?
 
 * **Identical Microscopic Matrix Elements**:
-  In ECSH NAMD, the transition from a biexciton state :math:`\Phi_{XX}` to a hot single exciton :math:`\Phi_{X^*}` is driven by the **exact same Resta-screened Coulomb integrals** :math:`V_{\mathrm{dir}} - V_{\mathrm{exch}}` computed for the :math:`eeh` (electron-ejected) and :math:`hhe` (hole-ejected) trion channels:
+  When ECSH or a biexciton clock is requested, the hop rate is the frame-0 golden-rule :math:`k_{XX}` from the static Auger module (or an explicit ``tau_auger_ps``). Resonant finals inside the window share that rate. The energy stays in the electronic subsystem: no Boltzmann factor and no velocity rescaling (Gumber and Prezhdo, JCTC 2024). A cooling run does not load this path. Per-frame :math:`V_{\mathrm{dir}} - V_{\mathrm{exch}}` is not stored on the compacted trajectory. The static channels are:
   
   .. math::
   
      \langle \Phi_{XX} | \hat{V} | \Phi_{X^*} \rangle = \begin{cases} V^{eeh}(e'), & \text{spectator electron promoted} \\ V^{hhe}(h'), & \text{spectator hole promoted} \end{cases}
 
-* **Dynamic Fluctuations vs. Static Golden Rule**:
-  In the static picture, Fermi's Golden Rule applies a static Gaussian broadening :math:`\sigma` to an equilibrium geometry. In ECSH NAMD, the nuclear vibrations :math:`\mathbf{R}(t)` continually modulate the orbital energies and wavefunctions :math:`C(t)`, sweeping states into and out of resonance dynamically.
+* **What moves along the trajectory**:
+  The static golden rule uses one geometry and a Gaussian of width :math:`\sigma`. In the dynamics the diagonal-BSE energies move with the frame, and a two-body hop is accepted only inside :math:`\max(k_B T, \sigma)`. The Coulomb weight shared by those resonant finals is the frame-0 :math:`k_{XX}`, unless ``tau_auger_ps`` or ``k_auger_fs`` is set. Per-frame :math:`V_{\mathrm{dir}}` is not recomputed. If no final state lies in the window, the trajectory stays where it is.
 * **Complete Kinetic Cascade**:
   The static calculation outputs only the single instantaneous rate :math:`\Gamma_{XX}`. ECSH NAMD simulates the **full sequence of events**: the biexciton lives on the :math:`XX` surface, undergoes an Auger hop to a hot single exciton, and then emits phonons through the single-particle NAC manifold as it cools to the band edge. In Transient Absorption, this reproduces the bi-exponential bleach recovery observed in experiments.
 
@@ -558,7 +558,7 @@ Resolving the Timescale Mismatch (:math:`1 - 10\text{ ps}` MD vs. :math:`100\tex
 
       qdex --config test_auger.yaml --namd-run --namd-trajectory-loops 20
 
-   This allows trajectories to reach long timescales, directly observing the exponential decay :math:`P_{XX}(t) = \exp(-t / \tau_{XX})`.
+   The nuclear sequence is repeated. At the seam the geometry jumps from the last frame back to the first with no connecting overlap, and electronic phases are not randomized. The loop extends the bath by repetition. It is not a longer molecular-dynamics trajectory. ``--namd-trajectory-loops`` does not turn Auger on. A cooling run leaves ``ecsh_auger`` false and does not set ``initial_state: biexciton``.
 
 2. **Integrated Survival Probability & Initial Linear Decay Slope**:
    Even without trajectory looping, for :math:`t \ll \tau_{XX}`, the decay of the biexciton population is linear:
@@ -594,7 +594,7 @@ YAML Configuration Options
      channel: "all"          # "all" (both eeh and hhe), "eeh", or "hhe"
      n_initial_states: 1     # Number of frontier band-edge carriers to consider
      lineshape: "gaussian"   # "gaussian" or "fcwd"
-     eps_eff: 1.8            # Dynamic screening at hbar*omega=Eg (default: Resta eps_inf)
+     # eps_eff is ignored. Resta already screens as eps(r). Do not stack a second factor.
 
    namd:
      dynamics:
