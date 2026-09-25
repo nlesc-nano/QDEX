@@ -43,5 +43,5 @@ tests/CdSe/compare_*/
 tests/CdSe/sweep_env/
 tests/CdSe/probe_*/
 tests/CdSe/consist/
-# uncompressed MO files (commit the .gz instead)
-tests/CdSe/*/MOs_cleaned_*.txt
+tests/CdSe/2.0nm/MOs_cleaned_20ang.txt
+tests/CdSe/1.2nm/MOs_cleaned_12ang.txt
