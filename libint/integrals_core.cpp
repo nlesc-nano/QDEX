@@ -393,4 +393,50 @@ Matrix overlap_pbc(const std::vector<libint2::Shell>& shells,
   return S;
 }
 
+Matrix compute_aabb_coulomb(const std::vector<libint2::Shell>& shells, int nthreads) {
+  const auto nbf = nbasis(shells);
+  Matrix Gamma = Matrix::Zero(nbf, nbf);
+
+  const auto max_np = max_nprim(shells);
+  const auto max_ang = max_l(shells);
+
+  std::vector<libint2::Engine> engines(nthreads);
+  engines[0] = libint2::Engine(libint2::Operator::coulomb, max_np, max_ang, 0);
+  for (int i = 1; i < nthreads; ++i) engines[i] = engines[0];
+
+  const auto s2bf = map_shell_to_basis_function(shells);
+  const int nS = static_cast<int>(shells.size());
+
+  auto worker = [&](int tid) {
+    auto& eng = engines[tid];
+    for (int s1 = 0; s1 < nS; ++s1) {
+      int bf1 = static_cast<int>(s2bf[s1]);
+      int n1 = static_cast<int>(shells[s1].size());
+      for (int s2 = 0; s2 <= s1; ++s2) {
+        if ((s2 + s1 * nS) % nthreads != tid) continue;
+        int bf2 = static_cast<int>(s2bf[s2]);
+        int n2 = static_cast<int>(shells[s2].size());
+
+        const auto& buf = eng.compute(shells[s1], shells[s1], shells[s2], shells[s2]);
+        if (buf.empty() || buf[0] == nullptr) continue;
+
+        const double* ptr = buf[0];
+        for (int f1 = 0; f1 < n1; ++f1) {
+          int row_offset = (f1 * n1 + f1) * (n2 * n2);
+          for (int f2 = 0; f2 < n2; ++f2) {
+            int idx = row_offset + (f2 * n2 + f2);
+            double val = ptr[idx];
+            Gamma(bf1 + f1, bf2 + f2) = val;
+            if (s1 != s2 || f1 != f2) {
+              Gamma(bf2 + f2, bf1 + f1) = val;
+            }
+          }
+        }
+      }
+    }
+  };
+  parallel_do(worker, nthreads);
+  return Gamma;
+}
+
 } // namespace licpp

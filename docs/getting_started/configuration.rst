@@ -21,9 +21,13 @@ Complete Example Configuration
 
    physics:
      excitation_mode: "diagonal_bse"   # "bse", "diagonal_bse", "independent_qp", "independent_dft"
-     qp_gap: "gw"                      # "gw", "brus", "pbe", or numeric value in eV
-     exchange: true                    # Include bare electron-hole exchange
-     kernel: "resta"                   # "resta" or "bse"
+     qp_gap: "sgw-anchor"              # "sgw-anchor" (or "gw"), "sgw-dim", "evgw-dim", "qsgw-dim", "brus", "pbe"
+     2e-integrals: "mnok"              # "mnok" atom charges or "xs" analytical AO density-pair integrals
+     kernel: "resta"                   # "resta", "dim", "rpa", "sbse", or "bse"
+     dynamic_z: false                  # Empirical state-dependent Z_p damping
+     update_orbitals: false            # Static AO-basis orbital relaxation model
+     include_direct_eh: true           # Attractive screened electron-hole term Kd
+     include_exchange: true            # Repulsive bare electron-hole term Kx
      eps_out: 2.25                     # Solvent / external dielectric constant
      nhomos: 50                        # Active occupied MOs (or all if omitted)
      nlumos: 50                        # Active virtual MOs (or all if omitted)
@@ -109,13 +113,22 @@ physics
   - ``"independent_qp"``: Non-interacting single-particle transitions with scaled GW scissor gap.
   - ``"independent_dft"``: Non-interacting single-particle transitions with bare DFT gap.
 * **qp_gap** (*str or float*):
-  - ``"gw"``: Scaled GW model with two anchors (vacuum cluster and bulk limit) and dielectric polarization.
+  - ``"sgw-anchor"`` (or ``"gw"``): Scaled GW model with two anchors (vacuum cluster and bulk limit) and dielectric polarization.
+  - ``"sgw-dim"``: Microscopic atomistic polarizable dipole screening difference model.
+  - ``"sgw-resta"``: Resta electronic Thomas-Fermi screening model with Penn size-dependent dielectric scaling.
+  - ``"evgw-dim"`` / ``"evgw-resta"``: Effective-gap self-consistent screening models.
+  - ``"qsgw-dim"`` / ``"qsgw-resta"``: Static AO-basis COHSEX-like orbital-relaxation models; these are not conventional QSGW.
   - ``"brus"``: Brus effective mass confinement model.
   - ``"pbe"``: Uncorrected DFT eigenvalues.
   - *float*: Explicit user-defined target band gap in eV.
+* **2e-integrals** (*str*): Two-electron integral representation: ``"mnok"`` (semi-empirical atom-centered transition charges) or ``"xs"`` (analytical Libint2 integrals restricted to AO density pairs :math:`(\mu\mu|\nu\nu)`). Also accepted as ``two_electron_integrals`` or legacy ``kernel_type``.
+* **kernel** (*str*): Dielectric screening model applied to direct electron-hole attraction: ``"resta"``, ``"dim"``, ``"rpa"`` (or ``"xs-rpa"``), ``"sbse"``, or ``"bse"``.
+* **dynamic_z** (*bool*): Apply an empirical state-dependent damping factor :math:`Z_p`. No frequency-dependent self-energy or :math:`f`-sum rule is evaluated.
+* **update_orbitals** (*bool*): Relax molecular orbitals in the AO basis using the static COHSEX-like ``qsgw-*`` model.
+* **include_direct_eh** (*bool*): Include screened attractive :math:`K^d` in ``bse`` or ``diagonal_bse`` (default ``true``). CLI: ``--include-direct-eh`` / ``--no-direct-eh``.
+* **include_exchange** (*bool*): Include bare repulsive :math:`K^x` independently of :math:`K^d` (default ``true``). CLI: ``--include-exchange`` / ``--no-exchange``.
 * **soc** (*bool*): Enable fully relativistic 2-component spinor Hamiltonian.
 * **soc_window_ev** (*float*): Energy window in eV around the Fermi level for selecting active MOs in SOC.
-* **kernel** (*str*): Dielectric screening model: ``"resta"`` (valence electron Thomas-Fermi model) or ``"bse"``.
 * **eps_out** (*float*): Surrounding solvent or matrix dielectric constant (default 2.0).
 * **nhomos** / **nlumos** (*int*): Number of occupied and virtual frontier molecular orbitals to include in the active space.
 * **triplet** (*bool*): Perform triplet BSE calculation (omits repulsive exchange :math:`2K^x`).

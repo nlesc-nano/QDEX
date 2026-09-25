@@ -1,0 +1,2767 @@
+{
+  "note": "Proposed routing only. RST units partition every source byte exactly once. Labels/directives must be checked before actual moves; preserve duplicate derivations with provenance, do not deduplicate during migration.",
+  "files": [
+    {
+      "path": "docs/api/index.rst",
+      "sha256": "b8cb7fd464a348ff20c4105518c6d3b51b7d4aa5db1c239f2c805ed28c8c17c6",
+      "lines": 148,
+      "bytes": 2344
+    },
+    {
+      "path": "docs/getting_started/configuration.rst",
+      "sha256": "b68957e7b7533a20773f34378be0c9bf437d66271d45329aa1d2f0faf1fd99f0",
+      "lines": 185,
+      "bytes": 11943
+    },
+    {
+      "path": "docs/getting_started/installation.rst",
+      "sha256": "5a070a220d7c595a24d9460027ce28b192f2e9a3b9b03d88d33beac326e29476",
+      "lines": 61,
+      "bytes": 1616
+    },
+    {
+      "path": "docs/getting_started/quickstart.rst",
+      "sha256": "93dba9b9e355586e05ed71d89bf58162a40ba907836687efe7078f9a9d9865fa",
+      "lines": 91,
+      "bytes": 2643
+    },
+    {
+      "path": "docs/index.rst",
+      "sha256": "56758474be8adb178fe06b163e2869130472a12f5218727f48b4dd817e5621be",
+      "lines": 91,
+      "bytes": 4651
+    },
+    {
+      "path": "docs/part1_ground_state/index.rst",
+      "sha256": "d4b705f5b2964a228f2b43a30d191c0677fc62a5a2810a7be2f62f7decce7944",
+      "lines": 336,
+      "bytes": 15558
+    },
+    {
+      "path": "docs/part2_soc/index.rst",
+      "sha256": "9eda452e45b9325b2b2a7ad25aa54692242a4c64fe7df931d46f7d94715393f2",
+      "lines": 286,
+      "bytes": 15069
+    },
+    {
+      "path": "docs/part3_gw_scissor/index.rst",
+      "sha256": "69ae9465e9e6114eeef9ea491e002c89481f86d7437b37dbbdf6d1bb2f69e0df",
+      "lines": 1205,
+      "bytes": 55986
+    },
+    {
+      "path": "docs/part4_excited_states/index.rst",
+      "sha256": "a823284b2dc3034ba4802e5abb64c5f6991de834b4c1104fd3dfba5077a42261",
+      "lines": 592,
+      "bytes": 29822
+    },
+    {
+      "path": "docs/part5_exciton_analysis/index.rst",
+      "sha256": "56b9404a00b000fdc7e8537dea19343251c863d0ff19539bff969296f5c8cfac",
+      "lines": 276,
+      "bytes": 12423
+    },
+    {
+      "path": "docs/part6_namd/index.rst",
+      "sha256": "8ba51b5f449001c3a8bc72002e2329b817addfc9ec209e0ba97d6c2819bf21b6",
+      "lines": 1448,
+      "bytes": 92187
+    },
+    {
+      "path": "docs/part7_examples/index.rst",
+      "sha256": "f3a5468995ace3d9f37b9ec8300a2fee3de2f244be9038064448b67746abfc8a",
+      "lines": 346,
+      "bytes": 10649
+    },
+    {
+      "path": "docs/part8_auger/index.rst",
+      "sha256": "a191c6206620c81c1c7c8712b0ef16ddcb229556bc91cc657cb0db94d083dfc8",
+      "lines": 623,
+      "bytes": 38321
+    }
+  ],
+  "units": [
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 1,
+      "end_line": 5,
+      "title": "API Reference",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "fe97b658fecdbd71a25682b7b889bc9ba2f61b08ba20696fe07f706b8bfca432",
+      "bytes": 116
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 6,
+      "end_line": 13,
+      "title": "qdex.solver",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "d433c91f1ffbb7d5a7b15a6f9bded1a1c11b5baa65ea3d76d253a779b3b7c26e",
+      "bytes": 108
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 14,
+      "end_line": 21,
+      "title": "qdex.cli",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "afb1218de706c304a544d56b9bc688d71bdb50e774457863b9fcf06bcb8e21ae",
+      "bytes": 99
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 22,
+      "end_line": 29,
+      "title": "qdex.pdos_coop",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "b6590dc5f01c359013686641c93794bfb5e0f449dca648358a307d5559ccbfa2",
+      "bytes": 117
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 30,
+      "end_line": 37,
+      "title": "qdex.fuzzy_bands",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "5938d2b3cc27091ab714b48a5713d2b22d27a9dc34eb60994a2d2f3ae521db8b",
+      "bytes": 123
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 38,
+      "end_line": 45,
+      "title": "qdex.soc_utils",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "240c6e4afb1be9918e67a68cb8e6495e068af827314bbf7fafe40427772eac69",
+      "bytes": 117
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 46,
+      "end_line": 53,
+      "title": "qdex.hardness",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "b52b9857d3a0fe93ccf2c535416f1ec50506b4f843d7f0a4dec9b07dcda1532a",
+      "bytes": 114
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 54,
+      "end_line": 61,
+      "title": "qdex.exciton_analysis",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "a49abf2af52c45d9ea05de6a492dd2efed648489f93a248aecc18739b866c0ca",
+      "bytes": 138
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 62,
+      "end_line": 69,
+      "title": "qdex.nto",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "fc72eb54fde456678f248940f1159ea5858130aa8f9b1ffe77a084394e80a9d6",
+      "bytes": 99
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 70,
+      "end_line": 77,
+      "title": "qdex.exciton_cube",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "411079e582664d99ec578b336a7913ada1c16f28196fcbb84a44da920e4dbbe0",
+      "bytes": 126
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 78,
+      "end_line": 85,
+      "title": "qdex.namd.precompute",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "9f07e1c41e1653c4634193a3c6a8f3dd0ffde20d0c534a57133ac8ddcfdee5fb",
+      "bytes": 135
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 86,
+      "end_line": 93,
+      "title": "qdex.namd.master_equation",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "954de8ffcf51866dcb8bf6e2c1fa9f52ae7935ebfb088e7c60098a5a4b447fe8",
+      "bytes": 150
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 94,
+      "end_line": 101,
+      "title": "qdex.namd.surface_hopping",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "fde0020783a372080c94bc6ec23409459de30fca58becf9399d8d278f3813cf7",
+      "bytes": 150
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 102,
+      "end_line": 109,
+      "title": "qdex.namd.analysis",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "237a9474670a588634831f0c55d2ed2274fbdb4dd8c0285be2a68331aa2aa3f0",
+      "bytes": 129
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 110,
+      "end_line": 117,
+      "title": "qdex.namd.transient_absorption",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "f160d59ea993df5a5eed91febcaa13b517bc0c7a588cd2e8d23136f5dcb42070",
+      "bytes": 165
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 118,
+      "end_line": 125,
+      "title": "qdex.io_utils",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "052f56dc12ef29793e04f4ea2cc9f5332f2943964ee37dd0bace092f59f824e0",
+      "bytes": 114
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 126,
+      "end_line": 133,
+      "title": "qdex.device_utils",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "f3aeee3e3bcd339f3019071c3a718428dfb4e6871964f55105cdee34d9798599",
+      "bytes": 126
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 134,
+      "end_line": 141,
+      "title": "qdex.profiler",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "e0eeed5802c332d56bc1353090c7049d4106a54f7570d94ae6f294db9633926d",
+      "bytes": 114
+    },
+    {
+      "source": "docs/api/index.rst",
+      "start_line": 142,
+      "end_line": 148,
+      "title": "qdex.auger",
+      "proposed_destination": "docs/reference/api.rst",
+      "sha256": "f2a4a75f572edb43689cf7c6e502366e0f97d20a75bb24ca74036485eacb6253",
+      "bytes": 104
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 1,
+      "end_line": 5,
+      "title": "Configuration Reference (YAML)",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "341040330b02f0a37ce93d3e8e6088a8e66935a801eebe28111b78e734c18f10",
+      "bytes": 209
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 6,
+      "end_line": 90,
+      "title": "Complete Example Configuration",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "7fa8a052305e4c15d2e75b2ca757b1a783e98d6dae9e0bf85b8dcf3f3d0fc838",
+      "bytes": 4778
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 91,
+      "end_line": 93,
+      "title": "Detailed Keyword Reference",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "4b8ba93994df8f22fdf40e0dee2ec9378db84f0bc027d936c6f29c67ddf862d4",
+      "bytes": 55
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 94,
+      "end_line": 105,
+      "title": "system",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "740f48ba4305a9c648413f5fdf45f0e878d7aa82f62c50469d687db7f1895f4f",
+      "bytes": 847
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 106,
+      "end_line": 138,
+      "title": "physics",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "0e70c4c1daba6c7d1883ea3e92d3f1795af4df6761350b907bd51c44b196df32",
+      "bytes": 2793
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 139,
+      "end_line": 151,
+      "title": "fuzzy",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "11c238a362fc2b5c43c76d4ca0f10b550e973cdff6842fb1b6ba08c5ea54ff51",
+      "bytes": 967
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 152,
+      "end_line": 158,
+      "title": "cube",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "30787e274b05119d10b220bc3ff9b4247e4aca310ce1fa482b84b5eb1aa5a510",
+      "bytes": 364
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 159,
+      "end_line": 166,
+      "title": "analysis",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "73acf706e33c60f19318b879a3cbdc4e8207517711336830881839fa2647f3ed",
+      "bytes": 423
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 167,
+      "end_line": 174,
+      "title": "auger",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "49c6728d9c0c98c67d87e33dd41070f8691c5f628d01803e76f7c7a9c8a9c696",
+      "bytes": 485
+    },
+    {
+      "source": "docs/getting_started/configuration.rst",
+      "start_line": 175,
+      "end_line": 185,
+      "title": "namd",
+      "proposed_destination": "docs/start/configuration.rst",
+      "sha256": "48c5b89096e1aa1f656e2771ff5eabd161e4fd683f2426bab5397a86b6fd36e2",
+      "bytes": 1022
+    },
+    {
+      "source": "docs/getting_started/installation.rst",
+      "start_line": 1,
+      "end_line": 5,
+      "title": "Installation Guide",
+      "proposed_destination": "docs/start/installation.rst",
+      "sha256": "2c6ec917cab3fb6cfdacf88695eba4919c970f97046b21d11b02527368f52fa2",
+      "bytes": 184
+    },
+    {
+      "source": "docs/getting_started/installation.rst",
+      "start_line": 6,
+      "end_line": 26,
+      "title": "Method 1: Conda / Micromamba (Recommended)",
+      "proposed_destination": "docs/start/installation.rst",
+      "sha256": "86d0079cae230ac33328a1698a11e366a80eb9afa121d34fc9ac0270477adaba",
+      "bytes": 617
+    },
+    {
+      "source": "docs/getting_started/installation.rst",
+      "start_line": 27,
+      "end_line": 45,
+      "title": "Method 2: Manual Pip Installation",
+      "proposed_destination": "docs/start/installation.rst",
+      "sha256": "9419d5ecb6b52f8883483c5337d373d528c652a1aeeb231aab7ac6db2bf59b0a",
+      "bytes": 471
+    },
+    {
+      "source": "docs/getting_started/installation.rst",
+      "start_line": 46,
+      "end_line": 61,
+      "title": "Verifying the Installation",
+      "proposed_destination": "docs/start/installation.rst",
+      "sha256": "ab8a2f1c09063872d2352c95ad18d24ae66354f502537aeb91ba04e943132395",
+      "bytes": 344
+    },
+    {
+      "source": "docs/getting_started/quickstart.rst",
+      "start_line": 1,
+      "end_line": 5,
+      "title": "Quickstart Guide",
+      "proposed_destination": "docs/start/quickstart.rst",
+      "sha256": "a2ff816e65aed56f5087467d63fe524aad23118449f1c218bfe7a786653254aa",
+      "bytes": 155
+    },
+    {
+      "source": "docs/getting_started/quickstart.rst",
+      "start_line": 6,
+      "end_line": 32,
+      "title": "1. Static BSE Calculation via CLI",
+      "proposed_destination": "docs/start/quickstart.rst",
+      "sha256": "902eaf48f1be0a9f514fe34ebf9cf359339e5bf67082ccb2196d285461a78275",
+      "bytes": 975
+    },
+    {
+      "source": "docs/getting_started/quickstart.rst",
+      "start_line": 33,
+      "end_line": 64,
+      "title": "2. YAML Configuration Workflow",
+      "proposed_destination": "docs/start/quickstart.rst",
+      "sha256": "35e3a8419e23d1ec39bbe7481cd9e24d6f2bbd1f0f90f17fa142f079d26b0779",
+      "bytes": 621
+    },
+    {
+      "source": "docs/getting_started/quickstart.rst",
+      "start_line": 65,
+      "end_line": 69,
+      "title": "3. NAMD Carrier Cooling Workflow",
+      "proposed_destination": "docs/start/quickstart.rst",
+      "sha256": "ac3a7cd17661d8edb02dd62989ad726d80bed39bab4508dfd18b30cfe1bb3294",
+      "bytes": 137
+    },
+    {
+      "source": "docs/getting_started/quickstart.rst",
+      "start_line": 70,
+      "end_line": 82,
+      "title": "Step 1: Precompute overlaps and exciton states",
+      "proposed_destination": "docs/start/quickstart.rst",
+      "sha256": "2f607ae811354a0eebb40365ec5d2247cd88f632e79c4d648839a8441e9f1cdc",
+      "bytes": 407
+    },
+    {
+      "source": "docs/getting_started/quickstart.rst",
+      "start_line": 83,
+      "end_line": 91,
+      "title": "Step 2: Run Dynamics & Carrier Cooling",
+      "proposed_destination": "docs/start/quickstart.rst",
+      "sha256": "594ee126fd9d76432d402d12446489a96e57d49469df84a6db16857491ce2822",
+      "bytes": 348
+    },
+    {
+      "source": "docs/index.rst",
+      "start_line": 1,
+      "end_line": 2,
+      "title": "Preamble",
+      "proposed_destination": "docs/index.rst",
+      "sha256": "dffc1166a6da0455168ba7420ff3f8cffbffc78f2c28c4900e55e94ee936b95b",
+      "bytes": 35
+    },
+    {
+      "source": "docs/index.rst",
+      "start_line": 3,
+      "end_line": 9,
+      "title": "Welcome to QDEX's Documentation!",
+      "proposed_destination": "docs/index.rst",
+      "sha256": "fd3171108412070f466da06b19950d71e149407418261ff3b2a3e88463b3341f",
+      "bytes": 656
+    },
+    {
+      "source": "docs/index.rst",
+      "start_line": 10,
+      "end_line": 85,
+      "title": "Pedagogical Structure (From Easiest to Most Complex)",
+      "proposed_destination": "docs/index.rst",
+      "sha256": "c665f1ea4f3c11d66af4ec2c29e8cdb44c444ea8264206aee5b201441d73965b",
+      "bytes": 3869
+    },
+    {
+      "source": "docs/index.rst",
+      "start_line": 86,
+      "end_line": 91,
+      "title": "Indices and tables",
+      "proposed_destination": "docs/index.rst",
+      "sha256": "9c62eea803462611af064ceef26131591eda654f83023b2562b5846aca5a86c8",
+      "bytes": 91
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 1,
+      "end_line": 9,
+      "title": "Part 1: Ground-State Electronic Structure Analysis",
+      "proposed_destination": "docs/electronic_structure/orbitals.rst",
+      "sha256": "b88ea753b44d7721d733152d710c3b3f76e6b86712910c9b338889deaed46307",
+      "bytes": 656
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 10,
+      "end_line": 31,
+      "title": "1. Molecular Orbitals and the Atomic Orbital Basis",
+      "proposed_destination": "docs/electronic_structure/orbitals.rst",
+      "sha256": "07d41a0d130abda8a8de43ebd8079331cf1dd7c92ef73c3c871d87d004e96e6f",
+      "bytes": 1316
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 32,
+      "end_line": 50,
+      "title": "MO Orthonormality and Diagnostics",
+      "proposed_destination": "docs/electronic_structure/orbitals.rst",
+      "sha256": "966ff0676e8c3ca374fc03b01416273388223389be2cf39ed4aa48135d885a96",
+      "bytes": 879
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 51,
+      "end_line": 55,
+      "title": "2. Projected Density of States (PDOS)",
+      "proposed_destination": "docs/electronic_structure/populations_pdos.rst",
+      "sha256": "5b3e35fc6c991d544a5f1b33aabe28c99fff5b739927dcd510ba51fefafb5da9",
+      "bytes": 365
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 56,
+      "end_line": 82,
+      "title": "Mulliken Population Weights",
+      "proposed_destination": "docs/electronic_structure/populations_pdos.rst",
+      "sha256": "363bde02abc67c11983de1e850aaad20aa04bd66e614edb2e3ea1b7d693cf414",
+      "bytes": 795
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 83,
+      "end_line": 93,
+      "title": "Energy Convolution & Smearing",
+      "proposed_destination": "docs/electronic_structure/populations_pdos.rst",
+      "sha256": "ee30d485f02c42c62526b239df28720a2c2b3408cdc6ce05b87659a1ae25c89a",
+      "bytes": 664
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 94,
+      "end_line": 106,
+      "title": "Surface vs. Core Spatial Partitioning",
+      "proposed_destination": "docs/electronic_structure/populations_pdos.rst",
+      "sha256": "6037356efc8b285a059ca05166281b169015d00251a328f2b3c4763e8dbb7a33",
+      "bytes": 765
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 107,
+      "end_line": 111,
+      "title": "3. Inverse Participation Ratio (IPR)",
+      "proposed_destination": "docs/electronic_structure/localization.rst",
+      "sha256": "2b7f6b79e1f057afaa48984daebded4cc19ade4f34ace7fa6cc088ae0c5aaa12",
+      "bytes": 188
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 112,
+      "end_line": 120,
+      "title": "Mathematical Formulation",
+      "proposed_destination": "docs/electronic_structure/localization.rst",
+      "sha256": "2abb6e4889f74f8c8be471017e9527653b8795bf42948ec8db0d59a02437fe7c",
+      "bytes": 283
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 121,
+      "end_line": 139,
+      "title": "Physical Interpretation",
+      "proposed_destination": "docs/electronic_structure/localization.rst",
+      "sha256": "cf43764792cbbc57ce4ff0a6f9508aeccc5279c7824f4fcb671b78e0be2ffeca",
+      "bytes": 750
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 140,
+      "end_line": 144,
+      "title": "4. Crystal Orbital Overlap Population (COOP)",
+      "proposed_destination": "docs/electronic_structure/bonding_coop.rst",
+      "sha256": "455294baefc7bd3b196af7984c0dd0358c5ad40f9ecd6d5d4c91d876ec817773",
+      "bytes": 308
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 145,
+      "end_line": 159,
+      "title": "Mathematical Definition",
+      "proposed_destination": "docs/electronic_structure/bonding_coop.rst",
+      "sha256": "dcdf6f4c8bce90d52b5c3adabf0fa941d268048323e75ac67354e2bb27cc25b9",
+      "bytes": 685
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 160,
+      "end_line": 170,
+      "title": "Bonding vs. Antibonding Character",
+      "proposed_destination": "docs/electronic_structure/bonding_coop.rst",
+      "sha256": "24a2875725b023daa38e69a7fb1a9842d947b0809ac43c2c224efdbd15fccd3c",
+      "bytes": 663
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 171,
+      "end_line": 177,
+      "title": "5. Fuzzy Band Structure (Supercell Unfolding)",
+      "proposed_destination": "docs/electronic_structure/fuzzy_bands.rst",
+      "sha256": "8164643e5a053aac2c980daab75a5e41d96c61f7308f3e7596df3aa094d78f09",
+      "bytes": 630
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 178,
+      "end_line": 194,
+      "title": "Plane-Wave Fourier Projection",
+      "proposed_destination": "docs/electronic_structure/fuzzy_bands.rst",
+      "sha256": "dcf3cab756d21e91cd3434cc3a7e8322b191565f1aa8cd073df4a5a27b956bb1",
+      "bytes": 961
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 195,
+      "end_line": 208,
+      "title": "Brillouin Zone Folding",
+      "proposed_destination": "docs/electronic_structure/fuzzy_bands.rst",
+      "sha256": "1276c07bf78aa2fd0d5ae9db53b72661cd6c894c8acfe2de286399470e7314b9",
+      "bytes": 756
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 209,
+      "end_line": 218,
+      "title": "Automated High-Symmetry Paths & PCA Alignment",
+      "proposed_destination": "docs/electronic_structure/fuzzy_bands.rst",
+      "sha256": "669ae3273715bed0b9264f35fff7fc26cc55649fca59e45b3531bcd89cda6902",
+      "bytes": 546
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 219,
+      "end_line": 223,
+      "title": "6. Visualizing Orbitals via 3D Gaussian .cube Files",
+      "proposed_destination": "docs/electronic_structure/orbital_cubes.rst",
+      "sha256": "fd7ea1c1ecdd13d747e905464445eab5e587f4da6c1172a897931dab72455476",
+      "bytes": 258
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 224,
+      "end_line": 234,
+      "title": "Grid Discretization",
+      "proposed_destination": "docs/electronic_structure/orbital_cubes.rst",
+      "sha256": "a521497bd883aa7793156b9c89607a2e2fdf0fbd5604c33dfc20ea81dd84f029",
+      "bytes": 485
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 235,
+      "end_line": 251,
+      "title": "C++ Libint Acceleration",
+      "proposed_destination": "docs/electronic_structure/orbital_cubes.rst",
+      "sha256": "f78513bf0894ea91c1d8b6cc0f060390d097de552ac53587ed63eabb2325d320",
+      "bytes": 864
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 252,
+      "end_line": 256,
+      "title": "7. CLI Flags & YAML Configuration Reference",
+      "proposed_destination": "docs/electronic_structure/configuration.rst",
+      "sha256": "3119b89ca611b341325b86456846e4094d0716eb9c79dab8a49affb182e4d662",
+      "bytes": 220
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 257,
+      "end_line": 309,
+      "title": "Command-Line Arguments",
+      "proposed_destination": "docs/electronic_structure/configuration.rst",
+      "sha256": "a3a244a8a7a86b0d8f769f402b914e012e57bee0b229565a70089437125d63c3",
+      "bytes": 1999
+    },
+    {
+      "source": "docs/part1_ground_state/index.rst",
+      "start_line": 310,
+      "end_line": 336,
+      "title": "YAML Configuration Example",
+      "proposed_destination": "docs/electronic_structure/configuration.rst",
+      "sha256": "d5dbdd40d42a71a1aa77215836c360ffccbbdca44913dc2b7acce3fba18e53e3",
+      "bytes": 522
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 1,
+      "end_line": 9,
+      "title": "Part 2: Relativistic Spin-Orbit Coupling (SOC)",
+      "proposed_destination": "docs/relativity/foundations.rst",
+      "sha256": "e04a0232e69a37e754a0d0583db0d7b4c182c8a542c3a1db51551efc0ea02847",
+      "bytes": 644
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 10,
+      "end_line": 26,
+      "title": "1. Physical Origin of Spin-Orbit Coupling",
+      "proposed_destination": "docs/relativity/foundations.rst",
+      "sha256": "519f072bf50779a0e51bea7b853088df0f869ec85803c3301eda655c7a49d34c",
+      "bytes": 1489
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 27,
+      "end_line": 39,
+      "title": "The :math:`Z^4` Scaling Law",
+      "proposed_destination": "docs/relativity/foundations.rst",
+      "sha256": "f30afe77de21852357a208354c6eb32b6a94f14be86edef0c1f04318baeed4ab",
+      "bytes": 722
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 40,
+      "end_line": 44,
+      "title": "2. Impact of SOC on Semiconductor Nanocrystals",
+      "proposed_destination": "docs/relativity/material_effects.rst",
+      "sha256": "60488dfafdc715f7cc3d8c640226ef852141b5df8b88444700072774ccfb6b92",
+      "bytes": 250
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 45,
+      "end_line": 62,
+      "title": "Band Inversion & Giant Gap Contraction",
+      "proposed_destination": "docs/relativity/material_effects.rst",
+      "sha256": "fbfee751c37535882c0db59ab9e0a9b24f8c5715d8dfeb43ddcaa00176b5e9db",
+      "bytes": 1215
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 63,
+      "end_line": 75,
+      "title": "Rashba-Dresselhaus Splitting",
+      "proposed_destination": "docs/relativity/material_effects.rst",
+      "sha256": "b273d29492e7e3ee62ea68bea690501edac356aa547d8b1375a48320d41fb2fb",
+      "bytes": 639
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 76,
+      "end_line": 100,
+      "title": "3. Survey of Relativistic Methods & Rationale for GTH Pseudopotentials",
+      "proposed_destination": "docs/relativity/pseudopotentials.rst",
+      "sha256": "0736077f32055d1538caa1f3cd1b0333333bd7a162ff9bf75f01233793f8b7f3",
+      "bytes": 1460
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 101,
+      "end_line": 110,
+      "title": "Why QDEX Chooses GTH SOC Pseudopotentials",
+      "proposed_destination": "docs/relativity/pseudopotentials.rst",
+      "sha256": "65ee136d935f78f28e4288ac2649501a75a46f809d71f56e69ab17fb41e226c1",
+      "bytes": 781
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 111,
+      "end_line": 131,
+      "title": "4. Mathematical Formulation: Separable GTH Pseudopotential",
+      "proposed_destination": "docs/relativity/spinor_hamiltonian.rst",
+      "sha256": "10076f4c7a5e821a0dbfa1b5f61b3798656dec50c281a5d071d57eeced9056a8",
+      "bytes": 1266
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 132,
+      "end_line": 150,
+      "title": "Angular Momentum Matrices in Spherical Harmonics",
+      "proposed_destination": "docs/relativity/spinor_hamiltonian.rst",
+      "sha256": "7129348ad3dcda620e72867d1e17bdeda73b6c93b08b71a41ba22d540a72d95d",
+      "bytes": 525
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 151,
+      "end_line": 186,
+      "title": "Two-Component Spinor Hamiltonian Structure",
+      "proposed_destination": "docs/relativity/spinor_hamiltonian.rst",
+      "sha256": "1d754b9ee617dc7317a846f659436254e942580d0abc3fea211fe02003200c59",
+      "bytes": 1564
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 187,
+      "end_line": 204,
+      "title": "5. High-Performance Sparse Assembly & DGEMM Optimization",
+      "proposed_destination": "docs/relativity/assembly.rst",
+      "sha256": "def70d41b55bbce2a42adf9f4b5cd5f4c99a6f0e8e581f439bb9aef21134d419",
+      "bytes": 1563
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 205,
+      "end_line": 226,
+      "title": "6. Spinor Representation & Unrestricted Kohn-Sham (UKS)",
+      "proposed_destination": "docs/relativity/unrestricted.rst",
+      "sha256": "702291d146ffa56d470c9ecd217eefb1874cb08898fc010094a8028e24f029e0",
+      "bytes": 933
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 227,
+      "end_line": 242,
+      "title": "UKS Spin-Preserving Framework",
+      "proposed_destination": "docs/relativity/unrestricted.rst",
+      "sha256": "0c9e1f1aad9ca74fc825b4adbcd69aaf70cdc4730ba0c223b65387907be8c93a",
+      "bytes": 815
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 243,
+      "end_line": 245,
+      "title": "7. CLI Flags & YAML Configuration Reference",
+      "proposed_destination": "docs/relativity/configuration.rst",
+      "sha256": "93595d81d44737fc0c2485697560d30851d2bce1f8290bf6533feff37b018dd2",
+      "bytes": 89
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 246,
+      "end_line": 271,
+      "title": "Command-Line Arguments",
+      "proposed_destination": "docs/relativity/configuration.rst",
+      "sha256": "1ef2f91755d82b688f641f5988055677aaa8160f581e3cab7d22e322df2fc2da",
+      "bytes": 801
+    },
+    {
+      "source": "docs/part2_soc/index.rst",
+      "start_line": 272,
+      "end_line": 286,
+      "title": "YAML Configuration Example",
+      "proposed_destination": "docs/relativity/configuration.rst",
+      "sha256": "11acecf07c4b2841b99280d73de48359a1232ab2095ca414e73a257610022c16",
+      "bytes": 313
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1,
+      "end_line": 9,
+      "title": "Part 3: Quasiparticle Corrections & The Scaled GW Models",
+      "proposed_destination": "docs/quasiparticles/foundations.rst",
+      "sha256": "5ba9416a801e463bbf5d94d95e3696adc421ea3d61bc343ea65d145bee91c366",
+      "bytes": 776
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 10,
+      "end_line": 23,
+      "title": "1. Quasiparticle Theory and Hedin's GW Approximation",
+      "proposed_destination": "docs/quasiparticles/foundations.rst",
+      "sha256": "f957b73a363378a692e49968dbf1ee9af5f2f71faefae20ccd57254463d995fa",
+      "bytes": 781
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 24,
+      "end_line": 47,
+      "title": "Hedin's Equations & The :math:`G_0W_0` Approximation",
+      "proposed_destination": "docs/quasiparticles/foundations.rst",
+      "sha256": "50a87da83c3aca2d76ededf486fec5ffd0be857d10911dec12974fa9a3300d56",
+      "bytes": 1221
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 48,
+      "end_line": 80,
+      "title": "2. Unified Two-Body Interaction Engine (``2e-integrals`` vs. ``kernel``)",
+      "proposed_destination": "docs/interactions/architecture.rst",
+      "sha256": "54f8915fb2a02ddc5a6b60395df17a504d660d0481d97b2ae2d791c16dde2066",
+      "bytes": 1691
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 81,
+      "end_line": 109,
+      "title": "Shared Two-Body Operator Architecture",
+      "proposed_destination": "docs/interactions/architecture.rst",
+      "sha256": "123c79d0d1e71cbc58670f86d1827a2c2a309166f327b53aed682a57f989edf3",
+      "bytes": 2212
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 110,
+      "end_line": 134,
+      "title": "Role in Quasiparticle Theory vs. Excited States",
+      "proposed_destination": "docs/interactions/architecture.rst",
+      "sha256": "237a83ad28bf4a8fbd65a24d69d4b750cd932514e824095e0cf27c848ca1d022",
+      "bytes": 1476
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 135,
+      "end_line": 153,
+      "title": "3. The DFT Band Gap Problem",
+      "proposed_destination": "docs/quasiparticles/dft_reference.rst",
+      "sha256": "c2898431f171f86f871c0c52d5a06b3eac46439ee539e930a600e2b54a9c5d38",
+      "bytes": 1136
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 154,
+      "end_line": 164,
+      "title": "4. The Nanocrystal Scaling Bottleneck",
+      "proposed_destination": "docs/quasiparticles/cost.rst",
+      "sha256": "7a91b3f46f9e59a1f134066d21a756ed590d8eb45235f04e3aebbdd751145c55",
+      "bytes": 963
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 165,
+      "end_line": 188,
+      "title": "5. Hierarchy of Quasiparticle Models in QDEX",
+      "proposed_destination": "docs/quasiparticles/model_selection.rst",
+      "sha256": "c9641b7e01b8ea5bb26d92a514147866f29b7d6362ec0f7ffe5f61610d8b6d85",
+      "bytes": 1173
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 189,
+      "end_line": 207,
+      "title": "6. Avenue 1: Two-Anchor Scaled GW (``sgw-anchor``)",
+      "proposed_destination": "docs/quasiparticles/anchor.rst",
+      "sha256": "cb8337fa818601caeff454bf4ebfc6595bc6a4c5ec8ac9a35e36120d6255aa7d",
+      "bytes": 866
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 208,
+      "end_line": 241,
+      "title": "The Confinement Interpolation Formula",
+      "proposed_destination": "docs/quasiparticles/anchor.rst",
+      "sha256": "4b7373e78392645213759cfbfab3cde6484eacc02132bf1632038a460d48f89c",
+      "bytes": 1160
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 242,
+      "end_line": 260,
+      "title": "Implementation in QDEX (``sgw-anchor``)",
+      "proposed_destination": "docs/quasiparticles/anchor.rst",
+      "sha256": "479daad7fe4f20a59f6db224ded68bbc98dcbcc459408bec9a40d56b4e21d088",
+      "bytes": 1442
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 261,
+      "end_line": 265,
+      "title": "7. Avenue 2: Microscopic Dielectric Shift Model (:math:`\\Delta W`)",
+      "proposed_destination": "docs/quasiparticles/delta_w.rst",
+      "sha256": "cf655acab375e2714544bc9b90180a84d6980f4071674556ed5fcbaf785ad262",
+      "bytes": 491
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 266,
+      "end_line": 280,
+      "title": "The Physical Rationale: Cancellation of :math:`v_{xc}`",
+      "proposed_destination": "docs/quasiparticles/delta_w.rst",
+      "sha256": "275cd73485ff67c59a142ce4ad7bf98be473df72fe136769b20bd3fd89578238",
+      "bytes": 1168
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 281,
+      "end_line": 317,
+      "title": "Screened COHSEX Operator",
+      "proposed_destination": "docs/quasiparticles/delta_w.rst",
+      "sha256": "0b926e559eff9166d2dbecdfb3a71389f38685b75696ca273d5677e0b238a6a6",
+      "bytes": 1323
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 318,
+      "end_line": 355,
+      "title": "Screening Formulations for :math:`W^{\\mathrm{QD}}`",
+      "proposed_destination": "docs/interactions/qp_screening.rst",
+      "sha256": "73d7600f5b2e0944e21387b3333e4fc64b204e57054e8566c5aa7cc20f0d54e6",
+      "bytes": 2081
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 356,
+      "end_line": 387,
+      "title": "Spatial Asymptotics of the Dielectric Kernel: Why Screening Fits Nanocrystals",
+      "proposed_destination": "docs/interactions/asymptotics.rst",
+      "sha256": "328a2390096fade205e308b3f52e1f2d119839e5cd0e8473e7a2de5c411b4a85",
+      "bytes": 2364
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 388,
+      "end_line": 429,
+      "title": "Approach B: Microscopic Wavefunction Asymmetry (:math:`f_H^{\\mathrm{micro}}, f_L^{\\mathrm{micro}}`)",
+      "proposed_destination": "docs/quasiparticles/edge_partition.rst",
+      "sha256": "b95021d69a53e5f460ce8ff8b009469e94da5943fe09736e5e996b782d29a103",
+      "bytes": 3019
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 430,
+      "end_line": 468,
+      "title": "Implementation in QDEX (``sgw-dim``, ``sgw-resta``, ``sgw``)",
+      "proposed_destination": "docs/quasiparticles/delta_w_implementation.rst",
+      "sha256": "56db9dbba5f81cd9d9e4463c25ed7b1a0409eca64fb1dcbb1faf675e061d64a4",
+      "bytes": 2687
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 469,
+      "end_line": 471,
+      "title": "8. Avenue 3: Dynamic Renormalization & Self-Consistency",
+      "proposed_destination": "docs/quasiparticles/dynamic_z.rst",
+      "sha256": "7b5c31904a92b92edea9f23c7f9a06dd0a27bd3f61d8db737afe163db0faf515",
+      "bytes": 113
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 472,
+      "end_line": 488,
+      "title": "Dynamic Renormalization Factor :math:`Z_p` (``--dynamic_z``)",
+      "proposed_destination": "docs/quasiparticles/dynamic_z.rst",
+      "sha256": "488dcf680310e6970ccbad6a54a7d6bf3a309a1456e57f3b12f3c1d418cb69f5",
+      "bytes": 1162
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 489,
+      "end_line": 498,
+      "title": "Implementation in QDEX (``--dynamic_z``)",
+      "proposed_destination": "docs/quasiparticles/dynamic_z.rst",
+      "sha256": "25817af1ca9118ceb86d6fa84ce7ba639ac2460bf98aa9a5c0c3af4140848d82",
+      "bytes": 888
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 499,
+      "end_line": 509,
+      "title": "Eigenvalue Self-Consistent GW (``evgw-dim``, ``evgw-resta``)",
+      "proposed_destination": "docs/quasiparticles/gap_iteration.rst",
+      "sha256": "26bf3aed11b106a195729971deff3e197a7241bc85212dee8cc3b1d198a812a7",
+      "bytes": 607
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 510,
+      "end_line": 519,
+      "title": "Implementation in QDEX (``evgw-dim``, ``evgw-resta``)",
+      "proposed_destination": "docs/quasiparticles/gap_iteration.rst",
+      "sha256": "efda8a27d27a2e7452d905e206adda3e0459eeaef4df5086cd91649187f6705f",
+      "bytes": 934
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 520,
+      "end_line": 550,
+      "title": "Quasiparticle Self-Consistent GW (``qsgw-dim``, ``qsgw-resta``)",
+      "proposed_destination": "docs/quasiparticles/orbital_iteration.rst",
+      "sha256": "f95ef477a08bb8e3d6e72f92dbdbaa99a4aac30c05f6b27eaf8596a345613899",
+      "bytes": 1521
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 551,
+      "end_line": 580,
+      "title": "Implementation in QDEX (``qsgw-dim``, ``qsgw-resta``, ``--update_orbitals``)",
+      "proposed_destination": "docs/quasiparticles/orbital_iteration.rst",
+      "sha256": "b9ddac0bc7d9980d78b24b11c427576fb43f8b3ba5b65bc42786dc27dc29372c",
+      "bytes": 3760
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 581,
+      "end_line": 585,
+      "title": "9. Environmental Dielectric Polarization",
+      "proposed_destination": "docs/interactions/environment.rst",
+      "sha256": "d493e51b5a6152f435161c9306396eb76b7f9caf82240436677770d285e19d41",
+      "bytes": 310
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 586,
+      "end_line": 600,
+      "title": "Classical Image Charge Solvation",
+      "proposed_destination": "docs/interactions/environment.rst",
+      "sha256": "b6ab307c5ebab03ec4bd057621fda00b317b75269015ceafd57fc4eab999fd23",
+      "bytes": 910
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 601,
+      "end_line": 618,
+      "title": "10. Rigid Scissor Operator & Frontier Splitting Strategies (Approach A vs. Approach B)",
+      "proposed_destination": "docs/quasiparticles/alignment.rst",
+      "sha256": "4e070eb0afdfae0009814bcf8100cb21c15775c4549aa6f494812eee89edab85",
+      "bytes": 1134
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 619,
+      "end_line": 637,
+      "title": "Approach A: Database Monomer Anchor Frontier Splitting (Used by ``sgw-anchor``)",
+      "proposed_destination": "docs/quasiparticles/alignment.rst",
+      "sha256": "c10eb9ef4c5f472ac9fce4a221b0aad615f87fe2b52eab3ae776c3ab0133ffc9",
+      "bytes": 953
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 638,
+      "end_line": 668,
+      "title": "Approach B: Microscopic Wavefunction Asymmetry (Used by ``sgw-dim``, ``sgw-resta``, ``evgw``, ``qsgw``)",
+      "proposed_destination": "docs/quasiparticles/alignment.rst",
+      "sha256": "cb5fe78cec979ce4d88d2048b76ac73e8faf6fbf91510adbf33a3c2956473dd9",
+      "bytes": 2351
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 669,
+      "end_line": 699,
+      "title": "Implementation in QDEX (Frontier Alignment & CLI)",
+      "proposed_destination": "docs/quasiparticles/alignment.rst",
+      "sha256": "e33780751f87391243973babaf4c4afcacc6ca43ec5f2482a6480a177a0974e6",
+      "bytes": 1920
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 700,
+      "end_line": 704,
+      "title": "11. Material Database Reference",
+      "proposed_destination": "docs/reference/materials.rst",
+      "sha256": "c772febef2b882d04d8a5306bd2c488e230a280efc86769f3cba2cacb28716a9",
+      "bytes": 422
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 705,
+      "end_line": 782,
+      "title": "Perovskites",
+      "proposed_destination": "docs/reference/materials.rst",
+      "sha256": "4fc7ab56262655dc48e13fc2a6b91d4448cd7f94cc341a6b97285629391fba1c",
+      "bytes": 1075
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 783,
+      "end_line": 890,
+      "title": "II\u2013VI Semiconductors",
+      "proposed_destination": "docs/reference/materials.rst",
+      "sha256": "8a57089c34b2e45e01e269016a83310fd9e22244567294bcc48253cec0f5f550",
+      "bytes": 1421
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 891,
+      "end_line": 1000,
+      "title": "III\u2013V Semiconductors",
+      "proposed_destination": "docs/reference/materials.rst",
+      "sha256": "ab3cca58b7f5b236561769ddf13b2980cb39ca02c98ea2b4745894cea5a5522f",
+      "bytes": 1426
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1001,
+      "end_line": 1062,
+      "title": "12. Comprehensive Quasiparticle Options Matrix",
+      "proposed_destination": "docs/quasiparticles/model_selection.rst",
+      "sha256": "985e7d09c3e7d0602eedd2cf1ab2da15d4754aae651484b012990cfcd8b5b9e8",
+      "bytes": 1810
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1063,
+      "end_line": 1065,
+      "title": "13. Recommended Workflow Presets",
+      "proposed_destination": "docs/workflows/qp_presets.rst",
+      "sha256": "bf6880bfb6a743b3a13296f4f4127a29c384d3daa34c6543bee1c0bcc2a5e4fe",
+      "bytes": 67
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1066,
+      "end_line": 1080,
+      "title": "Preset 1: Ultra-Fast NAMD Trajectory Dynamics (``sgw-anchor``)",
+      "proposed_destination": "docs/workflows/qp_presets.rst",
+      "sha256": "7a5e34920e691a948e0f39902d70e7d6262849ae15620dfa195d54aef0ffc0eb",
+      "bytes": 559
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1081,
+      "end_line": 1096,
+      "title": "Preset 2: First-Principles Nanocrystal Screening (``sgw-dim``)",
+      "proposed_destination": "docs/workflows/qp_presets.rst",
+      "sha256": "6fc7775479ce1a54d5633ae7f33d3adee4fa1761c3d233bfd6756d930e69565d",
+      "bytes": 628
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1097,
+      "end_line": 1111,
+      "title": "Preset 3: Eigenvalue Self-Consistency (``evgw-dim``)",
+      "proposed_destination": "docs/workflows/qp_presets.rst",
+      "sha256": "e452d0cf5d1d6091bbd98aaea15e108856959d1e1b9c1b18ac3651a6cfe06cf2",
+      "bytes": 446
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1112,
+      "end_line": 1130,
+      "title": "Preset 4: Full Quasiparticle Self-Consistency (``qsgw-dim``)",
+      "proposed_destination": "docs/workflows/qp_presets.rst",
+      "sha256": "282b704e3e3ef64b95ded3780b66049a004f71ac046ee5a30c5b5f70ffa6bbd4",
+      "bytes": 575
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1131,
+      "end_line": 1146,
+      "title": "14. Combining Electronic Structure Analysis with QP Shifts",
+      "proposed_destination": "docs/electronic_structure/qp_analysis.rst",
+      "sha256": "60f20c138c7dae616dcf5e3c1eb61c816f7c6cb6a9850525703e45248f6e1280",
+      "bytes": 805
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1147,
+      "end_line": 1149,
+      "title": "15. CLI Flags & YAML Configuration Reference",
+      "proposed_destination": "docs/quasiparticles/configuration.rst",
+      "sha256": "b107eba6f3dd94b046360fcf044a422d4665562ac1183b2a8fb2fb202daede38",
+      "bytes": 91
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1150,
+      "end_line": 1187,
+      "title": "Command-Line Arguments",
+      "proposed_destination": "docs/quasiparticles/configuration.rst",
+      "sha256": "4818b454fc6b19c35f1987d01c32607523bd319c012cb040440aa62963d57ae2",
+      "bytes": 1533
+    },
+    {
+      "source": "docs/part3_gw_scissor/index.rst",
+      "start_line": 1188,
+      "end_line": 1205,
+      "title": "YAML Configuration Reference",
+      "proposed_destination": "docs/quasiparticles/configuration.rst",
+      "sha256": "1cbe03681405b5b89cd8cd184d4282fd67f52decd71e79fc0e1941c5397e4b1f",
+      "bytes": 535
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 1,
+      "end_line": 9,
+      "title": "Part 4: Optical Excitations & Four Excited-State Frameworks",
+      "proposed_destination": "docs/excitons/foundations.rst",
+      "sha256": "5504ad7a8691a115cb35fa374a01ed1305c173f39d7a863e0fc8c5b163bf82ff",
+      "bytes": 715
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 10,
+      "end_line": 22,
+      "title": "1. The Two-Particle Excitation Problem",
+      "proposed_destination": "docs/excitons/foundations.rst",
+      "sha256": "1fd0707755bf78c5671878ea614291a8351f489cd59a9cb9a44799abcdf17df9",
+      "bytes": 722
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 23,
+      "end_line": 51,
+      "title": "Tamm-Dancoff Approximation (TDA)",
+      "proposed_destination": "docs/excitons/foundations.rst",
+      "sha256": "67480f580fa57e69fabf07b387e6fd5c24cb34d00bb4cbdb18806d4806960f54",
+      "bytes": 1100
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 52,
+      "end_line": 66,
+      "title": "Singlet vs. Triplet Matrix Elements",
+      "proposed_destination": "docs/excitons/foundations.rst",
+      "sha256": "6e60eb33a1b5ee8517f074b03105e96b6cfa7562084ee5bf2201749d41aaa726",
+      "bytes": 778
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 67,
+      "end_line": 79,
+      "title": "Relativistic 2-Component Spinor BSE",
+      "proposed_destination": "docs/excitons/foundations.rst",
+      "sha256": "e17e8990f99534638b097dfcccb8866b092e071458956cb6e714a03e4cfc87d2",
+      "bytes": 747
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 80,
+      "end_line": 142,
+      "title": "2. Key Distinction: ``2e-integrals`` vs. ``kernel``",
+      "proposed_destination": "docs/interactions/architecture.rst",
+      "sha256": "acf4c327c16eb38b3c04cf92f31a0a5b71804f1b46259cca61c05dd86fb345ee",
+      "bytes": 4215
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 143,
+      "end_line": 145,
+      "title": "3. Two-Electron Integral Representations (``2e-integrals``)",
+      "proposed_destination": "docs/interactions/representations.rst",
+      "sha256": "c92d4afb1e683bf3c65827844d5a8b8af1582059f437fabc7f81d041fd150f89",
+      "bytes": 121
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 146,
+      "end_line": 179,
+      "title": "Semi-Empirical Atom-Centered Representation (``2e-integrals: mnok``)",
+      "proposed_destination": "docs/interactions/representations.rst",
+      "sha256": "7c14559111a21568e076bea0bba484c84ad1b1f807bfb5b5a2844b923545c7a5",
+      "bytes": 1553
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 180,
+      "end_line": 206,
+      "title": "Exact Analytical Gaussian Representation (``2e-integrals: xs``)",
+      "proposed_destination": "docs/interactions/representations.rst",
+      "sha256": "05fe3ffd3db19cca620387cf9ee6ccf2ecdecd478b5e6c79b4bdf5c3b4d44c22",
+      "bytes": 1296
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 207,
+      "end_line": 224,
+      "title": "Implementation in QDEX (``2e-integrals``)",
+      "proposed_destination": "docs/interactions/representations.rst",
+      "sha256": "116ae2264807a1ce1a0c625d2efaa6efc6d27a9ea4b587d60a26628a30554b7c",
+      "bytes": 1396
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 225,
+      "end_line": 229,
+      "title": "4. Dielectric Screening Kernels (``kernel``)",
+      "proposed_destination": "docs/interactions/screening.rst",
+      "sha256": "ca5713b6c069d6cb4c965b9680762d4dbdaae5f5565eb2500abd2fd73438b0de",
+      "bytes": 253
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 230,
+      "end_line": 252,
+      "title": "1. Resta Screened Dielectric Kernel (``kernel: resta``)",
+      "proposed_destination": "docs/interactions/screening.rst",
+      "sha256": "70715494ca6722b321563f531b16900eb87fc171b0c7c7326efb9a55829ec067",
+      "bytes": 1078
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 253,
+      "end_line": 263,
+      "title": "2. Atomistic Discrete Dipole Interaction Kernel (``kernel: dim``)",
+      "proposed_destination": "docs/interactions/screening.rst",
+      "sha256": "e52b8a8db7a7ae999e0a79e2b4c3dc0ff33639d557e00977f1af765ac844ae41",
+      "bytes": 601
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 264,
+      "end_line": 276,
+      "title": "3. Parameter-Free Microscopic ZDO-RPA Kernel (``kernel: rpa`` / ``xs-rpa``)",
+      "proposed_destination": "docs/interactions/screening.rst",
+      "sha256": "eec793163bbf93ccc091b9464cd5890018cfbabbf1065a497df4d5908cc32670",
+      "bytes": 634
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 277,
+      "end_line": 285,
+      "title": "4. Simplified BSE Kernel (``kernel: sbse``)",
+      "proposed_destination": "docs/interactions/screening.rst",
+      "sha256": "d871f6e99d96a8e78fbbe368b894c9b499208399ccf3cfabf0ec257d942c0bc2",
+      "bytes": 291
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 286,
+      "end_line": 290,
+      "title": "5. Uniform Dielectric Kernel (``kernel: bse``)",
+      "proposed_destination": "docs/interactions/screening.rst",
+      "sha256": "e7fe13f5d3dffec274a2210a96f7d527660716ac4020aff1009f122c6e629e38",
+      "bytes": 238
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 291,
+      "end_line": 313,
+      "title": "Spatial Asymptotics & Wannier-Mott Bulk Limit",
+      "proposed_destination": "docs/validation/bulk_exciton_limit.rst",
+      "sha256": "18596a0e108a10a0c2947b6d3badd674ca493503bd21c62f1e9abc308b73a51d",
+      "bytes": 1991
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 314,
+      "end_line": 338,
+      "title": "5. The Four Excitation Frameworks (``excitation_mode``)",
+      "proposed_destination": "docs/excitons/frameworks.rst",
+      "sha256": "550c169ad9ac1f4daaeeb307f01e28464f132fcd6958b830181c87f75c4a19f7",
+      "bytes": 1489
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 339,
+      "end_line": 352,
+      "title": "Why Diagonal BSE Works in Nanocrystals",
+      "proposed_destination": "docs/excitons/frameworks.rst",
+      "sha256": "59d9d7d31518194818d528b430757e3c909ba84e74db1897c8ad2359c62bee68",
+      "bytes": 1220
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 353,
+      "end_line": 368,
+      "title": "Implementation in QDEX (``--excitation-mode``)",
+      "proposed_destination": "docs/excitons/frameworks.rst",
+      "sha256": "dda068a48bb2f99bca7265b13691be9383cfbca21bbc827274835a94a72e9a44",
+      "bytes": 1545
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 369,
+      "end_line": 395,
+      "title": "6. Transition Dipoles, Oscillator Strengths & Superradiance",
+      "proposed_destination": "docs/spectroscopy/dipoles_oscillators.rst",
+      "sha256": "2e56dabe9aabc61d1c581a85b3228d81785bb33d060c3d885995666b382dbf39",
+      "bytes": 1035
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 396,
+      "end_line": 410,
+      "title": "7. Full BSE & The Davidson Iterative Solver",
+      "proposed_destination": "docs/excitons/solvers.rst",
+      "sha256": "c2c02c10f038332c88c19f0bfc3fdf0658ad09b5e8cc2abb1e2bf27f8f2da148",
+      "bytes": 1030
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 411,
+      "end_line": 460,
+      "title": "8. Comprehensive Exciton Calculation Matrix",
+      "proposed_destination": "docs/excitons/model_selection.rst",
+      "sha256": "991fecdcffa76b8c0bda4088a11ac8116a4d7ba97b30c3065e1d19f9e97c452c",
+      "bytes": 1470
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 461,
+      "end_line": 463,
+      "title": "9. Recommended Workflow Presets",
+      "proposed_destination": "docs/workflows/exciton_presets.rst",
+      "sha256": "ab2b85b78a186206056a447d03c49ee3de35fd9bd74817cda12cc1189677f8a5",
+      "bytes": 65
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 464,
+      "end_line": 485,
+      "title": "Preset 1: Standard Colloidal QD Absorption Spectrum",
+      "proposed_destination": "docs/workflows/exciton_presets.rst",
+      "sha256": "7bc52f2e036be2eb82499fcead5fea4f43c4ce083e75480f1e430866ea408f4c",
+      "bytes": 732
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 486,
+      "end_line": 500,
+      "title": "Preset 2: Ultrafast Non-Adiabatic Molecular Dynamics (NAMD)",
+      "proposed_destination": "docs/workflows/exciton_presets.rst",
+      "sha256": "8ec607091c1c0dabc0ab6836df0960255c70429270fad519f79b3814d4680745",
+      "bytes": 473
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 501,
+      "end_line": 520,
+      "title": "Preset 3: Benchmark First-Principles Calculation",
+      "proposed_destination": "docs/workflows/exciton_presets.rst",
+      "sha256": "a8373e76ed8d0d3a394d06009af0f0d7df940f7acada3d9c80b3324c4452dba6",
+      "bytes": 598
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 521,
+      "end_line": 543,
+      "title": "Preset 4: Spin-Orbit Coupling & Dark Excitons",
+      "proposed_destination": "docs/workflows/exciton_presets.rst",
+      "sha256": "cfaa1b686395f635d30db700c09c52f29e2507516fc4446a693f8c0fc4bc98a4",
+      "bytes": 533
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 544,
+      "end_line": 546,
+      "title": "10. CLI Flags & YAML Configuration Reference",
+      "proposed_destination": "docs/excitons/configuration.rst",
+      "sha256": "1fd0c5fc39f3e1cfd8ce68a95ae530834e416d6505de634aedf8dfbd778f064a",
+      "bytes": 91
+    },
+    {
+      "source": "docs/part4_excited_states/index.rst",
+      "start_line": 547,
+      "end_line": 592,
+      "title": "Command-Line Arguments",
+      "proposed_destination": "docs/excitons/configuration.rst",
+      "sha256": "fb22267705337d2052e868d6aa1b90ca722f09844945410a2d17d8327ef20d8a",
+      "bytes": 1812
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 1,
+      "end_line": 9,
+      "title": "Part 5: Excited-State Wavefunction Analysis (Plasser-Dreuw)",
+      "proposed_destination": "docs/exciton_analysis/transition_density.rst",
+      "sha256": "acfb41cde12ee6e49a287a0b1052a37a28a02c93cdb5d905ea73d781f1e476fc",
+      "bytes": 776
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 10,
+      "end_line": 24,
+      "title": "1. The Two-Particle Transition Density Matrix",
+      "proposed_destination": "docs/exciton_analysis/transition_density.rst",
+      "sha256": "0088a731efde9a4ef4509a838cf5c292aa45679a304c3889a1b62d3f84dd1139",
+      "bytes": 680
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 25,
+      "end_line": 43,
+      "title": "Reduced Hole and Electron Densities",
+      "proposed_destination": "docs/exciton_analysis/transition_density.rst",
+      "sha256": "526f82424c238e3b57f5d097d34fb60816ac0d44e639b6643527850209320b46",
+      "bytes": 748
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 44,
+      "end_line": 60,
+      "title": "Vectorized Low-Memory Mulliken Population",
+      "proposed_destination": "docs/exciton_analysis/transition_density.rst",
+      "sha256": "007ec8fa46ab3dd9ffef19d14f7ed82da477b5b3ec7d93ddaabf04918a977dcd",
+      "bytes": 837
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 61,
+      "end_line": 65,
+      "title": "2. Rigorous Plasser-Dreuw Spatial Descriptors",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "2f2a6fb0d6dd955f1d26b0a039ee7c91a57ba50cd495f61168ea67d3821dcf88",
+      "bytes": 243
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 66,
+      "end_line": 75,
+      "title": "1. Spatial Centroids (:math:`\\langle \\mathbf{r}_h \\rangle, \\langle \\mathbf{r}_e \\rangle`)",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "31547f39b40b1a4efb51faee717c2be4d36e057ac35e8fd1c71f20851c461431",
+      "bytes": 453
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 76,
+      "end_line": 87,
+      "title": "2. Charge-Transfer Distance (:math:`d_{\\mathrm{CT}}`)",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "60ea97b9756917c9a5615aab77c9b5eb5c2f756a75ee0136069569bc2b7fd53e",
+      "bytes": 530
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 88,
+      "end_line": 102,
+      "title": "3. Root-Mean-Square Particle Sizes (:math:`\\sigma_h, \\sigma_e`)",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "41ca1d0f937423e3c0f1d7d3925fa1cb2c4d4e0b9bd74a94764d670107c39453",
+      "bytes": 685
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 103,
+      "end_line": 113,
+      "title": "4. Electron-Hole Spatial Covariance (:math:`\\mathrm{Cov}_{eh}`)",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "3f30e176112e3f6497b4d564ba2782308b3bb8cc1a0d887305ee04272f979633",
+      "bytes": 553
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 114,
+      "end_line": 126,
+      "title": "5. Pearson Correlation Coefficient (:math:`R_{eh}`)",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "a0a973848e21dab4b009a2d4500c5b09f2c066173d4c22754ab9b9f2df9645e0",
+      "bytes": 682
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 127,
+      "end_line": 137,
+      "title": "6. True Root-Mean-Square Exciton Size (:math:`d_{eh}`)",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "2b6d4020e9f053067cb9263b17087d79573a78f391041801cd6a8acb58fa354e",
+      "bytes": 540
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 138,
+      "end_line": 146,
+      "title": "7. Charge-Transfer Ratio (:math:`\\mathrm{CT}`)",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "da16063e215bc9c92e10f66aad59a7e6d365e2f9db0b5df578986e388d0bb2f1",
+      "bytes": 242
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 147,
+      "end_line": 160,
+      "title": "8. Exciton Participation Ratio (:math:`\\mathrm{PR}`)",
+      "proposed_destination": "docs/exciton_analysis/descriptors.rst",
+      "sha256": "186b1bf0c46b804d0cdb885e2034bdf07454898f96d41ab127ce785aace8d31b",
+      "bytes": 499
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 161,
+      "end_line": 184,
+      "title": "3. Natural Transition Orbitals (NTOs)",
+      "proposed_destination": "docs/exciton_analysis/ntos.rst",
+      "sha256": "681c41316521175afaae7792dfbf3114e6c3a3e403f1d8d425e7520e0a71fbb6",
+      "bytes": 1383
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 185,
+      "end_line": 195,
+      "title": "NTO Compactness Metrics",
+      "proposed_destination": "docs/exciton_analysis/ntos.rst",
+      "sha256": "0a4476e46df2c34919cce3ad4230f2874647d06b60bdec7ca6a17654d9e6a698",
+      "bytes": 515
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 196,
+      "end_line": 208,
+      "title": "4. 3D Volumetric Visualization (.cube Files)",
+      "proposed_destination": "docs/exciton_analysis/cubes.rst",
+      "sha256": "d7f1dd08b5c08bdae96b149e093e00f78fee32991166bd20a4cf05ec0cdd6b6d",
+      "bytes": 793
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 209,
+      "end_line": 222,
+      "title": "5. Interactive Plotly 6-Panel Dashboard",
+      "proposed_destination": "docs/exciton_analysis/dashboards.rst",
+      "sha256": "08133adb63a3067e71ed3117b79fcfa1f6a0937e146353b903eecd4b1bafad72",
+      "bytes": 812
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 223,
+      "end_line": 225,
+      "title": "6. CLI Flags & YAML Configuration Reference",
+      "proposed_destination": "docs/exciton_analysis/configuration.rst",
+      "sha256": "a9d7e6455814c199a97004f3ee2855f17e367c0571a84249f074d9b3b11d65e4",
+      "bytes": 89
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 226,
+      "end_line": 260,
+      "title": "Command-Line Arguments",
+      "proposed_destination": "docs/exciton_analysis/configuration.rst",
+      "sha256": "4a1d10b466b751e02917c3640d5c1193ba622d622bdc0a44d18b8c4cc2f0b4c9",
+      "bytes": 1106
+    },
+    {
+      "source": "docs/part5_exciton_analysis/index.rst",
+      "start_line": 261,
+      "end_line": 276,
+      "title": "YAML Configuration Example",
+      "proposed_destination": "docs/exciton_analysis/configuration.rst",
+      "sha256": "e332284042fe3176736492b6c01ae68b6b6bc985cf5e7361ef15f3fde8469ef8",
+      "bytes": 257
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1,
+      "end_line": 9,
+      "title": "Part 6: Carrier Cooling Dynamics & Photoluminescence (NAMD)",
+      "proposed_destination": "docs/dynamics/pipeline.rst",
+      "sha256": "f012db4620ecccdefda9e744cc2fcc39bdcdfce5f4cca1e889e5696477be9181",
+      "bytes": 1013
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 10,
+      "end_line": 44,
+      "title": "1. Overview & The NAMD Pipeline Architecture",
+      "proposed_destination": "docs/dynamics/pipeline.rst",
+      "sha256": "b44a1e0e51635f180074bc44d4e67b300eac8313367edb22fdf656cba297d054",
+      "bytes": 1587
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 45,
+      "end_line": 49,
+      "title": "2. Multi-Timescale Integration: Separating Nuclear and Electronic Time Steps",
+      "proposed_destination": "docs/dynamics/timesteps_cpa.rst",
+      "sha256": "a04f8da469633d06d75a16be981ce11408c8a41693c1fb8f705e9bc39dfd818e",
+      "bytes": 326
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 50,
+      "end_line": 70,
+      "title": "The Timescale Mismatch",
+      "proposed_destination": "docs/dynamics/timesteps_cpa.rst",
+      "sha256": "b206b51b5d7a1ee0db31fbd908b3b88f9658e18cdef7e29d6304ac2acf76e2b4",
+      "bytes": 1442
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 71,
+      "end_line": 81,
+      "title": "The Classical Path Approximation (CPA)",
+      "proposed_destination": "docs/dynamics/timesteps_cpa.rst",
+      "sha256": "06fc8bc6e44b5abf2f22390e7931ad41c174bc7796adc1127c4ce9c40042fce4",
+      "bytes": 1102
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 82,
+      "end_line": 132,
+      "title": "Electronic Sub-Stepping in CPA-FSSH",
+      "proposed_destination": "docs/dynamics/timesteps_cpa.rst",
+      "sha256": "66b3a2127654a33f4bcfa71aebd766ac96715c1f0d61c6ca87e2f2cc715a6b65",
+      "bytes": 3286
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 133,
+      "end_line": 153,
+      "title": "Electronic Sub-Stepping in the Pauli Master Equation (PME)",
+      "proposed_destination": "docs/dynamics/timesteps_cpa.rst",
+      "sha256": "315b69ca53b3df9822a5eb5349d40b0b3d441e957b68daa37140ac2868581cc6",
+      "bytes": 1631
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 154,
+      "end_line": 187,
+      "title": "3. Method Selection: PME vs. CPA-FSSH-EDC vs. DISH",
+      "proposed_destination": "docs/dynamics/model_selection.rst",
+      "sha256": "0a41f09899d59ad2c5e061359360525ce56db09b14c8b5cff5c16fcaac1741c8",
+      "bytes": 2435
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 188,
+      "end_line": 200,
+      "title": "The Phonon Bottleneck Case (:math:`1P_e \\to 1S_e`)",
+      "proposed_destination": "docs/dynamics/model_selection.rst",
+      "sha256": "b4cd7c0ab6be23621a89fcade3bad5e33a4172417783995e1173de2cc372dc35",
+      "bytes": 1345
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 201,
+      "end_line": 211,
+      "title": "Surface Trap States: Hopping & De-Hopping Kinetics",
+      "proposed_destination": "docs/dynamics/model_selection.rst",
+      "sha256": "e0a1fd4f989fca27fc48e82e80af22e96ee01dfc84e0f7f3234049038c2bc2b6",
+      "bytes": 1602
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 212,
+      "end_line": 221,
+      "title": "Summary Decision Rule",
+      "proposed_destination": "docs/dynamics/model_selection.rst",
+      "sha256": "a89016c2c8a0854e59c1ab4f09e4b8aa13b442ce6e5a36231b7cf35e2207e6d6",
+      "bytes": 757
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 222,
+      "end_line": 224,
+      "title": "4. Theoretical Foundations of the Dynamical Engines",
+      "proposed_destination": "docs/dynamics/pme.rst",
+      "sha256": "409ed76d3f74a16033f7efec9bae96a5c4a6e76eb7f2afb98e82e99d800f2517",
+      "bytes": 105
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 225,
+      "end_line": 286,
+      "title": "1. Derivation of the Pauli Master Equation (PME)",
+      "proposed_destination": "docs/dynamics/pme.rst",
+      "sha256": "4d1cdb163b7f741b40e0e6d402389bc27c0e05e8dca7150249543fd9ab00f75f",
+      "bytes": 4557
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 287,
+      "end_line": 413,
+      "title": "2. Classical Path Approximation Surface Hopping with Energy-Based Decoherence (CPA-FSSH-EDC)",
+      "proposed_destination": "docs/dynamics/fssh_edc.rst",
+      "sha256": "d1d5812c7f336d8a85aec1e21ffef695f5e313687a3cb58936ec273c6763ddbd",
+      "bytes": 7919
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 414,
+      "end_line": 522,
+      "title": "3. Decoherence-Induced Surface Hopping (DISH)",
+      "proposed_destination": "docs/dynamics/dish.rst",
+      "sha256": "55b095c3e3d7bff13a02d2fd5dd9b3848870b739c3e28ab8069a87130cfb4b8d",
+      "bytes": 6719
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 523,
+      "end_line": 575,
+      "title": "4. Comparative Synthesis: PME vs. CPA-FSSH-EDC vs. DISH",
+      "proposed_destination": "docs/dynamics/comparison.rst",
+      "sha256": "0e63e8b2ea3b02280bf72636ef5c9d6e5012c1b32aa70f7426fedc6c1deab395",
+      "bytes": 3574
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 576,
+      "end_line": 578,
+      "title": "5. Trajectory Precomputation & Wavefunction Tracking",
+      "proposed_destination": "docs/dynamics/nacs_tracking.rst",
+      "sha256": "a670461e6004862612543caa670fa21baf51f5aea6faee82646d243bd76e5201",
+      "bytes": 108
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 579,
+      "end_line": 589,
+      "title": "Numerical Non-Adiabatic Couplings (NAC)",
+      "proposed_destination": "docs/dynamics/nacs_tracking.rst",
+      "sha256": "39d79650f517a19666e824057aa2bff0c919ba84d702d9a2bf2dd2529161eb46",
+      "bytes": 764
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 590,
+      "end_line": 606,
+      "title": "Eliminating Gauge Phase Discontinuities",
+      "proposed_destination": "docs/dynamics/nacs_tracking.rst",
+      "sha256": "b2fcf9ce55706aa7c2edc436e1c017dc4389863b73fd67e61a3b7196d80411a3",
+      "bytes": 831
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 607,
+      "end_line": 621,
+      "title": "Hungarian Matching for Trivial Crossings",
+      "proposed_destination": "docs/dynamics/nacs_tracking.rst",
+      "sha256": "fed754cff8034b3ed4fbd7e9f228e413403fdb35e553eacb388279ce7861aa96",
+      "bytes": 743
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 622,
+      "end_line": 624,
+      "title": "6. Electronic Decoherence: Origin, Computation, and Rationale",
+      "proposed_destination": "docs/dynamics/decoherence.rst",
+      "sha256": "eb07a6ac4ce35712814bac8b8129fd88b769e24c400553e9eb364bf1df51b608",
+      "bytes": 125
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 625,
+      "end_line": 643,
+      "title": "Physical Origin of Electronic Decoherence",
+      "proposed_destination": "docs/dynamics/decoherence.rst",
+      "sha256": "0640c4281c4e19cb803420d4a7df6422764ed627c52f2e869714c9c0b07846d8",
+      "bytes": 1067
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 644,
+      "end_line": 648,
+      "title": "Why Dephasing is Ultrafast in Nanocrystals",
+      "proposed_destination": "docs/dynamics/decoherence.rst",
+      "sha256": "dc96f249c79e7c31c81823a80f1c5bf6d1494052f56ae9ced305668b8fdcc2c5",
+      "bytes": 492
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 649,
+      "end_line": 685,
+      "title": "Automated Ab Initio Cumulant Decoherence",
+      "proposed_destination": "docs/dynamics/decoherence.rst",
+      "sha256": "25306a31f277e36c6ca1b6ddf33c6686d31bbb22cf7bd70e2fba56ccaf984523",
+      "bytes": 1652
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 686,
+      "end_line": 746,
+      "title": "State-Pair Pure-Dephasing Matrices (tau_ij)",
+      "proposed_destination": "docs/dynamics/decoherence.rst",
+      "sha256": "cb4da76c053db32a0bd4e95a9cf56fb3f1d1b15b61a5cc864881d647d3d25159",
+      "bytes": 3182
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 747,
+      "end_line": 786,
+      "title": "Surface Hopping Schemes: FSSH-EDC vs. DISH",
+      "proposed_destination": "docs/dynamics/decoherence.rst",
+      "sha256": "c5f38d185b7c1ba85bbe8d700dc06612b2e77088786c8d373e8fa7a3dd665f7e",
+      "bytes": 2369
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 787,
+      "end_line": 789,
+      "title": "7. Phonon Spectral Density J(\u03c9): Mapping Electron-Phonon Coupling",
+      "proposed_destination": "docs/spectroscopy/spectral_density.rst",
+      "sha256": "2989de2aa7413e8430a7ac59b979c6de6bae5eb71f8e866cbbd834fbe48752bf",
+      "bytes": 134
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 790,
+      "end_line": 800,
+      "title": "Mathematical Definition",
+      "proposed_destination": "docs/spectroscopy/spectral_density.rst",
+      "sha256": "68d3874dc5096847d4c856f013c3f01fab1bd9ecc9d7903e76a92663534ba38c",
+      "bytes": 671
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 801,
+      "end_line": 809,
+      "title": "Physical Meaning",
+      "proposed_destination": "docs/spectroscopy/spectral_density.rst",
+      "sha256": "af5d43df17ae9ed3883c28e303c7497fbc7671c16b72be1fb8009f2c35cf6991",
+      "bytes": 443
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 810,
+      "end_line": 820,
+      "title": "Identifying Active Phonon Modes During Cooling",
+      "proposed_destination": "docs/spectroscopy/spectral_density.rst",
+      "sha256": "0ebc015c7becf9881068c34120729a10e5218b485a5b410ddc3e826fcd4001df",
+      "bytes": 949
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 821,
+      "end_line": 831,
+      "title": "8. Radiative & Non-Radiative Recombination Mechanisms",
+      "proposed_destination": "docs/recombination/overview.rst",
+      "sha256": "2fb1f50c8a0e966df982bff35e9408d8867d4deda32150debc697b55c4fffb5b",
+      "bytes": 780
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 832,
+      "end_line": 890,
+      "title": "1. Microscopic Origin: From DFT and BSE to Recombination",
+      "proposed_destination": "docs/recombination/overview.rst",
+      "sha256": "4695048871b8274ead6f01d727262c4bdb796e6f0670deb7408a51a2aa5f86ee",
+      "bytes": 3131
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 891,
+      "end_line": 918,
+      "title": "2. Einstein Radiative Rate: Single-Frame vs. NAMD Trajectory Averaging",
+      "proposed_destination": "docs/recombination/radiative.rst",
+      "sha256": "6d03bb04076e6d958fb5a70fc4067876dac36c51b5e6272a2aa51a01213caab4",
+      "bytes": 2402
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 919,
+      "end_line": 945,
+      "title": "3. Non-Radiative Decay Across Large Gaps: Englman-Jortner Energy Gap Law",
+      "proposed_destination": "docs/recombination/energy_gap_law.rst",
+      "sha256": "3e9ab874de6dca3d4326684353d8e4bb04e2035a6d97c11cdb4eaa77e298db48",
+      "bytes": 1427
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 946,
+      "end_line": 982,
+      "title": "4. Non-Empirical Extraction of Optical Phonon Energy from NAMD Spectral Density",
+      "proposed_destination": "docs/recombination/trajectory_parameters.rst",
+      "sha256": "cb10d204093711fd332637e4125357d603d290b35ae66e21822b1a935578bc00",
+      "bytes": 1870
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 983,
+      "end_line": 1012,
+      "title": "5. Derivation of Huang-Rhys Factor S and Reorganization Energy \u03bb from Trajectory Data",
+      "proposed_destination": "docs/recombination/trajectory_parameters.rst",
+      "sha256": "2bfb817b2a52e034dabde298c45f296c257f8772c784a679ee95d1918aaf1c75",
+      "bytes": 2223
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1013,
+      "end_line": 1044,
+      "title": "6. Intermediate & Narrow Gap Decay: Franck-Condon Weighted Density of States (FCWD)",
+      "proposed_destination": "docs/recombination/fcwd.rst",
+      "sha256": "48b38eb54baafb9e2fabf7627553e392938a6cbbf6e3966f050516808a19c2f8",
+      "bytes": 2184
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1045,
+      "end_line": 1058,
+      "title": "7. Defect Trap-Assisted Recombination (Shockley-Read-Hall)",
+      "proposed_destination": "docs/recombination/traps.rst",
+      "sha256": "1925d68204fdc802c2cf8627aa471b73e295929429a9d443bb276c6b8b8360fb",
+      "bytes": 741
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1059,
+      "end_line": 1072,
+      "title": "8. Photoluminescence Quantum Yield (PLQY)",
+      "proposed_destination": "docs/recombination/plqy.rst",
+      "sha256": "f951fd06547aeae1b411c31d429d3ad1648cd377debe4d2cb4891d5e1feb4c2d",
+      "bytes": 875
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1073,
+      "end_line": 1077,
+      "title": "9. In-Depth Analysis of NAMD Simulations",
+      "proposed_destination": "docs/dynamics/analysis.rst",
+      "sha256": "ccf12ae8e742c0d75d95ad04470ba120c1c75aa97e954c2edfce5b2689cb6d82",
+      "bytes": 225
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1078,
+      "end_line": 1134,
+      "title": "1. Carrier Cooling Curves, Lifetimes, and Band Edge Arrival Times",
+      "proposed_destination": "docs/dynamics/analysis.rst",
+      "sha256": "14b72fe6e5ce629ef3be65cff830501aea25ddf7bc07a01274c137f6c6c84a84",
+      "bytes": 2809
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1135,
+      "end_line": 1139,
+      "title": "2. State-Resolved Population Kinetics",
+      "proposed_destination": "docs/dynamics/analysis.rst",
+      "sha256": "ec94907be5b71e9591ab32f88363c187de0073679904f00b4da95b0d973dd15f",
+      "bytes": 297
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1140,
+      "end_line": 1144,
+      "title": "3. NAC vs. Energy Gap Distribution",
+      "proposed_destination": "docs/dynamics/analysis.rst",
+      "sha256": "774c1bb0c89dfa77ac76d77b08524ef8bcc04d467b04354383c96264df2d37d9",
+      "bytes": 389
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1145,
+      "end_line": 1157,
+      "title": "4. 6-Panel Publication Figures & Dashboards",
+      "proposed_destination": "docs/dynamics/analysis.rst",
+      "sha256": "59651014cfd5fb27322df9a9857a092987bc371a7fecab56099d9e5ab4fcd499",
+      "bytes": 787
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1158,
+      "end_line": 1168,
+      "title": "10. Ultrafast Pump-Probe Transient Absorption (TA) Spectroscopy",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "523a5181bfc74357b05105e1ebbb1495cde26af706e5b884c08226aa3e486ab2",
+      "bytes": 644
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1169,
+      "end_line": 1182,
+      "title": "Physical Mechanisms in Nanocrystal Transient Absorption",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "c1c0de5165e1616bff48adb5a83ae68fddfdb5c691110f709b5836d5a604aa15",
+      "bytes": 1359
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1183,
+      "end_line": 1207,
+      "title": "Microscopic Formulation & State-Filling Factors",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "6b6fe47f4215d6136d63853d7ae5107cffda4829da91fb5fde5a38f24f55d0e7",
+      "bytes": 1718
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1208,
+      "end_line": 1228,
+      "title": "1S Bleach Kinetic Profiling & Carrier Cooling Rates (:math:`k_C`)",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "5a5bd602cb5d1f8ece825c9ddb715ff5ba44b52effe0fb2e8f3690c048eabb8b",
+      "bytes": 1271
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1229,
+      "end_line": 1238,
+      "title": "Schematic Diagrams of Transient Absorption Processes",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "6c2fc71ded09c779420c631b3139bdbaa8e74fceab3d76773a23be5e0f08ba7a",
+      "bytes": 456
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1239,
+      "end_line": 1279,
+      "title": "THREE OPTICAL MECHANISMS IN TRANSIENT ABSORPTION SPECTROSCOPY (\u0394A)",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "b03967bca74da23f118694c30cbee9773d5c763fc9ca50acced2b0178b2c2651",
+      "bytes": 4143
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1280,
+      "end_line": 1310,
+      "title": "HOT-CARRIER RELAXATION CASCADE & 1S BLEACH KINETIC RISE PROFILE",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "bd66c581ca2fde1e688b661c1583bd2d100ed53007e1db82f74711980a3d7e53",
+      "bytes": 2672
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1311,
+      "end_line": 1350,
+      "title": "How QDEX Data Are Used to Compute Every Formula Term",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "16836b7f7d841724c0125f2dd29aa9add88f5171fa037b96b673776f7c41dc03",
+      "bytes": 2248
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1351,
+      "end_line": 1360,
+      "title": "Publication-Quality Visualizations",
+      "proposed_destination": "docs/spectroscopy/transient_absorption.rst",
+      "sha256": "6983039cc57ada3eb045741e235d738f33976880c3bcf0646af129df2f95ed53",
+      "bytes": 756
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1361,
+      "end_line": 1363,
+      "title": "11. CLI Flags & YAML Configuration Reference",
+      "proposed_destination": "docs/dynamics/configuration.rst",
+      "sha256": "e3d9475527aac650f9e41245d67082c6a77ea199c85b79eb3e2a9ad8e2d69f38",
+      "bytes": 91
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1364,
+      "end_line": 1416,
+      "title": "Command-Line Arguments",
+      "proposed_destination": "docs/dynamics/configuration.rst",
+      "sha256": "9b403ca221993004feffa2bbc26573a53506789b8b1ffbe9829e55f1595bac8a",
+      "bytes": 2211
+    },
+    {
+      "source": "docs/part6_namd/index.rst",
+      "start_line": 1417,
+      "end_line": 1448,
+      "title": "YAML Configuration Example",
+      "proposed_destination": "docs/dynamics/configuration.rst",
+      "sha256": "af9e66450dd0220ba283a68f818c9b2107531d3fc2f7f0a18b81c3293c8e95bd",
+      "bytes": 1548
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 1,
+      "end_line": 14,
+      "title": "Part 7: Step-by-Step Tutorials & Workflows",
+      "proposed_destination": "docs/workflows/index.rst",
+      "sha256": "26198962d5d1755aed0250b3b86faf57be34a8bf9530e66f6bdec20916f205f4",
+      "bytes": 749
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 15,
+      "end_line": 19,
+      "title": "Tutorial 1: Ground-State Electronic Structure Analysis",
+      "proposed_destination": "docs/workflows/electronic_structure.rst",
+      "sha256": "70be6c6aae5a09efcf725b155228325aba7ffd2e14957295272872f9a011f50c",
+      "bytes": 247
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 20,
+      "end_line": 27,
+      "title": "Input Files Required",
+      "proposed_destination": "docs/workflows/electronic_structure.rst",
+      "sha256": "6d94e9aef1350b02b8417dd705e69e21c53711906bf26e4d79c3d54a37b8cc18",
+      "bytes": 356
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 28,
+      "end_line": 55,
+      "title": "Configuration File (``tutorial1_ground_state.yaml``)",
+      "proposed_destination": "docs/workflows/electronic_structure.rst",
+      "sha256": "b3b0b0cb88370565447eefa58a85e979f1927677795d4eeeb1f66a1e63fd3ac4",
+      "bytes": 584
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 56,
+      "end_line": 64,
+      "title": "Execution",
+      "proposed_destination": "docs/workflows/electronic_structure.rst",
+      "sha256": "453d83e945199c37ed2edcce8960f6ccd4c9aee8a266ac80a8c8b358945c9aa1",
+      "bytes": 129
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 65,
+      "end_line": 76,
+      "title": "Generated Output Files",
+      "proposed_destination": "docs/workflows/electronic_structure.rst",
+      "sha256": "1d87db5ededcd067375d8dd37ec561bb3ebfcd832684462edfb4ccbe0fd93118",
+      "bytes": 610
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 77,
+      "end_line": 81,
+      "title": "Tutorial 2: Incorporating Relativistic Spin-Orbit Coupling",
+      "proposed_destination": "docs/workflows/soc.rst",
+      "sha256": "b13f3467993d6d0e8827154d2af602cdb78e901b9653e27bc7713c62440d538b",
+      "bytes": 269
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 82,
+      "end_line": 107,
+      "title": "Configuration File (``tutorial2_soc.yaml``)",
+      "proposed_destination": "docs/workflows/soc.rst",
+      "sha256": "f5094b4439caa1f0886292114c0563b9d2ae8bf5ac79e9b447daecce81137375",
+      "bytes": 470
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 108,
+      "end_line": 114,
+      "title": "Execution",
+      "proposed_destination": "docs/workflows/soc.rst",
+      "sha256": "bcfcee15d8851f36cd130f268af5e64b4183191de0209a05dc0ab30347477b33",
+      "bytes": 80
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 115,
+      "end_line": 123,
+      "title": "What to Observe",
+      "proposed_destination": "docs/workflows/soc.rst",
+      "sha256": "71a9efca5f0e7190eb8da5b7e16fc40ff312a4cb840580e719913db8dbd6bcb6",
+      "bytes": 487
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 124,
+      "end_line": 128,
+      "title": "Tutorial 3: Scaled GW Band Gap Correction & Absolute Edges",
+      "proposed_destination": "docs/workflows/qp_edges.rst",
+      "sha256": "49a89865c49eed9056e080ff00f20a9b770ccd3c63d8bd2e9c86a18e97461e80",
+      "bytes": 327
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 129,
+      "end_line": 153,
+      "title": "Configuration File (``tutorial3_gw.yaml``)",
+      "proposed_destination": "docs/workflows/qp_edges.rst",
+      "sha256": "70f770ba547ffa96f536601ec5ee5cab9c2fc2472a488d9974aa34ca1d75504a",
+      "bytes": 544
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 154,
+      "end_line": 160,
+      "title": "Execution",
+      "proposed_destination": "docs/workflows/qp_edges.rst",
+      "sha256": "f06a5c1bdd4f5f1fdf35d90a4fd102482fc6a92b8f5875ae9fb0fd850e64278c",
+      "bytes": 79
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 161,
+      "end_line": 178,
+      "title": "Key Output",
+      "proposed_destination": "docs/workflows/qp_edges.rst",
+      "sha256": "fee8f4c26e6dd90eaee5bf9e69627bd933cb5b6e79ca13f5738123585066f47e",
+      "bytes": 592
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 179,
+      "end_line": 183,
+      "title": "Tutorial 4: Comparing the Four Excited-State Frameworks",
+      "proposed_destination": "docs/workflows/four_frameworks.rst",
+      "sha256": "d812e4c3d963201277f9ba28769004d407fd1994381c5910fe0526d116d9ade8",
+      "bytes": 251
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 184,
+      "end_line": 210,
+      "title": "Compare via CLI",
+      "proposed_destination": "docs/workflows/four_frameworks.rst",
+      "sha256": "70e0f909391c3f97d8b12deba16e4b22e6c8a22dc6a1acf50ad84dbe58f6d427",
+      "bytes": 640
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 211,
+      "end_line": 219,
+      "title": "Comparison Summary",
+      "proposed_destination": "docs/workflows/four_frameworks.rst",
+      "sha256": "308d0e167a5ccac53e49b3d21362f6c52c12e14d802843e8762a55a8fd46665d",
+      "bytes": 568
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 220,
+      "end_line": 224,
+      "title": "Tutorial 5: Exciton Wavefunction Descriptors & NTO Analysis",
+      "proposed_destination": "docs/workflows/exciton_analysis.rst",
+      "sha256": "440e203bc3be917b38ec054b73062aecf01582de0308e9756b72758cfb91757b",
+      "bytes": 270
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 225,
+      "end_line": 258,
+      "title": "Configuration File (``tutorial5_analysis.yaml``)",
+      "proposed_destination": "docs/workflows/exciton_analysis.rst",
+      "sha256": "05768faf4cfab10efad175e86dabbf8f8df580b4d374c14e07b6081e334d57cf",
+      "bytes": 603
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 259,
+      "end_line": 265,
+      "title": "Execution",
+      "proposed_destination": "docs/workflows/exciton_analysis.rst",
+      "sha256": "4d201b8125bf1bcccf783632cfb4155cf90d88aee2200715de06c054f28aeb6d",
+      "bytes": 85
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 266,
+      "end_line": 274,
+      "title": "Analysis Results",
+      "proposed_destination": "docs/workflows/exciton_analysis.rst",
+      "sha256": "a5246cff265831974a03f25385689abca2d4a68b7865c2efc3cb9ccde3efc37a",
+      "bytes": 429
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 275,
+      "end_line": 279,
+      "title": "Tutorial 6: Carrier Cooling Dynamics & Photoluminescence (NAMD)",
+      "proposed_destination": "docs/workflows/carrier_cooling.rst",
+      "sha256": "625252d655a68603b11c558c0fddb168b473747d214a030db0a282ed114f4b46",
+      "bytes": 351
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 280,
+      "end_line": 290,
+      "title": "Directory Layout",
+      "proposed_destination": "docs/workflows/carrier_cooling.rst",
+      "sha256": "7a03e6a1c67193db77e219ae016aeefa0f7ddf684e9278b3653a95512c1e9daf",
+      "bytes": 192
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 291,
+      "end_line": 323,
+      "title": "Configuration File (``tutorial6_namd.yaml``)",
+      "proposed_destination": "docs/workflows/carrier_cooling.rst",
+      "sha256": "17a43e09e571f93c548253df86403d7e75c6aa180a9fa29430521f7892b1ac96",
+      "bytes": 692
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 324,
+      "end_line": 332,
+      "title": "Step 1: Trajectory Precomputation",
+      "proposed_destination": "docs/workflows/carrier_cooling.rst",
+      "sha256": "4f01987dba029eb8065a27d1cd23334acd7c8e04dca623add0a38a87910dc2b7",
+      "bytes": 316
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 333,
+      "end_line": 339,
+      "title": "Step 2: Carrier Cooling Simulation",
+      "proposed_destination": "docs/workflows/carrier_cooling.rst",
+      "sha256": "5af924766ea0533d9339ad36e6072c3d820a1f60aa45128d8c6fe77d64b92f83",
+      "bytes": 142
+    },
+    {
+      "source": "docs/part7_examples/index.rst",
+      "start_line": 340,
+      "end_line": 346,
+      "title": "Results & Visualizations",
+      "proposed_destination": "docs/workflows/carrier_cooling.rst",
+      "sha256": "42bf98fb0615757be3d05d2792be680b71dcca45fd0781c92cf6ddcf2d862c76",
+      "bytes": 587
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 1,
+      "end_line": 11,
+      "title": "Part 8: Multi-Carrier Auger Recombination in Quantum Dots",
+      "proposed_destination": "docs/recombination/auger_foundations.rst",
+      "sha256": "47805807717881068acc18f18127730addb933cd0bb52670eafc5982224b392c",
+      "bytes": 1151
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 12,
+      "end_line": 33,
+      "title": "1. Physical Foundations of Auger Scattering in Quantum Dots",
+      "proposed_destination": "docs/recombination/auger_foundations.rst",
+      "sha256": "47e20ef03be30c9416f74698dc8050a104e52897e814a098cc5dda06a60f15b7",
+      "bytes": 1115
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 34,
+      "end_line": 72,
+      "title": "Breakdown of Momentum Conservation & :math:`1/V` Volume Scaling",
+      "proposed_destination": "docs/recombination/auger_foundations.rst",
+      "sha256": "6ee3d168bd91881a73c4ed7c848ef14537b10f5c605035e1df5528d5b038a6bf",
+      "bytes": 1986
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 73,
+      "end_line": 81,
+      "title": "2. Many-Body Formulation & Matrix Elements",
+      "proposed_destination": "docs/recombination/auger_matrix_elements.rst",
+      "sha256": "db80e11f8c35f44455e11a34c29229c7de9d8e9f538c76223cffaa57e2d4bf74",
+      "bytes": 414
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 82,
+      "end_line": 110,
+      "title": "The Two-Body Screened Coulomb Operator",
+      "proposed_destination": "docs/recombination/auger_matrix_elements.rst",
+      "sha256": "6bf1c0f3d0878afb3c0a20d17ff3b1bfa4f3896bd4d5f00ebd3b2dbbe3bd3633",
+      "bytes": 1447
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 111,
+      "end_line": 123,
+      "title": "Spin Summation & Multiplicity",
+      "proposed_destination": "docs/recombination/auger_matrix_elements.rst",
+      "sha256": "835ca883f1b6ac2ab9767d9c155fbe1b7504cba7f349f480685b04bd82875142",
+      "bytes": 673
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 124,
+      "end_line": 138,
+      "title": "Universal Multiexciton Statistical Scaling",
+      "proposed_destination": "docs/recombination/auger_matrix_elements.rst",
+      "sha256": "06b1adb82c129f141586a3444abcf0924ac304c33477962d40a10b04960bf2e0",
+      "bytes": 1132
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 139,
+      "end_line": 148,
+      "title": "Schematic Diagrams of the Auger Processes",
+      "proposed_destination": "docs/recombination/auger_matrix_elements.rst",
+      "sha256": "83d15ad51ebbc342f9f0115a8ea07fc1bc90aab25a630451ef534f93fe99589e",
+      "bytes": 476
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 149,
+      "end_line": 191,
+      "title": "NEGATIVE TRION / BIEXCITON: eeh (Electron Ejected)",
+      "proposed_destination": "docs/recombination/auger_matrix_elements.rst",
+      "sha256": "757e3c472eb707bcc16a0e55b4e50d2593a5bda92fddf499d9474061560d31d8",
+      "bytes": 3445
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 192,
+      "end_line": 234,
+      "title": "POSITIVE TRION / BIEXCITON: hhe (Hole Ejected)",
+      "proposed_destination": "docs/recombination/auger_matrix_elements.rst",
+      "sha256": "4207d521c20138d326d5d2c6bf29bfe0ba11c8d7e203bba0dee9312436a7f8b9",
+      "bytes": 3207
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 235,
+      "end_line": 262,
+      "title": "NEUTRAL BIEXCITON (XX) ANNIHILATION & ENERGY-CONSERVING SURFACE HOPPING (ECSH) CASCADE",
+      "proposed_destination": "docs/recombination/auger_matrix_elements.rst",
+      "sha256": "a38d469986caf12eddc10b7dbccfef2466b69f555a70cd75145eab76936afea7",
+      "bytes": 1692
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 263,
+      "end_line": 273,
+      "title": "3. The Atom-Centered Resta Screening Contraction",
+      "proposed_destination": "docs/recombination/auger_screening.rst",
+      "sha256": "336c9a8c3940e51ef34a450ecfc243c63f944c86d6129db7c903b1a51e7bfbc8",
+      "bytes": 717
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 274,
+      "end_line": 296,
+      "title": "Monopole Transition Charge Projection",
+      "proposed_destination": "docs/recombination/auger_screening.rst",
+      "sha256": "7221614a17cc8243681947245f72282a3b98fb19939426bfd86206c4339e2279",
+      "bytes": 1068
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 297,
+      "end_line": 314,
+      "title": "The Microscopic Resta Screening Kernel",
+      "proposed_destination": "docs/recombination/auger_screening.rst",
+      "sha256": "04a3fdef19f94072760ea5dd53391c049f3d5a087c22f46b7c08d48f7a4b21ee",
+      "bytes": 807
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 315,
+      "end_line": 335,
+      "title": "Local vs. Macroscopic Dielectric Screening in Auger Scattering",
+      "proposed_destination": "docs/recombination/auger_screening.rst",
+      "sha256": "ec58a781b626827e7bd3f972e58432e03c6682f04afc994ad0e6741fa2da4a17",
+      "bytes": 1456
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 336,
+      "end_line": 383,
+      "title": "4. How QDEX Data Are Used to Compute Every Formula Term",
+      "proposed_destination": "docs/recombination/auger_implementation.rst",
+      "sha256": "af1f619dd65072658507e3db3216ba3ef731e65e40b5750aca0937f9a1dc6269",
+      "bytes": 2464
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 384,
+      "end_line": 388,
+      "title": "5. Energy Conservation Line Shapes: Gaussian vs. FCWD",
+      "proposed_destination": "docs/recombination/auger_lineshapes.rst",
+      "sha256": "23a7d5205ba94998bb3704c77746c47faa95c566e7567a8f9f44f5f0d3d990ce",
+      "bytes": 278
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 389,
+      "end_line": 399,
+      "title": "1. Gaussian Line Shape Model",
+      "proposed_destination": "docs/recombination/auger_lineshapes.rst",
+      "sha256": "5dc53ee64062a816a8a282a205ab137a2d69b4ac6d5cea91be68f0da97c592e4",
+      "bytes": 375
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 400,
+      "end_line": 412,
+      "title": "2. Multi-Phonon Marcus / Jortner Line Shape (FCWD)",
+      "proposed_destination": "docs/recombination/auger_lineshapes.rst",
+      "sha256": "46235567b0242ba6693e787cb28bb67b486106abe62fba21731274da3f6231ff",
+      "bytes": 662
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 413,
+      "end_line": 431,
+      "title": "6. Relativistic Spin-Orbit Coupling (SOC) in Auger Scattering",
+      "proposed_destination": "docs/recombination/auger_soc.rst",
+      "sha256": "79afe60203d6113c8f7bca5b10b91c2de3769ca7b0fac770ce7dc2e2d3be9f41",
+      "bytes": 922
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 432,
+      "end_line": 434,
+      "title": "7. Static Calculations vs. Trajectory Dynamics in NAMD",
+      "proposed_destination": "docs/recombination/auger_workflows.rst",
+      "sha256": "c6326329f265b7a479e6a8308d11830a1f28260726b2295a2257c7f4c7392842",
+      "bytes": 111
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 435,
+      "end_line": 448,
+      "title": "Static Calculation",
+      "proposed_destination": "docs/recombination/auger_workflows.rst",
+      "sha256": "cdb84ae4239b6535caf6dff57d08e5ee32b02603404a61064fa5be1cfee03c0e",
+      "bytes": 335
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 449,
+      "end_line": 452,
+      "title": "QDEX AUGER RECOMBINATION REPORT",
+      "proposed_destination": "docs/recombination/auger_workflows.rst",
+      "sha256": "4ae5ecded01574cb9dc29a5648151c3495d96237a8c4a50f41731354b9709990",
+      "bytes": 332
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 453,
+      "end_line": 454,
+      "title": "Evaluated Active Pathways       : 177 (eeh) | 48 (hhe)",
+      "proposed_destination": "docs/recombination/auger_workflows.rst",
+      "sha256": "a6633bece1bf48290a8c7f0ad07ef8ab6240bfa85a44eda8ea2348fbab553a71",
+      "bytes": 167
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 455,
+      "end_line": 458,
+      "title": "Channel                 Rate (s^-1)        Rate (ns^-1)        Lifetime (ns)          Lifetime (ps)",
+      "proposed_destination": "docs/recombination/auger_workflows.rst",
+      "sha256": "81dc599a68bc93c271b67b3cf7d119ab872578b100839d9da5004975af45b0fc",
+      "bytes": 416
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 459,
+      "end_line": 461,
+      "title": "Biexciton (XX)             1.8990e+11        1.8990e+02            0.0053 ns            5.27 ps",
+      "proposed_destination": "docs/recombination/auger_workflows.rst",
+      "sha256": "a502bae687c7f34a7728631f9181125b5c656551a10772c0d3ae08cb3f840e65",
+      "bytes": 209
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 462,
+      "end_line": 474,
+      "title": "Trajectory-Averaged Dynamic Auger Rates in NAMD",
+      "proposed_destination": "docs/recombination/auger_workflows.rst",
+      "sha256": "20cfc752f00e276ec158b7b45242f13fca88fdd652449cf525d22cfa816c732b",
+      "bytes": 538
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 475,
+      "end_line": 477,
+      "title": "8. Energy-Conserving Surface Hopping (ECSH) for Auger in NAMD",
+      "proposed_destination": "docs/recombination/auger_ecsh.rst",
+      "sha256": "b2f03994fc3dee86b8b9588311e7212c9a57c833aa594341e1aff72f4308739a",
+      "bytes": 125
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 478,
+      "end_line": 500,
+      "title": "Physical Foundations: Electron-Phonon vs. Coulomb Transitions",
+      "proposed_destination": "docs/recombination/auger_ecsh.rst",
+      "sha256": "94d0e5e400b5b658bb64a74d694c30d5da39e7366d0681ddd84235b292ce9823",
+      "bytes": 1529
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 501,
+      "end_line": 507,
+      "title": "The Fundamental Flaw in Previous Approaches (The \"Energy Leak\" Error)",
+      "proposed_destination": "docs/recombination/auger_ecsh.rst",
+      "sha256": "e4aeec93029f46faa4a6ab3608f977bc2229a414aaba1f878c74af8490f16607",
+      "bytes": 929
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 508,
+      "end_line": 529,
+      "title": "The Gumber-Prezhdo ECSH Methodology",
+      "proposed_destination": "docs/recombination/auger_ecsh.rst",
+      "sha256": "e48f77367540c7cefe089a702a4bddd3b00abb374019eea8c78838e8b5b4dd6d",
+      "bytes": 1343
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 530,
+      "end_line": 546,
+      "title": "Relation with Static Trions (:math:`eeh` and :math:`hhe`)",
+      "proposed_destination": "docs/recombination/auger_ecsh.rst",
+      "sha256": "946ecdc85f105b45e1f157874784a40b994f376581c4a8c850e87747b1573799",
+      "bytes": 1928
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 547,
+      "end_line": 582,
+      "title": "Resolving the Timescale Mismatch (:math:`1 - 10\\text{ ps}` MD vs. :math:`100\\text{ ps} - 10\\text{ ns}` Auger)",
+      "proposed_destination": "docs/recombination/auger_ecsh.rst",
+      "sha256": "b87f28f4ba8fc520bac46b9067a3f601c130f46afb88f4d52e4c95f34dc2f6b7",
+      "bytes": 2634
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 583,
+      "end_line": 585,
+      "title": "9. Configuration Reference (YAML & CLI)",
+      "proposed_destination": "docs/recombination/auger_configuration.rst",
+      "sha256": "72f8f76a677d34e3c1b7f38957ddbb52228467397ff28f4cfab74717039e5fbc",
+      "bytes": 81
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 586,
+      "end_line": 607,
+      "title": "YAML Configuration Options",
+      "proposed_destination": "docs/recombination/auger_configuration.rst",
+      "sha256": "ce36fcd7411a850cd17441b159dd36afb697f57a21616f7f943ee1be13bc1c7a",
+      "bytes": 1040
+    },
+    {
+      "source": "docs/part8_auger/index.rst",
+      "start_line": 608,
+      "end_line": 623,
+      "title": "Command-Line Arguments",
+      "proposed_destination": "docs/recombination/auger_configuration.rst",
+      "sha256": "b5345b5254ff9aeaabf177c2fcf8e09377fe27af55df91fd9c5555d01ff48354",
+      "bytes": 1117
+    }
+  ]
+}

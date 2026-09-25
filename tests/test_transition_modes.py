@@ -30,6 +30,30 @@ def make_two_transition_hamiltonian():
 
 
 class IndependentTransitionModeTests(unittest.TestCase):
+    def test_exchange_and_direct_flags_control_matrix_free_action_independently(self):
+        probe = np.array([0.3, -0.7])
+        reference = make_two_transition_hamiltonian()
+        reference.include_exchange = True
+        kx_ref, kd_ref = reference.kernel_actions(probe)
+        self.assertGreater(np.linalg.norm(kx_ref), 0.0)
+        self.assertGreater(np.linalg.norm(kd_ref), 0.0)
+
+        for exchange in (False, True):
+            for direct in (False, True):
+                ham = make_two_transition_hamiltonian()
+                ham.include_exchange = exchange
+                ham.include_direct_eh = direct
+                kx, kd = ham.kernel_actions(probe)
+                np.testing.assert_allclose(kx, kx_ref if exchange else 0.0)
+                np.testing.assert_allclose(kd, kd_ref if direct else 0.0)
+                energies, kx_diag, kd_diag = ham.independent_transition_energies('diagonal_bse')
+                dense = np.column_stack([ham.matvec(vec) for vec in np.eye(ham.dim)])
+                np.testing.assert_allclose(energies, np.diag(dense))
+                if not exchange:
+                    np.testing.assert_allclose(kx_diag, 0.0)
+                if not direct:
+                    np.testing.assert_allclose(kd_diag, 0.0)
+
     def test_kernel_separation_and_diagonal_approximation(self):
         ham = make_two_transition_hamiltonian()
         basis = np.eye(ham.dim)

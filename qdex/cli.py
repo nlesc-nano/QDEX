@@ -98,6 +98,41 @@ def print_qp_provenance(details, dft_gap=None, target_qp_gap=None, output_file=N
     if not details:
         return
 
+    if details.get("qp_model") in ["sgw_dw", "sgw_dim", "sgw_resta", "evgw_dim", "evgw_resta", "qsgw_dim", "qsgw_resta"]:
+        if details.get("qp_model") in ["qsgw_dim", "evgw_dim", "sgw_dim"]:
+            model_name = "qsGW-DIM" if details.get("orbital_update") else ("evGW-DIM" if details.get("self_consistent") else "sGW-DIM")
+        elif details.get("qp_model") in ["qsgw_resta", "evgw_resta", "sgw_resta"]:
+            model_name = "qsGW-Resta" if details.get("orbital_update") else ("evGW-Resta" if details.get("self_consistent") else "sGW-Resta")
+        else:
+            model_name = "Microscopic sGW / Delta-W"
+        print(f"\n  [QP Provenance] {model_name} Model")
+        print(f"    Material                 : {details['material']}")
+        print(f"    Bulk PBE -> GW gap       : {details['bulk_pbe_gap_ev']:.3f} -> {details['bulk_gw_gap_ev']:.3f} eV")
+        print(f"    Bulk GW shift            : {details['bulk_shift_ev']:+.3f} eV")
+        if details.get("dynamic_z"):
+            z_info = f"dynamic: Zh={details.get('z_homo', details['z_factor']):.3f}, Zl={details.get('z_lumo', details['z_factor']):.3f}"
+        else:
+            z_info = f"Z = {details['z_factor']:.2f}"
+        print(f"    Confinement shift        : {details['confinement_shift_ev']:+.3f} eV ({z_info})")
+        if "confinement_shift_internal_ev" in details and "confinement_shift_solvent_ev" in details:
+            print(f"      - Internal Contrast    : {details['confinement_shift_internal_ev']:+.3f} eV")
+            print(f"      - Solvent Reaction Field: {details['confinement_shift_solvent_ev']:+.3f} eV")
+        print(f"    HOMO shift (Delta Sigma) : {details['delta_sigma_homo_ev']:+.3f} eV")
+        print(f"    LUMO shift (Delta Sigma) : {details['delta_sigma_lumo_ev']:+.3f} eV")
+        if details.get("orbital_update"):
+            print(f"    qsGW Iterations          : {details.get('qsgw_iterations', 1)} (converged: {details.get('qsgw_converged', False)})")
+            print(f"    HOMO Orbital Fidelity    : {details.get('homo_fidelity', 1.0):.5f}  (|<psi_PBE|psi_QP>|^2)")
+            print(f"    LUMO Orbital Fidelity    : {details.get('lumo_fidelity', 1.0):.5f}  (|<psi_PBE|psi_QP>|^2)")
+        elif details.get("self_consistent"):
+            print(f"    evGW Iterations          : {details.get('evgw_iterations', 1)} (converged: {details.get('evgw_converged', False)})")
+        print(f"    Solvent epsilon_out      : {details['eps_out']:.2f}")
+        print(f"    Total scissor            : {details['total_scissor_ev']:+.3f} eV")
+        if dft_gap is not None and target_qp_gap is not None:
+            print(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
+        if output_file:
+            print(f"    JSON                     : {output_file}")
+        return
+
     print("\n  [QP Provenance] Anchor-scaled PBE-to-QP model")
     print(f"    Material                 : {details['material']}")
     if "cluster_radius_ang" in details:
@@ -256,7 +291,19 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     print(f"  QP Correction (Shift) : {scissor:8.4f} eV")
     print(f"  Confinement Energy    : {confinement_energy:8.4f} eV")
     print(f"  Excitation Mode        : {args.excitation_mode}")
-    if args.kernel != "resta":
+    if hasattr(solver, 'eps_info') and solver.eps_info:
+        eps_info = solver.eps_info
+        print(f"  Microscopic ε_eff (1S) : {eps_info.get('eps_eff_exciton', 1.0):8.3f} (Lowest exciton screening)")
+        if eps_info.get('eps_bulk'):
+            print(f"  Bulk Dielectric (ε_∞)  : {eps_info.get('eps_bulk'):8.3f} (Retention: {eps_info.get('dielectric_retention_pct', 100.0):.1f}%)")
+        dielectric_file = f"dielectric_summary{suffix}.json"
+        try:
+            with open(dielectric_file, "w", encoding="utf-8") as f:
+                json.dump(eps_info, f, indent=2, sort_keys=True)
+            print(f"  Dielectric Log File    : {dielectric_file}")
+        except Exception:
+            pass
+    elif args.kernel != "resta":
         print(f"  Legacy Kernel Scaling  : {args.alpha:8.4f}")
     print("-" * 60)
 
@@ -466,8 +513,11 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     if getattr(args, "auger", False):
         from qdex.auger import calculate_auger_rates
         eps_eval = solver.eps.copy()
-        if scissor is not None and scissor != 0.0:
-            eps_eval[solver.homo_index + 1:] += scissor
+        eff_scissor = getattr(solver, "scissor_ev", None)
+        if eff_scissor is None:
+            eff_scissor = scissor
+        if eff_scissor is not None and eff_scissor != 0.0:
+            eps_eval[solver.homo_index + 1:] += eff_scissor
         if solver.soc_flag and soc_E is not None and soc_U is not None:
             k = soc_U.shape[0] // 2
             act_start = solver.homo_index - solver.n_occ + 1
@@ -536,13 +586,16 @@ def validate_args(args, parser):
             parser.error("Validation error: periodic.lattice_vectors must be a 3x3 list of vectors in angstrom.")
 
 
-def _apply_config(args, config_data):
+def _apply_config(args, config_data, explicit_cli_args=None):
+    if explicit_cli_args is None:
+        explicit_cli_args = set()
     for section, parameters in config_data.items():
         if section == "periodic" and isinstance(parameters, dict):
-            setattr(args, "periodic_enabled", bool(parameters.get("enabled", False)))
-            if "lattice_vectors" in parameters:
+            if "periodic_enabled" not in explicit_cli_args and "periodic" not in explicit_cli_args:
+                setattr(args, "periodic_enabled", bool(parameters.get("enabled", False)))
+            if "lattice_vectors" in parameters and "lattice_vectors" not in explicit_cli_args:
                 setattr(args, "lattice_vectors", parameters["lattice_vectors"])
-            if "overlap_cutoff" in parameters:
+            if "overlap_cutoff" in parameters and "overlap_cutoff" not in explicit_cli_args:
                 setattr(args, "overlap_cutoff", parameters["overlap_cutoff"])
             continue
 
@@ -551,28 +604,47 @@ def _apply_config(args, config_data):
             continue
 
         if section == "auger" and isinstance(parameters, dict):
-            setattr(args, "auger", bool(parameters.get("run", parameters.get("enabled", True))))
-            if "sigma" in parameters:
+            if "auger" not in explicit_cli_args:
+                setattr(args, "auger", bool(parameters.get("run", parameters.get("enabled", True))))
+            if "sigma" in parameters and "auger_sigma" not in explicit_cli_args:
                 setattr(args, "auger_sigma", float(parameters["sigma"]))
-            if "channel" in parameters:
+            if "channel" in parameters and "auger_channel" not in explicit_cli_args:
                 setattr(args, "auger_channel", str(parameters["channel"]))
-            if "n_initial_states" in parameters:
+            if "n_initial_states" in parameters and "auger_states" not in explicit_cli_args:
                 setattr(args, "auger_states", int(parameters["n_initial_states"]))
-            if "lineshape" in parameters:
+            if "lineshape" in parameters and "auger_lineshape" not in explicit_cli_args:
                 setattr(args, "auger_lineshape", str(parameters["lineshape"]))
-            if "eps_eff" in parameters and parameters["eps_eff"] is not None:
+            if "eps_eff" in parameters and parameters["eps_eff"] is not None and "auger_eps_eff" not in explicit_cli_args:
                 setattr(args, "auger_eps_eff", float(parameters["eps_eff"]))
             continue
 
         if isinstance(parameters, dict):
             for key, value in parameters.items():
-                if not hasattr(args, key):
+                norm_key = key.replace("-", "_")
+                if norm_key in ["two_electron_integrals", "2e_integrals"]:
+                    norm_key = "kernel_type"
+                if (
+                    key in explicit_cli_args
+                    or norm_key in explicit_cli_args
+                    or (norm_key == "kernel_type" and any(k in explicit_cli_args for k in ["kernel_type", "2e_integrals", "two_electron_integrals"]))
+                ):
+                    continue
+                if hasattr(args, norm_key):
+                    setattr(args, norm_key, value)
+                elif hasattr(args, key):
+                    setattr(args, key, value)
+                else:
                     raise ValueError(f"Unknown YAML key '{section}.{key}'")
-                setattr(args, key, value)
         else:
-            if not hasattr(args, section):
+            norm_sec = section.replace("-", "_")
+            if section in explicit_cli_args or norm_sec in explicit_cli_args:
+                continue
+            if hasattr(args, section):
+                setattr(args, section, parameters)
+            elif hasattr(args, norm_sec):
+                setattr(args, norm_sec, parameters)
+            else:
                 raise ValueError(f"Unknown YAML key '{section}'")
-            setattr(args, section, parameters)
 
 
 def _select_soc_window_indices(eps_shifted, homo_index, soc_window):
@@ -609,12 +681,21 @@ def main():
     parser.add_argument("--e_thresh", type=float, default=None)
     parser.add_argument("--f_thresh", type=float, default=0.0)
 
-    parser.add_argument("--qp_gap", type=str, default="brus")
+    parser.add_argument("--qp_gap", type=str, default="brus",
+                        help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (eigenvalue self-consistent GW with DIM), 'qsgw-dim' / 'qsgw' (quasiparticle self-consistent GW with full AO orbital update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (eigenvalue self-consistent GW with Resta), 'qsgw-resta' (qsGW with Resta and full AO orbital update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (Cho et al. sBSE Delta-W), 'brus' (effective mass), 'pbe' (uncorrected), or explicit gap in eV.")
+    parser.add_argument("--dynamic_z", action="store_true", default=False,
+                        help="Compute state-dependent dynamic renormalization factor Z_p from the plasmon-pole f-sum rule.")
+    parser.add_argument("--update_orbitals", "--qsgw", dest="update_orbitals", action="store_true", default=False,
+                        help="Perform full AO-basis Quasiparticle Self-Consistent GW (qsGW) orbital update.")
     parser.add_argument("--soc", type=float, default=0.0)
     parser.add_argument("--soc_flag", action="store_true")
     parser.add_argument("--gth_file", type=str, default=None)
 
-    parser.add_argument("--kernel", choices=["bse", "resta"], default="bse")
+    parser.add_argument("--kernel", choices=["bse", "resta", "mnok", "xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "dim", "xs-dim", "dipole", "xs-dipole", "sbse", "sbse-atom", "sbse-ao", "xs-sbse"], default="bse",
+                        help="Exciton interaction kernel: 'bse' (MNOK uniform), 'resta' (MNOK Resta-screened), 'dim' / 'dipole' (MNOK atomistic polarizable dipole model), 'sbse' / 'sbse-atom' (Simplified BSE atom-resolved kernel, Cho et al. 2022), 'sbse-ao' / 'xs-sbse' (Simplified BSE AO-resolved kernel), 'xs' (Xs-QDEX uniform), 'xs-resta' (Xs-QDEX Resta-screened), 'xs-rpa' (Xs-QDEX microscopic RPA screening), 'xs-dim' (Xs-QDEX atomistic polarizable dipole model).")
+    parser.add_argument("--two-electron-integrals", "--two_electron_integrals", "--2e-integrals", "--2e_integrals", "--kernel_type", "--kernel-type",
+                        dest="kernel_type", choices=["mnok", "xs", "xs-qdex"], default="mnok",
+                        help="Two-electron integral representation: 'mnok' (semi-empirical atom-centered damped Coulomb) or 'xs' / 'xs-qdex' (exact analytical Gaussian AO four-center integrals via Libint2).")
     parser.add_argument("--alpha", type=float, default=1.0, help="Scaling for the legacy non-RESTA kernel; ignored by RESTA.")
     parser.add_argument("--beta", type=float, default=0.0, help="Reserved on-site stiffening parameter; beta > 0 is currently rejected.")
     parser.add_argument("--exchange", action="store_true", default=None, help="Deprecated alias for --include-direct-eh.")
@@ -623,6 +704,11 @@ def main():
                               help="Include the Resta-screened attractive electron-hole direct term (default).")
     direct_group.add_argument("--no-direct-eh", dest="include_direct_eh", action="store_false",
                               help="Disable the attractive electron-hole direct term.")
+    exchange_group = parser.add_mutually_exclusive_group()
+    exchange_group.add_argument("--include-exchange", dest="include_exchange", action="store_true", default=None,
+                                help="Include the repulsive electron-hole exchange term Kx (default).")
+    exchange_group.add_argument("--no-exchange", dest="include_exchange", action="store_false",
+                                help="Disable the repulsive electron-hole exchange term Kx.")
     parser.add_argument("--estimate_qp", action="store_true", help="Compute G0W0-lite Quasiparticle corrections via COHSEX")
     parser.add_argument("--use_cohsex_gap", action="store_true", help="Override the tabulated GW gap with the pure COHSEX computed gap")
     parser.add_argument("--vxc_ao", type=str, default=None, help="Path to cleaned CP2K AO-basis Vxc matrix text file")
@@ -746,7 +832,13 @@ def main():
         with open(args.config, 'r') as f:
             config_data = yaml.safe_load(f) or {}
 
-        _apply_config(args, config_data)
+        explicit_cli_args = set()
+        for arg_str in sys.argv[1:]:
+            if arg_str.startswith("--"):
+                flag_name = arg_str.lstrip("-").split("=")[0].replace("-", "_")
+                explicit_cli_args.add(flag_name)
+
+        _apply_config(args, config_data, explicit_cli_args=explicit_cli_args)
 
     if getattr(args, "namd_soc", False):
         config_data.setdefault("physics", {})["soc"] = True
@@ -839,9 +931,12 @@ def main():
         args.include_direct_eh = True if args.exchange is None else bool(args.exchange)
     if args.exchange is not None:
         print("  [Deprecated] 'exchange' now maps to include_direct_eh; use include_direct_eh instead.")
+    if getattr(args, "include_exchange", None) is None:
+        args.include_exchange = True
 
     setup_run_logging(getattr(args, "log_file", "minibse.log"))
     validate_args(args, parser)
+    compute_device, dev_obj = resolve_device(args.device, verbose=True)
     if config_path:
         print(f"Loading configuration from {config_path}...")
 
@@ -937,6 +1032,7 @@ def main():
     target_qp_gap = dft_gap
     confinement_energy = 0.0
     qp_provenance = None
+    eps_qp_active = None
     
     if isinstance(args.qp_gap, str):
         if args.qp_gap.lower() == "brus":
@@ -950,7 +1046,7 @@ def main():
                     "Select qp_gap: pbe explicitly for an uncorrected calculation."
                 )
                 
-        elif args.qp_gap.lower() == "gw":
+        elif args.qp_gap.lower() in ["gw", "sgw-anchor", "sgw_anchor"]:
             if getattr(args, "periodic_enabled", False):
                 print("\n  [Bulk GW Model] Periodic mode enabled: using tabulated bulk GW-PBE scissor.")
                 gw_scissor, qp_provenance = estimate_periodic_bulk_gw_scissor(args.material)
@@ -974,7 +1070,196 @@ def main():
                 )
                 
             if args.estimate_qp:
-                print("  [QP Warning] qp_gap is set to 'gw', which already uses the recommended scaled-GW hardness model.")
+                print("  [QP Warning] qp_gap is set to 'sgw-anchor', which already uses the recommended scaled-GW hardness model.")
+                print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
+                print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
+        elif args.qp_gap.lower() in ["sgw-dim", "sgw_dim", "sgw-dim-dz", "evgw", "evgw-dim", "evgw_dim", "qsgw", "qsgw-dim", "qsgw_dim", "scgw", "scgw-dim", "scgw_dim"]:
+            from qdex.hardness import estimate_sgw_dim_qp_gap, estimate_qsgw_dim_qp_gap
+            from qdex.lowdin import lowdin_sqrt
+
+            is_qsgw = ("qsgw" in args.qp_gap.lower()) or ("scgw" in args.qp_gap.lower()) or getattr(args, "update_orbitals", False)
+            is_evgw = "evgw" in args.qp_gap.lower()
+            use_dz = is_qsgw or is_evgw or "dz" in args.qp_gap.lower() or getattr(args, "dynamic_z", False)
+            model_tag = "qsGW-DIM" if is_qsgw else ("evGW-DIM" if is_evgw else ("sGW-DIM (Dynamic Z)" if use_dz else "sGW-DIM"))
+            print(f"\n--- Estimating Quasiparticle Gap using {model_tag} (Atomistic Delta-W) ---")
+            t0_sgw = time.time()
+
+            if is_qsgw:
+                sgw_scissor, qp_provenance, C_qp, eps_qp = estimate_qsgw_dim_qp_gap(
+                    coords=np.array(coords_ang),
+                    atom_symbols=syms,
+                    C=C,
+                    eps=eps,
+                    S=S,
+                    atom_ao_ranges=atom_ao_ranges,
+                    homo_index=homo_index,
+                    material_name=args.material,
+                    eps_out=args.eps_out,
+                    alpha=args.alpha,
+                    dynamic_z=use_dz,
+                    return_details=True
+                )
+                C = C_qp
+                eps_qp_active = eps_qp
+                scissor = sgw_scissor
+                target_qp_gap = dft_gap + scissor
+            else:
+                S_dense = S.toarray() if hasattr(S, 'toarray') else S
+                S_half = lowdin_sqrt(S_dense, device=compute_device)
+
+                n_occ_tot = homo_index + 1
+                n_virt_tot = min(1000, len(eps) - n_occ_tot)
+                occ_idx_a = np.arange(0, n_occ_tot)
+                virt_idx_a = np.arange(n_occ_tot, n_occ_tot + n_virt_tot)
+                C_occ_act = C[:, occ_idx_a].toarray() if hasattr(C, 'toarray') else C[:, occ_idx_a]
+                C_virt_act = C[:, virt_idx_a].toarray() if hasattr(C, 'toarray') else C[:, virt_idx_a]
+                C_occ_low = S_half @ C_occ_act
+                C_virt_low = S_half @ C_virt_act
+
+                sgw_scissor, qp_provenance = estimate_sgw_dim_qp_gap(
+                    coords=np.array(coords_ang),
+                    atom_symbols=syms,
+                    material_name=args.material,
+                    eps_out=args.eps_out,
+                    C_occ_low=C_occ_low,
+                    C_virt_low=C_virt_low,
+                    eps_occ=eps[occ_idx_a],
+                    eps_virt=eps[virt_idx_a],
+                    atom_ao_ranges=atom_ao_ranges,
+                    alpha=args.alpha,
+                    dynamic_z=use_dz,
+                    self_consistent=is_evgw,
+                    return_details=True
+                )
+                scissor = sgw_scissor
+                target_qp_gap = dft_gap + scissor
+
+            confinement_energy = qp_provenance.get("confinement_shift_ev", 0.0)
+            print(f"  -> {model_tag} Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
+
+            if args.estimate_qp:
+                print(f"  [QP Warning] qp_gap is set to '{args.qp_gap}', which already applies the microscopic Delta-W quasiparticle correction.")
+                print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
+                print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
+
+        elif args.qp_gap.lower() in ["sgw-resta", "sgw_resta", "sgw-resta-penn", "sgw-resta-pure", "sgw-resta-bulk", "sgw-resta-dz", "evgw-resta", "evgw_resta", "qsgw-resta", "qsgw_resta", "scgw-resta", "scgw_resta"]:
+            from qdex.hardness import estimate_sgw_resta_qp_gap, estimate_qsgw_resta_qp_gap
+            from qdex.lowdin import lowdin_sqrt
+
+            is_qsgw = ("qsgw" in args.qp_gap.lower()) or ("scgw" in args.qp_gap.lower()) or getattr(args, "update_orbitals", False)
+            is_evgw = "evgw" in args.qp_gap.lower()
+            use_dz = is_qsgw or is_evgw or "dz" in args.qp_gap.lower() or getattr(args, "dynamic_z", False)
+            use_penn = not any(k in args.qp_gap.lower() for k in ["pure", "bulk"])
+            penn_label = "Penn-scaled" if use_penn else "Pure Boundary"
+            model_tag = f"qsGW-Resta ({penn_label})" if is_qsgw else (f"evGW-Resta ({penn_label})" if is_evgw else (f"sGW-Resta ({penn_label}, Dynamic Z)" if use_dz else f"sGW-Resta ({penn_label})"))
+            print(f"\n--- Estimating Quasiparticle Gap using {model_tag} (Delta-W) ---")
+            t0_sgw = time.time()
+
+            if is_qsgw:
+                sgw_scissor, qp_provenance, C_qp, eps_qp = estimate_qsgw_resta_qp_gap(
+                    coords=np.array(coords_ang),
+                    atom_symbols=syms,
+                    C=C,
+                    eps=eps,
+                    S=S,
+                    atom_ao_ranges=atom_ao_ranges,
+                    homo_index=homo_index,
+                    material_name=args.material,
+                    eps_out=args.eps_out,
+                    alpha=args.alpha,
+                    penn_scaling=use_penn,
+                    dynamic_z=use_dz,
+                    return_details=True
+                )
+                C = C_qp
+                eps_qp_active = eps_qp
+                scissor = sgw_scissor
+                target_qp_gap = dft_gap + scissor
+            else:
+                S_dense = S.toarray() if hasattr(S, 'toarray') else S
+                S_half = lowdin_sqrt(S_dense, device=compute_device)
+
+                n_occ_tot = homo_index + 1
+                n_virt_tot = min(1000, len(eps) - n_occ_tot)
+                occ_idx_a = np.arange(0, n_occ_tot)
+                virt_idx_a = np.arange(n_occ_tot, n_occ_tot + n_virt_tot)
+                C_occ_act = C[:, occ_idx_a].toarray() if hasattr(C, 'toarray') else C[:, occ_idx_a]
+                C_virt_act = C[:, virt_idx_a].toarray() if hasattr(C, 'toarray') else C[:, virt_idx_a]
+                C_occ_low = S_half @ C_occ_act
+                C_virt_low = S_half @ C_virt_act
+
+                sgw_scissor, qp_provenance = estimate_sgw_resta_qp_gap(
+                    coords=np.array(coords_ang),
+                    atom_symbols=syms,
+                    material_name=args.material,
+                    eps_out=args.eps_out,
+                    dft_gap=dft_gap,
+                    C_occ_low=C_occ_low,
+                    C_virt_low=C_virt_low,
+                    eps_occ=eps[occ_idx_a],
+                    eps_virt=eps[virt_idx_a],
+                    atom_ao_ranges=atom_ao_ranges,
+                    alpha=args.alpha,
+                    penn_scaling=use_penn,
+                    dynamic_z=use_dz,
+                    self_consistent=is_evgw,
+                    return_details=True
+                )
+                scissor = sgw_scissor
+                target_qp_gap = dft_gap + scissor
+
+            confinement_energy = qp_provenance.get("confinement_shift_ev", 0.0)
+            print(f"  -> {model_tag} Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
+
+            if args.estimate_qp:
+                print(f"  [QP Warning] qp_gap is set to '{args.qp_gap}', which already applies the microscopic Delta-W quasiparticle correction.")
+                print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
+                print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
+
+        elif args.qp_gap.lower() in ["sgw", "sgw-dw", "sgw_dw", "sgw-atom", "sgw-ao"]:
+            from qdex.hardness import estimate_sgw_qp_gap
+            from qdex.lowdin import lowdin_sqrt
+
+            print(f"\n--- Estimating Quasiparticle Gap using Microscopic sGW (Delta-W formulation) ---")
+            t0_sgw = time.time()
+            S_dense = S.toarray() if hasattr(S, 'toarray') else S
+            S_half = lowdin_sqrt(S_dense, device=compute_device)
+
+            n_occ_tot = homo_index + 1
+            n_virt_tot = min(1000, len(eps) - n_occ_tot)
+            occ_idx_a = np.arange(0, n_occ_tot)
+            virt_idx_a = np.arange(n_occ_tot, n_occ_tot + n_virt_tot)
+            C_occ_act = C[:, occ_idx_a].toarray() if hasattr(C, 'toarray') else C[:, occ_idx_a]
+            C_virt_act = C[:, virt_idx_a].toarray() if hasattr(C, 'toarray') else C[:, virt_idx_a]
+            C_occ_low = S_half @ C_occ_act
+            C_virt_low = S_half @ C_virt_act
+            eps_occ_act = eps[occ_idx_a]
+            eps_virt_act = eps[virt_idx_a]
+
+            sgw_mode = "ao" if "ao" in args.qp_gap.lower() else "atom"
+            sgw_scissor, qp_provenance = estimate_sgw_qp_gap(
+                coords=np.array(coords_ang),
+                atom_symbols=syms,
+                material_name=args.material,
+                eps_out=args.eps_out,
+                C_occ_low=C_occ_low,
+                C_virt_low=C_virt_low,
+                eps_occ=eps_occ_act,
+                eps_virt=eps_virt_act,
+                atom_ao_ranges=atom_ao_ranges,
+                shells=shells,
+                mode=sgw_mode,
+                alpha=args.alpha,
+                nthreads=args.nthreads,
+                return_details=True
+            )
+            scissor = sgw_scissor
+            target_qp_gap = dft_gap + scissor
+            confinement_energy = qp_provenance.get("confinement_shift_ev", 0.0)
+            print(f"  -> sGW Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
+
+            if args.estimate_qp:
+                print("  [QP Warning] qp_gap is set to 'sgw', which already applies the microscopic Delta-W quasiparticle correction.")
                 print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
                 print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
         elif args.qp_gap.lower() == "pbe":
@@ -983,7 +1268,7 @@ def main():
             print("  [QP] Explicit uncorrected PBE mode selected.")
         else:
             raise ValueError(
-                f"Unknown qp_gap mode '{args.qp_gap}'. Use 'gw', 'brus', 'pbe', or a numeric gap."
+                f"Unknown qp_gap mode '{args.qp_gap}'. Use 'gw', 'sgw-dim', 'evgw-dim', 'qsgw-dim', 'sgw-resta', 'evgw-resta', 'qsgw-resta', 'sgw', 'brus', 'pbe', or a numeric gap."
             )
     else:
         # Numeric explicit gap provided
@@ -1014,6 +1299,30 @@ def main():
         print(f"    Raw CP2K LUMO    : {dft_lumo_raw:8.4f} eV")
         print(f"    Bulk GW scissor  : virtual manifold shifted by {scissor:+.4f} eV")
         print("    Note             : absolute IP/EA levels are not assigned in periodic mode.")
+
+    elif qp_provenance is not None and "f_homo" in qp_provenance and "f_lumo" in qp_provenance:
+        f_homo = float(qp_provenance["f_homo"])
+        f_lumo = float(qp_provenance["f_lumo"])
+        model_name = qp_provenance.get("qp_model", "microscopic").upper()
+
+        if entry is not None and len(entry) >= 14:
+            pbe_h_mono, pbe_l_mono = entry[10], entry[11]
+            gap_pbe_mono = pbe_l_mono - pbe_h_mono
+            shrinkage_pbe = gap_pbe_mono - dft_gap
+            true_pbe_homo = pbe_h_mono + (shrinkage_pbe * f_homo)
+            true_pbe_lumo = pbe_l_mono - (shrinkage_pbe * f_lumo)
+            qp_homo = true_pbe_homo - (scissor * f_homo)
+            qp_lumo = true_pbe_lumo + (scissor * f_lumo)
+            print(f"\n  [Absolute Band Edges (IP & EA - Microscopic Wavefunction Asymmetry)]")
+            print(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (Floating Vacuum)")
+            print(f"    Modeled PBE HOMO : {true_pbe_homo:8.4f} eV (vacuum-anchored)")
+            print(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}% ({model_name})")
+        else:
+            qp_homo = dft_homo_raw - (scissor * f_homo)
+            qp_lumo = dft_lumo_raw + (scissor * f_lumo)
+            print(f"\n  [Absolute Band Edges (IP & EA - Microscopic Wavefunction Asymmetry)]")
+            print(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV")
+            print(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}% ({model_name})")
 
     elif entry is not None and len(entry) >= 14:
         pbe_h_mono, pbe_l_mono, gw_h_mono, gw_l_mono = entry[10], entry[11], entry[12], entry[13]
@@ -1075,6 +1384,12 @@ def main():
         })
         write_qp_provenance(qp_provenance, dft_gap, target_qp_gap, scissor, args)
     # =========================================================================
+
+    eps_dft_shifted = eps_shifted.copy()
+    if eps_qp_active is not None:
+        eps_shifted = eps_qp_active - e_fermi_raw
+        if C_beta is None:
+            eps_beta_shifted = eps_shifted
 
     print(f"  -> Energy axis shifted and target gap resolved in {time.time() - t0_gap:.4f} s")
  
@@ -1314,12 +1629,18 @@ def main():
         fuzzy_active_indices = _select_soc_window_indices(eps_shifted, homo_index, args.soc_window)
         fuzzy_active_indices_beta = _select_soc_window_indices(eps_beta_shifted, homo_index_beta, args.soc_window)
 
-        qp_occ_shift_abs = qp_homo - eps[homo_index]
-        qp_virt_shift_abs = qp_lumo - eps_beta[homo_index_beta + 1]
-        qp_energies_abs = build_qp_energies_vacuum(eps, homo_index, occ_shift=qp_occ_shift_abs, virt_shift=qp_virt_shift_abs)
-        qp_energies_beta_abs = build_qp_energies_vacuum(eps_beta, homo_index_beta, occ_shift=qp_occ_shift_abs, virt_shift=qp_virt_shift_abs)
-        qp_energies_rel = build_qp_energies(eps_shifted, homo_index, scissor_ev=scissor)
-        qp_energies_beta_rel = build_qp_energies(eps_beta_shifted, homo_index_beta, scissor_ev=scissor)
+        if eps_qp_active is not None:
+            qp_energies_abs = eps_qp_active
+            qp_energies_beta_abs = eps_qp_active
+            qp_energies_rel = eps_qp_active - e_fermi_raw
+            qp_energies_beta_rel = eps_qp_active - e_fermi_raw
+        else:
+            qp_occ_shift_abs = qp_homo - eps[homo_index]
+            qp_virt_shift_abs = qp_lumo - eps_beta[homo_index_beta + 1]
+            qp_energies_abs = build_qp_energies_vacuum(eps, homo_index, occ_shift=qp_occ_shift_abs, virt_shift=qp_virt_shift_abs)
+            qp_energies_beta_abs = build_qp_energies_vacuum(eps_beta, homo_index_beta, occ_shift=qp_occ_shift_abs, virt_shift=qp_virt_shift_abs)
+            qp_energies_rel = build_qp_energies(eps_dft_shifted, homo_index, scissor_ev=scissor)
+            qp_energies_beta_rel = build_qp_energies(eps_beta_shifted, homo_index_beta, scissor_ev=scissor)
         
         fuzzy_soc_E, fuzzy_soc_E_abs, fuzzy_soc_U, fuzzy_spinor_homo_idx = None, None, None, None
         if args.soc_flag:
@@ -1358,7 +1679,7 @@ def main():
             fuzzy_soc_E -= (fuzzy_soc_E[fuzzy_spinor_homo_idx] + fuzzy_soc_E[fuzzy_spinor_homo_idx + 1]) / 2.0
 
         run_fuzzy_bands_and_pdos(
-            args, C_dense, S, eps_shifted, occ, homo_index, e_homo, e_lumo, e_fermi_raw, 
+            args, C_dense, S, eps_dft_shifted, occ, homo_index, e_homo, e_lumo, e_fermi_raw,
             syms, coords_ang, shells, pops_sf, 
             soc_active_indices=fuzzy_active_indices, soc_E_act=fuzzy_soc_E, soc_U_act=fuzzy_soc_U, spinor_homo_idx=fuzzy_spinor_homo_idx,
             qp_energies=qp_energies_rel,
@@ -1460,10 +1781,15 @@ def main():
     args.qp_gap_num = target_qp_gap
 
     tracker.start_stage("BSE Exciton Solver (Spin-Free)")
+    scissor_solver = 0.0 if eps_qp_active is not None else scissor
+    eps_solver = eps_shifted
+    eps_dft_solver = eps_dft_shifted
+
     solver_sf = ExcitonSolver(
-        C=C, eps=eps_shifted, occ=occ, overlap=S, atom_symbols=syms, atom_coords=np.array(coords_ang),
+        C=C, eps=eps_solver, occ=occ, overlap=S, atom_symbols=syms, atom_coords=np.array(coords_ang),
         atom_ao_ranges=atom_ao_ranges, homo_index=homo_index, n_occ=bse_n_occ, n_virt=bse_n_virt, 
-        scissor_ev=scissor, kernel=args.kernel, alpha=args.alpha, beta=args.beta, include_exchange=args.include_direct_eh,
+        scissor_ev=scissor_solver, kernel=args.kernel, alpha=args.alpha, beta=args.beta,
+        include_exchange=args.include_exchange,
         include_direct_eh=args.include_direct_eh,
         estimate_qp=args.estimate_qp, material=args.material, e_thresh=args.e_thresh, f_thresh=args.f_thresh,
         mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z, eps_out=args.eps_out,
@@ -1474,7 +1800,10 @@ def main():
         C_beta=C_beta, eps_beta=eps_beta_shifted, homo_index_beta=homo_index_beta,
         charge_type=args.charge_type,
         n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta,
-        excitation_mode=args.excitation_mode
+        excitation_mode=args.excitation_mode,
+        kernel_type=args.kernel_type,
+        shells=shells,
+        eps_dft=eps_dft_solver
     )
 
     if args.estimate_qp:
@@ -1502,20 +1831,25 @@ def main():
     if args.soc_flag:
         tracker.start_stage("BSE Exciton Solver (SOC)")
         solver_soc = ExcitonSolver(
-            C=C, eps=eps_shifted, occ=occ, overlap=S, atom_symbols=syms, atom_coords=np.array(coords_ang),
+            C=C, eps=eps_solver, occ=occ, overlap=S, atom_symbols=syms, atom_coords=np.array(coords_ang),
             atom_ao_ranges=atom_ao_ranges, homo_index=homo_index, n_occ=bse_n_occ, n_virt=bse_n_virt, 
-            scissor_ev=scissor, kernel=args.kernel, alpha=args.alpha, beta=args.beta, include_exchange=args.include_direct_eh,
+            scissor_ev=scissor_solver, kernel=args.kernel, alpha=args.alpha, beta=args.beta,
+            include_exchange=args.include_exchange,
             include_direct_eh=args.include_direct_eh,
             estimate_qp=args.estimate_qp, material=args.material, e_thresh=args.e_thresh, f_thresh=args.f_thresh, 
             mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z, eps_out=args.eps_out,
             soc_U=bse_soc_U, soc_E=bse_soc_E, device=compute_device, 
+            precomputed_sigma=precalc_sigma,
             vxc_ao_path=args.vxc_ao,
             nthreads=args.nthreads,
             spin=spin_mode,
             C_beta=C_beta, eps_beta=eps_beta_shifted, homo_index_beta=homo_index_beta,
             charge_type=args.charge_type,
             n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta,
-            excitation_mode=args.excitation_mode
+            excitation_mode=args.excitation_mode,
+            kernel_type=args.kernel_type,
+            shells=shells,
+            eps_dft=eps_dft_solver
         )
  
         run_solver_and_analysis(solver_soc, np.array(coords_ang), syms, shells, mu_ia_x, mu_ia_y, mu_ia_z, 
