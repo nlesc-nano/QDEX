@@ -149,7 +149,7 @@ def build_cases_large(eps_solvent, nact, nroots, xs=True, qsgw=True, soc=True):
     Cases are ordered from cheap to expensive.
     """
     es = f"{eps_solvent:g}"
-    act = {"nhomos": nact, "nlumos": nact, "nroots": nroots}
+    act = {"nhomos": nact, "nlumos": nact, "nroots": nroots, "skip_orthonormality_check": True}
     dav = {"full_diag": False}
     cases = []
 
