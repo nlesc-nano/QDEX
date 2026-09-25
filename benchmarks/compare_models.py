@@ -137,6 +137,15 @@ def sizing_energy(ref, d_nm):
     if kind == "inverse_poly":
         c = ref["coefficients"]
         return float(ref["e_gap_bulk_ev"] + 1.0 / sum(ck * d_nm ** k for k, ck in enumerate(c)))
+    if kind == "aubert_hens":
+        Ry, a0 = 13.606, 0.0529177
+        E0, dfit = float(ref["e0_ev"]), float(ref["d_fit_nm"])
+        pref = 8.0 * abs(E0) * float(ref.get("alpha", 0.7)) * np.pi ** 2 * Ry * a0 / (float(ref["eps_inf"]) * dfit)
+        x = np.exp(-d_nm / dfit)
+        rng = ref.get("data_range_nm")
+        if rng and not rng[0] <= d_nm <= rng[1]:
+            print(f"  [exp-ref] d = {d_nm:.2f} nm is outside the fitted data range {rng} nm (extrapolation)")
+        return float(0.5 * (E0 + np.sqrt(E0 ** 2 + pref * x / (1.0 - x) ** 2)))
     if kind == "yu2003":
         from scipy.optimize import brentq
         D = lambda L: 1.6122e-9 * L**4 - 2.6575e-6 * L**3 + 1.6242e-3 * L**2 - 0.4277 * L + 41.57
@@ -166,8 +175,15 @@ def experimental_window(name, system, cfg, d_override=None):
         rows = [ln.split() for ln in lines[2:2 + n_at]]
         syms = [r[0] for r in rows]
         xyz = np.array([[float(v) for v in r[1:4]] for r in rows])
-        m = get_cluster_size_metrics(xyz, syms, cfg["system"].get("material"))
-        d_nm = 0.2 * (m["R_eff_hull"] - m["surface_offset_ang"])
+        from qdex.hardness import MATERIAL_DB, MATERIAL_ELEMENTS
+        mat = str(cfg["system"].get("material", "")).upper()
+        if mat in MATERIAL_ELEMENTS and mat in MATERIAL_DB and len(MATERIAL_ELEMENTS[mat]) == 2:
+            n_core = sum(1 for s_ in syms if s_ in MATERIAL_ELEMENTS[mat])
+            v_fu = float(MATERIAL_DB[mat][2]) ** 3 / 4.0
+            d_nm = 0.1 * (6.0 * 0.5 * n_core * v_fu / np.pi) ** (1.0 / 3.0)
+        else:
+            m = get_cluster_size_metrics(xyz, syms, cfg["system"].get("material"))
+            d_nm = 0.2 * m["R_eff_hull"]
     e = sizing_energy(ref, d_nm)
     tol = float(ref.get("tolerance_ev", 0.1))
     return (e - tol, e + tol), f"{ref['citation']}: E_1S({d_nm:.2f} nm) = {e:.3f} eV (+/- {tol:.2f})"
