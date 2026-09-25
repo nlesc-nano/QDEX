@@ -261,8 +261,9 @@ import os as _os
 ANCHOR_TABLE = _os.path.join(_os.path.dirname(__file__), "data", "dw_anchor_residuals.json")
 
 
-def anchor_key(material, qp_model, selfenergy, representation, populations, z_label):
-    return "|".join(str(x).lower() for x in (material, qp_model, selfenergy, representation, populations, z_label))
+def anchor_key(material, qp_model, selfenergy, representation, populations, z_label, solvent_term="sphere"):
+    return "|".join(str(x).lower() for x in (material, qp_model, selfenergy, representation, populations, z_label,
+                                             solvent_term))
 
 
 def load_anchor_table(path=None):

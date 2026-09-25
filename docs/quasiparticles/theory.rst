@@ -198,7 +198,7 @@ not classical:
   real :math:`\Delta\mathrm{SEX}_n = -\sum_{m\in\mathrm{occ}}(nm|\Delta W|mn)` depends on how each
   orbital overlaps the occupied states, and it has no counterpart in the direct BSE term. QDEX
   evaluates it for every orbital (one-shot ΔCOHSEX). At 1.2 nm it raises the ``sgw-resta`` QP gap
-  from 5.66 to 5.96 eV (evGW: 6.03 eV) and S₁ by about 0.4 eV.
+  from 6.24 to 6.57 eV (evGW: 6.03 eV) and S₁ by 0.43 eV, before the anchor calibration.
 * **Energy dependence of the bulk correction (band stretching).** Confined states are built from
   bulk states away from the band edges, where the bulk GW correction differs from its band-edge value.
   To first order this adds :math:`s\,E_{\mathrm{conf}}^{\mathrm{KS}}(R)`, with E_conf the KS confinement

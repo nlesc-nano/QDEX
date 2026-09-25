@@ -18,10 +18,10 @@ the formulas of the models as implemented.
      - bulk Resta W + reaction field of a dielectric sphere
      - ``resta-sphere``: the same W
    * - ``sgw-resta``, ``evgw-resta``, ``qsgw-resta``
-     - Resta W with the Penn ε_in(R) + solvent term
+     - Resta W with the Penn ε_in(R) + sphere reaction field
      - ``qp``: the same W
    * - ``sgw-dim``, ``evgw-dim``, ``qsgw-dim``
-     - DIM/Thole W + solvent term
+     - DIM/Thole W + sphere reaction field
      - ``qp``: the same W
 
 Combining a model with a different kernel is an error; ``--allow-inconsistent-kernel`` exists only
@@ -44,11 +44,18 @@ of that one W for both the QP correction and the kernel.
    S_\epsilon(r) = \frac1\epsilon + \Big(1 - \frac1\epsilon\Big)e^{-k_s r},\qquad k_s = \frac{\sqrt{\epsilon-1}}{d_{NN}},
    \qquad W^{\mathrm{bulk}}_{AB} = S_{\epsilon_\infty}(r_{AB})\,\gamma_{AB}.
 
-**Solvent / surface term** (softened Born form, R = effective radius of the dot):
+**Solvent / surface term.** The reaction field of a dielectric sphere with ε∞ inside and ε_out
+outside, the same Green function as the two-anchor model (section 7):
 
 .. math::
 
-   W^{\mathrm{add}}_{AB} = \Big(\frac1{\epsilon_{\mathrm{out}}} - \frac1{\epsilon_\infty}\Big)\frac{e^2}{\sqrt{r_{AB}^2 + R^2}} .
+   W^{\mathrm{add}}_{AB} = G(\mathbf r_A,\mathbf r_B) = \frac{e^2}{R}\sum_{l\ge0}
+   \frac{(\epsilon_\infty-\epsilon_{\mathrm{out}})(l+1)}{\epsilon_\infty\,[l\epsilon_\infty+(l+1)\epsilon_{\mathrm{out}}]}
+   \Big(\frac{r_A r_B}{R^2}\Big)^l P_l(\cos\theta_{AB}).
+
+Its diagonal grows toward the surface through the l ≥ 1 multipoles. The earlier softened Born form,
+:math:`(1/\epsilon_{\mathrm{out}} - 1/\epsilon_\infty)\,e^2/\sqrt{r_{AB}^2 + R^2}`, has no position
+dependence of the self-image; it is available as ``qp_solvent_term: born``.
 
 **The finite-size part of W:**
 
@@ -103,8 +110,8 @@ W are:
 
 *Why:* the reduction of screening is placed where it physically occurs, at under-coordinated
 surface atoms, and follows the actual geometry and ligand shell. For CdSe the interior contrast is
-smaller than with the Penn scaling. With the ΔCOHSEX levels, Resta and DIM agree within 0.1 eV at
-1.2 nm.
+smaller than with the Penn scaling. After calibration, Resta and DIM agree within 0.1 eV in the QP gap
+and S₁ at 2 nm.
 
 4. QP energies of all orbitals: one-shot ΔCOHSEX
 ------------------------------------------------
@@ -153,9 +160,9 @@ s(R) is 1 at the anchor, 0.41 at 2 nm and 0.26 at 3.2 nm for CdSe.
 
 For a constant ΔW = c this gives ΔCOH = c/2 for every orbital, ΔSEX = −c (occupied) and 0 (empty),
 so the gap opens by c: the classical limit. The actual ΔW varies over the dot, and the screened
-exchange then depends on each orbital's overlap with the occupied states. At 1.2 nm ΔSEX is
-−2.27 eV for the HOMO and −0.09 eV for the LUMO (``sgw-resta``), and this part does not cancel
-against the binding.
+exchange then depends on each orbital's overlap with the occupied states. At 1.2 nm
+(``sgw-resta``) ΔSEX is −3.01 eV for the HOMO and −0.22 eV for the LUMO, and ΔCOH is +1.55 and
++1.67 eV. This part does not cancel against the binding.
 
 * **Classical option.** ``qp_selfenergy: classical`` replaces ΔΣ_n by the classical charging term
   ±½ q_nᵀ ΔW q_n, with q_n the atomic populations.

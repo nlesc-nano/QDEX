@@ -1474,6 +1474,22 @@ def compute_dynamic_z(delta_sigma_stat_ev, gap_ev=None, eps_eff=None, material_n
     return float(np.clip(Z, 0.50, 1.0))
 
 
+def solvent_reaction_term(coords, atom_symbols, material_name, eps_out, eps_bulk, R_mat_ang, R_QD_ang,
+                          mode="sphere"):
+    """Environment part of Delta W for the Delta-W models (eV, atom pairs).
+
+    mode 'sphere' (default): reaction field of a dielectric sphere with eps_bulk inside and eps_out
+    outside, the full multipole Green function (``build_sphere_reaction_field``), the same term the
+    two-anchor gw model uses.  mode 'born': the earlier softened Born form
+    (1/eps_out - 1/eps_bulk) e^2 / sqrt(r_AB^2 + R^2).
+    """
+    eps_out_val = max(1.0, float(eps_out))
+    if str(mode).lower() == "born":
+        return ((1.0 / eps_out_val - 1.0 / eps_bulk) * COULOMB_EV_ANG) / np.sqrt(R_mat_ang ** 2 + R_QD_ang ** 2)
+    return build_sphere_reaction_field(np.asarray(coords, dtype=float), atom_symbols, material_name,
+                                       eps_out_val, eps_in=eps_bulk)
+
+
 def expand_atom_to_ao(M_atom, atom_ao_ranges, n_ao):
     """Expand an atom-pair matrix to AO blocks: M_ao[mu, nu] = M[A(mu), B(nu)]."""
     owner = np.empty(n_ao, dtype=int)
@@ -1524,7 +1540,7 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
                             C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None,
                             atom_ao_ranges=None, alpha=1.0, Z=0.8, dynamic_z=False,
                             self_consistent=False, max_iter=25, tol=1e-4, damping=0.5,
-                            return_details=False, frontier_pops=None):
+                            return_details=False, frontier_pops=None, solvent_term="sphere"):
     """
     Computes the Quasiparticle (GW) gap shift for a quantum dot via the microscopic
     screening difference (Delta W) approach using the Atomistic Polarizable Dipole Interaction
@@ -1588,7 +1604,8 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
 
     # 3. Solvent Reaction Field: Delta W^{solv}
     eps_out_val = max(1.0, float(eps_out))
-    delta_W_solv = ((1.0 / eps_out_val - 1.0 / eps_bulk) * 14.3996) / np.sqrt(R_mat_ang**2 + (R_QD_ang)**2)
+    delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, eps_out_val, eps_bulk, R_mat_ang, R_QD_ang,
+                                         solvent_term)
 
     # 4. Project onto frontier HOMO and LUMO states
     if frontier_pops is not None:
@@ -1759,7 +1776,7 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
         "eps_bulk": float(eps_bulk),
         "total_scissor_ev": total_sgw_scissor,
         "total_scissor_solvent_ev": total_sgw_scissor,
-        "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal + (0.5 * float(Z_h * (q_h @ (((1.0 - 1.0/eps_bulk)*14.3996)/np.sqrt(R_mat_ang**2 + R_QD_ang**2)) @ q_h) + Z_l * (q_l @ (((1.0 - 1.0/eps_bulk)*14.3996)/np.sqrt(R_mat_ang**2 + R_QD_ang**2)) @ q_l))),
+        "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal + (0.5 * float(Z_h * (q_h @ solvent_reaction_term(coords, atom_symbols, m_name, 1.0, eps_bulk, R_mat_ang, R_QD_ang, solvent_term) @ q_h) + Z_l * (q_l @ solvent_reaction_term(coords, atom_symbols, m_name, 1.0, eps_bulk, R_mat_ang, R_QD_ang, solvent_term) @ q_l))),
     }
     # The screened interaction this QP model is built on.  The CLI passes it
     # to the BSE (kernel "qp") so that GW and BSE share the same W.
@@ -1770,7 +1787,7 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
     provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
                              "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
                              "eps_z": float(eps_eff_med), "bulk_shift": float(bulk_shift)}
-    provenance["w_bse_label"] = "DIM W_QD + solvent term"
+    provenance["w_bse_label"] = f"DIM W_QD + {solvent_term} solvent term"
 
     if return_details:
         return total_sgw_scissor, provenance
@@ -1782,7 +1799,7 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
                               eps_occ=None, eps_virt=None, atom_ao_ranges=None,
                               alpha=1.0, Z=0.8, penn_scaling=True, dynamic_z=False,
                               self_consistent=False, max_iter=25, tol=1e-4, damping=0.5,
-                              return_details=False, frontier_pops=None):
+                              return_details=False, frontier_pops=None, solvent_term="sphere"):
     """
     Computes the Quasiparticle (GW) gap shift for a quantum dot via the microscopic
     screening difference (Delta W) approach using the Resta dielectric screening model::
@@ -1846,7 +1863,8 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
 
     # 3. Solvent Reaction Field: Delta W^{solv}
     eps_out_val = max(1.0, float(eps_out))
-    delta_W_solv = ((1.0 / eps_out_val - 1.0 / eps_bulk) * 14.3996) / np.sqrt(R_mat_ang**2 + (R_QD_ang)**2)
+    delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, eps_out_val, eps_bulk, R_mat_ang, R_QD_ang,
+                                         solvent_term)
 
     # 4. Project onto frontier orbitals
     if frontier_pops is not None:
@@ -2031,7 +2049,7 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
         "penn_scaling": bool(penn_scaling and eps_eff_qd < eps_bulk),
         "total_scissor_ev": total_sgw_scissor,
         "total_scissor_solvent_ev": total_sgw_scissor,
-        "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal + (0.5 * float(Z_h * (q_h @ (((1.0 - 1.0/eps_bulk)*14.3996)/np.sqrt(R_mat_ang**2 + R_QD_ang**2)) @ q_h) + Z_l * (q_l @ (((1.0 - 1.0/eps_bulk)*14.3996)/np.sqrt(R_mat_ang**2 + R_QD_ang**2)) @ q_l))),
+        "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal + (0.5 * float(Z_h * (q_h @ solvent_reaction_term(coords, atom_symbols, m_name, 1.0, eps_bulk, R_mat_ang, R_QD_ang, solvent_term) @ q_h) + Z_l * (q_l @ solvent_reaction_term(coords, atom_symbols, m_name, 1.0, eps_bulk, R_mat_ang, R_QD_ang, solvent_term) @ q_l))),
     }
     # The screened interaction this QP model is built on.  The CLI passes it
     # to the BSE (kernel "qp") so that GW and BSE share the same W.
@@ -2042,7 +2060,7 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
     provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
                              "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
                              "eps_z": float(eps_eff_qd), "bulk_shift": float(bulk_shift)}
-    provenance["w_bse_label"] = "Resta W_QD(eps_eff) + solvent term"
+    provenance["w_bse_label"] = f"Resta W_QD(eps_eff) + {solvent_term} solvent term"
 
     if return_details:
         return total_sgw_scissor, provenance
@@ -2080,7 +2098,7 @@ def estimate_evgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out
 def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
                              material_name=None, eps_out=2.4, alpha=1.0, dynamic_z=True,
                              max_iter=25, tol=1e-4, damping=0.5, return_details=False, Z=0.8,
-                             gamma_ao=None):
+                             gamma_ao=None, solvent_term="sphere"):
     """
     Computes Quasiparticle Self-Consistent GW (qsGW) by updating BOTH eigenvalues
     and molecular orbitals across the full AO basis using the Atomistic Polarizable
@@ -2143,7 +2161,8 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
 
     # 3. Solvent Reaction Field: Delta W^{solv}
     eps_out_val = max(1.0, float(eps_out))
-    delta_W_solv = ((1.0 / eps_out_val - 1.0 / eps_bulk) * 14.3996) / np.sqrt(R_mat_ang**2 + (R_QD_ang)**2)
+    delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, eps_out_val, eps_bulk, R_mat_ang, R_QD_ang,
+                                         solvent_term)
 
     # 4. Löwdin Orthogonalization Operators
     S_dense = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
@@ -2315,7 +2334,7 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
 def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
                                material_name=None, eps_out=2.4, alpha=1.0, penn_scaling=True,
                                dynamic_z=True, max_iter=25, tol=1e-4, damping=0.5,
-                               return_details=False, Z=0.8, gamma_ao=None):
+                               return_details=False, Z=0.8, gamma_ao=None, solvent_term="sphere"):
     """
     Computes Quasiparticle Self-Consistent GW (qsGW) by updating BOTH eigenvalues
     and molecular orbitals across the full AO basis using the Resta dielectric model::
@@ -2377,7 +2396,8 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
 
     # 3. Solvent Reaction Field: Delta W^{solv}
     eps_out_val = max(1.0, float(eps_out))
-    delta_W_solv = ((1.0 / eps_out_val - 1.0 / eps_bulk) * 14.3996) / np.sqrt(R_mat_ang**2 + (R_QD_ang)**2)
+    delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, eps_out_val, eps_bulk, R_mat_ang, R_QD_ang,
+                                         solvent_term)
 
     # 4. Löwdin Orthogonalization Operators
     S_dense = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)

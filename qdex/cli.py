@@ -821,6 +821,9 @@ def main():
     parser.add_argument("--qp-selfenergy", dest="qp_selfenergy", choices=["cohsex", "classical"], default="cohsex",
                         help="Orbital QP levels of the Delta-W models: 'cohsex' (default; one-shot static Delta-COHSEX "
                              "diagonal incl. non-classical screened exchange) or 'classical' (1/2 q^T dW q).")
+    parser.add_argument("--qp-solvent-term", dest="qp_solvent_term", choices=["sphere", "born"], default="sphere",
+                        help="Environment part of Delta W in the Delta-W models: 'sphere' (default; reaction field "
+                             "of a dielectric sphere, as in gw) or 'born' (earlier softened Born form).")
     parser.add_argument("--qp-residual-scaling", dest="qp_residual_scaling", choices=["econf", "power"],
                         default="econf",
                         help="Size scaling of the non-classical anchor residual: 'econf' (default; "
@@ -1258,6 +1261,7 @@ def main():
                     Z=z_val,
                     return_details=True,
                     gamma_ao=_xs_gamma_ao(),
+                    solvent_term=getattr(args, "qp_solvent_term", "sphere"),
                 )
                 C = C_qp
                 eps_qp_active = eps_qp
@@ -1287,6 +1291,7 @@ def main():
                     self_consistent=is_evgw,
                     return_details=True,
                     frontier_pops=(q_edge[:, 0], q_edge[:, 1]),
+                    solvent_term=getattr(args, "qp_solvent_term", "sphere"),
                 )
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
@@ -1329,6 +1334,7 @@ def main():
                     Z=z_val,
                     return_details=True,
                     gamma_ao=_xs_gamma_ao(),
+                    solvent_term=getattr(args, "qp_solvent_term", "sphere"),
                 )
                 C = C_qp
                 eps_qp_active = eps_qp
@@ -1360,6 +1366,7 @@ def main():
                     self_consistent=is_evgw,
                     return_details=True,
                     frontier_pops=(q_edge[:, 0], q_edge[:, 1]),
+                    solvent_term=getattr(args, "qp_solvent_term", "sphere"),
                 )
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
@@ -1530,7 +1537,8 @@ def main():
                 from qdex.hardness import anchor_residual_scale
                 z_label = "derived" if z_mode == "derived" else f"{z_fixed:g}"
                 a_key = anchor_key(args.material, str(args.qp_gap).lower(), selfenergy,
-                                   "xs" if use_xs else "mnok", qp_pop_mode, z_label)
+                                   "xs" if use_xs else "mnok", qp_pop_mode, z_label,
+                                   getattr(args, "qp_solvent_term", "sphere"))
                 table_path = getattr(args, "qp_anchor_table", None)
                 ent = MATERIAL_DB.get(str(args.material).upper(), ())
                 if getattr(args, "qp_anchor_calibrate", False):
