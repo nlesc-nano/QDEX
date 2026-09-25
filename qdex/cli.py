@@ -880,6 +880,10 @@ def main():
               "DFT gaps, QP gaps, or QP gaps plus diagonal Kx/Kd corrections."),
     )
     parser.add_argument("--tol", type=float, default=1e-5)
+    parser.add_argument("--skip-orthonormality-check", dest="skip_orthonormality_check", action="store_true",
+                        help="Skip the C^T S C = I check (a full n_ao^3 product); use only for MO files already "
+                             "known to be orthonormal (SOC still re-orthonormalizes its small active window). YAML: "
+                             "physics.skip_orthonormality_check: true")
     parser.add_argument("--orthonormality-tol", type=float, default=1e-5,
                         help="Abort when max|C^dagger S C-I| exceeds this tolerance.")
     parser.add_argument("--nthreads", type=int, default=1)
@@ -1720,39 +1724,47 @@ def main():
     SC_dense = _get_SC()  # reused if the QP step already computed it
     C_dense_beta_pop, SC_dense_beta_pop, pops_beta = None, None, None
     
-    # === DIAGNOSTIC: STRICT C^T S C ORTHONORMALITY CHECK ===
-    overlap_label = "PBC" if getattr(args, "periodic_enabled", False) else "finite"
-    print(f"\n  [Diag] Testing MO Orthonormality with {overlap_label} overlap (C^T S C = I) ...")
-    norm_matrix = C_dense.conj().T @ SC_dense
-    orth_delta = norm_matrix - np.eye(C_dense.shape[1])
-    orth_err = np.linalg.norm(orth_delta)
-    orth_max = np.max(np.abs(orth_delta))
-    print(f"[CHECK] alpha ||C†SC - I||_F = {orth_err:.3e}")
-    print(f"[CHECK] alpha max|C†SC - I|  = {orth_max:.3e}")
-    if orth_max > args.orthonormality_tol:
-        raise ValueError(
-            f"MO orthonormality failure: max|C†SC-I|={orth_max:.3e} exceeds "
-            f"{args.orthonormality_tol:.3e}. Check AO ordering, normalization, and spherical conventions."
-        )
-    soc_assume_orthonormal = orth_max < 1.0e-6
-
-    if C_beta is not None:
-        C_dense_beta_pop = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
-        SC_dense_beta_pop = S @ C_dense_beta_pop
-        norm_matrix_beta = C_dense_beta_pop.conj().T @ SC_dense_beta_pop
-        orth_delta_beta = norm_matrix_beta - np.eye(C_dense_beta_pop.shape[1])
-        orth_err_beta = np.linalg.norm(orth_delta_beta)
-        orth_max_beta = np.max(np.abs(orth_delta_beta))
-        print(f"[CHECK] beta  ||C†SC - I||_F = {orth_err_beta:.3e}")
-        print(f"[CHECK] beta  max|C†SC - I|  = {orth_max_beta:.3e}")
-        if orth_max_beta > args.orthonormality_tol:
+    if getattr(args, "skip_orthonormality_check", False):
+        print("\n  [Diag] MO orthonormality check skipped (skip_orthonormality_check).")
+        # SOC keeps its cheap re-orthonormalization of the active window (the safe path).
+        soc_assume_orthonormal = False
+        if C_beta is not None:
+            C_dense_beta_pop = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
+            SC_dense_beta_pop = S @ C_dense_beta_pop
+    else:
+        # === DIAGNOSTIC: STRICT C^T S C ORTHONORMALITY CHECK ===
+        overlap_label = "PBC" if getattr(args, "periodic_enabled", False) else "finite"
+        print(f"\n  [Diag] Testing MO Orthonormality with {overlap_label} overlap (C^T S C = I) ...")
+        norm_matrix = C_dense.conj().T @ SC_dense
+        orth_delta = norm_matrix - np.eye(C_dense.shape[1])
+        orth_err = np.linalg.norm(orth_delta)
+        orth_max = np.max(np.abs(orth_delta))
+        print(f"[CHECK] alpha ||C†SC - I||_F = {orth_err:.3e}")
+        print(f"[CHECK] alpha max|C†SC - I|  = {orth_max:.3e}")
+        if orth_max > args.orthonormality_tol:
             raise ValueError(
-                f"Beta MO orthonormality failure: max|C†SC-I|={orth_max_beta:.3e} exceeds "
-                f"{args.orthonormality_tol:.3e}."
+                f"MO orthonormality failure: max|C†SC-I|={orth_max:.3e} exceeds "
+                f"{args.orthonormality_tol:.3e}. Check AO ordering, normalization, and spherical conventions."
             )
-        soc_assume_orthonormal = soc_assume_orthonormal and orth_max_beta < 1.0e-6
-        cross_err = np.linalg.norm(C_dense.conj().T @ SC_dense_beta_pop)
-        print(f"[CHECK] alpha/beta ||Caᵀ S Cb|| = {cross_err:.3e} (diagnostic)")
+        soc_assume_orthonormal = orth_max < 1.0e-6
+
+        if C_beta is not None:
+            C_dense_beta_pop = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
+            SC_dense_beta_pop = S @ C_dense_beta_pop
+            norm_matrix_beta = C_dense_beta_pop.conj().T @ SC_dense_beta_pop
+            orth_delta_beta = norm_matrix_beta - np.eye(C_dense_beta_pop.shape[1])
+            orth_err_beta = np.linalg.norm(orth_delta_beta)
+            orth_max_beta = np.max(np.abs(orth_delta_beta))
+            print(f"[CHECK] beta  ||C†SC - I||_F = {orth_err_beta:.3e}")
+            print(f"[CHECK] beta  max|C†SC - I|  = {orth_max_beta:.3e}")
+            if orth_max_beta > args.orthonormality_tol:
+                raise ValueError(
+                    f"Beta MO orthonormality failure: max|C†SC-I|={orth_max_beta:.3e} exceeds "
+                    f"{args.orthonormality_tol:.3e}."
+                )
+            soc_assume_orthonormal = soc_assume_orthonormal and orth_max_beta < 1.0e-6
+            cross_err = np.linalg.norm(C_dense.conj().T @ SC_dense_beta_pop)
+            print(f"[CHECK] alpha/beta ||Caᵀ S Cb|| = {cross_err:.3e} (diagnostic)")
     # ===========================================================
 
     pops_sf = np.real(C_dense.conj() * SC_dense)
