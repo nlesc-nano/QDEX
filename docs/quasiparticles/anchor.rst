@@ -7,12 +7,12 @@ Part of :doc:`/quasiparticles/index`.
    :width: 100%
    :alt: anchor model
 
-   Anchor-scaled model evaluated with the CdSe database entry (ℓ = 1 Å, p = 2). The vacuum curve passes through the monomer GW anchor at R₀; below R₀ the radius is clamped. The square marks the 2 nm CdSe test cluster.
+   Anchor-scaled model evaluated with the CdSe database entry (p = 2). The vacuum curve passes through the monomer GW anchor at R₀; below R₀ the radius is clamped. The square marks the 2 nm CdSe test cluster.
 
 
 .. important::
 
-   ``sgw-anchor`` interpolates a bulk gap correction and one finite vacuum anchor. Its exponent and regularization length are model parameters, not uniquely fixed by two endpoints.
+   ``sgw-anchor`` interpolates a bulk gap correction and one finite vacuum anchor. The finite-size shape is the classical surface polarization of a dielectric sphere. The residual exponent :math:`p` is a model parameter; two endpoints do not fix it uniquely.
 
 .. rubric:: QDEX implementation
 
@@ -20,12 +20,12 @@ Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
-* CLI: ``--qp_gap, --dynamic_z``
-* YAML: ``physics.qp_gap, physics.dynamic_z``
+* CLI: ``--qp_gap gw``, ``--qp-polarization sphere|legacy``, ``--qp-residual-power``, ``--kernel resta-sphere``
+* YAML: ``physics.qp_gap``, ``physics.qp_polarization``, ``physics.qp_residual_power``
 
 .. code-block:: python
 
-   estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
+   estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False, polarization_model="sphere")
 
 
 6. Avenue 1: Two-Anchor Scaled GW (``sgw-anchor``)
@@ -51,52 +51,131 @@ Instead of guessing empirical parameters, ``sgw-anchor`` (historically called ``
 The Confinement Interpolation Formula
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The radius :math:`R` is the equivalent-volume radius of the inorganic core, :math:`R = (3V/4\pi)^{1/3}`. The scissor added to a PBE eigenvalue difference is:
+The radius :math:`R` is ``R_eff_hull``: the equivalent-volume radius of the convex hull of the
+inorganic core atoms, :math:`(3V/4\pi)^{1/3}`, plus 1.25 Å. The scissor added to a PBE eigenvalue
+difference is:
 
 .. math::
 
    \Delta_{\mathrm{GW}}(R)
    = \Delta_{\mathrm{bulk}}
-   + \frac{\kappa_{\mathrm{out}}}{R+\ell}
-   + A\left(\frac{R_0}{R}\right)^{p}
+   + P(R;\epsilon_\infty,\epsilon_{\mathrm{out}})
+   + A\left(\frac{R_0}{R}\right)^{p},
+   \qquad \Delta_{\mathrm{bulk}} = E_g^{\mathrm{GW,bulk}} - E_g^{\mathrm{PBE,bulk}} .
 
-with the bulk shift defined by:
-
-.. math::
-
-   \Delta_{\mathrm{bulk}} = E_g^{\mathrm{GW,bulk}} - E_g^{\mathrm{PBE,bulk}}.
-
-The dielectric prefactor is:
+**Polarization term.** :math:`P` is the classical self-polarization energy of the electron plus the
+hole in a dielectric sphere. The sphere has :math:`\epsilon_\infty` inside and
+:math:`\epsilon_{\mathrm{out}}` outside, and both carriers are averaged over the 1S envelope
+:math:`|j_0(\pi r/R)|^2`:
 
 .. math::
 
-   \kappa_{\mathrm{out}} = 11.52\,\mathrm{eV\,\AA}\left(\frac{1}{\epsilon_{\mathrm{out}}} - \frac{1}{\epsilon_\infty}\right).
+   P(R) = F(\epsilon_\infty,\epsilon_{\mathrm{out}})\,\frac{e^2}{R},\qquad
+   F = \Big\langle \sum_{n\ge0}
+   \frac{(\epsilon_\infty-\epsilon_{\mathrm{out}})(n+1)}{\epsilon_\infty\,[n\epsilon_\infty+(n+1)\epsilon_{\mathrm{out}}]}
+   \Big(\frac rR\Big)^{2n}\Big\rangle_{1S}.
 
-In vacuum (:math:`\epsilon_{\mathrm{out}}=1`), :math:`\kappa_{\mathrm{vac}} = 11.52\,\mathrm{eV\,\AA}\,(1 - 1/\epsilon_\infty)`. The standard defaults are regularization length :math:`\ell = 1.0\,\text{Å}` and power :math:`p = 2`.
+This is the image-charge series of Böttcher and Brus (J. Chem. Phys. 80, 4403 (1984)).
 
-The anchor amplitude :math:`A` is fixed by the finite cluster opening:
+* The :math:`n=0` term is the Born term, :math:`1/\epsilon_{\mathrm{out}} - 1/\epsilon_\infty`.
+* The higher multipoles add about 12 % for CdSe in vacuum: F = 0.937 against 0.839.
+* F vanishes for :math:`\epsilon_{\mathrm{out}}=\epsilon_\infty`.
+
+Tight-binding GW calculations of Si nanocrystals find that the finite-size self-energy
+correction is dominated by this surface polarization term, evaluated with the *bulk*
+:math:`\epsilon_\infty` inside (Delerue, Lannoo and Allan, PRL 84, 2457 (2000); PRL 90, 076803
+(2003); PRB 68, 115411 (2003)). The term therefore uses :math:`\epsilon_\infty`, not a size-reduced
+:math:`\epsilon(R)`. Its large-R limit, :math:`F e^2/R`, is exact classical electrostatics.
+
+**Residual.** The anchor amplitude is fixed by the finite cluster opening in vacuum:
 
 .. math::
 
-   A = \Delta(R_0) - \Delta_{\mathrm{bulk}} - \frac{\kappa_{\mathrm{vac}}}{R_0+\ell}
+   A = \Delta(R_0) - \Delta_{\mathrm{bulk}} - P(R_0;\epsilon_\infty,1),
+   \qquad \Delta(R_0) = E_g^{\mathrm{GW,cluster}} - E_g^{\mathrm{PBE,cluster}} .
 
-where :math:`\Delta(R_0) = E_g^{\mathrm{GW,cluster}} - E_g^{\mathrm{PBE,cluster}}`.
+:math:`A` collects everything that is not classical polarization of a sharp sphere:
 
+* reduced screening near the surface;
+* non-locality of the polarization;
+* exchange–correlation effects.
 
-Implementation in QDEX (``sgw-anchor``)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+It decays as :math:`(R_0/R)^p`, with p = 2 by default. It is fitted in vacuum and kept unchanged in
+a solvent. For Cd₁₆Se₁₃Cl₆, :math:`A = -0.42` eV.
 
-The two-anchor scaled GW model is implemented in :func:`qdex.hardness.estimate_gw_qp_gap`:
+**Exact anchor.** :math:`R_0` in ``MATERIAL_DB`` must be computed with the same radius definition as
+the target cluster (``get_cluster_size_metrics``). The CdSe entry is 5.3133 Å, recomputed from the
+anchor geometry ``tests/CdSe/1.2nm/geom.xyz`` (previously 5.258 Å). The model then returns the evGW
+correction of the monomer exactly. The QP gap differs from the evGW gap only by the difference
+between the PBE gap of the supplied MO file and that of ``MATERIAL_DB`` (5 meV).
 
-1. **Nanocrystal Core Sizing**: Evaluates the equivalent spherical core radius :math:`R = (3V/4\pi)^{1/3}` or gyro-radius from the 3D atomic coordinates :math:`\mathbf{R}_A` of the inorganic core.
-2. **Database Query**: Queries tabulated bulk and monomer anchor parameters from ``MATERIAL_DB`` (:math:`E_g^{\mathrm{PBE, bulk}}, E_g^{\mathrm{GW, bulk}}, R_0, \Delta(R_0), f_{\mathrm{homo}}, f_{\mathrm{lumo}}`).
-3. **Electrostatic Image Charges**: Computes dielectric prefactors :math:`\kappa_{\mathrm{vac}} = 11.52 (1 - 1/\epsilon_\infty)` and :math:`\kappa_{\mathrm{out}} = 11.52 (1/\epsilon_{\mathrm{out}} - 1/\epsilon_\infty)` in :math:`\mathrm{eV\cdot\mathring{A}}`.
-4. **Analytic Scissor Calculation**: Evaluates the total opening :math:`\Delta_{\mathrm{GW}}(R) = \Delta_{\mathrm{bulk}} + \frac{\kappa_{\mathrm{out}}}{R+\ell} + A (R_0/R)^p`.
-5. **Level Alignment & Provenance**: Partitions :math:`\Delta_{\mathrm{GW}}` across occupied and virtual manifolds using database fractions :math:`f_{\mathrm{homo}}, f_{\mathrm{lumo}}` (Approach A) and stores detailed diagnostics in the returned ``details`` dictionary.
+Per-edge curves: HOMO/LUMO split
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each band edge gets its own two-anchor curve (``anchor_edge_curves``):
+
+.. math::
+
+   \delta_H(R) &= f_b\,\Delta_{\mathrm{bulk}} + \tfrac12 P(R) + A_H (R_0/R)^p ,\\
+   \delta_L(R) &= (1-f_b)\,\Delta_{\mathrm{bulk}} + \tfrac12 P(R) + A_L (R_0/R)^p .
+
+Here :math:`\delta_H` is the downward shift of the HOMO and :math:`\delta_L` the upward shift of the
+LUMO.
+
+* **Polarization.** Symmetric between electron and hole, since both see the same sphere.
+* **Bulk opening.** Split by :math:`f_b`; 0.5 unless tabulated.
+* **Residuals.** :math:`A_H` and :math:`A_L` are fitted so that each edge reproduces the evGW
+  frontier shifts of the anchor: −1.398 / +1.997 eV for CdSe, i.e. 41 %/59 %. For CdSe,
+  :math:`A_H = -0.52` eV and :math:`A_L = +0.08` eV.
+
+The asymmetry therefore sits in the non-classical residual. It is exact at :math:`R_0` and fades
+toward the bulk split for large dots. The Delta-W models use the same split for absolute IP/EA by
+default (``qp_edge_split: anchor``; see :doc:`/quasiparticles/edge_partition`).
+
+The BSE kernel of the two-anchor model
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The QP gap contains :math:`P(R)`, the surface polarization of a separated electron and hole. The
+bulk Resta kernel has no surface term. The electron–hole image attraction is then missing from the
+BSE, and the whole of :math:`P(R)` ends up in S₁. For Cd₁₆Se₁₃Cl₆ that gives S₁ = 5.58 eV in vacuum
+and 3.97 eV in toluene.
+
+The default kernel for ``qp_gap: gw`` with the sphere model is therefore ``resta-sphere``: the bulk
+Resta W plus the reaction field of the same dielectric sphere,
+
+.. math::
+
+   G(\mathbf r,\mathbf r') = \frac{e^2}{R}\sum_{n\ge0}
+   \frac{(\epsilon_\infty-\epsilon_{\mathrm{out}})(n+1)}{\epsilon_\infty\,[n\epsilon_\infty+(n+1)\epsilon_{\mathrm{out}}]}
+   \Big(\frac{r r'}{R^2}\Big)^n P_n(\cos\theta)
+
+(``build_sphere_reaction_field``). The diagonal of G is the self-image term of P(R), so QP and BSE
+see one dielectric model. The surface polarization then cancels in the neutral excitation
+(Brus 1984; Delerue et al. 2000). The results for Cd₁₆Se₁₃Cl₆:
+
+* S₁ = 3.18 eV in vacuum and 3.13 eV in toluene;
+* the QP gap moves by 1.6 eV between the two;
+* the gw S₁ is within 0.15 eV of the shared-W Delta-W models.
+
+The residual A and the bulk shift stay in the QP gap only. Atom positions are capped at r/R = 0.9
+because the series diverges at the boundary; this is a regularization choice.
+
+``--kernel resta`` restores the bulk-only kernel, and ``--qp-polarization legacy`` restores the old
+curve:
+
+.. math::
+
+   \Delta_{\mathrm{GW}}^{\mathrm{legacy}}(R) = \Delta_{\mathrm{bulk}}
+   + \frac{11.52\,\mathrm{eV\,\AA}\,(1/\epsilon_{\mathrm{out}} - 1/\epsilon_\infty)}{R+\ell}
+   + A\left(\frac{R_0}{R}\right)^{p},\qquad \ell = 1\ \text{Å}.
+
+Its prefactor is 0.8 of the Born term. That is 1.4 times smaller than the classical large-R limit
+for CdSe in vacuum, and the 0.8 has no documented origin.
 
 *CLI & YAML Invocation*:
 
 .. code-block:: bash
 
-   qdex --mos ground_state.mos --material CSPBBR3 --qp_gap sgw-anchor --eps-out 2.25
-
+   qdex --config config.yaml --qp_gap gw --eps-out 2.24          # sphere polarization, kernel resta-sphere
+   qdex --config config.yaml --qp_gap gw --kernel resta           # bulk-only BSE kernel
+   qdex --config config.yaml --qp_gap gw --qp-polarization legacy --kernel resta   # old behaviour

@@ -72,25 +72,77 @@ not share a :math:`W`, and the solvent term of ``gw`` does not enter the BSE.
 The quasiparticle weight Z
 --------------------------
 
-The Delta-W correction is :math:`\Delta\varepsilon_p = Z\cdot\tfrac12 q_p^T\Delta W q_p`. The BSE uses
-the full :math:`W`. ``qp_z`` selects Z:
+The Delta-W correction is :math:`\Delta\varepsilon_p = Z_p\cdot\tfrac12 q_p^T\Delta W q_p`. The BSE uses
+:math:`W_{\mathrm{bulk}} + \bar Z\,(W_{\mathrm{QD}}-W_{\mathrm{bulk}})`, with the same Z
+(:doc:`/quasiparticles/dynamic_z`). ``qp_z`` selects Z:
 
-* ``qp_z: 1.0``: the static limit. The classical polarization terms then cancel between QP gap and
-  BSE, and S\ :sub:`1` is independent of the solvent. **Recommended with a static BSE.**
-* ``qp_z: 0.8`` (default of the one-shot models): scales the QP shift but not the BSE attraction. A
-  fraction :math:`1-Z` of the polarization energy is left over, so S\ :sub:`1` shifts with the solvent.
-  In the opposite direction to the old mismatched combination, and 5× smaller.
-* ``qp_z: derived``: empirical state-dependent :math:`Z_p` (0.94–0.97 for CdSe). Not a computed
-  self-energy derivative.
+* ``qp_z: derived`` (default for all Delta-W models): one plasmon pole at
+  :math:`\omega_p/\sqrt{1-1/\epsilon_{\mathrm{eff}}}`. It uses the material's valence plasmon and the
+  same :math:`\epsilon_{\mathrm{eff}}` as the model's W. Z ≈ 0.94–0.97 for CdSe in vacuum and
+  ≈ 0.98 in toluene.
+* ``qp_z: 1.0``: the static limit.
+* ``qp_z: <number>``: a fixed value, e.g. 0.8 to reproduce old runs.
 
-A reduced Z paired with a static BSE is not a consistent pair. In full GW–BSE, the renormalization of
-the QP energies is largely compensated by the dynamical screening of the BSE kernel, which a static
-kernel omits.
+Because the kernel carries the same Z, the classical polarization still cancels between QP gap and
+BSE. For CdSe 2 nm, S\ :sub:`1` of ``sgw-resta`` is 2.513 eV for the derived Z and for Z = 1, and in
+vacuum and in toluene.
+
+Two-anchor ``gw`` model
+-----------------------
+
+``gw`` is gap-only, but its polarization term is the surface polarization of a dielectric sphere
+(:doc:`/quasiparticles/anchor`). Its default kernel ``resta-sphere`` adds the reaction field of the
+same sphere to the bulk Resta W. QP gap and BSE then see one dielectric model, and the solvent drops
+out of S\ :sub:`1`: 2.494 / 2.446 eV in vacuum / toluene for CdSe 2 nm. ``kernel: resta`` (bulk only)
+gives 3.826 eV in vacuum, because the image attraction of the electron–hole pair is missing.
 
 What consistency does to the results (CdSe 2 nm)
 ------------------------------------------------
 
 Cd\ :sub:`68`\ Se\ :sub:`55`\ Cl\ :sub:`26`, spin-free, 25 × 25 active space. S\ :sub:`1` in eV.
+Current QP layer (sphere-polarization ``gw``, Penn-gap Resta, derived Z):
+
+.. list-table::
+   :header-rows: 1
+
+   * - model
+     - vacuum QP / S\ :sub:`1`
+     - toluene (:math:`\epsilon_{\mathrm{out}}=2.24`) QP / S\ :sub:`1`
+   * - ``gw`` + ``resta-sphere``
+     - 4.053 / 2.494
+     - 3.127 / 2.446
+   * - ``gw`` + ``resta`` (bulk kernel)
+     - 4.053 / 3.826
+     -
+   * - ``sgw-resta``, derived Z
+     - 3.727 / 2.513
+     - 3.118 / 2.513
+   * - ``sgw-resta``, Z = 1
+     - 3.759 / 2.513
+     -
+   * - ``sgw-dim``, derived Z
+     - 3.774 / 2.528
+     - 3.167 / 2.530
+   * - ``evgw-resta``
+     - 3.816 / 2.511
+     -
+   * - ``qsgw-dim``
+     - 3.988 / 2.756
+     -
+   * - ``qsgw-resta``
+     - 4.114 / 2.782
+     -
+
+The consistent static routes agree on S\ :sub:`1` = 2.45–2.53 eV, while their QP gaps spread over
+0.3 eV. The qsGW models are 0.25 eV higher because of their non-classical orbital relaxation.
+Experiment is 2.70–2.95 eV (Yu et al. 2003 sizing for D ≈ 1.6–2.0 nm). Part of the difference comes
+from SOC (about −0.08 eV) and from the active space (about −0.05 eV at 100 × 100), both of which lower
+S\ :sub:`1` further. The Aubert–Hens sizing is to replace Yu et al. once its CdSe values are entered
+in ``benchmarks/experimental_sizing.yaml`` (``--exp-ref aubert-hens-2022-zb``).
+
+Before the revision (legacy ``gw`` polarization, PBE-gap "Penn" scaling, Z = 0.8 default):
+
+
 
 .. list-table::
    :header-rows: 1

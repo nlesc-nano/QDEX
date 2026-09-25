@@ -145,7 +145,14 @@ def print_qp_provenance(details, dft_gap=None, target_qp_gap=None, output_file=N
         print(f"    Monomer anchor radius    : {details['monomer_radius_ang']:.3f} Å")
         print(f"    Monomer PBE -> GW gap    : {details['monomer_pbe_gap_ev']:.3f} -> {details['monomer_gw_gap_ev']:.3f} eV")
         print(f"    Anchor residual A        : {details['anchor_residual_ev']:+.3f} eV")
-        print(f"    ell, p                   : {details['regularization_length_ang']:.3f} Å, {details['residual_power']:.3f}")
+        if details.get("polarization_model", "legacy") == "sphere":
+            print(f"    Polarization             : sphere, F = {details['polarization_factor_solvent']:.4f} "
+                  f"(vacuum {details['polarization_factor_vacuum']:.4f}), p = {details['residual_power']:.3f}")
+        else:
+            print(f"    ell, p                   : {details['regularization_length_ang']:.3f} Å, {details['residual_power']:.3f}")
+        if details.get("edge_split_source") == "anchor_edge_curves":
+            print(f"    Edge residuals A_h, A_l  : {details['edge_residual_homo_ev']:+.3f}, "
+                  f"{details['edge_residual_lumo_ev']:+.3f} eV (HOMO share of bulk shift {details['bulk_homo_fraction']:.2f})")
     if details.get("principal_extents_ang"):
         extents = ", ".join(f"{x:.3f}" for x in details["principal_extents_ang"])
         print(f"    Principal extents        : [{extents}] Å")
@@ -672,8 +679,13 @@ W_BASED_QP_MODELS = {
 }
 
 
-def resolve_qp_z(args, model_default_dynamic):
-    """Return (dynamic_z, Z) for a Delta-W QP model from --qp-z / --dynamic_z."""
+def resolve_qp_z(args, model_default_dynamic=True):
+    """Return (dynamic_z, Z) for a Delta-W QP model from --qp-z / --dynamic_z.
+
+    Without an explicit qp_z, Z is derived from the model's own screening
+    (plasmon pole, see ``compute_dynamic_z``) for every Delta-W model.
+    ``model_default_dynamic`` is kept for callers that need the old default.
+    """
     qz = getattr(args, "qp_z", None)
     if qz is None:
         if getattr(args, "dynamic_z", False):
@@ -748,21 +760,21 @@ def main():
     parser.add_argument("--qp_gap", type=str, default="brus",
                         help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'pbe' (uncorrected), or explicit gap in eV.")
     parser.add_argument("--qp-z", dest="qp_z", type=str, default=None,
-                        help="Quasiparticle renormalization Z for Delta-W models: 'derived' (empirical state-dependent "
-                             "formula, see compute_dynamic_z) or a fixed number, e.g. 0.8 or 1.0. Default: model default "
-                             "(fixed 0.8 for sgw-*/sgw, derived for evgw-*/qsgw-*). Not applicable to gap-only models.")
+                        help="Quasiparticle renormalization Z for Delta-W models: 'derived' (default; one plasmon pole whose "
+                             "frequency follows from the same eps as the model's W, see compute_dynamic_z) or a fixed "
+                             "number, e.g. 1.0. Not applicable to gap-only models.")
     parser.add_argument("--allow-inconsistent-kernel", action="store_true", default=False,
                         help="Allow a BSE kernel whose W differs from the W of the QP model (legacy behaviour; "
                              "only for reproducing old results).")
     parser.add_argument("--dynamic_z", action="store_true", default=False,
-                        help="Apply the empirical state-dependent damping factor Z_p (heuristic one-pole form; not a computed plasmon-pole self-energy derivative).")
+                        help="Deprecated alias of --qp-z derived (now the default for Delta-W models).")
     parser.add_argument("--update_orbitals", "--qsgw", dest="update_orbitals", action="store_true", default=False,
                         help="Perform full AO-basis Quasiparticle Self-Consistent GW (qsGW) orbital update.")
     parser.add_argument("--soc", type=float, default=0.0)
     parser.add_argument("--soc_flag", action="store_true")
     parser.add_argument("--gth_file", type=str, default=None)
 
-    parser.add_argument("--kernel", choices=["qp", "bse", "resta", "mnok", "xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "dim", "xs-dim", "dipole", "xs-dipole", "sbse", "sbse-atom", "sbse-ao", "xs-sbse"], default=None,
+    parser.add_argument("--kernel", choices=["qp", "resta-sphere", "bse", "resta", "mnok", "xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "dim", "xs-dim", "dipole", "xs-dipole", "sbse", "sbse-atom", "sbse-ao", "xs-sbse"], default=None,
                         help="Exciton interaction kernel. 'qp': the screened W built by the QP model (default and only allowed choice for "
                              "sgw-*, evgw-*, qsgw-* and sgw, so that GW and BSE share one W). For gap-only QP models (pbe, brus, gw, "
                              "numeric) choose: 'bse' (MNOK uniform, legacy default), 'resta' (MNOK Resta-screened), 'dim' / 'dipole' (MNOK atomistic polarizable dipole model), 'sbse' / 'sbse-atom' (Simplified BSE atom-resolved kernel, Cho et al. 2022), 'sbse-ao' / 'xs-sbse' (Simplified BSE AO-resolved kernel), 'xs' (Xs-QDEX uniform), 'xs-resta' (Xs-QDEX Resta-screened), 'xs-rpa' (Xs-QDEX microscopic RPA screening), 'xs-dim' (Xs-QDEX atomistic polarizable dipole model).")
@@ -791,6 +803,14 @@ def main():
                         help="Regularization length ell in angstrom for the anchor-scaled QP model.")
     parser.add_argument("--qp-residual-power", dest="qp_residual_power", type=float, default=2.0,
                         help="Power p > 1 controlling decay of the anchor residual.")
+    parser.add_argument("--qp-polarization", dest="qp_polarization", choices=["sphere", "legacy"], default="sphere",
+                        help="Finite-size term of the anchor-scaled QP model: 'sphere' (classical surface polarization "
+                             "of a dielectric sphere, 1S-averaged, Delerue-Lannoo-Allan; default) or 'legacy' "
+                             "(11.52 eV A (1/eps_out - 1/eps_inf)/(R + ell)).")
+    parser.add_argument("--qp-edge-split", dest="qp_edge_split", choices=["anchor", "model"], default="anchor",
+                        help="HOMO/LUMO split of the QP correction for absolute IP/EA: 'anchor' (per-edge two-anchor "
+                             "curves calibrated on the monomer evGW, default when MATERIAL_DB has monomer data) or "
+                             "'model' (the Delta-W model's own, nearly symmetric split).")
     parser.add_argument("--qp-strict", action="store_true",
                         help="Reject clusters smaller than the finite-size anchor instead of clamping to it.")
 
@@ -1130,6 +1150,7 @@ def main():
                     regularization_length_ang=args.qp_regularization_length,
                     residual_power=args.qp_residual_power,
                     strict=args.qp_strict,
+                    polarization_model=getattr(args, "qp_polarization", "sphere"),
                     return_details=True,
                 )
             
@@ -1152,7 +1173,7 @@ def main():
 
             is_qsgw = ("qsgw" in args.qp_gap.lower()) or ("scgw" in args.qp_gap.lower()) or getattr(args, "update_orbitals", False)
             is_evgw = "evgw" in args.qp_gap.lower()
-            use_dz, z_val = resolve_qp_z(args, is_qsgw or is_evgw or "dz" in args.qp_gap.lower())
+            use_dz, z_val = resolve_qp_z(args, True)
             model_tag = "qsGW-DIM" if is_qsgw else ("evGW-DIM" if is_evgw else ("sGW-DIM (Dynamic Z)" if use_dz else "sGW-DIM"))
             print(f"\n--- Estimating Quasiparticle Gap using {model_tag} (Atomistic Delta-W) ---")
             t0_sgw = time.time()
@@ -1223,7 +1244,7 @@ def main():
 
             is_qsgw = ("qsgw" in args.qp_gap.lower()) or ("scgw" in args.qp_gap.lower()) or getattr(args, "update_orbitals", False)
             is_evgw = "evgw" in args.qp_gap.lower()
-            use_dz, z_val = resolve_qp_z(args, is_qsgw or is_evgw or "dz" in args.qp_gap.lower())
+            use_dz, z_val = resolve_qp_z(args, True)
             use_penn = not any(k in args.qp_gap.lower() for k in ["pure", "bulk"])
             penn_label = "Penn-scaled" if use_penn else "Pure Boundary"
             model_tag = f"qsGW-Resta ({penn_label})" if is_qsgw else (f"evGW-Resta ({penn_label})" if is_evgw else (f"sGW-Resta ({penn_label}, Dynamic Z)" if use_dz else f"sGW-Resta ({penn_label})"))
@@ -1314,9 +1335,7 @@ def main():
             eps_virt_act = eps[virt_idx_a]
 
             sgw_mode = "ao" if "ao" in args.qp_gap.lower() else "atom"
-            sgw_dz, sgw_z = resolve_qp_z(args, False)
-            if sgw_dz:
-                raise ValueError("qp_gap 'sgw' supports only a fixed Z (qp_z: <number>), not 'derived'.")
+            sgw_dz, sgw_z = resolve_qp_z(args, True)
             sgw_scissor, qp_provenance = estimate_sgw_qp_gap(
                 coords=np.array(coords_ang),
                 atom_symbols=syms,
@@ -1331,6 +1350,7 @@ def main():
                 mode=sgw_mode,
                 alpha=args.alpha,
                 Z=sgw_z,
+                dynamic_z=sgw_dz,
                 nthreads=args.nthreads,
                 return_details=True
             )
@@ -1364,6 +1384,19 @@ def main():
             f"qp_z / dynamic_z apply only to Delta-W QP models (sgw-*, evgw-*, qsgw-*, sgw); "
             f"qp_gap '{args.qp_gap}' has no Z."
         )
+    if (qp_w is None and qp_provenance is not None
+            and qp_provenance.get("polarization_model") == "sphere"
+            and args.kernel in (None, "resta-sphere")):
+        # Anchor-scaled gw model: the BSE sees the same dielectric sphere as the
+        # QP polarization term, W = Resta(eps_inf) + sphere reaction field.
+        from qdex.hardness import build_resta_mnok, build_sphere_reaction_field
+        w_resta, _ = build_resta_mnok(syms, np.array(coords_ang), args.alpha, args.material, eps_out=args.eps_out)
+        w_sphere = build_sphere_reaction_field(np.array(coords_ang), syms, args.material, args.eps_out)
+        qp_w = (w_resta + w_sphere, f"Resta(eps_inf) + sphere reaction field (eps_out = {args.eps_out:.2f})")
+        qp_provenance["bse_kernel_model"] = "resta_plus_sphere_reaction_field"
+        args.kernel = None
+    elif args.kernel == "resta-sphere":
+        raise ValueError("kernel 'resta-sphere' requires qp_gap: gw with qp_polarization: sphere.")
     args.kernel = resolve_bse_kernel(args, qp_w)
 
     print(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
@@ -1392,6 +1425,26 @@ def main():
         print("    Note             : absolute IP/EA levels are not assigned in periodic mode.")
 
     elif qp_provenance is not None and "f_homo" in qp_provenance and "f_lumo" in qp_provenance:
+        if (getattr(args, "qp_edge_split", "anchor") == "anchor"
+                and qp_provenance.get("edge_split_source") is None
+                and entry is not None and len(entry) >= 14):
+            # Delta-W models split the correction almost 50/50 (classical charging);
+            # take the HOMO/LUMO split from the per-edge two-anchor curves instead.
+            from qdex.hardness import anchor_edge_curves, get_cluster_size_metrics
+            r_split = qp_provenance.get("cluster_radius_ang")
+            if r_split is None:
+                r_split = get_cluster_size_metrics(np.array(coords_ang), syms, args.material)["R_eff_hull"]
+            edges = anchor_edge_curves(args.material, float(r_split), args.eps_out,
+                                       residual_power=args.qp_residual_power)
+            if edges is not None:
+                qp_provenance.setdefault("f_homo_micro", qp_provenance["f_homo"])
+                qp_provenance.setdefault("f_lumo_micro", qp_provenance["f_lumo"])
+                qp_provenance["f_homo"] = float(edges["f_homo"])
+                qp_provenance["f_lumo"] = float(edges["f_lumo"])
+                qp_provenance["edge_split_source"] = "anchor_edge_curves"
+                print(f"\n  [QP Edge Split] Anchor-calibrated: HOMO {edges['f_homo']*100:.1f}% / LUMO "
+                      f"{edges['f_lumo']*100:.1f}% (model's own split: {qp_provenance['f_homo_micro']*100:.1f}% / "
+                      f"{qp_provenance['f_lumo_micro']*100:.1f}%)")
         f_homo = float(qp_provenance["f_homo"])
         f_lumo = float(qp_provenance["f_lumo"])
         model_name = qp_provenance.get("qp_model", "microscopic").upper()

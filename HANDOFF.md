@@ -1,5 +1,12 @@
 # Handoff: QDEX audit of QP models and excited-state frameworks
 
+> **Update (second session, same day):** QP-layer revision, described in audit
+> §9. Z is derived by default; the anchor is exact; there are per-edge anchor
+> curves; Resta uses the Penn-gap ε(R); `gw` has sphere polarization and the
+> `resta-sphere` kernel; `--exp-ref` has been added. Run folders were
+> regenerated in `/tmp/runs` (ephemeral). Environment: `/opt/qdexenv` (rebuilt
+> with micromamba); locally, use `conda activate minibse`.
+
 Branch `claude/gallant-wright-6u105o`, 25 September 2026. Everything below is
 committed and pushed unless it is explicitly listed under "not committed".
 
@@ -159,17 +166,25 @@ Main documents:
   the QP ΔW and the silent `eps_out ≥ 1` clamp in qsGW were left as they are
   and documented as open.
 
-**Open (need Ivan)**
-* **Should `qp_z` default to 1.0 for the Delta-W models?** The recommendation
-  is yes; it changes their numbers.
-* **Radius mismatch:** fix the stored R₀ = 5.258 Å, or the radius definition,
-  so that `gw` reproduces the anchor exactly.
-* **HOMO/LUMO asymmetry:** whether to calibrate it, e.g. from the monomer evGW
-  split, or stop reporting absolute IP/EA from the Delta-W models.
-* **"Penn" ε_eff(R):** whether to replace it with a Penn-gap or Wang–Zunger
-  form. It dominates the QP gap at 1.2 nm but cancels in S₁.
-* **Aubert–Hens sizing:** its CdSe parameters are needed to replace Yu et al.
-  as the experimental reference.
+**Decided by Ivan after §8, implemented (audit §9)**
+* **Z:** derived within the method, one plasmon pole from the model's own ε
+  and the material's valence plasmon. It is the default for all Delta-W
+  models, and the kernel carries the same Z.
+* **Anchor radius:** CdSe R₀ = 5.31331 Å, so `gw` reproduces the anchor
+  exactly.
+* **HOMO/LUMO:** per-edge two-anchor curves; the Delta-W models use them for
+  IP/EA by default.
+* **Resta ε(R):** the Penn-gap form replaces the PBE-gap interpolation.
+* **Two-anchor polarization curve:** the classical dielectric-sphere
+  polarization (Delerue–Lannoo–Allan), with a new default kernel
+  `resta-sphere` for `gw`.
+* **Experiment:** use Hens (Aubert et al. 2022). The data file and
+  `--exp-ref` hook exist, but the values still have to be entered.
+
+**Still open**
+* Aubert–Hens CdSe values for `benchmarks/experimental_sizing.yaml`.
+* R₀ of the other materials: recompute from their monomer geometries.
+* Sphere reaction field for the Delta-W solvent term; bulk HOMO share f_b.
 
 ## 5. Not committed / still local
 

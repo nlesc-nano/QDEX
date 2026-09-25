@@ -13,13 +13,27 @@ Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
-* CLI: ``--qp_gap, --dynamic_z``
-* YAML: ``physics.qp_gap, physics.dynamic_z``
+* CLI: ``--qp_gap``, ``--qp-edge-split anchor|model``
+* YAML: ``physics.qp_gap``, ``physics.qp_edge_split``
 
 .. code-block:: python
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
+
+Default: anchor-calibrated split (``qp_edge_split: anchor``)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``MATERIAL_DB`` has monomer evGW data, the HOMO/LUMO split of the QP correction is taken from
+the per-edge two-anchor curves (:doc:`/quasiparticles/anchor`) at the radius of the cluster. This
+holds for the ``gw`` model and for the Delta-W models.
+
+* **Gap.** Each model keeps its own gap; only the split used for absolute IP/EA changes.
+* **Why.** The Delta-W charging term :math:`\tfrac12\mathbf q^{\mathsf T}\Delta W\mathbf q` is almost
+  symmetric in electron and hole: HOMO share 52–57 % for Cd₁₆Se₁₃Cl₆, against 41 % in evGW.
+  The asymmetry is non-classical, and the anchor supplies it.
+* **Provenance.** The model's own split is kept as ``f_homo_micro`` / ``f_lumo_micro``.
+  ``qp_edge_split: model`` uses it instead.
 
 Approach B: Microscopic Wavefunction Asymmetry (:math:`f_H^{\mathrm{micro}}, f_L^{\mathrm{micro}}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

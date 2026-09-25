@@ -10,7 +10,7 @@ physics:
   qp_gap: "gw"
   estimate_qp: false
   exchange: true
-  kernel: "resta"
+  kernel: "resta-sphere"   # gw default: bulk Resta W + sphere reaction field
   eps_out: 1.0   
   nhomos: 25
   nlumos: 25

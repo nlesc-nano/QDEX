@@ -1,0 +1,37 @@
+# Experimental first-exciton (1S) energy against quantum-dot diameter.
+#
+# Used by benchmarks/compare_models.py --exp-ref <name>.  The diameter of a
+# computed cluster is 2 x (convex-hull equivalent-volume radius of the core
+# atoms), without the 1.25 A surface offset, unless --exp-diameter is given.
+#
+# Supported kinds
+#   table          points: [[d_nm, E_eV], ...]; linear interpolation in 1/d^2,
+#                  no extrapolation outside the table.
+#   inverse_poly   E = E_g + 1 / (sum_k c_k d^k), d in nm; coefficients c_k
+#                  listed from k = 0 upward.
+#   yu2003         Yu, Qu, Guo, Peng, Chem. Mater. 15, 2854 (2003):
+#                  D(nm) = 1.6122e-9 L^4 - 2.6575e-6 L^3 + 1.6242e-3 L^2
+#                          - 0.4277 L + 41.57, L = 1S wavelength in nm;
+#                  inverted numerically, valid for L ~ 450-650 nm (D >~ 1.9 nm).
+#
+# tolerance_ev is the half-width of the window used for the PASS/WARN check.
+
+aubert-hens-2022-zb:
+  citation: "T. Aubert et al. (Z. Hens), Nano Lett. 22, 1778 (2022), zinc blende CdSe"
+  kind: table
+  tolerance_ev: 0.10
+  # TODO: fill in from the paper (sizing function with the refined Bohr
+  # diameter for zb-CdSe).  Left empty on purpose: the paper was not
+  # accessible when this file was written and no values are guessed.
+  points: []
+
+aubert-hens-2022-wz:
+  citation: "T. Aubert et al. (Z. Hens), Nano Lett. 22, 1778 (2022), wurtzite CdSe"
+  kind: table
+  tolerance_ev: 0.10
+  points: []
+
+yu-2003:
+  citation: "W. W. Yu, L. Qu, W. Guo, X. Peng, Chem. Mater. 15, 2854 (2003)"
+  kind: yu2003
+  tolerance_ev: 0.10

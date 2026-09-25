@@ -126,7 +126,10 @@ physics
 
   - ``"qp"``: the :math:`W` built by the QP model. It is the default, and the only allowed choice, for the Delta-W QP models (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``), so that GW and BSE share one :math:`W`. Any other kernel with these models is rejected; see :doc:`/validation/model_comparison`.
   - ``"resta"``, ``"dim"``, ``"xs-resta"``, ``"sbse"``, ``"bse"`` (unscreened MNOK, legacy default): independent kernels for the gap-only QP models (``pbe``, ``brus``, ``gw``, a numeric gap).
-* **qp_z** (*str or float*): Quasiparticle weight for the Delta-W models. ``"derived"`` uses the empirical state-dependent formula; a number (e.g. ``1.0`` or ``0.8``) is used as a fixed value. The default is the model default (fixed 0.8 for ``sgw-*``/``sgw``, derived for ``evgw-*``/``qsgw-*``). Rejected for gap-only models. CLI: ``--qp-z``.
+* **qp_z** (*str or float*): Quasiparticle weight for the Delta-W models. ``"derived"`` (default for all Delta-W models) uses one plasmon pole built from the model's own dielectric constant and the material's valence plasmon; a number (e.g. ``1.0`` or ``0.8``) is used as a fixed value. The same Z scales Delta-W in the BSE kernel. Rejected for gap-only models. CLI: ``--qp-z``.
+
+* **qp_polarization** (*str*): finite-size term of the ``gw`` model: ``"sphere"`` (default; classical surface polarization of a dielectric sphere) or ``"legacy"`` (11.52 eV Å (1/ε_out − 1/ε_∞)/(R + ℓ)). CLI: ``--qp-polarization``.
+* **qp_edge_split** (*str*): HOMO/LUMO split for absolute IP/EA: ``"anchor"`` (default; per-edge two-anchor curves) or ``"model"`` (the Delta-W model's own split). CLI: ``--qp-edge-split``.
 * **allow_inconsistent_kernel** (*bool*): Allow a BSE kernel different from the QP model's :math:`W`. Only for reproducing results obtained before this check existed. CLI: ``--allow-inconsistent-kernel``.
 * **dynamic_z** (*bool*): Same as ``qp_z: derived`` (empirical state-dependent :math:`Z_p`; no frequency-dependent self-energy or :math:`f`-sum rule is evaluated).
 * **update_orbitals** (*bool*): Relax molecular orbitals in the AO basis using the static COHSEX-like ``qsgw-*`` model.

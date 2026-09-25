@@ -690,9 +690,13 @@ class TestXsKernel(unittest.TestCase):
         """Test physical behavior of dynamic Z calculation via plasmon-pole model."""
         from qdex.hardness import compute_dynamic_z
 
-        # 1. Zero self-energy shift gives maximum Z (near 1.0)
+        # 1. Zero self-energy shift gives Z = 1
         z_zero = compute_dynamic_z(0.0, gap_ev=2.5, eps_eff=5.0)
-        self.assertAlmostEqual(z_zero, 0.99, places=2)
+        self.assertAlmostEqual(z_zero, 1.0, places=12)
+
+        # One plasmon pole: Z = 1 / (1 + dSigma / omega_tilde), omega_tilde = omega_p / sqrt(1 - 1/eps)
+        omega = 15.0 / np.sqrt(1.0 - 1.0 / 5.0)
+        self.assertAlmostEqual(compute_dynamic_z(1.0, eps_eff=5.0, omega_p_ev=15.0), 1.0 / (1.0 + 1.0 / omega), places=12)
 
         # 2. Typical self-energy shifts (0.3 - 1.5 eV) yield physical Z in [0.75, 0.98]
         z_small = compute_dynamic_z(0.3, gap_ev=2.5, eps_eff=5.0)
