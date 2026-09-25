@@ -118,7 +118,7 @@ def orbital_qp_energies(eps, q_occ, q_virt, occ_idx, virt_idx, dW,
 
     q_occ, q_virt are the populations of the window orbitals (see
     ``orbital_populations``), in the representation of dW (atom or AO).
-    Orbitals outside the window get the shift of the nearest window edge.
+    Orbitals outside the window (if a window is used) get the shift of the nearest window edge.
     ``edge_shifts`` = (dH, dL) pins the HOMO and LUMO shifts (two-anchor model):
     every orbital then gets the edge shift plus its sigma relative to the edge
     orbital (Z = 1), so the anchor-calibrated frontier levels are kept.
@@ -134,8 +134,12 @@ def orbital_qp_energies(eps, q_occ, q_virt, occ_idx, virt_idx, dW,
         z_v = np.ones_like(sig_v)
     else:
         if z_mode == "derived":
-            z_o = np.array([compute_dynamic_z(s, None, eps_z, material) for s in sig_o])
-            z_v = np.array([compute_dynamic_z(s, None, eps_z, material) for s in sig_v])
+            # vectorized compute_dynamic_z: Z = 1 / (1 + |sigma| / omega_tilde), clipped to [0.5, 1]
+            from qdex.hardness import valence_plasmon_ev
+            eps_val = max(1.01, float(eps_z) if eps_z is not None else 1.01)
+            omega = valence_plasmon_ev(material) / np.sqrt(1.0 - 1.0 / eps_val)
+            z_o = np.clip(1.0 / (1.0 + np.abs(sig_o) / omega), 0.5, 1.0)
+            z_v = np.clip(1.0 / (1.0 + np.abs(sig_v) / omega), 0.5, 1.0)
         else:
             z_o = np.full_like(sig_o, float(z_fixed))
             z_v = np.full_like(sig_v, float(z_fixed))

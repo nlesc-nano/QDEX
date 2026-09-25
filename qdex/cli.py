@@ -813,8 +813,8 @@ def main():
                              "curves calibrated on the monomer evGW, default when MATERIAL_DB has monomer data) or "
                              "'model' (the Delta-W model's own, nearly symmetric split).")
     parser.add_argument("--qp-levels", dest="qp_levels", choices=["orbital", "rigid"], default="orbital",
-                        help="QP energies of models that define W: 'orbital' (default; every orbital of the active "
-                             "window gets its own Z_p * sigma_p) or 'rigid' (one scissor on all virtual orbitals).")
+                        help="QP energies of models that define W: 'orbital' (default; every molecular orbital gets its "
+                             "own Z_p * sigma_p) or 'rigid' (one scissor on all virtual orbitals).")
     parser.add_argument("--qp-strict", action="store_true",
                         help="Reject clusters smaller than the finite-size anchor instead of clamping to it.")
 
@@ -1135,6 +1135,16 @@ def main():
     # (the xs Hamiltonian is Löwdin-based), Mulliken otherwise (no diagonalization of S needed).
     qp_pop_mode = ("lowdin" if (str(getattr(args, "charge_type", "mulliken")).lower() == "lowdin"
                                 or str(args.kernel_type).lower() in ("xs", "xs-qdex")) else "mulliken")
+    _pop_cache = {}
+
+    def _all_populations(representation):
+        """Populations of ALL molecular orbitals (one vectorized pass, cached per representation)."""
+        if representation not in _pop_cache:
+            t0p = time.time()
+            _pop_cache[representation] = orbital_populations(C, S, atom_ao_ranges, qp_pop_mode, representation)
+            print(f"  [QP] {qp_pop_mode.capitalize()} populations of all {C.shape[1]} orbitals ({representation}) "
+                  f"in {time.time() - t0p:.1f} s")
+        return _pop_cache[representation]
 
     def _xs_gamma_ao():
         """Exact AO density-pair integrals (mu mu|nu nu) in eV when two_electron_integrals: xs."""
@@ -1219,12 +1229,11 @@ def main():
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
             else:
-                # The Delta-W estimators need only the HOMO and LUMO atomic populations,
-                # in the same partition as the BSE charges (Mulliken: S C only, no eigh).
+                # Populations of all orbitals are computed once; the Delta-W gap formula uses the
+                # HOMO and LUMO columns, the orbital-resolved levels below use all of them.
                 occ_idx_a = np.array([homo_index])
                 virt_idx_a = np.array([homo_index + 1])
-                q_edge = orbital_populations(C[:, [homo_index, homo_index + 1]], S, atom_ao_ranges,
-                                             qp_pop_mode, "atom")
+                q_edge = _all_populations("atom")[:, [homo_index, homo_index + 1]]
                 C_occ_low = C_virt_low = None
 
                 sgw_scissor, qp_provenance = estimate_sgw_dim_qp_gap(
@@ -1291,12 +1300,11 @@ def main():
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
             else:
-                # The Delta-W estimators need only the HOMO and LUMO atomic populations,
-                # in the same partition as the BSE charges (Mulliken: S C only, no eigh).
+                # Populations of all orbitals are computed once; the Delta-W gap formula uses the
+                # HOMO and LUMO columns, the orbital-resolved levels below use all of them.
                 occ_idx_a = np.array([homo_index])
                 virt_idx_a = np.array([homo_index + 1])
-                q_edge = orbital_populations(C[:, [homo_index, homo_index + 1]], S, atom_ao_ranges,
-                                             qp_pop_mode, "atom")
+                q_edge = _all_populations("atom")[:, [homo_index, homo_index + 1]]
                 C_occ_low = C_virt_low = None
 
                 sgw_scissor, qp_provenance = estimate_sgw_resta_qp_gap(
@@ -1436,11 +1444,9 @@ def main():
 
         levels_mode = str(getattr(args, "qp_levels", "orbital")).lower()
         if levels_mode == "orbital" and eps_qp_active is None:
-            n_win = max(100, int(args.nhomos or 0), int(args.nlumos or 0)) + 10
-            occ_w = np.arange(max(0, homo_index + 1 - n_win), homo_index + 1)
-            virt_w = np.arange(homo_index + 1, min(len(eps), homo_index + 1 + n_win))
-            q_w = orbital_populations(C[:, np.concatenate([occ_w, virt_w])], S, atom_ao_ranges,
-                                      qp_pop_mode, representation)
+            occ_w = np.arange(0, homo_index + 1)
+            virt_w = np.arange(homo_index + 1, len(eps))
+            q_w = _all_populations(representation)
             edges = None
             if w_parts.get("anchor_edges"):
                 f_h = float(qp_provenance.get("f_homo", 0.5))
@@ -1453,7 +1459,7 @@ def main():
                 w_parts.get("eps_z"), args.material, edge_shifts=edges, representation=representation)
             lev_info["qp_populations"] = qp_pop_mode
             new_scissor = float(eps_qp[homo_index + 1] - eps_qp[homo_index]) - dft_gap
-            print(f"\n  [QP Levels] Orbital-resolved ({representation}): {len(occ_w)} occ + {len(virt_w)} virt levels; "
+            print(f"\n  [QP Levels] Orbital-resolved ({representation}): all {len(occ_w)} occ + {len(virt_w)} virt levels; "
                   f"HOMO {lev_info['qp_homo_shift_ev']:+.3f} eV, LUMO {lev_info['qp_lumo_shift_ev']:+.3f} eV; "
                   f"spread occ {lev_info['qp_shift_spread_occ_ev']:.3f} / virt {lev_info['qp_shift_spread_virt_ev']:.3f} eV; "
                   f"Z in [{lev_info['z_min_window']:.3f}, {lev_info['z_max_window']:.3f}]")
