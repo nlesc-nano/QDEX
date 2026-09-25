@@ -41,29 +41,36 @@ Screening Formulations for :math:`W^{\mathrm{QD}}`
       W_{AB}^{\mathrm{QD}} = \frac{1}{\epsilon_{\mathrm{in}}(R) r_{AB}} + \frac{1 - \epsilon_{\mathrm{in}}(R)^{-1}}{r_{AB}} \exp\left( -\frac{r_{AB}}{\lambda_{\mathrm{TF}}} \right)
 
    where :math:`1/r_{AB}` is regularized by the MNOK damping and
-   :math:`\lambda_{\mathrm{TF}} = d_{\mathrm{NN}}/\sqrt{\epsilon_{\mathrm{in}}-1}`. The implemented
-   size dependence of :math:`\epsilon_{\mathrm{in}}` is an interpolation in the confinement energy
-   (``estimate_sgw_resta_qp_gap``, one-shot path):
+   :math:`\lambda_{\mathrm{TF}} = d_{\mathrm{NN}}/\sqrt{\epsilon_{\mathrm{in}}-1}`. The size
+   dependence of :math:`\epsilon_{\mathrm{in}}` follows the Penn model (Penn, Phys. Rev. 128, 2093
+   (1962); Tsu, Babić and Ioriatti, J. Appl. Phys. 82, 1327 (1997)). With one oscillator,
+   :math:`\epsilon-1=(\hbar\omega_p/E_P)^2`, and confinement opens the average gap
+   :math:`E_P\to E_P+\Delta E_{\mathrm{conf}}`:
 
    .. math::
 
-      \epsilon_{\mathrm{in}} = 1 + \frac{\epsilon_\infty - 1}{1 + \left(\Delta E_{\mathrm{conf}} / E_g^{\mathrm{PBE,bulk}}\right)^2},
-      \qquad \Delta E_{\mathrm{conf}} = E_g^{\mathrm{DFT,QD}} - E_g^{\mathrm{PBE,bulk}}
+      \epsilon_{\mathrm{in}}(R) = 1 + (\epsilon_\infty - 1)\left[\frac{E_P}{E_P+\Delta E_{\mathrm{conf}}}\right]^2,
+      \qquad E_P = \frac{\hbar\omega_p}{\sqrt{\epsilon_\infty-1}},
+      \qquad \Delta E_{\mathrm{conf}} = E_g^{\mathrm{DFT,QD}} - E_g^{\mathrm{PBE,bulk}}.
 
-   (the iterated ``evgw-resta``/``qsgw-resta`` paths use the current QP gap and the bulk GW gap
-   instead).
+   :math:`\hbar\omega_p = \sqrt{4\pi n_v e^2/m}` is the free-electron plasmon of the bulk valence
+   (s, p) electron density (``qdex.hardness.valence_plasmon_ev``; 14.1 eV and :math:`E_P` = 6.2 eV for
+   CdSe). The iterated ``evgw-resta``/``qsgw-resta`` paths use the current QP gap minus the bulk GW
+   gap as :math:`\Delta E_{\mathrm{conf}}`. For CdSe this gives :math:`\epsilon_{\mathrm{in}}` = 3.97
+   for Cd₁₆Se₁₃Cl₆ (1.2 nm) and 5.1 for the 2 nm test cluster.
+
+   The same :math:`\hbar\omega_p` and :math:`\epsilon_{\mathrm{in}}` fix the plasmon-pole frequency of
+   the derived Z (:doc:`/quasiparticles/dynamic_z`), so one oscillator parameterizes the screening and
+   its dynamics.
 
    .. note::
 
-      Despite its name, this is not Penn's scaling. In the Penn model
-      :math:`\epsilon-1\propto(\hbar\omega_p/E_P)^2`, where :math:`E_P` is the average (Penn) gap,
-      about 4–5 eV for CdSe, not the fundamental band gap. A Penn-consistent size correction would be
-      :math:`\epsilon_{\mathrm{in}}-1=(\epsilon_\infty-1)\,[E_P/(E_P+\Delta E_{\mathrm{conf}})]^2`.
-      Using the small PBE bulk gap as the reference energy makes the reduction much stronger. For the
-      CdSe test cluster (:math:`\Delta E_{\mathrm{conf}}=0.82` eV) the implemented expression gives
-      :math:`\epsilon_{\mathrm{in}}\approx3.0`, compared with :math:`\approx4.7` from the Penn form with
-      :math:`E_P=4.5` eV. Atomistic calculations of ~2 nm dots (Wang and Zunger, PRL 73, 1039 (1994);
-      Delerue, Lannoo and Allan, PRB 68, 115411 (2003)) find a reduction of tens of percent, not a halving.
+      Earlier versions used
+      :math:`\epsilon_{\mathrm{in}} = 1 + (\epsilon_\infty-1)/[1+(\Delta E_{\mathrm{conf}}/E_g^{\mathrm{PBE,bulk}})^2]`.
+      Its reference energy was the 0.64 eV PBE band gap instead of the Penn gap. That gave
+      :math:`\epsilon_{\mathrm{in}}` = 1.48 at 1.2 nm and 2.98 at 2 nm, a much stronger reduction than
+      atomistic calculations (Wang and Zunger, PRL 73, 1039 (1994); Delerue, Lannoo and Allan, PRB 68,
+      115411 (2003)).
 
 3. **Simplified BSE Screened Interaction (``sgw``)**:
    Implements the Cho, Bintrim, and Berkelbach [J. Chem. Theory Comput. 18, 3438 (2022)] polarizability kernel:

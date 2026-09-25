@@ -34,8 +34,121 @@ Reference (``MATERIAL_DB["CDSE"]`` monomer entries, vacuum, eV):
 The DFT gap of the supplied MO file is 2.639 eV, 5 meV from the stored PBE gap. The bulk GW–PBE
 opening is 1.270 eV, so evGW requires a finite-size correction of 2.125 eV on top of it.
 
-Results
--------
+Results with the current QP layer
+---------------------------------
+
+This section reflects the September 2026 revision:
+
+* sphere polarization with an exact anchor for ``gw``;
+* Penn-gap :math:`\epsilon_{\mathrm{in}}(R)` for the Resta family;
+* Z derived from the model's own plasmon pole (the default);
+* HOMO/LUMO split from the per-edge anchor curves.
+
+Vacuum, spin-free, 25 × 25. Δ = model − evGW in eV. S\ :sub:`1` uses each model's consistent
+kernel: ``qp`` for the Delta-W models and ``resta-sphere`` for ``gw``.
+
+.. list-table::
+   :header-rows: 1
+
+   * - qp_gap
+     - Z
+     - QP gap
+     - Δ gap
+     - Δ HOMO
+     - Δ LUMO
+     - S\ :sub:`1` (vac / toluene)
+   * - ``gw``
+     - —
+     - 6.034
+     - +0.005
+     - −0.002
+     - +0.002
+     - 3.177 / 3.132
+   * - ``sgw-resta``
+     - derived 0.95
+     - 5.664
+     - −0.37
+     - +0.15
+     - −0.21
+     - 3.325 / 3.400
+   * - ``sgw-resta``
+     - 1.0
+     - 5.764
+     - −0.26
+     - +0.11
+     - −0.16
+     - 3.314 / 3.398
+   * - ``sgw-resta-pure``
+     - derived 0.95
+     - 5.444
+     - −0.58
+     - +0.24
+     - −0.34
+     - 3.373
+   * - ``sgw-dim``
+     - derived 0.95
+     - 5.576
+     - −0.45
+     - +0.19
+     - −0.27
+     - 3.369 / 3.439
+   * - ``evgw-resta``
+     - derived 0.94
+     - 5.880
+     - −0.15
+     - +0.06
+     - −0.09
+     - 3.286
+   * - ``evgw-dim``
+     - derived 0.95
+     - 5.565
+     - −0.46
+     - +0.19
+     - −0.27
+     - 3.366
+   * - ``qsgw-resta``
+     - derived 0.94
+     - 6.251
+     - +0.22
+     - −0.09
+     - +0.13
+     - 3.677
+   * - ``qsgw-dim``
+     - derived 0.95
+     - 5.868
+     - −0.16
+     - +0.07
+     - −0.09
+     - 3.686
+   * - ``sgw`` (sBSE)
+     - derived 0.98
+     - 6.684
+     - +0.66
+     - −0.27
+     - +0.38
+     - 4.524 / 4.488
+
+What changed:
+
+* **``gw`` reproduces the anchor exactly.** :math:`R_0` was recomputed with the code's radius
+  definition (5.3133 Å). The remaining +5 meV is the PBE-gap difference of the MO file. Both
+  frontier levels match evGW to 2 meV.
+* **The Resta interior term is now modest.** With the Penn gap (:math:`E_P` = 6.2 eV),
+  :math:`\epsilon_{\mathrm{in}}` is 3.97 instead of 1.48. Resta and DIM now agree to 0.1 eV:
+  −0.37 and −0.45 eV. Both underestimate the evGW gap by 0.3–0.5 eV.
+* **The closest models are ``evgw-resta`` (−0.15 eV) and ``qsgw-dim`` (−0.16 eV).**
+* **Derived Z.** Z ≈ 0.95 and changes the gap by 0.1 eV relative to Z = 1. It is no longer the
+  dominant knob.
+* **IP/EA.** With the anchor-calibrated split, the HOMO and LUMO errors are each about half of the
+  gap error, with the right signs. The old 50/50 split put up to 0.8 eV error on one edge.
+* **S₁ consistency.** All consistent Delta-W routes give S₁ = 3.29–3.37 eV and ``gw`` gives
+  3.18 eV. The qsGW models and sBSE are higher. With the bulk-only Resta kernel, ``gw`` would give
+  5.58 eV, because the kernel lacks the surface polarization that the QP gap contains.
+
+The tables below are the results before this revision and are kept for reference.
+
+Results before the revision
+---------------------------
 
 Vacuum, spin-free. Each Delta-W model is run with its shared-:math:`W` BSE kernel (``kernel: qp``) and
 the gap-only models with ``resta``. The QP gap and edges do not depend on the kernel. Δ is the deviation
@@ -138,9 +251,9 @@ from evGW in eV.
 Interpretation
 --------------
 
-* **``gw`` is not tested here.** It is interpolated through this point. The remaining −20 meV comes from
-  the radius: QDEX gives :math:`R_{\mathrm{eff}}` = 5.313 Å for this geometry, while ``MATERIAL_DB``
-  stores :math:`R_0` = 5.258 Å.
+* **``gw`` is not tested here.** It is interpolated through this point. Before the revision, the
+  remaining −20 meV came from the radius: QDEX gives :math:`R_{\mathrm{eff}}` = 5.313 Å for this
+  geometry, while ``MATERIAL_DB`` stored :math:`R_0` = 5.258 Å. It is now 5.3133 Å.
 * **The interior term separates the models.** The solvent/surface term is nearly the same for Resta and
   DIM (1.29 eV with Z = 0.8, 1.61 eV with Z = 1). The interior contrast differs by a factor of nine:
   1.01 eV for Resta with its size-scaled :math:`\epsilon_{\mathrm{eff}}`, and 0.11 eV for DIM. Only the

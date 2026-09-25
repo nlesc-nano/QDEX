@@ -423,3 +423,103 @@ spin-free; Δ = model − evGW in eV.
   these models are unreliable by several tenths of an eV.
 * **Scope.** One cluster at the anchor size; this tests the finite-size term,
   not transferability.
+
+## 9. Revision of the QP layer (Z, anchor, edge split, Resta ε(R), polarization curve)
+
+Requested by the author after §8. All numbers below are spin-free, 25 × 25, vacuum unless noted.
+
+**Changes**
+
+1. **Z from the model itself** (`compute_dynamic_z`, default `qp_z: derived` for every Delta-W model).
+   - *Formula:* one plasmon pole, Z_p = [1 + |σ_p|/ω̃]⁻¹, with ω̃ = ω_p/√(1 − 1/ε_eff).
+   - *Pole:* the Hybertsen–Louie GPP frequency, i.e. the zero of the single-oscillator ε(ω) whose
+     static value is the ε_eff of the model's W.
+   - *ω_p:* the valence (s, p) plasmon of the bulk crystal (`valence_plasmon_ev`; 14.1 eV for
+     CdSe). It replaces the fixed 15 eV and the old √(ω_p²/(ε−1) + E_g²).
+   - *Kernel:* the BSE kernel carries the same Z, W_BSE = W_bulk + Z̄ (W_QD − W_bulk)
+     (`scale_w_difference`). This preserves the Bechstedt-type cancellation, so Z < 1 no longer
+     leaks the solvent term into S₁.
+   - *CdSe values:* Z ≈ 0.94–0.97 in vacuum, ≈ 0.98 in toluene.
+2. **Exact anchor.** `MATERIAL_DB["CDSE"]` R₀ was changed from 5.2578 to 5.31331 Å, the value that
+   `get_cluster_size_metrics` gives for `tests/CdSe/1.2nm/geom.xyz`.
+   - `gw` now returns the monomer evGW correction exactly. The remaining +5 meV on the gap is the
+     PBE-gap difference of the MO file.
+   - A test checks the radius against the geometry.
+   - The other materials' R₀ were not re-derived; their monomer geometries are not in the repo.
+3. **Per-edge two-anchor curves** (`anchor_edge_curves`):
+   δ_H,L(R) = f_b Δ_bulk + P(R)/2 + A_H,L (R₀/R)^p.
+   - A_H and A_L are fitted so that each edge matches the evGW anchor; f_b = 0.5.
+   - `gw` and, by default (`qp_edge_split: anchor`), the Delta-W models take their HOMO/LUMO split
+     for IP/EA from these curves. The Delta-W models' own split was 52–57 % HOMO against 41 % in
+     evGW. The model split is kept as `f_*_micro`.
+4. **Resta ε(R): Penn-gap form.** ε_in = 1 + (ε∞ − 1)[E_P/(E_P + ΔE)]², with
+   E_P = ω_p/√(ε∞ − 1) = 6.2 eV for CdSe.
+   - The old expression used the 0.64 eV PBE gap as reference.
+   - ε_in: 3.97 at 1.2 nm (was 1.48) and 5.06 at 2 nm (was 2.98).
+   - Applied in the one-shot, evGW and qsGW Resta paths.
+5. **Polarization curve of the two-anchor model** (`qp_polarization: sphere`, default).
+   - *Old term:* κ/(R + ℓ), κ = 0.8 × Born.
+   - *New term:* the classical self-polarization of a dielectric sphere (ε∞ inside, ε_out
+     outside), 1S-averaged over the full multipole series: P = F e²/R, with F = 0.937 for CdSe in
+     vacuum against a Born term of 0.839.
+   - *Grounds:* it is the leading self-energy correction in tight-binding GW for nanocrystals
+     (Delerue, Lannoo, Allan, PRL 84, 2457 (2000); PRL 90, 076803 (2003); PRB 68, 115411 (2003)),
+     and its large-R limit is exact. The old κ was 1.4× too small asymptotically.
+   - *Anchor residual:* A = −0.42 eV for CdSe.
+   - *Kernel:* the default kernel of `gw` is now `resta-sphere`, the bulk Resta W plus the sphere
+     reaction field G(r, r'). QP and BSE then share one dielectric model. `--qp-polarization legacy`
+     and `--kernel resta` restore the old behaviour.
+6. **Experimental reference.** `benchmarks/experimental_sizing.yaml` and `compare_models.py --exp-ref`.
+   - Entries for Aubert–Hens 2022 (zb and wz CdSe) exist but are empty: the paper could not be
+     reached from the container and no values were guessed.
+   - Yu et al. 2003 is included as the fallback.
+
+**Cd₁₆Se₁₃Cl₆ against evGW (Δ gap, Δ HOMO, Δ LUMO in eV; S₁ vacuum / toluene)**
+
+| qp_gap | Z | Δ gap | Δ HOMO | Δ LUMO | S₁ |
+|---|---|---|---|---|---|
+| gw (resta-sphere) | — | +0.005 | −0.002 | +0.002 | 3.177 / 3.132 |
+| sgw-resta | 0.95 | −0.37 | +0.15 | −0.21 | 3.325 / 3.400 |
+| sgw-resta | 1.0 | −0.26 | +0.11 | −0.16 | 3.314 / 3.398 |
+| sgw-dim | 0.95 | −0.45 | +0.19 | −0.27 | 3.369 / 3.439 |
+| evgw-resta | 0.94 | −0.15 | +0.06 | −0.09 | 3.286 |
+| qsgw-dim | 0.95 | −0.16 | +0.07 | −0.09 | 3.686 |
+| qsgw-resta | 0.94 | +0.22 | −0.09 | +0.13 | 3.677 |
+| sgw (sBSE) | 0.98 | +0.66 | −0.27 | +0.38 | 4.524 / 4.488 |
+| gw + bulk resta kernel | — | +0.005 | | | 5.581 / 3.974 |
+
+**CdSe 2 nm (QP gap / S₁, vacuum; toluene)**
+
+| model | vacuum | toluene |
+|---|---|---|
+| gw + resta-sphere | 4.053 / 2.494 | 3.127 / 2.446 |
+| gw + resta (bulk) | 4.053 / 3.826 | — |
+| sgw-resta (derived Z) | 3.727 / 2.513 | 3.118 / 2.513 |
+| sgw-resta (Z = 1) | 3.759 / 2.513 | — |
+| sgw-dim | 3.774 / 2.528 | 3.167 / 2.530 |
+| evgw-resta | 3.816 / 2.511 | — |
+| qsgw-dim / qsgw-resta | 3.988 / 2.756, 4.114 / 2.782 | — |
+
+**Findings**
+
+* **Optical gap.** All consistent static routes give the same S₁ to within 0.08 eV at 2 nm
+  (2.45–2.53) and 0.2 eV at 1.2 nm (3.18–3.37), independent of the solvent, although their QP gaps
+  differ by 0.3–0.6 eV. The optical gap is now robust to the choice of QP model. The QP gap and
+  IP/EA are not.
+* **QP gap at the anchor size.** With the Penn-gap ε(R), Resta and DIM agree (−0.37 / −0.45 eV) and
+  both underestimate evGW. `evgw-resta` and `qsgw-dim` come within 0.16 eV.
+* **qsGW** is 0.25 eV higher in S₁ because its non-classical orbital relaxation does not cancel.
+* **Gap-only models with a bulk kernel.** `gw` with a bulk kernel overestimates S₁ by the full
+  surface polarization (1.3 eV at 2 nm in vacuum). Any gap-only model needs a kernel that contains
+  the same dielectric boundary.
+* **Remaining solvent dependence** of S₁ at 1.2 nm is 45–85 meV. It is independent of Z and comes
+  from the incomplete cancellation of the softened solvent term (Delta-W) or of the 1S-averaged
+  against the atomistic image (gw) in a 35-atom cluster.
+
+**Open**
+
+* Hens sizing values (Aubert et al. 2022) for the experimental comparison.
+* R₀ of the other materials from their monomer geometries.
+* The Delta-W solvent term e²/√(r² + R²) could be replaced by the same sphere reaction field.
+* Bulk HOMO share f_b per material (0.5 now).
+* Orbital-resolved P(R) instead of the 1S envelope.

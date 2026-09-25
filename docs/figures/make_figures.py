@@ -127,7 +127,7 @@ def fig_qp_hierarchy():
     rows = [
         ("pbe", "none", "—", "—", "—", "DFT reference only"),
         ("brus", "bulk exp. gap + EMA confinement", "scalar", "—", "—", "kinetic confinement only"),
-        ("gw / sgw-anchor", "bulk ΔGW + κ/(R+ℓ) + anchor term", "scalar", "—", "—", "bulk ↔ monomer interpolation"),
+        ("gw / sgw-anchor", "bulk ΔGW + sphere polarization + anchor term", "scalar", "—", "—", "bulk ↔ monomer interpolation"),
         ("sgw-dim / sgw-resta(-pure)", "bulk ΔGW + ½ qᵀ ΔW q (edges)", "scalar", "HOMO / LUMO", "—", "static charging model"),
         ("sgw  (+ --kernel sbse)", "bulk ΔGW + ½ Σ q_A ΔW_AA", "scalar", "HOMO / LUMO", "—", "site-diagonal sBSE screening"),
         ("evgw-dim / -resta", "iterate gap ↔ screening", "scalar", "HOMO / LUMO", "—", "fixed point in the gap only"),
@@ -164,32 +164,31 @@ def fig_qp_hierarchy():
 # 3. Anchor-scaled QP model (data driven, CdSe database entry)
 # ---------------------------------------------------------------------------
 def fig_anchor_model():
-    try:
-        from qdex.hardness import MATERIAL_DB
-        from qdex.constants import IMAGE_CHARGE_CONST_EV_ANG as KAPPA0
-        e = MATERIAL_DB["CDSE"]
-    except Exception:  # documentation build without the compiled package
-        KAPPA0 = 11.52
-        e = (6.2, 56.0, 6.05, 1.74, 9.5, 0.13, 0.026, 0.64, 1.91, 5.2578, -6.4196, -3.7852, -7.8177, -1.7884)
+    from qdex.hardness import MATERIAL_DB, sphere_polarization_factor, COULOMB_EV_ANG
+    from qdex.constants import IMAGE_CHARGE_CONST_EV_ANG as KAPPA0
+    e = MATERIAL_DB["CDSE"]
     eps_inf, gpbe, ggw, R0 = e[0], e[7], e[8], e[9]
     anchor = (e[13] - e[12]) - (e[11] - e[10])
     dbulk = ggw - gpbe
-    ell, p = 1.0, 2.0
-    kvac = KAPPA0 * (1 - 1 / eps_inf)
-    A = anchor - dbulk - kvac / (R0 + ell)
+    p = 2.0
+    A = anchor - dbulk - sphere_polarization_factor(eps_inf, 1.0) * COULOMB_EV_ANG / R0
+    ell = 1.0
+    A_leg = anchor - dbulk - KAPPA0 * (1 - 1 / eps_inf) / (R0 + ell)
     R = np.linspace(R0, 40, 400)
 
     def scissor(eps_out, R):
-        k = KAPPA0 * (1 / eps_out - 1 / eps_inf)
-        return dbulk + k / (R + ell) + A * (R0 / R) ** p
+        return dbulk + sphere_polarization_factor(eps_inf, eps_out) * COULOMB_EV_ANG / R + A * (R0 / R) ** p
+
+    def legacy(eps_out, R):
+        return dbulk + KAPPA0 * (1 / eps_out - 1 / eps_inf) / (R + ell) + A_leg * (R0 / R) ** p
 
     fig, ax = plt.subplots(figsize=(7.2, 4.3))
     ax.axhline(dbulk, color=C_GREY, ls="--", lw=1)
     ax.text(39.5, dbulk - 0.04, f"bulk limit ΔGW = {dbulk:.2f} eV", ha="right", va="top", fontsize=8.5, color=C_GREY)
-    for eps_out, c, lab in [(1.0, C_QP, "vacuum, ε_out = 1"), (2.4, C_KER, "toluene-like, ε_out = 2.4"),
+    for eps_out, c, lab in [(1.0, C_QP, "vacuum, ε_out = 1"), (2.24, C_KER, "toluene, ε_out = 2.24"),
                             (eps_inf, C_DYN, f"matched, ε_out = ε_∞ = {eps_inf}")]:
         ax.plot(R, scissor(eps_out, R), color=c, lw=2, label=lab)
-    Rr = np.linspace(2.5, R0, 50)
+    ax.plot(R, legacy(1.0, R), color=C_QP, lw=1, ls=":", label="legacy κ/(R+ℓ), vacuum")
     ax.axvspan(2.5, R0, color=C_LIGHT)
     ax.text((2.5 + R0) / 2, 3.9, "R < R₀:\nclamped to R₀\n(no extrapolation)", ha="center", fontsize=7.5, color=C_GREY, va="top")
     ax.plot([R0], [anchor], "o", color="black", ms=6, zorder=5)
@@ -198,12 +197,12 @@ def fig_anchor_model():
     Rq = 9.221
     ax.plot([Rq], [scissor(1.0, Rq)], "s", color=C_QP, ms=6, zorder=5)
     ax.annotate(f"CdSe 2 nm test (R_eff = {Rq:.2f} Å)\nscissor = {scissor(1.0, Rq):.2f} eV", (Rq, scissor(1.0, Rq)),
-                (Rq + 6, scissor(1.0, Rq) + 0.45), fontsize=8, arrowprops=dict(arrowstyle="-", color=C_QP, lw=0.8))
+                (Rq + 9, scissor(1.0, Rq) + 0.1), fontsize=8, arrowprops=dict(arrowstyle="-", color=C_QP, lw=0.8))
     ax.set_xlim(2.5, 40)
     ax.set_ylim(1.0, 4.0)
     ax.set_xlabel("effective radius R (Å)")
     ax.set_ylabel("PBE → QP gap correction Δ(R) (eV)")
-    ax.set_title(r"Anchor-scaled model:  $\Delta(R)=\Delta_b+\kappa_{out}/(R+\ell)+A\,(R_0/R)^p$", fontsize=10)
+    ax.set_title(r"Anchor-scaled model:  $\Delta(R)=\Delta_b+F(\epsilon_\infty,\epsilon_{out})\,e^2/R+A\,(R_0/R)^p$", fontsize=10)
     ax.legend(frameon=False, fontsize=8.5, loc="upper right")
     save(fig, "anchor_model")
 

@@ -11,9 +11,10 @@ kernel.
                     compatible BSE kernel (vacuum).
   B  Environment    Does S1 stay (nearly) constant when the solvent changes,
                     while the QP gap moves?
-  C  Z factor       Fixed 0.8, fixed 1.0 and derived Z for sgw-resta / sgw-dim.
-  D  BSE kernel     For the gap-only gw model: which interior W (independent
-                    choice) and how much binding it gives.
+  C  Z factor       Derived Z (default) against fixed 1.0 and 0.8 for sgw-resta / sgw-dim.
+  D  BSE kernel     For the gap-only gw model: which interior W without the
+                    sphere reaction field (independent choice) and how much
+                    binding it gives.  Group A's gw uses resta-sphere.
   E  Framework      Exact relations of the excitation modes, spin and charges.
   F  Convergence    Is S1 converged in the active space?
   L  Legacy         sgw-* with the old mismatched Resta kernel, for comparison.
@@ -64,7 +65,8 @@ def build_cases(eps_solvent, eps_inf):
         # A: every QP model with its compatible kernel, vacuum
         ("A", "pbe", ["--qp_gap", "pbe", "--kernel", "resta"], ALL),
         ("A", "brus", ["--qp_gap", "brus", "--kernel", "resta"], STD),
-        ("A", "gw", ["--qp_gap", "gw", "--kernel", "resta"], ALL),
+        ("A", "gw", ["--qp_gap", "gw", "--kernel", "resta-sphere"], ALL),
+        ("A", "gw[legacy-pol]", ["--qp_gap", "gw", "--kernel", "resta", "--qp-polarization", "legacy"], F),
         ("A", "sgw-resta", ["--qp_gap", "sgw-resta", *qp], ALL),
         ("A", "sgw-resta-pure", ["--qp_gap", "sgw-resta-pure", *qp], F),
         ("A", "sgw-dim", ["--qp_gap", "sgw-dim", *qp], ALL),
@@ -74,7 +76,8 @@ def build_cases(eps_solvent, eps_inf):
         ("A", "qsgw-dim", ["--qp_gap", "qsgw-dim", *qp], STD),
         ("A", "sgw(sbse)", ["--qp_gap", "sgw", *qp], STD),
         # B: solvent (vacuum runs are the group-A cases)
-        ("B", f"gw@{es}", ["--qp_gap", "gw", "--kernel", "resta", "--eps-out", es], ALL),
+        ("B", f"gw@{es}", ["--qp_gap", "gw", "--kernel", "resta-sphere", "--eps-out", es], ALL),
+        ("B", f"gw+resta@{es}", ["--qp_gap", "gw", "--kernel", "resta", "--eps-out", es], STD),
         ("B", f"sgw-resta@{es}", ["--qp_gap", "sgw-resta", *qp, "--eps-out", es], ALL),
         ("B", f"sgw-dim@{es}", ["--qp_gap", "sgw-dim", *qp, "--eps-out", es], ALL),
         ("B", f"sgw(sbse)@{es}", ["--qp_gap", "sgw", *qp, "--eps-out", es], F),
@@ -82,10 +85,11 @@ def build_cases(eps_solvent, eps_inf):
         ("B", f"sgw-dim[Z=1]@{es}", ["--qp_gap", "sgw-dim", *qp, "--qp-z", "1.0", "--eps-out", es], STD),
         # C: Z factor (vacuum)
         ("C", "sgw-resta[Z=1]", ["--qp_gap", "sgw-resta", *qp, "--qp-z", "1.0"], STD),
-        ("C", "sgw-resta[Z=derived]", ["--qp_gap", "sgw-resta", *qp, "--qp-z", "derived"], STD),
+        ("C", "sgw-resta[Z=0.8]", ["--qp_gap", "sgw-resta", *qp, "--qp-z", "0.8"], STD),
         ("C", "sgw-dim[Z=1]", ["--qp_gap", "sgw-dim", *qp, "--qp-z", "1.0"], STD),
-        ("C", "sgw-dim[Z=derived]", ["--qp_gap", "sgw-dim", *qp, "--qp-z", "derived"], F),
-        # D: independent kernels for the gap-only gw model
+        ("C", "sgw-dim[Z=0.8]", ["--qp_gap", "sgw-dim", *qp, "--qp-z", "0.8"], F),
+        # D: independent kernels for the gap-only gw model (no surface polarization in the BSE)
+        ("D", "gw+resta", ["--qp_gap", "gw", "--kernel", "resta"], ALL),
         ("D", "gw+dim", ["--qp_gap", "gw", "--kernel", "dim"], STD),
         ("D", "gw+xs-resta", ["--qp_gap", "gw", "--kernel", "xs-resta"], F),
         ("D", "gw+sbse", ["--qp_gap", "gw", "--kernel", "sbse"], STD),
@@ -108,6 +112,65 @@ def build_cases(eps_solvent, eps_inf):
                                                "--allow-inconsistent-kernel", "--eps-out", es], F),
     ]
     return cases
+
+
+# ---------------------------------------------------------------------------
+# Experimental sizing references (benchmarks/experimental_sizing.yaml)
+# ---------------------------------------------------------------------------
+SIZING_FILE = Path(__file__).with_name("experimental_sizing.yaml")
+
+
+def sizing_energy(ref, d_nm):
+    """First-exciton energy (eV) of a reference sizing curve at diameter d_nm."""
+    import numpy as np
+    kind = ref.get("kind")
+    if kind == "table":
+        pts = sorted(ref.get("points") or [])
+        if len(pts) < 2:
+            raise ValueError(f"sizing reference '{ref.get('citation')}' has no data points yet; fill in "
+                             f"'points' in {SIZING_FILE.name}")
+        d = np.array([p[0] for p in pts], float)
+        e = np.array([p[1] for p in pts], float)
+        if not d[0] <= d_nm <= d[-1]:
+            raise ValueError(f"d = {d_nm:.2f} nm is outside the reference table [{d[0]}, {d[-1]}] nm")
+        return float(np.interp(1.0 / d_nm ** 2, (1.0 / d ** 2)[::-1], e[::-1]))
+    if kind == "inverse_poly":
+        c = ref["coefficients"]
+        return float(ref["e_gap_bulk_ev"] + 1.0 / sum(ck * d_nm ** k for k, ck in enumerate(c)))
+    if kind == "yu2003":
+        from scipy.optimize import brentq
+        D = lambda L: 1.6122e-9 * L**4 - 2.6575e-6 * L**3 + 1.6242e-3 * L**2 - 0.4277 * L + 41.57
+        lo, hi = 400.0, 700.0
+        if not min(D(lo), D(hi)) <= d_nm <= max(D(lo), D(hi)):
+            raise ValueError(f"d = {d_nm:.2f} nm is outside the Yu et al. (2003) fit range")
+        lam = brentq(lambda L: D(L) - d_nm, lo, hi)
+        if lam < 450.0:
+            print(f"  [exp-ref] Yu et al. (2003) extrapolated below 450 nm (d = {d_nm:.2f} nm)")
+        return float(1239.84 / lam)
+    raise ValueError(f"unknown sizing kind '{kind}'")
+
+
+def experimental_window(name, system, cfg, d_override=None):
+    """Return ((lo, hi), note) for a named sizing reference at the system's diameter."""
+    import numpy as np
+    refs = yaml.safe_load(SIZING_FILE.read_text())
+    if name not in refs:
+        raise ValueError(f"unknown --exp-ref '{name}'; available: {', '.join(refs)}")
+    ref = refs[name]
+    if d_override is not None:
+        d_nm = float(d_override)
+    else:
+        from qdex.hardness import get_cluster_size_metrics
+        lines = (system / cfg["system"]["xyz"]).read_text().split("\n")
+        n_at = int(lines[0])
+        rows = [ln.split() for ln in lines[2:2 + n_at]]
+        syms = [r[0] for r in rows]
+        xyz = np.array([[float(v) for v in r[1:4]] for r in rows])
+        m = get_cluster_size_metrics(xyz, syms, cfg["system"].get("material"))
+        d_nm = 0.2 * (m["R_eff_hull"] - m["surface_offset_ang"])
+    e = sizing_energy(ref, d_nm)
+    tol = float(ref.get("tolerance_ev", 0.1))
+    return (e - tol, e + tol), f"{ref['citation']}: E_1S({d_nm:.2f} nm) = {e:.3f} eV (+/- {tol:.2f})"
 
 
 # ---------------------------------------------------------------------------
@@ -226,18 +289,18 @@ def checks(R, groups, eps_solvent, eps_inf, bulk_shift, exp_gap):
             add("WARN", f"{name} converged", "qsGW loop reached max iterations")
 
     # E: exact relations
-    if get("mode:independent_dft", "s1") is not None and get("gw", "dft_gap") is not None:
-        d = get("mode:independent_dft", "s1") - get("gw", "dft_gap")
+    if get("mode:independent_dft", "s1") is not None and get("gw+resta", "dft_gap") is not None:
+        d = get("mode:independent_dft", "s1") - get("gw+resta", "dft_gap")
         add("PASS" if abs(d) < 2e-3 else "FAIL", "independent_dft lowest = DFT gap", f"difference {d*1000:+.1f} meV")
-    if get("mode:independent_qp", "s1") is not None and get("gw", "qp_gap") is not None:
-        d = get("mode:independent_qp", "s1") - get("gw", "qp_gap")
+    if get("mode:independent_qp", "s1") is not None and get("gw+resta", "qp_gap") is not None:
+        d = get("mode:independent_qp", "s1") - get("gw+resta", "qp_gap")
         add("PASS" if abs(d) < 2e-3 else "FAIL", "independent_qp lowest = QP gap", f"difference {d*1000:+.1f} meV")
-    if get("mode:diagonal_bse", "s1") is not None and get("gw", "s1") is not None:
-        d = get("mode:diagonal_bse", "s1") - get("gw", "s1")
+    if get("mode:diagonal_bse", "s1") is not None and get("gw+resta", "s1") is not None:
+        d = get("mode:diagonal_bse", "s1") - get("gw+resta", "s1")
         add("PASS" if d >= -1e-4 else "FAIL", "full BSE S1 <= lowest diagonal element",
             f"diagonal - full = {d*1000:+.1f} meV (variational principle)")
-    if get("spin:triplet", "s1") is not None and get("gw", "s1") is not None:
-        d = get("gw", "s1") - get("spin:triplet", "s1")
+    if get("spin:triplet", "s1") is not None and get("gw+resta", "s1") is not None:
+        d = get("gw+resta", "s1") - get("spin:triplet", "s1")
         add("PASS" if d >= -1e-4 else "FAIL", "T1 <= S1 (exchange is repulsive)", f"S1 - T1 = {d*1000:+.1f} meV")
     if get("no-exchange", "s1") is not None and get("spin:triplet", "s1") is not None:
         d = get("no-exchange", "s1") - get("spin:triplet", "s1")
@@ -248,7 +311,7 @@ def checks(R, groups, eps_solvent, eps_inf, bulk_shift, exp_gap):
                 add("FAIL", f"{name}: binding > 0", f"QP - S1 = {r['qp_gap'] - r['s1']:.3f} eV")
 
     # B: solvent consistency
-    pairs = [("gw", f"gw@{es}"), ("sgw-resta", f"sgw-resta@{es}"), ("sgw-dim", f"sgw-dim@{es}"),
+    pairs = [("gw", f"gw@{es}"), ("gw+resta", f"gw+resta@{es}"), ("sgw-resta", f"sgw-resta@{es}"), ("sgw-dim", f"sgw-dim@{es}"),
              ("sgw(sbse)", f"sgw(sbse)@{es}"), ("sgw-resta[Z=1]", f"sgw-resta[Z=1]@{es}"),
              ("sgw-dim[Z=1]", f"sgw-dim[Z=1]@{es}"),
              ("legacy sgw-resta+resta", f"legacy sgw-resta+resta@{es}")]
@@ -261,25 +324,25 @@ def checks(R, groups, eps_solvent, eps_inf, bulk_shift, exp_gap):
         ratio = abs(ds1) / max(abs(dqp), 1e-6)
         if ratio < 0.1:
             status, why = "PASS", ""
-        elif vac_n.startswith("gw") or vac_n.startswith("legacy"):
+        elif vac_n.startswith("gw+") or vac_n.startswith("legacy"):
             status, why = "WARN", "  (no shared W: the BSE does not see the solvent term of the QP model)"
         else:
-            status, why = "WARN", "  (shared W but Z < 1: the QP shift is scaled by Z, the BSE attraction is not)"
+            status, why = "WARN", "  (same dielectric model in QP and BSE; residual from Z(eps_out) or 1S vs atomistic average)"
         add(status, f"{vac_n}: S1 insensitive to solvent",
             f"eps_out 1 -> {es}: dQP = {dqp:+.3f} eV, dS1 = {ds1:+.3f} eV, ratio {ratio:.2f}{why}")
 
     # C: Z
     for base in ["sgw-resta", "sgw-dim"]:
-        vals = {z: get(f"{base}{z}", "s1") for z in ["", "[Z=1]", "[Z=derived]"]}
-        vals = {k or "[Z=0.8]": v for k, v in vals.items() if v is not None}
+        vals = {z: get(f"{base}{z}", "s1") for z in ["", "[Z=1]", "[Z=0.8]"]}
+        vals = {k or "[Z=derived]": v for k, v in vals.items() if v is not None}
         if len(vals) > 1:
             add("PASS", f"{base}: S1 vs Z", ", ".join(f"{k} {v:.3f} eV" for k, v in vals.items()) +
                 "  (informative: Z changes S1 through the QP shift only)")
 
     # D: kernel spread for the gap-only gw model
-    kern = {"resta": get("gw", "s1"), "dim": get("gw+dim", "s1"), "xs-resta": get("gw+xs-resta", "s1"),
+    kern = {"resta": get("gw+resta", "s1"), "dim": get("gw+dim", "s1"), "xs-resta": get("gw+xs-resta", "s1"),
             "sbse": get("gw+sbse", "s1"), "mnok-bare": get("gw+mnok-bare", "s1")}
-    qpg = get("gw", "qp_gap")
+    qpg = get("gw+resta", "qp_gap")
     kb = {k: qpg - v for k, v in kern.items() if v is not None and qpg is not None}
     if len(kb) > 1:
         spread = max(kb.values()) - min(kb.values())
@@ -326,11 +389,13 @@ def report(out, cases, R, chk, meta):
              f"profile `{meta['profile']}`, eps_solvent = {meta['eps_solvent']}, eps_inf = {meta['eps_inf']}, "
              f"bulk GW-PBE opening = {meta['bulk_shift']:.3f} eV, "
              f"{'SOC on (S1 columns spin-free, bright column with SOC)' if meta.get('soc') else 'spin-free'}", ""]
+    if meta.get("exp_note"):
+        lines += [f"Experimental reference: {meta['exp_note']}", ""]
     rows_csv = []
     for g in "ABCDEFL":
         names = [c[1] for c in cases if c[0] == g]
         if g in "DE":
-            names = ["gw"] + names
+            names = ["gw+resta"] + names
         if g == "C":
             names = ["sgw-resta", "sgw-dim"] + names
         names = [n for n in dict.fromkeys(names) if n in R]
@@ -391,6 +456,11 @@ def main():
     ap.add_argument("--eps-solvent", type=float, default=2.24, help="optical eps_out of the solvent (n^2); toluene 2.24, hexane 1.89")
     ap.add_argument("--exp-gap", type=float, nargs=2, default=None, metavar=("LO", "HI"),
                     help="experimental first-exciton window in eV for the plausibility check")
+    ap.add_argument("--exp-ref", default=None,
+                    help="named sizing reference from experimental_sizing.yaml (e.g. aubert-hens-2022-zb); "
+                         "sets the experimental window from the cluster diameter. Overrides --exp-gap.")
+    ap.add_argument("--exp-diameter", type=float, default=None,
+                    help="diameter in nm used with --exp-ref (default: 2 x hull equivalent-volume radius)")
     ap.add_argument("--nthreads", type=int, default=4)
     ap.add_argument("--soc", action="store_true", help="keep SOC on (slower); default spin-free")
     ap.add_argument("--force", action="store_true", help="rerun cases that already have results")
@@ -405,15 +475,19 @@ def main():
     eps_inf = float(entry[0])
     bulk_shift = float(entry[8] - entry[7]) if len(entry) >= 9 else 0.0
 
+    exp_note = None
+    if a.exp_ref:
+        a.exp_gap, exp_note = experimental_window(a.exp_ref, system, cfg, a.exp_diameter)
+        print(f"  experimental reference: {exp_note}")
     groups = set(a.only.split(",")) if a.only else set("ABCDEFL")
     all_cases = build_cases(a.eps_solvent, eps_inf)
     cases = [c for c in all_cases if a.profile in c[3] and c[0] in groups]
     # reference runs that other groups compare against
     needed = set()
     if groups & set("DE"):
-        needed |= {"gw"}
+        needed |= {"gw", "gw+resta"}
     if "B" in groups:
-        needed |= {"gw", "sgw-resta", "sgw-dim", "sgw(sbse)", "sgw-resta[Z=1]", "sgw-dim[Z=1]"}
+        needed |= {"gw", "gw+resta", "sgw-resta", "sgw-dim", "sgw(sbse)", "sgw-resta[Z=1]", "sgw-dim[Z=1]"}
     if "C" in groups:
         needed |= {"sgw-resta", "sgw-dim"}
     if "F" in groups:
@@ -437,7 +511,7 @@ def main():
         print(f"QP={r.get('qp_gap')}  S1={s1 if s1 is None else round(s1, 3)}  "
               f"{'ok' if r.get('ok') else 'FAILED'}  ({r.get('wall_s')} s)")
     meta = {"system": str(system), "profile": a.profile, "eps_solvent": a.eps_solvent, "soc": a.soc,
-            "eps_inf": eps_inf, "bulk_shift": bulk_shift, "exp_gap": a.exp_gap}
+            "eps_inf": eps_inf, "bulk_shift": bulk_shift, "exp_gap": a.exp_gap, "exp_note": exp_note}
     chk = checks(R, groups, a.eps_solvent, eps_inf, bulk_shift, a.exp_gap)
     report(out, cases, R, chk, meta)
     n_fail = sum(1 for c in chk if c[0] == "FAIL")
