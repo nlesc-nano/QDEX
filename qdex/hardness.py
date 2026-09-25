@@ -859,18 +859,27 @@ def build_sphere_reaction_field(coords, atom_symbols, material_name, eps_out, ep
     P_prev = np.ones_like(cos_t)
     P_curr = cos_t.copy()
     pow_n = np.ones_like(xx)
+    xmax2 = float(x.max()) ** 2
+    tmp = np.empty_like(xx)
     for n in range(int(n_terms)):
         if n == 0:
             Pn = P_prev
         elif n == 1:
             Pn = P_curr
         else:
-            P_next = ((2 * n - 1) * cos_t * P_curr - (n - 1) * P_prev) / n
-            P_prev, P_curr = P_curr, P_next
+            # P_n = ((2n-1) x P_{n-1} - (n-1) P_{n-2}) / n, in place
+            np.multiply(cos_t, P_curr, out=tmp)
+            tmp *= (2 * n - 1) / n
+            P_prev *= (n - 1) / n
+            tmp -= P_prev
+            P_prev, P_curr, tmp = P_curr, tmp, P_prev
             Pn = P_curr
         cn = (ei - eo) * (n + 1.0) / (ei * (n * ei + (n + 1.0) * eo))
         G += cn * pow_n * Pn
-        pow_n = pow_n * xx
+        # |P_n| <= 1 and (r r'/R^2)^n <= xmax^(2n): stop once the tail is negligible
+        if n > 2 and abs(cn) * xmax2 ** (n + 1) / max(1.0e-300, 1.0 - xmax2) < 1.0e-10 * abs(G[0, 0] if G[0, 0] else 1.0):
+            break
+        pow_n *= xx
     return G * COULOMB_EV_ANG / R
 
 

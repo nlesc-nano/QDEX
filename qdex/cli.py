@@ -1136,12 +1136,24 @@ def main():
     qp_pop_mode = ("lowdin" if (str(getattr(args, "charge_type", "mulliken")).lower() == "lowdin"
                                 or str(args.kernel_type).lower() in ("xs", "xs-qdex")) else "mulliken")
     _pop_cache = {}
+    _sc_cache = {}
+
+    def _get_SC():
+        """S @ C for the current C, computed once and shared with the population analysis stage."""
+        key = id(C)
+        if key not in _sc_cache:
+            _sc_cache.clear()
+            C_d = C.toarray() if hasattr(C, "toarray") else C
+            _sc_cache[key] = S @ C_d
+        return _sc_cache[key]
 
     def _all_populations(representation):
         """Populations of ALL molecular orbitals (one vectorized pass, cached per representation)."""
         if representation not in _pop_cache:
             t0p = time.time()
-            _pop_cache[representation] = orbital_populations(C, S, atom_ao_ranges, qp_pop_mode, representation)
+            _pop_cache[representation] = orbital_populations(
+                C, S, atom_ao_ranges, qp_pop_mode, representation,
+                SC=_get_SC() if qp_pop_mode == "mulliken" else None)
             print(f"  [QP] {qp_pop_mode.capitalize()} populations of all {C.shape[1]} orbitals ({representation}) "
                   f"in {time.time() - t0p:.1f} s")
         return _pop_cache[representation]
@@ -1620,7 +1632,7 @@ def main():
     print("\n--- Computing Unified S@C Population Analysis ---")
     t0_pop = time.time()
     C_dense = C.toarray() if hasattr(C, 'toarray') else C
-    SC_dense = S @ C_dense 
+    SC_dense = _get_SC()  # reused if the QP step already computed it
     C_dense_beta_pop, SC_dense_beta_pop, pops_beta = None, None, None
     
     # === DIAGNOSTIC: STRICT C^T S C ORTHONORMALITY CHECK ===

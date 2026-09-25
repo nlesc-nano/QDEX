@@ -82,7 +82,7 @@ def atom_delta_w(parts):
     return dW
 
 
-def orbital_populations(C_cols, S, atom_ao_ranges, mode="mulliken", representation="atom"):
+def orbital_populations(C_cols, S, atom_ao_ranges, mode="mulliken", representation="atom", SC=None):
     """Populations q[feature, p] of the orbitals in the columns of C (AO basis).
 
     mode 'mulliken': q_mu = C_mu (S C)_mu  -- needs only S C, no diagonalization.
@@ -95,8 +95,10 @@ def orbital_populations(C_cols, S, atom_ao_ranges, mode="mulliken", representati
         from qdex.lowdin import lowdin_apply
         pop = np.abs(lowdin_apply(S, C_cols)) ** 2
     else:
-        S_d = S.toarray() if hasattr(S, "toarray") else S
-        pop = C_cols * (S_d @ C_cols)
+        if SC is None:
+            S_d = S.toarray() if hasattr(S, "toarray") else S
+            SC = S_d @ C_cols
+        pop = C_cols * SC
     if representation == "atom":
         n_ao = pop.shape[0]
         owner = _owner(atom_ao_ranges, n_ao)
