@@ -1,80 +1,74 @@
 Configuration
 =============
 
-Part of :doc:`/quasiparticles/index`.
-
-.. rubric:: QDEX implementation
-
-Implementation entry point:
-
-* Module: ``qdex.hardness``
-* Callable: ``qdex.hardness.estimate_gw_qp_gap``
-* CLI: ``--qp_gap, --dynamic_z``
-* YAML: ``physics.qp_gap, physics.dynamic_z``
-
-.. code-block:: python
-
-   estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
-
-
-15. CLI Flags & YAML Configuration Reference
---------------------------------------------
-
-
-Command-Line Arguments
-~~~~~~~~~~~~~~~~~~~~~~
+Part of :doc:`/quasiparticles/index`. All keys go in the ``physics`` section of the YAML file; the CLI
+flag is given in brackets.
 
 .. list-table::
-   :widths: 25 20 55
    :header-rows: 1
+   :widths: 26 16 58
 
-   * - CLI Flag
+   * - Key [flag]
      - Default
-     - Description
-   * - ``--qp_gap <choice>``
+     - Meaning
+   * - ``qp_gap`` [``--qp_gap``]
      - ``brus``
-     - Quasiparticle model: ``sgw-anchor`` (alias ``gw``), ``sgw-dim``, ``sgw-resta``, ``evgw-dim``, ``evgw-resta``, ``qsgw-dim``, ``qsgw-resta``, ``brus``, ``pbe``, or numeric gap in eV.
-   * - ``--dynamic_z``
-     - ``False``
-     - Compute state-dependent dynamic renormalization :math:`Z_p` from the plasmon-pole :math:`f`-sum rule.
-   * - ``--update_orbitals``
-     - ``False``
-     - Run the static AO-basis COHSEX-like orbital-relaxation model.
-   * - ``--material <name>``
-     - ``DEFAULT``
-     - Material key in ``MATERIAL_DB`` (e.g. ``CSPBBR3``, ``CDSE``, ``INAS``).
-   * - ``--eps-out <float>``
+     - QP model: ``gw``, ``sgw-resta``, ``sgw-dim``, ``evgw-resta``, ``evgw-dim``, ``qsgw-resta``,
+       ``qsgw-dim``; also ``sgw``, ``brus``, ``pbe`` or a gap in eV (:doc:`models`).
+   * - ``kernel`` [``--kernel``]
+     - model default
+     - ``qp`` for the Delta-W models and ``resta-sphere`` for ``gw``, set automatically. Other kernels
+       only for models that define no W.
+   * - ``two_electron_integrals`` [``--two-electron-integrals``]
+     - ``mnok``
+     - Representation of W for the QP correction and the kernel: ``mnok`` (atom pairs) or ``xs``
+       (exact AO density pairs).
+   * - ``eps_out`` [``--eps-out``]
      - ``2.0``
-     - Optical dielectric constant :math:`\epsilon_{\mathrm{out}}` of surrounding solvent or matrix.
-   * - ``--qp-regularization-length <float>``
-     - ``1.0``
-     - Short-range regularization length :math:`\ell` (in Å) in the anchor confinement formula.
-   * - ``--qp-residual-power <float>``
+     - Optical dielectric constant of the environment (vacuum 1, toluene 2.24).
+   * - ``qp_selfenergy`` [``--qp-selfenergy``]
+     - ``cohsex``
+     - Delta-W levels: one-shot ΔCOHSEX (``cohsex``) or the classical ½ qᵀΔWq (``classical``).
+   * - ``qp_levels`` [``--qp-levels``]
+     - ``orbital``
+     - Correct every orbital (``orbital``) or apply one scissor (``rigid``).
+   * - ``qp_z`` [``--qp-z``]
+     - ``derived``
+     - Quasiparticle weight: plasmon pole of the model's ε (``derived``) or a fixed number.
+   * - ``charge_type`` [``--charge_type``]
+     - ``mulliken``
+     - Transition charges of the BSE; the QP populations follow the same partition (xs uses Löwdin).
+   * - ``qp_anchor_residual`` [``--qp-anchor-residual``]
+     - ``on``
+     - Add the calibrated per-edge anchor residual to the Delta-W levels.
+   * - ``qp_residual_scaling`` [``--qp-residual-scaling``]
+     - ``econf``
+     - Size scaling of the anchor residual: E_conf(R)/E_conf(R₀) (``econf``) or (R₀/R)^p (``power``).
+   * - ``qp_residual_power`` [``--qp-residual-power``]
      - ``2.0``
-     - Exponent :math:`p` for the quantum confinement power-law decay.
-   * - ``--dashboard_energy_mode <choice>``
-     - ``dft``
-     - Energy axis for Fuzzy Band and PDOS dashboards: ``dft``, ``qp``, or ``both``.
-   * - ``--qp_energy_reference <choice>``
-     - ``vacuum``
-     - Reference zero for QP spectra: ``vacuum`` (absolute IP/EA) or ``fermi`` (:math:`E_F = 0`).
+     - p of the ``power`` scaling.
+   * - ``qp_polarization`` [``--qp-polarization``]
+     - ``sphere``
+     - Finite-size term of ``gw``: dielectric sphere (``sphere``) or the older κ/(R + ℓ) (``legacy``).
+   * - ``qp_edge_split`` [``--qp-edge-split``]
+     - ``anchor``
+     - HOMO/LUMO split for absolute IP/EA: anchor curves (``anchor``) or the model's own (``model``).
+   * - [``--qp-anchor-calibrate``]
+     - off
+     - Run on the anchor cluster in vacuum to store this model's residual in
+       ``qdex/data/dw_anchor_residuals.json`` (or ``--qp-anchor-table``).
+   * - ``skip_orthonormality_check`` [``--skip-orthonormality-check``]
+     - off
+     - Skip the full Cᵀ S C test for MO files known to be orthonormal (saves one n_ao³ product).
 
-
-YAML Configuration Reference
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Example for a size series in toluene:
 
 .. code-block:: yaml
 
    physics:
-     qp_gap: "sgw-anchor"      # "sgw-anchor", "sgw-dim", "evgw-dim", "qsgw-dim", "brus", "pbe"
-     dynamic_z: true           # Apply empirical state-dependent Z_p damping
-     update_orbitals: false    # Full AO orbital relaxation (qsGW)
-     material: "CSPBBR3"
-     eps_out: 2.25
-     qp_regularization_length: 1.0
-     qp_residual_power: 2.0
-
-   fuzzy:
-     run: true
-     dashboard_energy_mode: "both"
-     qp_energy_reference: "vacuum"
+     qp_gap: sgw-resta          # kernel qp, ΔCOHSEX levels, anchor residual: defaults
+     eps_out: 2.24
+     two_electron_integrals: mnok
+     nhomos: 25
+     nlumos: 25
+     skip_orthonormality_check: true

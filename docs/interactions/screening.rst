@@ -12,7 +12,11 @@ Part of :doc:`/interactions/index`.
 
 .. important::
 
-   Resta and DIM screening builders omit external-medium screening from their BSE direct kernel. This is a model choice; their QP paths include an external reaction term. The two pieces have not been shown to cancel for arbitrary electron and hole densities.
+   With a QP model that defines W (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``gw`` with the sphere
+   polarization) the BSE kernel is that model's W, including its solvent or surface term
+   (:doc:`/quasiparticles/models`). The standalone kernels below are used only with models that
+   define no W (``pbe``, ``brus``, legacy ``gw``, a numeric gap), or with
+   ``--allow-inconsistent-kernel``.
 
 .. rubric:: QDEX implementation
 
