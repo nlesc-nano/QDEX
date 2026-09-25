@@ -41,3 +41,4 @@ tests/CdSe/MOs_cleaned_20ang.txt
 # comparison-suite outputs
 tests/CdSe/compare_*/
 tests/CdSe/sweep_env/
+tests/CdSe/probe_*/
