@@ -1509,6 +1509,22 @@ def main():
                 lev_info["qp_selfenergy"] = "classical"
             lev_info["qp_populations"] = qp_pop_mode
 
+            # The BSE kernel carries the same Z as the QP levels: W_BSE = W_bulk + Zbar (W_QD + W_add - W_bulk),
+            # Zbar = (Z_HOMO + Z_LUMO)/2 of the Delta-COHSEX levels (the estimator's classical Z is replaced).
+            if selfenergy == "cohsex" and not is_anchor_model:
+                z_new = 0.5 * (float(lev_info["z_homo_orbital"]) + float(lev_info["z_lumo_orbital"]))
+                if abs(z_new - z_eh) > 1.0e-12:
+                    from qdex.hardness import scale_w_difference
+                    if use_xs:
+                        W_new = xs_shared_w(w_parts, z_new, _xs_gamma_ao(), atom_ao_ranges)[0]
+                    else:
+                        add = w_parts.get("w_add")
+                        W_new = scale_w_difference(w_parts["w_qd"] + (0.0 if add is None else add),
+                                                   w_parts["w_bulk"], z_new)
+                    qp_w = (W_new, qp_w[1])
+                    print(f"  [Consistency] BSE kernel Zbar = {z_new:.4f} (Delta-COHSEX levels; estimator gave {z_eh:.4f}).")
+                lev_info["w_bse_z"] = float(z_new)
+
             # Non-classical anchor residual of the Delta-W models (calibrated on the evGW anchor)
             if not is_anchor_model:
                 from qdex.hardness import anchor_residual_scale
