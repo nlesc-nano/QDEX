@@ -3,9 +3,9 @@ Localization
 
 Part of :doc:`/electronic_structure/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.pdos_coop``
 * Callable: ``qdex.pdos_coop.compute_pdos_and_coop``
@@ -16,17 +16,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix='sf', pops=None, population_bars=None, device='numpy')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part1_ground_state/index.rst:107-111``
 
 3. Inverse Participation Ratio (IPR)
 ------------------------------------
 
 The **Inverse Participation Ratio (IPR)** provides a quantitative metric of wavefunction spatial localization. 
 
-
-.. rubric:: From ``docs/part1_ground_state/index.rst:112-120``
 
 Mathematical Formulation
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -37,8 +32,6 @@ In ``QDEX``, the orbital IPR for molecular orbital :math:`m` is defined in terms
 
    \mathrm{IPR}_m = \sum_{\mu=1}^{N_{\mathrm{ao}}} \left( P_{\mu, m} \right)^2
 
-
-.. rubric:: From ``docs/part1_ground_state/index.rst:121-139``
 
 Physical Interpretation
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -57,4 +50,3 @@ Physical Interpretation
 
 Plotting IPR alongside the PDOS immediately identifies localized trap states within the fundamental gap or resonant near the band edges.
 
----

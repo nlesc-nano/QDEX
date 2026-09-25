@@ -3,12 +3,19 @@ Foundations
 
 Part of :doc:`/excitons/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. figure:: /_static/figures/bse_kernels.svg
+   :width: 100%
+   :alt: bse kernels
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+   The two kernels of the TDA Bethe–Salpeter matrix. Exchange uses the bare interaction and transition charges :math:`q^{ia}_A`; the direct term uses the screened :math:`W` and the hole (:math:`q^{ij}_A`) and electron (:math:`q^{ab}_B`) densities.
+
+
+.. rubric:: QDEX implementation
+
+Implementation entry point:
 
 * Module: ``qdex.solver``
-* Callable: ``qdex.solver.solve``
+* Callable: ``qdex.solver.ExcitonSolver.solve``
 * CLI: ``--excitation-mode, --include-direct-eh, --include-exchange``
 * YAML: ``physics.excitation_mode, physics.include_direct_eh, physics.include_exchange``
 
@@ -16,19 +23,11 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    solve(self, nroots=10, full_diag=False, tol=1e-05, excitation_mode='bse')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:1-9``
-
 
 The description of neutral optical excitations in semiconductor nanostructures requires treating the two-particle correlated motion of an electron promoted to the conduction band and the hole left behind in the valence band.
 
 ``QDEX`` provides four distinct theoretical frameworks for computing excited states, ranging from non-interacting single-particle transitions to the fully coupled **Bethe-Salpeter Equation (BSE)** under the Tamm-Dancoff Approximation (TDA), coupled with a clear separation between **Two-Electron Integral Representations** and **Dielectric Screening Kernels**.
 
----
-
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:10-22``
 
 1. The Two-Particle Excitation Problem
 --------------------------------------
@@ -43,8 +42,6 @@ The exact correlated excited-state wavefunction :math:`|\Psi_S\rangle` is expres
 
 where :math:`X_{ia}^S` are the configuration interaction amplitudes and :math:`\Omega_S` is the corresponding optical excitation energy.
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:23-51``
 
 Tamm-Dancoff Approximation (TDA)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -73,10 +70,8 @@ Under the **Tamm-Dancoff Approximation (TDA)**, coupling to ground-state de-exci
 
    \mathbf{A} \mathbf{X}_S = \Omega_S \mathbf{X}_S.
 
-The TDA is exceptionally robust for semiconductor nanostructures: it eliminates triplet instabilities, guarantees purely real excitation energies, and reduces computational complexity by a factor of 4 with negligible loss of accuracy for optical transitions well below the plasma frequency.
+For the low-lying excitons of semiconductor nanocrystals the TDA is usually a small approximation (typically below 0.1 eV for band-edge states). It removes triplet instabilities, gives real excitation energies and a Hermitian problem, and halves the dimension of the eigenvalue problem. It is less reliable for high-energy states and for systems with small gaps relative to the kernel.
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:52-66``
 
 Singlet vs. Triplet Matrix Elements
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -91,10 +86,8 @@ The elements of the resonant matrix :math:`A_{ia, jb}` depend on the spin multip
 
    A_{ia, jb}^{\mathrm{triplet}} = \left( \varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}} \right) \delta_{ij} \delta_{ab} - K_{ia, jb}^d.
 
-The bare exchange term :math:`K_{ia, jb}^x` is strictly absent in triplet states because electrons with parallel spins experience identical spatial exchange cancellation. The factor of :math:`2 K_{ia, jb}^x` in singlets is responsible for the singlet-triplet exchange splitting.
+The exchange term :math:`K^x` describes virtual annihilation of the electron–hole pair and its recreation elsewhere (the local-field term). In a closed-shell reference the spin-adapted singlet combination :math:`(|i\alpha\to a\alpha\rangle+|i\beta\to a\beta\rangle)/\sqrt2` couples to this process with weight 2, whereas the triplet combinations have zero net transition density and do not couple at all. This gives the factor :math:`2K^x` for singlets, :math:`0` for triplets, and the singlet–triplet (dark–bright, before SOC) splitting.
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:67-79``
 
 Relativistic 2-Component Spinor BSE
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -105,6 +98,5 @@ When spin-orbit coupling is enabled (``soc: true``), the single-particle spatial
 
    A_{IA, JB}^{\mathrm{spinor}} = \left( \varepsilon_A^{\mathrm{QP}} - \varepsilon_I^{\mathrm{QP}} \right) \delta_{IJ} \delta_{AB} + K_{IA, JB}^x - K_{IA, JB}^d
 
-capturing fine-structure splittings, bright-dark exciton order inversion, and Rashba effects without empirical parameters.
+which carries the spin–orbit contribution to the exciton fine structure (bright–dark ordering) at the level of the single-particle SOC operator; the accuracy of the splitting is limited by the SOC window, the pseudopotential SOC terms and the bare-exchange representation.
 
----

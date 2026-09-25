@@ -8,4 +8,5 @@ This historical chapter has been reorganized by scientific topic. Its full origi
 Original RST: :download:`part8_auger source <../_legacy_parts/part8_auger.rst>`.
 
 Start with:
+
 * :doc:`/recombination/index`

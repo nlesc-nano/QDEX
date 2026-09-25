@@ -3,9 +3,9 @@ Analysis
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.precompute``
 * Callable: ``qdex.namd.precompute.precompute_namd_data``
@@ -16,17 +16,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    precompute_namd_data(config)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:1073-1077``
 
 9. In-Depth Analysis of NAMD Simulations
 ----------------------------------------
 
 ``QDEX`` includes a dedicated analysis module (``qdex.namd.analysis``) that automatically processes precomputed and dynamic trajectory data.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:1078-1134``
 
 1. Carrier Cooling Curves, Lifetimes, and Band Edge Arrival Times
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -86,15 +81,11 @@ In experiments and device modeling, researchers require not only the initial rel
 **Physical Insight**: While an ideal exponential decay satisfies :math:`t_{\mathrm{act}} \approx t_{\mathrm{est}}`, realistic atomistic trajectories often exhibit non-exponential behaviors—such as an initial **phonon bottleneck** across discrete sub-bands or delayed cascades through intermediate surface states. Comparing :math:`t_{\mathrm{est}}` with :math:`t_{\mathrm{act}}` immediately diagnostics whether carrier cooling proceeds smoothly or is delayed by bottlenecks.
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:1135-1139``
-
 2. State-Resolved Population Kinetics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Transient populations :math:`P_I(t)` are exported to ``carrier_cooling_populations.csv``, displaying the sequential decay of initial hot excitons into intermediate states and finally into the emitting :math:`1S` state.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:1140-1144``
 
 3. NAC vs. Energy Gap Distribution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -102,12 +93,11 @@ Transient populations :math:`P_I(t)` are exported to ``carrier_cooling_populatio
 To verify whether non-adiabatic transitions obey the energy-gap law, ``QDEX`` samples pairs of states across trajectory frames and plots non-adiabatic coupling magnitudes :math:`|d_{IJ}|` against energy differences :math:`|E_J - E_I|`. This distinguishes smooth exponential decay from resonant vibronic enhancements.
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:1145-1157``
-
 4. 6-Panel Publication Figures & Dashboards
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Executing the analysis workflow generates a comprehensive 6-panel summary figure (``namd_analysis_6panel.png``) and an interactive Plotly HTML dashboard:
+
 * **Panel A**: Carrier cooling curves (:math:`\Delta E_e(t)` vs. :math:`\Delta E_h(t)` with fitted lifetimes).
 * **Panel B**: Time-dependent populations of frontier exciton states.
 * **Panel C**: Band-gap thermal fluctuation trajectory :math:`E_g(t)`.
@@ -115,4 +105,3 @@ Executing the analysis workflow generates a comprehensive 6-panel summary figure
 * **Panel E**: Phonon Spectral Density :math:`J(\omega)` in :math:`\text{cm}^{-1}`.
 * **Panel F**: Non-adiabatic coupling distribution :math:`|d_{IJ}|` vs. :math:`\Delta E_{IJ}`.
 
----

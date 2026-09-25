@@ -3,9 +3,9 @@ Timesteps cpa
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.precompute``
 * Callable: ``qdex.namd.precompute.precompute_namd_data``
@@ -16,17 +16,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    precompute_namd_data(config)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:45-49``
 
 2. Multi-Timescale Integration: Separating Nuclear and Electronic Time Steps
 ----------------------------------------------------------------------------
 
 A fundamental challenge in simulating non-adiabatic carrier dynamics is the dramatic **timescale mismatch** between nuclear vibrations and electronic phase oscillations.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:50-70``
 
 The Timescale Mismatch
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -50,8 +45,6 @@ The Timescale Mismatch
 Attempting to propagate the electronic Schrödinger equation using the coarse nuclear step :math:`\Delta t_{\mathrm{nuc}} \sim 1\text{ fs}` violates the Nyquist-Shannon sampling theorem, causing severe numerical instability, catastrophic loss of norm conservation (:math:`\sum_I |c_I|^2 \neq 1`), and unphysical population blowup.
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:71-81``
-
 The Classical Path Approximation (CPA)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -60,11 +53,10 @@ To solve this timescale separation, ``QDEX`` operates within the **Classical Pat
 In semiconductor nanoclusters, the electronic transition involves one or two electrons out of thousands of valence electrons. To first order, the nuclear trajectory :math:`\mathbf{R}(t)` is driven primarily by the ground-state lattice potential, and the back-reaction of single-carrier relaxation on the heavy nuclear motion is negligible compared to thermal kinetic fluctuations at 300 K.
 
 This provides an immense computational advantage:
+
 1. **Decoupled Workflow**: The heavy *ab initio* DFT molecular dynamics simulation is performed **only once** to generate the classical trajectory :math:`\mathbf{R}(t)`.
 2. **Post-Processing Reusability**: All non-adiabatic electronic calculations (FSSH with thousands of stochastic trajectories, or PME at multiple temperatures and decoherence models) are executed in post-processing without ever re-evaluating expensive DFT self-consistent field cycles or nuclear forces.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:82-132``
 
 Electronic Sub-Stepping in CPA-FSSH
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -118,8 +110,6 @@ Tully's fewest switches hopping probabilities are accumulated incrementally acro
 The sum is the hop probability for that nuclear step. If the electron and hole channels together exceed 1, they are scaled so the total is 1 and the event is counted. Each nuclear step of a surface-hopping trajectory starts from the active orbital. The cumulant time :math:`\tau_{\mathrm{dec}}` is computed and printed. It is not applied again inside a step that already begins in a pure active state. Upward one-body hops are multiplied by :math:`B_{IJ}` after the flux is accumulated. That factor is the classical-path stand-in for a rejected velocity rescaling (Parandekar and Tully, J. Chem. Phys. 2005; Jain, Alguire, and Subotnik, J. Chem. Phys. 2016). Two-body Auger hops, when requested, do not carry it.
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:133-153``
-
 Electronic Sub-Stepping in the Pauli Master Equation (PME)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -139,4 +129,3 @@ In ``qdex.namd.master_equation``, two robust solutions are provided:
 2. **Tensorized row-stochastic step (Diagonal BSE)**:
    For the pair manifold actually propagated, each sub-step builds a row-stochastic matrix :math:`T = I + \delta t K` from the electron channel and from the hole channel. A row whose leaving probability would exceed 1 is renormalized onto its outgoing transitions. Applying :math:`\mathbf{P} \leftarrow \mathbf{P} T_e` and then :math:`\mathbf{P} \leftarrow T_h^\mathsf{T} \mathbf{P}` keeps every entry non-negative and conserves probability. Recombination :math:`\exp(-k_{\mathrm{loss}}\Delta t)` is applied once after the sub-steps, without putting that lost population back.
 
----

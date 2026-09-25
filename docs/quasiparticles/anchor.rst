@@ -3,13 +3,20 @@ Anchor
 
 Part of :doc:`/quasiparticles/index`.
 
+.. figure:: /_static/figures/anchor_model.svg
+   :width: 100%
+   :alt: anchor model
+
+   Anchor-scaled model evaluated with the CdSe database entry (ℓ = 1 Å, p = 2). The vacuum curve passes through the monomer GW anchor at R₀; below R₀ the radius is clamped. The square marks the 2 nm CdSe test cluster.
+
+
 .. important::
 
    ``sgw-anchor`` interpolates a bulk gap correction and one finite vacuum anchor. Its exponent and regularization length are model parameters, not uniquely fixed by two endpoints.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
@@ -20,9 +27,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:189-207``
 
 6. Avenue 1: Two-Anchor Scaled GW (``sgw-anchor``)
 --------------------------------------------------
@@ -43,8 +47,6 @@ Instead of guessing empirical parameters, ``sgw-anchor`` (historically called ``
      - Periodic crystal
      - High-accuracy bulk :math:`G_0W_0` quasiparticle gap (:math:`E_g^{\mathrm{GW, bulk}}`), calibrated against experimental ARPES.
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:208-241``
 
 The Confinement Interpolation Formula
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -81,8 +83,6 @@ The anchor amplitude :math:`A` is fixed by the finite cluster opening:
 where :math:`\Delta(R_0) = E_g^{\mathrm{GW,cluster}} - E_g^{\mathrm{PBE,cluster}}`.
 
 
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:242-260``
-
 Implementation in QDEX (``sgw-anchor``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -100,4 +100,3 @@ The two-anchor scaled GW model is implemented in :func:`qdex.hardness.estimate_g
 
    qdex --mos ground_state.mos --material CSPBBR3 --qp_gap sgw-anchor --eps-out 2.25
 
----

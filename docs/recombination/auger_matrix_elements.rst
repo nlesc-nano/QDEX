@@ -3,9 +3,9 @@ Auger matrix elements
 
 Part of :doc:`/recombination/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.auger``
 * Callable: ``qdex.auger.compute_auger_matrix_element``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_auger_matrix_element(q_recomb: np.ndarray, q_eject_1: np.ndarray, q_eject_2: np.ndarray, W_resta: np.ndarray, q_recomb_alt: Optional[np.ndarray]=None)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part8_auger/index.rst:73-81``
 
 2. Many-Body Formulation & Matrix Elements
 ------------------------------------------
@@ -30,8 +27,6 @@ Within first-order time-dependent perturbation theory (**Fermi's Golden Rule**),
    \Gamma_{\mathrm{Auger}} = \frac{2\pi}{\hbar} \sum_f \left| M_{if} \right|^2 \delta(E_i - E_f)
 
 
-.. rubric:: From ``docs/part8_auger/index.rst:82-110``
-
 The Two-Body Screened Coulomb Operator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -42,6 +37,7 @@ The interaction driving the transition is the screened two-body Coulomb operator
    \hat{W} = \frac{1}{2} \sum_{pqrs} \langle pq | \hat{W} | rs \rangle \, c_p^\dagger c_q^\dagger c_s c_r
 
 For the negative trion / biexciton :math:`eeh` channel:
+
 * Initial 3-carrier state: :math:`|i\rangle = c_{e_1}^\dagger c_{e_2}^\dagger c_h |0\rangle`
 * Final 1-carrier state: :math:`|f\rangle = c_{e'}^\dagger |0\rangle`
 
@@ -58,16 +54,16 @@ where each two-electron orbital integral is defined as:
    V_{e' e_1, h e_2} = \iint \phi_{e'}^*(\mathbf{r}_1) \, \phi_{e_1}(\mathbf{r}_1) \; W(\mathbf{r}_1, \mathbf{r}_2) \; \phi_h^*(\mathbf{r}_2) \, \phi_{e_2}(\mathbf{r}_2) \; d\mathbf{r}_1 \, d\mathbf{r}_2
 
 Notice the physical factorization of the two coordinate spaces:
+
 1. :math:`\rho_{\mathrm{recomb}}(\mathbf{r}_2) = \phi_h^*(\mathbf{r}_2) \phi_{e_2}(\mathbf{r}_2)` is the **recombination transition density** of the annihilating electron-hole pair.
 2. :math:`\rho_{\mathrm{eject}}(\mathbf{r}_1) = \phi_{e'}^*(\mathbf{r}_1) \phi_{e_1}(\mathbf{r}_1)` is the **ejection transition density** describing excitation of the spectator carrier into the continuum.
 
-
-.. rubric:: From ``docs/part8_auger/index.rst:111-123``
 
 Spin Summation & Multiplicity
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In a closed-shell spatial orbital representation where conduction band edge electrons have paired spins, the two electrons can occupy parallel or antiparallel spin states:
+
 * Parallel spins: only the antisymmetric channel :math:`|V_{\mathrm{dir}} - V_{\mathrm{exch}}|^2` is spin-allowed.
 * Antiparallel spins: exchange vanishes due to orthogonal spin factors, leaving :math:`|V_{\mathrm{dir}}|^2`.
 
@@ -78,12 +74,11 @@ Summing over all spin-allowed final configurations yields the transition probabi
    \sum_{\sigma_f} |M_{\mathrm{Auger}}|^2 = |V_{\mathrm{dir}} - V_{\mathrm{exch}}|^2 + |V_{\mathrm{dir}}|^2
 
 
-.. rubric:: From ``docs/part8_auger/index.rst:124-138``
-
 Universal Multiexciton Statistical Scaling
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In a neutral biexciton containing :math:`2e + 2h`:
+
 * Either of the 2 conduction electrons can recombine with either of the 2 valence holes, giving :math:`2 \times 2 = 4` independent electron-hole recombination channels.
 * Energy can be transferred to either the remaining spectator electron (:math:`eeh`) or the remaining spectator hole (:math:`hhe`).
 
@@ -95,8 +90,6 @@ The relation tested against single-dot and ensemble lifetimes is the superpositi
 
 Here :math:`k_{X^-}` and :math:`k_{X^+}` are the physical trion rates. For a twofold 1S shell each of those rates is twice the elementary three-carrier pathway, because either of the two identical carriers can recombine. When the two trion rates are equal this is :math:`\tau_{\mathrm{trion}} = 4 \tau_{XX}`. It is not an identity if one channel dominates.
 
-
-.. rubric:: From ``docs/part8_auger/index.rst:139-148``
 
 Schematic Diagrams of the Auger Processes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -223,4 +216,3 @@ The energy-level configurations, particle movements, and coupling formulas for t
              Cold electron at CBM (1S_e), Cold hole at VBM (1S_h)
              Energy: E_1S ≈ E_g  -->  Subsequent slow radiative emission (τ_rad ~ 10 - 50 ns)
 
----

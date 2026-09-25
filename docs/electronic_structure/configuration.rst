@@ -3,9 +3,9 @@ Configuration
 
 Part of :doc:`/electronic_structure/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.pdos_coop``
 * Callable: ``qdex.pdos_coop.compute_pdos_and_coop``
@@ -16,17 +16,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix='sf', pops=None, population_bars=None, device='numpy')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part1_ground_state/index.rst:252-256``
 
 7. CLI Flags & YAML Configuration Reference
 -------------------------------------------
 
 All ground-state electronic structure analyses can be triggered from the command-line interface or configured within a YAML file.
 
-
-.. rubric:: From ``docs/part1_ground_state/index.rst:257-309``
 
 Command-Line Arguments
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -81,8 +76,6 @@ Command-Line Arguments
      - ``False``
      - Disable the C++ Libint grid evaluator and fall back to pure Python grid generation.
 
-
-.. rubric:: From ``docs/part1_ground_state/index.rst:310-336``
 
 YAML Configuration Example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

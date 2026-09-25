@@ -8,4 +8,5 @@ This historical chapter has been reorganized by scientific topic. Its full origi
 Original RST: :download:`part1_ground_state source <../_legacy_parts/part1_ground_state.rst>`.
 
 Start with:
+
 * :doc:`/electronic_structure/index`

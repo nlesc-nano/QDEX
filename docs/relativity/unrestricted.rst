@@ -3,9 +3,9 @@ Unrestricted
 
 Part of :doc:`/relativity/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.soc_utils``
 * Callable: ``qdex.soc_utils.compute_spinor_subspace``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_spinor_subspace(atom_symbols, coords_ang, shells, C_AO, eps_Ha, S_AO, active_indices, gth_file, nthreads=1, soc_cache=None, assume_orthonormal=False, SC_AO=None, device='numpy', verbose=True)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part2_soc/index.rst:205-226``
 
 6. Spinor Representation & Unrestricted Kohn-Sham (UKS)
 -------------------------------------------------------
@@ -43,8 +40,6 @@ The local spinor probability density is given by:
    \rho_k^{\mathrm{spinor}}(\mathbf{r}) = |\psi_k^\alpha(\mathbf{r})|^2 + |\psi_k^\beta(\mathbf{r})|^2
 
 
-.. rubric:: From ``docs/part2_soc/index.rst:227-242``
-
 UKS Spin-Preserving Framework
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -59,4 +54,3 @@ When starting from an Unrestricted Kohn-Sham (UKS) calculation with different mo
 
 This allows studying doped quantum dots, open-shell radicals, or spin-polarized nanocrystals without loss of relativistic accuracy.
 
----

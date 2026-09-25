@@ -3,9 +3,9 @@ Fcwd
 
 Part of :doc:`/recombination/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.compute_fcwd_rate``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_fcwd_rate(E_gap_ev, V_el_ev, lambda_ev, sigma_ev)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:1013-1044``
 
 6. Intermediate & Narrow Gap Decay: Franck-Condon Weighted Density of States (FCWD)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

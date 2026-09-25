@@ -3,9 +3,9 @@ Exciton analysis
 
 Part of :doc:`/workflows/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
@@ -16,17 +16,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    main()
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part7_examples/index.rst:220-224``
 
 Tutorial 5: Exciton Wavefunction Descriptors & NTO Analysis
 ------------------------------------------------------------
 
 Here we perform deep spatial wavefunction analysis on the lowest exciton states using the Plasser-Dreuw framework and Natural Transition Orbitals.
 
-
-.. rubric:: From ``docs/part7_examples/index.rst:225-258``
 
 Configuration File (``tutorial5_analysis.yaml``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -63,8 +58,6 @@ Configuration File (``tutorial5_analysis.yaml``)
      spacing_ang: 0.5
 
 
-.. rubric:: From ``docs/part7_examples/index.rst:259-265``
-
 Execution
 ~~~~~~~~~
 
@@ -73,8 +66,6 @@ Execution
    qdex --config tutorial5_analysis.yaml
 
 
-.. rubric:: From ``docs/part7_examples/index.rst:266-274``
-
 Analysis Results
 ~~~~~~~~~~~~~~~~
 
@@ -82,4 +73,3 @@ Analysis Results
 * Inspect ``nto_results.csv``: Root 1 typically shows :math:`\lambda_1^2 > 0.90`, confirming that a single NTO pair captures the optical transition.
 * Render ``exciton_S1_hole.cube`` (red) and ``exciton_S1_elec.cube`` (green) in VMD to visualize the spatial extent of the exciton Bohr radius.
 
----

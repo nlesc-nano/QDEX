@@ -6,5 +6,5 @@ Topics in reference data pair each derivation with the QDEX callable, CLI flags 
 .. toctree::
    :maxdepth: 1
 
-   documentation_math
    materials
+   documentation_math

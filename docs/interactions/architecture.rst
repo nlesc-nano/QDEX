@@ -7,9 +7,9 @@ Part of :doc:`/interactions/index`.
 
    The ``--2e-integrals`` axis chooses the representation of the bare interaction; ``--kernel`` chooses a screening builder. Some kernel names force AO or atom resolution in ``qdex.solver.ExcitonSolver``. Inspect that dispatcher for supported combinations.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.build_gamma``
@@ -20,9 +20,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:48-80``
 
 2. Unified Two-Body Interaction Engine (``2e-integrals`` vs. ``kernel``)
 ------------------------------------------------------------------------
@@ -58,8 +55,6 @@ In ``QDEX``, rather than coupling these operators into an opaque, monolithic cho
      - **Dielectric Screening Profile**: Chooses how :math:`\epsilon^{-1}` and :math:`W(\mathbf{r}_1, \mathbf{r}_2)` are computed across the nanocluster and its surrounding environment.
 
 
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:81-109``
-
 Shared Two-Body Operator Architecture
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -90,8 +85,6 @@ The diagram below illustrates how this unified engine simultaneously powers Quas
    +--------------------------------------------+   +----------------------------------------+
 
 
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:110-134``
-
 Role in Quasiparticle Theory vs. Excited States
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -109,16 +102,12 @@ Role in Quasiparticle Theory vs. Excited States
      - Computes the confinement shift :math:`\Delta W = W^{\mathrm{QD}} - W^{\mathrm{bulk}} + W^{\mathrm{solv}}` for COHSEX self-energies and :math:`qsGW` Hamiltonian updates.
      - Computes the direct screened attraction :math:`K^d`, binding the electron and hole into an exciton.
    * - **Short-Range Limit** (:math:`r \to 0`)
-     - :math:`W \to v = 1/r` (:math:`\epsilon \to 1`), preventing unphysical damping of on-site self-energy shifts.
+     - Resta/DIM set :math:`W_{AA}=\gamma_{AA}` (unscreened, MNOK-damped); sBSE may screen on-site terms. The on-site conventions are not uniform across kernels.
      - Preserves full on-site Coulomb repulsion and atomic exchange splitting.
    * - **Bulk Limit** (:math:`R_{\mathrm{QD}} \to \infty`)
-     - :math:`\Delta W \to 0`, naturally recovering the bulk quasiparticle band gap :math:`\Delta_{\mathrm{bulk}}`.
-     - :math:`-K^d \to -e^2/(\epsilon_\infty r)`, recovering the bulk Wannier-Mott exciton binding energy :math:`E_b^{\mathrm{bulk}} = R_y^*`.
+     - :math:`\Delta W \to 0` only if the QD screening model converges to the same bulk reference; the anchor model reaches :math:`\Delta_{\mathrm{bulk}}` by construction.
+     - The long-range tail tends to :math:`-e^2/(\epsilon_\infty r)`. This is necessary but not sufficient for the Wannier–Mott limit, which also needs converged active spaces, band-edge masses and the full coupled BSE (not tested; see :doc:`/validation/bulk_exciton_limit`).
 
----
-
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:80-142``
 
 2. Key Distinction: ``2e-integrals`` vs. ``kernel``
 ---------------------------------------------------
@@ -181,4 +170,3 @@ In ``QDEX``, these two operators are configured independently:
 .. note::
    The keyword ``2e-integrals`` is also accepted via YAML as ``two_electron_integrals`` or ``2e_integrals``, and on the CLI as ``--2e-integrals`` or ``--two-electron-integrals``. The legacy flag ``kernel_type`` is retained for full backward compatibility.
 
----

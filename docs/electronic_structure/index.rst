@@ -6,11 +6,11 @@ Topics in electronic structure and orbital analysis pair each derivation with th
 .. toctree::
    :maxdepth: 1
 
-   bonding_coop
-   configuration
-   fuzzy_bands
-   localization
-   orbital_cubes
    orbitals
    populations_pdos
+   localization
+   bonding_coop
+   fuzzy_bands
+   orbital_cubes
    qp_analysis
+   configuration

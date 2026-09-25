@@ -6,9 +6,9 @@ Topics in exciton wavefunctions pair each derivation with the QDEX callable, CLI
 .. toctree::
    :maxdepth: 1
 
-   configuration
-   cubes
-   dashboards
+   transition_density
    descriptors
    ntos
-   transition_density
+   cubes
+   dashboards
+   configuration

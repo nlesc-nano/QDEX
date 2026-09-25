@@ -6,10 +6,10 @@ Topics in relativity and spin pair each derivation with the QDEX callable, CLI f
 .. toctree::
    :maxdepth: 1
 
-   assembly
-   configuration
    foundations
    material_effects
    pseudopotentials
    spinor_hamiltonian
+   assembly
    unrestricted
+   configuration

@@ -3,9 +3,9 @@ Pme
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.master_equation``
 * Callable: ``qdex.namd.master_equation.propagate_pme_tensor``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    propagate_pme_tensor(P_mat, E_mat, d_occ, d_virt, dt_fs, temp_k=300.0, tau_dec_fs=None, n_substeps=20, eps_occ=None, eps_virt=None, n_atoms=775, k_loss=None, return_flux=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:222-224``
 
 4. Theoretical Foundations of the Dynamical Engines
 ---------------------------------------------------
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:225-286``
 
 1. Derivation of the Pauli Master Equation (PME)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -3,9 +3,16 @@ Foundations
 
 Part of :doc:`/quasiparticles/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. figure:: /_static/figures/qp_hierarchy.svg
+   :width: 100%
+   :alt: qp hierarchy
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+   Map of the ``qp_gap`` options and what each one corrects.
+
+
+.. rubric:: QDEX implementation
+
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
@@ -16,19 +23,11 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1-9``
-
 
 Standard semi-local Kohn-Sham Density Functional Theory (DFT) using functionals like PBE severely underestimates the fundamental band gap of semiconductor nanostructures. For instance, PBE predicts a band gap of :math:`\approx 1.5\text{ eV}` for bulk :math:`\text{CsPbBr}_3`, whereas the experimental quasiparticle gap is :math:`\approx 2.35\text{ eV}`.
 
 In ``QDEX``, single-particle excitation energies are corrected via an analytical and physically grounded hierarchy of **Scaled GW Quasiparticle Models** that incorporate quantum confinement, microscopic electrostatic screening, dielectric solvation, dynamic renormalization, and orbital relaxation.
 
----
-
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:10-23``
 
 1. Quasiparticle Theory and Hedin's GW Approximation
 -----------------------------------------------------
@@ -44,8 +43,6 @@ where:
 * :math:`\hat{V}_H(\mathbf{r})` is the classical Hartree potential.
 * :math:`\Sigma(\mathbf{r}, \mathbf{r}'; \omega)` is the non-local, energy-dependent **electron self-energy** operator.
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:24-47``
 
 Hedin's Equations & The :math:`G_0W_0` Approximation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -69,4 +66,3 @@ The quasiparticle energy shift :math:`\Delta \varepsilon_k^{\mathrm{QP}} = \vare
 
 where :math:`Z_k = \left( 1 - \left. \frac{\partial \operatorname{Re}\Sigma}{\partial \omega} \right|_{\varepsilon_k} \right)^{-1}` is the quasiparticle renormalization weight.
 
----

@@ -8,6 +8,7 @@ This historical chapter has been reorganized by scientific topic. Its full origi
 Original RST: :download:`part6_namd source <../_legacy_parts/part6_namd.rst>`.
 
 Start with:
+
 * :doc:`/dynamics/index`
 * :doc:`/recombination/index`
 * :doc:`/spectroscopy/index`

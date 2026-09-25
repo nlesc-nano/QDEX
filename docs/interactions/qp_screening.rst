@@ -3,9 +3,9 @@ Qp screening
 
 Part of :doc:`/interactions/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.build_dim_screening_factors``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    build_dim_screening_factors(coords, atom_symbols, material_name=None, eps_out=2.4, alpha=1.0)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:318-355``
 
 Screening Formulations for :math:`W^{\mathrm{QD}}`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -43,14 +40,33 @@ Screening Formulations for :math:`W^{\mathrm{QD}}`
 
       W_{AB}^{\mathrm{QD}} = \frac{1}{\epsilon_{\mathrm{in}}(R) r_{AB}} + \frac{1 - \epsilon_{\mathrm{in}}(R)^{-1}}{r_{AB}} \exp\left( -\frac{r_{AB}}{\lambda_{\mathrm{TF}}} \right)
 
-   where quantum confinement suppresses the core dielectric constant according to the Penn model:
+   where :math:`1/r_{AB}` is regularized by the MNOK damping and
+   :math:`\lambda_{\mathrm{TF}} = d_{\mathrm{NN}}/\sqrt{\epsilon_{\mathrm{in}}-1}`. The implemented
+   size dependence of :math:`\epsilon_{\mathrm{in}}` is an interpolation in the confinement energy
+   (``estimate_sgw_resta_qp_gap``, one-shot path):
 
    .. math::
 
-      \epsilon_{\mathrm{in}}(R) = 1 + (\epsilon_\infty - 1) \frac{1}{1 + (R_p / R)^2}, \quad R_p = \frac{\pi}{2} \left( \frac{13.6\text{ eV}}{E_g^{\mathrm{bulk}}} \right) a_0.
+      \epsilon_{\mathrm{in}} = 1 + \frac{\epsilon_\infty - 1}{1 + \left(\Delta E_{\mathrm{conf}} / E_g^{\mathrm{PBE,bulk}}\right)^2},
+      \qquad \Delta E_{\mathrm{conf}} = E_g^{\mathrm{DFT,QD}} - E_g^{\mathrm{PBE,bulk}}
+
+   (the iterated ``evgw-resta``/``qsgw-resta`` paths use the current QP gap and the bulk GW gap
+   instead).
+
+   .. note::
+
+      Despite its name, this is not Penn's scaling. In the Penn model
+      :math:`\epsilon-1\propto(\hbar\omega_p/E_P)^2`, where :math:`E_P` is the average (Penn) gap,
+      about 4–5 eV for CdSe, not the fundamental band gap. A Penn-consistent size correction would be
+      :math:`\epsilon_{\mathrm{in}}-1=(\epsilon_\infty-1)\,[E_P/(E_P+\Delta E_{\mathrm{conf}})]^2`.
+      Using the small PBE bulk gap as the reference energy makes the reduction much stronger. For the
+      CdSe test cluster (:math:`\Delta E_{\mathrm{conf}}=0.82` eV) the implemented expression gives
+      :math:`\epsilon_{\mathrm{in}}\approx3.0`, compared with :math:`\approx4.7` from the Penn form with
+      :math:`E_P=4.5` eV. Atomistic calculations of ~2 nm dots (Wang and Zunger, PRL 73, 1039 (1994);
+      Delerue, Lannoo and Allan, PRB 68, 115411 (2003)) find a reduction of tens of percent, not a halving.
 
 3. **Simplified BSE Screened Interaction (``sgw``)**:
-   Implements the Cho, Bintrim, and Berkelbach [JCTC 18, 3054 (2022)] polarizability kernel:
+   Implements the Cho, Bintrim, and Berkelbach [J. Chem. Theory Comput. 18, 3438 (2022)] polarizability kernel:
 
    .. math::
 

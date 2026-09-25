@@ -7,9 +7,9 @@ Part of :doc:`/quasiparticles/index`.
 
    The ``evgw-*`` implementation iterates an effective gap and screening model; it does not update a complete Green function or the state-resolved GW self-energy.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_evgw_dim_qp_gap``
@@ -20,9 +20,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_evgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, atom_ao_ranges=None, alpha=1.0, max_iter=25, tol=0.0001, damping=0.5, return_details=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:499-509``
 
 Effective-gap Self-Consistent Screening Model (``evgw-dim``, ``evgw-resta``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -35,8 +32,6 @@ Standard one-shot :math:`G_0W_0` depends on the starting DFT functional. The **E
 
 until :math:`|\varepsilon_p^{(n+1)} - \varepsilon_p^{(n)}| < 10^{-4}\text{ eV}` (typically 3–5 iterations).
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:510-519``
 
 Implementation in QDEX (``evgw-dim``, ``evgw-resta``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

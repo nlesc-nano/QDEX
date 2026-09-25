@@ -3,9 +3,9 @@ Nacs tracking
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.precompute``
 * Callable: ``qdex.namd.precompute.align_phases_and_crossings``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    align_phases_and_crossings(S_mat, C_next, track_crossings=True, lock_above=0.5)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:576-578``
 
 5. Trajectory Precomputation & Wavefunction Tracking
 -----------------------------------------------------
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:579-589``
 
 Numerical Non-Adiabatic Couplings (NAC)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -37,8 +32,6 @@ Along the classical nuclear trajectory :math:`\mathbf{R}(t)`, the non-adiabatic 
 
 where :math:`S_{IJ}(t, t+\Delta t) = \langle \psi_I(t) | \psi_J(t+\Delta t) \rangle` is the cross-frame state overlap. In ``QDEX``, the underlying atomic orbital cross-overlaps :math:`S_{\mu \nu}(t, t+\Delta t) = \int \chi_\mu(\mathbf{r}; \mathbf{R}(t)) \chi_\nu(\mathbf{r}; \mathbf{R}(t+\Delta t)) d\mathbf{r}` are evaluated analytically via Libint2.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:590-606``
 
 Eliminating Gauge Phase Discontinuities
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -58,8 +51,6 @@ where :math:`\theta_I = \operatorname{arg}(S_{II}(t, t+\Delta t))`. This guarant
    \operatorname{Re}(S_{II}(t, t+\Delta t)) \ge 0, \quad \operatorname{Im}(S_{II}(t, t+\Delta t)) = 0
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:607-621``
-
 Hungarian Matching for Trivial Crossings
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -73,4 +64,3 @@ A trivial crossing is a label swap between two orbitals that do not interact. In
 
 and a state is allowed to leave its own column only when :math:`|S_{II}| < 0.5`. An avoided crossing that still overlaps its own adiabatic label stays in the adiabatic basis that surface hopping propagates. The assignment is not a global diabatization.
 
----

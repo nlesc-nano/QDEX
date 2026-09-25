@@ -3,9 +3,9 @@ Dish
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.integrator``
 * Callable: ``qdex.namd.integrator.step_dish_batch``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    step_dish_batch(C, active_surfaces, E_batch, dt_fs, tau_mat=None, beta=None, detailed_balance=True, min_tau_fs=1.0)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:414-522``
 
 3. Decoherence-Induced Surface Hopping (DISH)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -55,6 +52,7 @@ At each nuclear step :math:`\Delta t`, for every inactive state :math:`J \neq K`
 where :math:`\tau_{KJ}` is the state-pair pure-dephasing time (loaded from ``decoherence_times.npz``).
 
 For each state :math:`J \neq K`, a uniform random number :math:`R_1 \in [0, 1)` is sampled:
+
 * If :math:`R_1 \ge P_{\mathrm{dec}, J}`: State :math:`J` remains coherent with active state :math:`K`. No collapse attempt is made for state :math:`J`.
 * If :math:`R_1 < P_{\mathrm{dec}, J}`: A dephasing event has occurred. The nuclear wavepacket associated with state :math:`J` has spatially separated from the wavepacket on surface :math:`K`. The trajectory must now undergo stochastic branching!
 
@@ -62,7 +60,6 @@ Step 2: Stochastic Branching (Collapse vs. Quenching)
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
 
 When state :math:`J` dephases, the trajectory reaches a quantum bifurcation point. In accordance with the Born rule, the probability that the system collapses into state :math:`J` is given by its instantaneous electronic population :math:`|c_J|^2`, scaled by detailed balance:
-
 
 
 .. math::
@@ -127,4 +124,3 @@ Apart from a standard factor of 2 arising from the full two-sided integration of
 
 **Conclusion**: DISH provides a rigorous theoretical unification of wavepacket quantum dynamics and statistical master equations. It recovers PME cooling rates in dense manifolds while retaining single-trajectory stochastic statistics, individual dwell times, and branching kinetics.
 
----

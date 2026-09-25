@@ -3,9 +3,9 @@ Auger ecsh
 
 Part of :doc:`/recombination/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.surface_hopping``
 * Callable: ``qdex.namd.surface_hopping.run_namd_dynamics``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    run_namd_dynamics(config)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part8_auger/index.rst:475-477``
 
 8. Energy-Conserving Surface Hopping (ECSH) for Auger in NAMD
 -------------------------------------------------------------
 
-
-.. rubric:: From ``docs/part8_auger/index.rst:478-500``
 
 Physical Foundations: Electron-Phonon vs. Coulomb Transitions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -50,8 +45,6 @@ In contrast, **Auger processes** (such as biexciton annihilation :math:`XX \to X
 Coulomb matrix elements :math:`V_{ij} = \langle \Phi_i | \hat{V} | \Phi_j \rangle` couple many-body states that differ by **two orbitals** (:math:`\Delta N_{\mathrm{orb}} = 2`).
 
 
-.. rubric:: From ``docs/part8_auger/index.rst:501-507``
-
 The Fundamental Flaw in Previous Approaches (The "Energy Leak" Error)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -59,8 +52,6 @@ In earlier NAMD approaches (e.g. Zhou, Lu, & Prezhdo, *Nano Lett.* 2021, 21, 756
 
 **The physical failure**: When an Auger hop occurs, the recombination energy is transferred **entirely within the quantum electronic subsystem** to the spectator carrier. **Zero energy is transferred to lattice vibrations during the Auger hop itself.** Scaling Coulomb hops with the Boltzmann factor caused the huge recombination energy (:math:`\sim 2.5 - 3.5\text{ eV}`) to unphysically leak into classical phonons, leading to artificially accelerated decay rates (up to :math:`2\times` too fast) and distorted kinetics.
 
-
-.. rubric:: From ``docs/part8_auger/index.rst:508-529``
 
 The Gumber-Prezhdo ECSH Methodology
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -85,8 +76,6 @@ To resolve this issue, Gumber & Prezhdo (*J. Chem. Theory Comput.* 2024, 20, 13,
 where :math:`\Delta E_{\mathrm{window}} \approx k_B T` (or :math:`2 k_B T`). Once the hop occurs to the hot-carrier state, the newly created hot carrier subsequently relaxes down its band via standard single-particle NACs, correctly dissipating its energy to lattice heat as phonons.
 
 
-.. rubric:: From ``docs/part8_auger/index.rst:530-546``
-
 Relation with Static Trions (:math:`eeh` and :math:`hhe`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -104,8 +93,6 @@ How does dynamic ECSH NAMD relate to the static trion picture used in Section 1?
 * **Complete Kinetic Cascade**:
   The static calculation outputs only the single instantaneous rate :math:`\Gamma_{XX}`. ECSH NAMD simulates the **full sequence of events**: the biexciton lives on the :math:`XX` surface, undergoes an Auger hop to a hot single exciton, and then emits phonons through the single-particle NAC manifold as it cools to the band edge. In Transient Absorption, this reproduces the bi-exponential bleach recovery observed in experiments.
 
-
-.. rubric:: From ``docs/part8_auger/index.rst:547-582``
 
 Resolving the Timescale Mismatch (:math:`1 - 10\text{ ps}` MD vs. :math:`100\text{ ps} - 10\text{ ns}` Auger)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -141,4 +128,3 @@ Resolving the Timescale Mismatch (:math:`1 - 10\text{ ps}` MD vs. :math:`100\tex
 3. **Ultrafast Intraband Auger-Assisted Carrier Cooling**:
    Unlike interband biexciton recombination, **intraband Auger cooling** (where a hot electron cools from :math:`1P_e \to 1S_e` by kicking a valence hole deep into the valence band, bypassing the phonon bottleneck) occurs on an ultrafast timescale of :math:`50 - 500\text{ fs}`. This ultrafast process naturally fits well within standard :math:`1 - 2\text{ ps}` AIMD trajectories.
 
----

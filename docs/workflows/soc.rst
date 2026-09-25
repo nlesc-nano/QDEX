@@ -3,9 +3,9 @@ Soc
 
 Part of :doc:`/workflows/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
@@ -16,17 +16,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    main()
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part7_examples/index.rst:77-81``
 
 Tutorial 2: Incorporating Relativistic Spin-Orbit Coupling
 ----------------------------------------------------------
 
 Lead (:math:`Z = 82`) exhibits intense relativistic spin-orbit coupling. In this tutorial, we compute the two-component spinor electronic structure.
 
-
-.. rubric:: From ``docs/part7_examples/index.rst:82-107``
 
 Configuration File (``tutorial2_soc.yaml``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -55,8 +50,6 @@ Configuration File (``tutorial2_soc.yaml``)
      nlumos: 2
 
 
-.. rubric:: From ``docs/part7_examples/index.rst:108-114``
-
 Execution
 ~~~~~~~~~
 
@@ -65,8 +58,6 @@ Execution
    qdex --config tutorial2_soc.yaml
 
 
-.. rubric:: From ``docs/part7_examples/index.rst:115-123``
-
 What to Observe
 ~~~~~~~~~~~~~~~
 
@@ -74,4 +65,3 @@ What to Observe
 2. The fundamental band gap contracts by :math:`\approx 0.65\text{ eV}` compared to Tutorial 1.
 3. ``spinor_sp_HOMO_density.cube`` and ``spinor_sp_LUMO_density.cube`` are exported, containing the relativistic spinor densities :math:`\rho(\mathbf{r}) = |\psi^\alpha|^2 + |\psi^\beta|^2`.
 
----

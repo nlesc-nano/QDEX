@@ -3,9 +3,9 @@ Dipoles oscillators
 
 Part of :doc:`/spectroscopy/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.transient_absorption``
 * Callable: ``qdex.namd.transient_absorption.compute_transient_absorption``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_transient_absorption(times_fs: np.ndarray, populations: np.ndarray, E_pairs: np.ndarray, f_pairs: np.ndarray, i_pairs: np.ndarray, a_pairs: np.ndarray, sigma_ev: float=0.03, e_range: Optional[Tuple[float, float]]=None, n_e_points: int=300, include_se: bool=False, all_energies: Optional[np.ndarray]=None, state_degeneracy: float=2.0, include_esa: bool=False, f_elec_esa: Optional[np.ndarray]=None, e_elec_esa: Optional[np.ndarray]=None)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:369-395``
 
 6. Transition Dipoles, Oscillator Strengths & Superradiance
 -----------------------------------------------------------
@@ -45,4 +42,3 @@ The corresponding dimensionless oscillator strength is:
 
 This coherent summation describes **superradiance** and intensity borrowing, where optical strength from high-energy transitions is transferred into the lowest bright exciton.
 
----

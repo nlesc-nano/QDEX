@@ -7,8 +7,8 @@ Topics in two-body interactions pair each derivation with the QDEX callable, CLI
    :maxdepth: 1
 
    architecture
-   asymptotics
-   environment
-   qp_screening
    representations
    screening
+   environment
+   asymptotics
+   qp_screening

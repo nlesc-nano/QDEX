@@ -3,9 +3,16 @@ Transient absorption
 
 Part of :doc:`/spectroscopy/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. figure:: /_static/figures/ta_contributions.svg
+   :width: 100%
+   :alt: ta contributions
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+   Transient-absorption contributions (left) and a schematic 1S-bleach rise (right).
+
+
+.. rubric:: QDEX implementation
+
+Implementation entry point:
 
 * Module: ``qdex.namd.transient_absorption``
 * Callable: ``qdex.namd.transient_absorption.compute_transient_absorption``
@@ -16,9 +23,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_transient_absorption(times_fs: np.ndarray, populations: np.ndarray, E_pairs: np.ndarray, f_pairs: np.ndarray, i_pairs: np.ndarray, a_pairs: np.ndarray, sigma_ev: float=0.03, e_range: Optional[Tuple[float, float]]=None, n_e_points: int=300, include_se: bool=False, all_energies: Optional[np.ndarray]=None, state_degeneracy: float=2.0, include_esa: bool=False, f_elec_esa: Optional[np.ndarray]=None, e_elec_esa: Optional[np.ndarray]=None)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:1158-1168``
 
 10. Ultrafast Pump-Probe Transient Absorption (TA) Spectroscopy
 ---------------------------------------------------------------
@@ -31,8 +35,6 @@ In ultrafast optical experiments on semiconductor nanocrystals, **pump-probe tra
 
 as a function of probe photon energy :math:`E` and pump–probe delay time :math:`t`.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:1169-1182``
 
 Physical Mechanisms in Nanocrystal Transient Absorption
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -48,8 +50,6 @@ The transient absorption signal :math:`\Delta A(E, t)` comprises three distinct 
 3. **Excited-State Absorption (ESA)** (:math:`\Delta A > 0`):
    A populated excited carrier can absorb a second probe photon to transition into higher-lying continuum bands or multiexciton states (:math:`S_1 \to S_{XX}`), producing positive absorption features.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:1183-1207``
 
 Microscopic Formulation & State-Filling Factors
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -77,8 +77,6 @@ The continuous differential absorption spectrum :math:`\Delta A(E, t_k)` is then
    \Delta A(E, t_k) = \sum_{ia} \Delta f_{ia}(t_k) \frac{1}{\sqrt{2\pi}\sigma} \exp\left( -\frac{(E - E_{ia}(t_k))^2}{2\sigma^2} \right)
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:1208-1228``
-
 1S Bleach Kinetic Profiling & Carrier Cooling Rates (:math:`k_C`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -100,8 +98,6 @@ and performs non-linear least-squares fitting to an exponential rise model:
 
 This directly yields the **hot-carrier cooling time** :math:`\tau_C` (in fs/ps) and **cooling rate** :math:`k_C = 1 / \tau_C` (in :math:`\text{ps}^{-1}`), providing direct theoretical counterparts to the experimental 1S bleach rise traces reported in transient absorption spectroscopy.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:1229-1238``
 
 Schematic Diagrams of Transient Absorption Processes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -188,8 +184,6 @@ The optical mechanisms (GSB, SE, ESA) and dynamical carrier relaxation cascade u
           │    └─────┘
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:1311-1350``
-
 How QDEX Data Are Used to Compute Every Formula Term
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -231,14 +225,12 @@ Below is the exact step-by-step mapping of how QDEX data structures evaluate eve
      - Scipy curve-fit of :math:`-\Delta A_{1S}(t)` to exponential rise :math:`A_0 (1 - e^{-t/\tau_C})`.
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:1351-1360``
-
 Publication-Quality Visualizations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Executing transient absorption generates a 3-panel publication dashboard:
+
 * **Panel (a): 2D False-Color TA Map** :math:`\Delta A(E, t)`: Probe energy on x-axis, delay time on y-axis, using a diverging `RdBu_r` colormap (blue = negative bleach, red = positive ESA).
 * **Panel (b): 1S Bleach Kinetic Rise Profile**: Tracking the negative 1S bleach with exponential rise fit and annotated cooling time :math:`\tau_C` and rate :math:`k_C`.
 * **Panel (c): Differential Absorption Spectra** :math:`\Delta A(E)`: Spectral slices at selected delay times (e.g. :math:`t = 0, 100, 250, 500, 1000\text{ fs}`) showing the spectral shift from hot state filling to the sharp band-edge bleach.
 
----

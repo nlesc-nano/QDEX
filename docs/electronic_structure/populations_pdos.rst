@@ -3,9 +3,9 @@ Populations pdos
 
 Part of :doc:`/electronic_structure/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.pdos_coop``
 * Callable: ``qdex.pdos_coop.compute_pdos_and_coop``
@@ -16,17 +16,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix='sf', pops=None, population_bars=None, device='numpy')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part1_ground_state/index.rst:51-55``
 
 2. Projected Density of States (PDOS)
 -------------------------------------
 
 To understand the chemical character of states near the band gap (e.g. distinguishing Pb :math:`6s` and Br :math:`4p` valence band states from Pb :math:`6p` conduction band states), ``QDEX`` projects the total density of states onto individual atomic species or specific atomic centers.
 
-
-.. rubric:: From ``docs/part1_ground_state/index.rst:56-82``
 
 Mulliken Population Weights
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -56,8 +51,6 @@ Similarly, the element-projected weight for chemical species :math:`X` (e.g., Pb
    P_{X, m} = \sum_{A \in X} P_{A, m}
 
 
-.. rubric:: From ``docs/part1_ground_state/index.rst:83-93``
-
 Energy Convolution & Smearing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -70,8 +63,6 @@ The continuous Projected Density of States curve :math:`\mathrm{PDOS}_X(\varepsi
 where :math:`g_s = 2` for spin-restricted systems (accounting for Kramers spin degeneracy) and :math:`g_s = 1` for two-component spinor calculations.
 
 
-.. rubric:: From ``docs/part1_ground_state/index.rst:94-106``
-
 Surface vs. Core Spatial Partitioning
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -83,4 +74,3 @@ In colloidal semiconductor quantum dots, surface reconstruction, ligand terminat
 
 Atoms located at :math:`r_I \ge 0.75 \max(r_I)` are assigned to the surface layer, while atoms at :math:`r_I < 0.75 \max(r_I)` form the crystalline core. The resulting surface and core population curves are exported to ``surf_core_data_*.csv``.
 
----

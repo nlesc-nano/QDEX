@@ -3,9 +3,9 @@ Transition density
 
 Part of :doc:`/exciton_analysis/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.nto``
 * Callable: ``qdex.nto.analyze_nto_state``
@@ -16,19 +16,11 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    analyze_nto_state(solver, vec, energy_ev, f_osc, state_index, coords, symbols, mu_ia=None, soc_U=None, top_n=3, context=None)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:1-9``
-
 
 Solving the Bethe-Salpeter Equation yields excitation energies :math:`\Omega_S` and eigenvectors :math:`\mathbf{X}_S = (X_{ia}^S)`. However, understanding the physical nature of an exciton—whether it is a tightly bound Wannier-Mott exciton, a localized Frenkel exciton, a surface-trap state, or a spatial charge-transfer (CT) excitation—requires quantitative real-space wavefunction analysis.
 
 ``QDEX`` incorporates the rigorous **Plasser-Dreuw exciton analysis framework** along with **Natural Transition Orbitals (NTOs)** to decompose complex multi-configurational exciton wavefunctions into intuitive, publication-ready physical descriptors.
 
----
-
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:10-24``
 
 1. The Two-Particle Transition Density Matrix
 ---------------------------------------------
@@ -45,8 +37,6 @@ In real space, the transition density :math:`\gamma_0^S(\mathbf{r}_h, \mathbf{r}
 
    \gamma_0^S(\mathbf{r}_h, \mathbf{r}_e) = \sum_{i \in \mathrm{occ}} \sum_{a \in \mathrm{virt}} X_{ia}^S \, \phi_i(\mathbf{r}_h) \, \phi_a(\mathbf{r}_e)
 
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:25-43``
 
 Reduced Hole and Electron Densities
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -68,8 +58,6 @@ where the single-particle reduced density matrices are:
    \mathbf{D}^h = \mathbf{X} \mathbf{X}^\dagger, \quad \mathbf{D}^e = \mathbf{X}^\dagger \mathbf{X}
 
 
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:44-60``
-
 Vectorized Low-Memory Mulliken Population
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -85,4 +73,3 @@ In standard implementations, computing :math:`\rho_h` and :math:`\rho_e` require
 
 This vectorized reduction avoids large intermediate arrays and runs in milliseconds even for large nanoclusters.
 
----

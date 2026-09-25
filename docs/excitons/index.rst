@@ -6,8 +6,8 @@ Topics in excitons and bse pair each derivation with the QDEX callable, CLI flag
 .. toctree::
    :maxdepth: 1
 
-   configuration
    foundations
    frameworks
-   model_selection
    solvers
+   model_selection
+   configuration

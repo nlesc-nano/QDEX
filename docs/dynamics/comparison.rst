@@ -3,9 +3,9 @@ Comparison
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.precompute``
 * Callable: ``qdex.namd.precompute.precompute_namd_data``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    precompute_namd_data(config)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:523-575``
 
 4. Comparative Synthesis: PME vs. CPA-FSSH-EDC vs. DISH
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -71,4 +68,3 @@ The following comprehensive comparison synthesizes the mathematical foundations,
      - Nanocrystals with dense bands, avoided crossings, defect trapping, and single-carrier dwell times.
 
 
----

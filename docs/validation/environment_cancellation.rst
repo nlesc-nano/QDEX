@@ -1,6 +1,13 @@
 Environmental screening and optical cancellation
 ================================================
 
+
+.. figure:: /_static/figures/environment_cancellation.svg
+   :width: 100%
+   :alt: environment cancellation
+
+   CdSe test: the QP gap follows ε_out through the anchor model, but the implemented Resta direct kernel has no ε_out dependence, so the optical gap inherits the full solvent shift. The dashed line is the exact-cancellation limit.
+
 The Resta and DIM quasiparticle paths include an exterior dielectric reaction
 term through ``eps_out``. Their BSE direct kernels currently use the interior
 screening model and do not receive that same exterior reaction operator. This

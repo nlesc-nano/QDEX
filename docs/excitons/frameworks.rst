@@ -3,16 +3,23 @@ Frameworks
 
 Part of :doc:`/excitons/index`.
 
+.. figure:: /_static/figures/excitation_frameworks.svg
+   :width: 100%
+   :alt: excitation frameworks
+
+   The four ``excitation_mode`` choices, shown as the structure of the transition-space matrix.
+
+
 .. important::
 
    ``diagonal_bse`` omits all off-diagonal transition mixing. It can miss a substantial part of binding; it cannot generally be assumed to reproduce the bulk Wannier exciton. Exchange and direct attraction have independent switches.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.exciton_hamiltonian``
-* Callable: ``qdex.exciton_hamiltonian.independent_transition_energies``
+* Callable: ``qdex.exciton_hamiltonian.ExcitonHamiltonian.independent_transition_energies``
 * CLI: ``--excitation-mode, --include-direct-eh, --include-exchange``
 * YAML: ``physics.excitation_mode, physics.include_direct_eh, physics.include_exchange``
 
@@ -20,9 +27,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    independent_transition_energies(self, mode)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:314-338``
 
 5. The Four Excitation Frameworks (``excitation_mode``)
 -------------------------------------------------------
@@ -50,8 +54,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
      - Fully coupled configuration interaction. Solves the complete resonant matrix, capturing spatial exciton delocalization, state mixing, and oscillator strength redistribution.
 
 
-.. rubric:: From ``docs/part4_excited_states/index.rst:339-352``
-
 Why Diagonal BSE Works in Nanocrystals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -67,8 +69,6 @@ The **Diagonal BSE** framework omits off-diagonal configuration interaction (:ma
 * **Essential for NAMD**: In non-adiabatic molecular dynamics simulations where excited states must be evaluated at every time step (e.g. 5,000 steps), full BSE diagonalization is computationally prohibitive. Diagonal BSE provides a less expensive approximate surface; its error must be checked against coupled BSE for the chosen active space.
 
 
-.. rubric:: From ``docs/part4_excited_states/index.rst:353-368``
-
 Implementation in QDEX (``--excitation-mode``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -83,4 +83,3 @@ The excitation frameworks are implemented across :mod:`qdex.cli`, :mod:`qdex.exc
 4. **Coupled Bethe-Salpeter Equation (``bse``)**:
    Implemented via :func:`qdex.davidson.davidson`. Constructs the active space transition basis, applies energy truncation thresholds (``--e_thresh``), and solves for the lowest :math:`N_{\mathrm{roots}}` exciton eigenvectors using a block-Davidson iterative subspace algorithm.
 
----

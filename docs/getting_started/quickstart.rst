@@ -23,6 +23,7 @@ Below is a standard calculation for the excited states of an Indium Arsenide (In
      --nthreads 8
 
 Key CLI Arguments:
+
 * `--mo_file`: Path to binary `.mbse` or text MO file.
 * `--xyz`: Cartesian coordinates of the system in standard XYZ format.
 * `--basis_txt` & `--basis_name`: CP2K MOLOPT Gaussian basis set library and specific basis set name.
@@ -75,6 +76,7 @@ Step 1: Precompute overlaps and exciton states
    qdex --config config.yaml --namd-precompute
 
 This step computes:
+
 * Quasiparticle energies and diagonal BSE exciton states.
 * Cross-frame non-adiabatic overlaps :math:`S(t, t+\Delta t)`.
 * Spinor phase alignment and Hungarian crossing tracking.

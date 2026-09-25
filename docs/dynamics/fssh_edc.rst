@@ -3,9 +3,9 @@ Fssh edc
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.surface_hopping``
 * Callable: ``qdex.namd.surface_hopping.run_namd_dynamics``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    run_namd_dynamics(config)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:287-413``
 
 2. Classical Path Approximation Surface Hopping with Energy-Based Decoherence (CPA-FSSH-EDC)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -89,6 +86,7 @@ Hopping Decision & Wavepacket Collapse
 """"""""""""""""""""""""""""""""""""""
 
 A uniform random number :math:`\xi \in [0, 1)` is generated:
+
 * If :math:`\sum_{L=1}^{J-1} g_{K \to L} < \xi \le \sum_{L=1}^J g_{K \to L}`, trajectory :math:`tr` hops to state :math:`J`.
 * The active surface is reassigned: :math:`K \leftarrow J`.
 * The electronic wavepacket undergoes **projective collapse** onto the new active state:
@@ -145,4 +143,3 @@ State-Pair Dephasing Times: Ab Initio Covariance vs. Granucci-Persico
 
    where :math:`C = 0.1\text{ Hartree} = 2.721\text{ eV}`, and :math:`E_{\mathrm{kin}} = \frac{3}{2} N_{\mathrm{atoms}} k_B T` is the classical thermal kinetic energy of the nuclear lattice.
 
----

@@ -3,9 +3,9 @@ Overview
 
 Part of :doc:`/recombination/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.auger``
 * Callable: ``qdex.auger.calculate_auger_rates``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    calculate_auger_rates(C: np.ndarray, eps: np.ndarray, S: np.ndarray, atom_ao_ranges: List[Tuple[int, int]], coords: np.ndarray, atom_symbols: List[str], homo_idx: int, W_resta: Optional[np.ndarray]=None, material_name: Optional[str]='DEFAULT', eps_out: float=2.0, sigma_ev: float=0.05, broadening_mode: str='gaussian', channel: str='all', n_initial_elec: int=1, n_initial_hole: int=1, e_search_sigma_factor: float=4.0, spinor: bool=False, U_spinor_alpha: Optional[np.ndarray]=None, U_spinor_beta: Optional[np.ndarray]=None, lambda_reorg_ev: Optional[float]=None, temperature_k: float=300.0, eps_eff: Optional[float]=None, verbose: bool=True)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:821-831``
 
 8. Radiative & Non-Radiative Recombination Mechanisms
 -----------------------------------------------------
@@ -31,8 +28,6 @@ Once photoexcited hot carriers have cooled to the band edge (forming the lowest 
 
 where :math:`k_{I \to 0}^{\mathrm{rad}}` and :math:`k_{I \to 0}^{\mathrm{nr}}` represent the radiative and non-radiative recombination rates from excited state :math:`|I\rangle` to the ground state.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:832-890``
 
 1. Microscopic Origin: From DFT and BSE to Recombination
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

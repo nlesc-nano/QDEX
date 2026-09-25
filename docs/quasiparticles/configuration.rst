@@ -3,9 +3,9 @@ Configuration
 
 Part of :doc:`/quasiparticles/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1147-1149``
 
 15. CLI Flags & YAML Configuration Reference
 --------------------------------------------
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1150-1187``
 
 Command-Line Arguments
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -64,8 +59,6 @@ Command-Line Arguments
      - ``vacuum``
      - Reference zero for QP spectra: ``vacuum`` (absolute IP/EA) or ``fermi`` (:math:`E_F = 0`).
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1188-1205``
 
 YAML Configuration Reference
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

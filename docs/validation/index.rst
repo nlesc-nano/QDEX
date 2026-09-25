@@ -6,6 +6,6 @@ Topics in validation and limiting cases pair each derivation with the QDEX calla
 .. toctree::
    :maxdepth: 1
 
-   bulk_exciton_limit
    cdse_benchmark
    environment_cancellation
+   bulk_exciton_limit

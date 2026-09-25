@@ -3,9 +3,9 @@ Qp edges
 
 Part of :doc:`/workflows/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
@@ -16,17 +16,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    main()
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part7_examples/index.rst:124-128``
 
 Tutorial 3: Scaled GW Band Gap Correction & Absolute Edges
 ----------------------------------------------------------
 
 Semi-local DFT underestimates the band gap. Here we activate the Scaled GW model with dielectric solvent screening (:math:`\epsilon_{\mathrm{out}} = 2.25` for toluene) and predict absolute IP and EA levels.
 
-
-.. rubric:: From ``docs/part7_examples/index.rst:129-153``
 
 Configuration File (``tutorial3_gw.yaml``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -54,8 +49,6 @@ Configuration File (``tutorial3_gw.yaml``)
      pdos_atoms: ["Pb", "Br"]
 
 
-.. rubric:: From ``docs/part7_examples/index.rst:154-160``
-
 Execution
 ~~~~~~~~~
 
@@ -63,8 +56,6 @@ Execution
 
    qdex --config tutorial3_gw.yaml
 
-
-.. rubric:: From ``docs/part7_examples/index.rst:161-178``
 
 Key Output
 ~~~~~~~~~~
@@ -82,4 +73,3 @@ The terminal prints the reconstructed absolute band edges:
 
 Both ``fuzzy_dashboard_dft.html`` and ``fuzzy_dashboard_qp.html`` are created, allowing direct side-by-side comparison of DFT and quasiparticle band structures.
 
----
