@@ -7,6 +7,7 @@ Topics in validation and limiting cases pair each derivation with the QDEX calla
    :maxdepth: 1
 
    model_comparison
+   anchor_evgw_benchmark
    cdse_benchmark
    environment_cancellation
    bulk_exciton_limit

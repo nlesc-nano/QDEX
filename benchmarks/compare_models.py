@@ -324,7 +324,8 @@ TITLES = {
 def report(out, cases, R, chk, meta):
     lines = [f"# QDEX model comparison: {meta['system']}", "",
              f"profile `{meta['profile']}`, eps_solvent = {meta['eps_solvent']}, eps_inf = {meta['eps_inf']}, "
-             f"bulk GW-PBE opening = {meta['bulk_shift']:.3f} eV, spin-free", ""]
+             f"bulk GW-PBE opening = {meta['bulk_shift']:.3f} eV, "
+             f"{'SOC on (S1 columns spin-free, bright column with SOC)' if meta.get('soc') else 'spin-free'}", ""]
     rows_csv = []
     for g in "ABCDEFL":
         names = [c[1] for c in cases if c[0] == g]
@@ -435,7 +436,7 @@ def main():
         s1 = r.get("s1")
         print(f"QP={r.get('qp_gap')}  S1={s1 if s1 is None else round(s1, 3)}  "
               f"{'ok' if r.get('ok') else 'FAILED'}  ({r.get('wall_s')} s)")
-    meta = {"system": str(system), "profile": a.profile, "eps_solvent": a.eps_solvent,
+    meta = {"system": str(system), "profile": a.profile, "eps_solvent": a.eps_solvent, "soc": a.soc,
             "eps_inf": eps_inf, "bulk_shift": bulk_shift, "exp_gap": a.exp_gap}
     chk = checks(R, groups, a.eps_solvent, eps_inf, bulk_shift, a.exp_gap)
     report(out, cases, R, chk, meta)
