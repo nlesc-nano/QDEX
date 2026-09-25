@@ -351,5 +351,18 @@ experimental window (2.70–2.95 eV, Yu et al. 2003 sizing curve); with the
 monomer-calibrated residual it sits at the lower edge. The vacuum binding
 (1.35 eV) is plausible in magnitude for an unscreened ~2 nm cluster, but it has not
 been checked against a full GW–BSE reference.
-The remaining gap to experiment points to the next step, recommendation 2: a
-size-dependent interior screening and self-energy, consistent in QP and BSE.
+**Correction to recommendation 2.** A probe with reduced interior
+permittivity inside the `env` model shows that a size-dependent interior ε
+cancels in S₁ in the same way as the surface term. Its contributions are:
+* QP gap: ε_in = 4.7 → 3.047 eV and ε_in = 2.98 → 2.880 eV, plus an interior
+  ΔW term of +0.1 and +0.26–0.33 eV respectively;
+* binding: 0.64 and 0.70 eV, against 0.61 eV at ε_in = 6.2.
+
+The net S₁ change is only a few tens of meV. Any static, classical change of W used
+consistently in QP and BSE enters S₁ as ½(q_e − q_h)ᵀδW(q_e − q_h). The optical
+gap is therefore set by DFT gap + bulk ΔGW − bulk-screened binding. Only
+non-classical terms can move it: the size dependence of the short-range self-energy
+(which the anchor residual approximates), the DFT gap itself, and the uncertainty
+of the experimental size assignment. The decisive next test is a G₀W₀@PBE
+calculation of this same cluster. The `sgw-*` models reach ≈ 3.0 eV in toluene only
+because their interior term enters the QP gap without the matching binding.
