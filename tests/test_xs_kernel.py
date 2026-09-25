@@ -617,7 +617,9 @@ class TestXsKernel(unittest.TestCase):
         self.assertEqual(prov_solv["qp_model"], "sgw_dim")
         self.assertIn("confinement_shift_internal_ev", prov_solv)
         self.assertIn("confinement_shift_solvent_ev", prov_solv)
-        self.assertGreater(prov_solv["confinement_shift_internal_ev"], 0.0)
+        # H2 with identical atoms: the DIM screening equals the bulk reference, so the
+        # interior contrast is exactly zero (the old loop returned 3.6e-16 of round-off).
+        self.assertGreaterEqual(prov_solv["confinement_shift_internal_ev"], 0.0)
         self.assertGreater(prov_solv["confinement_shift_solvent_ev"], 0.0)
 
         # 2. Vacuum eps_out = 1.0 (must have larger scissor than solvent)
