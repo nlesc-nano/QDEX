@@ -113,27 +113,28 @@ physics
   - ``"independent_qp"``: Non-interacting single-particle transitions with scaled GW scissor gap.
   - ``"independent_dft"``: Non-interacting single-particle transitions with bare DFT gap.
 * **qp_gap** (*str or float*):
-  - ``"env"``: Bulk GW–PBE opening plus dielectric-sphere polarization self-energies. The same reaction field is added to the BSE direct kernel, so QP and optical gaps treat the solvent consistently. Recommended for optical gaps in a solvent; see :doc:`/quasiparticles/environment_model`.
   - ``"sgw-anchor"`` (or ``"gw"``): Scaled GW model with two anchors (vacuum cluster and bulk limit) and dielectric polarization.
   - ``"sgw-dim"``: Microscopic atomistic polarizable dipole screening difference model.
-  - ``"sgw-resta"``: Resta electronic Thomas-Fermi screening model with a gap-based size-dependent dielectric interpolation (see the note in :doc:`/interactions/qp_screening`).
+  - ``"sgw-resta"``: Resta electronic Thomas-Fermi screening model with Penn size-dependent dielectric scaling.
   - ``"evgw-dim"`` / ``"evgw-resta"``: Effective-gap self-consistent screening models.
   - ``"qsgw-dim"`` / ``"qsgw-resta"``: Static AO-basis COHSEX-like orbital-relaxation models; these are not conventional QSGW.
   - ``"brus"``: Brus effective mass confinement model.
   - ``"pbe"``: Uncorrected DFT eigenvalues.
   - *float*: Explicit user-defined target band gap in eV.
 * **2e-integrals** (*str*): Two-electron integral representation: ``"mnok"`` (semi-empirical atom-centered transition charges) or ``"xs"`` (analytical Libint2 integrals restricted to AO density pairs :math:`(\mu\mu|\nu\nu)`). Also accepted as ``two_electron_integrals`` or legacy ``kernel_type``.
-* **kernel** (*str*): Dielectric screening model applied to direct electron-hole attraction: ``"resta"``, ``"dim"``, ``"rpa"`` (or ``"xs-rpa"``), ``"sbse"``, or ``"bse"``.
-* **dynamic_z** (*bool*): Apply an empirical state-dependent damping factor :math:`Z_p`. No frequency-dependent self-energy or :math:`f`-sum rule is evaluated.
+* **kernel** (*str*): Screened interaction :math:`W` of the BSE direct term.
+
+  - ``"qp"``: the :math:`W` built by the QP model. It is the default, and the only allowed choice, for the Delta-W QP models (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``), so that GW and BSE share one :math:`W`. Any other kernel with these models is rejected; see :doc:`/validation/model_comparison`.
+  - ``"resta"``, ``"dim"``, ``"xs-resta"``, ``"sbse"``, ``"bse"`` (unscreened MNOK, legacy default): independent kernels for the gap-only QP models (``pbe``, ``brus``, ``gw``, a numeric gap).
+* **qp_z** (*str or float*): Quasiparticle weight for the Delta-W models. ``"derived"`` uses the empirical state-dependent formula; a number (e.g. ``1.0`` or ``0.8``) is used as a fixed value. The default is the model default (fixed 0.8 for ``sgw-*``/``sgw``, derived for ``evgw-*``/``qsgw-*``). Rejected for gap-only models. CLI: ``--qp-z``.
+* **allow_inconsistent_kernel** (*bool*): Allow a BSE kernel different from the QP model's :math:`W`. Only for reproducing results obtained before this check existed. CLI: ``--allow-inconsistent-kernel``.
+* **dynamic_z** (*bool*): Same as ``qp_z: derived`` (empirical state-dependent :math:`Z_p`; no frequency-dependent self-energy or :math:`f`-sum rule is evaluated).
 * **update_orbitals** (*bool*): Relax molecular orbitals in the AO basis using the static COHSEX-like ``qsgw-*`` model.
 * **include_direct_eh** (*bool*): Include screened attractive :math:`K^d` in ``bse`` or ``diagonal_bse`` (default ``true``). CLI: ``--include-direct-eh`` / ``--no-direct-eh``.
 * **include_exchange** (*bool*): Include bare repulsive :math:`K^x` independently of :math:`K^d` (default ``true``). CLI: ``--include-exchange`` / ``--no-exchange``.
 * **soc** (*bool*): Enable fully relativistic 2-component spinor Hamiltonian.
 * **soc_window_ev** (*float*): Energy window in eV around the Fermi level for selecting active MOs in SOC.
-* **eps_out** (*float*): Surrounding solvent or matrix dielectric constant (default 2.0). For vertical excitations use the optical value :math:`n^2` (hexane 1.89, toluene 2.24, vacuum 1.0).
-* **environment** (*str*): ``"none"`` (default) or ``"sphere"``. Set automatically by ``qp_gap: env``; with ``qp_gap: pbe`` it adds only the BSE reaction field (test mode).
-* **env_cavity_buffer** (*float*): Cavity radius = largest atomic distance from the centroid + this buffer, in Å (default 1.0).
-* **env_anchor_residual** (*bool*): For ``qp_gap: env``, add the anchor-model residual :math:`A(R_0/R)^p` (default ``false``).
+* **eps_out** (*float*): Surrounding solvent or matrix dielectric constant (default 2.0).
 * **nhomos** / **nlumos** (*int*): Number of occupied and virtual frontier molecular orbitals to include in the active space.
 * **triplet** (*bool*): Perform triplet BSE calculation (omits repulsive exchange :math:`2K^x`).
 * **charge_type** (*str*): Method for computing transition charges: ``"mulliken"`` or ``"lowdin"``.

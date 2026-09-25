@@ -1,12 +1,7 @@
-Comparing QP and BSE options
-============================
+QP and BSE compatibility
+========================
 
 Part of :doc:`/validation/index`.
-
-QDEX has three largely independent switches for the excited-state calculation. They combine into
-many possible runs, and it is easy to lose track of which difference comes from which switch. This
-page explains what each switch changes and describes a script that runs the combinations one factor
-at a time and checks them.
 
 .. figure:: /_static/figures/qp_hierarchy.svg
    :width: 100%
@@ -14,145 +9,169 @@ at a time and checks them.
 
    The ``qp_gap`` options and what each one corrects.
 
-The three switches
-------------------
+The rule: the same W in GW and BSE
+----------------------------------
+
+In GW–BSE, the screened interaction :math:`W` that corrects the quasiparticle energies is the same
+:math:`W` that binds the electron and hole in the BSE direct term. A Delta-W QP model computes a
+self-energy correction from a model :math:`W_{QD}` (including its solvent term). Its excitations are
+consistent only if the BSE kernel is that same :math:`W_{QD}`. Otherwise:
+
+* the charged excitation (QP gap) sees the solvent and the reduced interior screening, while
+* the neutral excitation (BSE) does not.
+
+The classical polarization energies then fail to cancel in the optical gap, and S\ :sub:`1` follows
+the QP gap one to one when the solvent changes.
+
+QDEX therefore enforces the rule. Each Delta-W QP model exposes the :math:`W` it built, and the BSE
+uses it through ``kernel: qp``.
+
+Compatibility table
+-------------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 18 30 52
+   :widths: 22 38 20 20
 
-   * - switch
-     - what it changes
-     - options
    * - ``qp_gap``
-     - the single-particle energies, i.e. the QP gap and level spacing
-     - ``pbe`` (none). ``brus`` (EMA kinetic term). ``gw`` (anchor-scaled scissor). ``sgw-dim``,
-       ``sgw-resta``, ``sgw`` (static charging models). ``evgw-*`` (gap iteration). ``qsgw-*``
-       (orbital relaxation). ``env`` (bulk GW + dielectric-sphere polarization, shared with the BSE).
-   * - ``kernel``
-     - the screened interaction :math:`W` in the direct e–h term, which sets the exciton binding
-     - ``resta`` (default: bulk :math:`\epsilon_\infty`, Thomas–Fermi-like profile). ``dim`` (Thole
-       dipoles). ``sbse`` (monopole RPA). ``xs-resta`` (AO density-pair integrals + Resta). ``bse``
-       (unscreened MNOK: an upper bound for the binding, not a physical choice).
-   * - ``excitation_mode``
-     - how the transition-space matrix is solved
-     - ``independent_dft``, ``independent_qp`` (no kernel), ``diagonal_bse`` (kernels on the diagonal
-       only), ``bse`` (full TDA BSE)
+     - :math:`W` of the QP model
+     - allowed ``kernel``
+     - default ``kernel``
+   * - ``sgw-resta``, ``evgw-resta``, ``qsgw-resta``
+     - Resta profile with the size-scaled :math:`\epsilon_{\mathrm{eff}}` (final iteration for ``evgw``/``qsgw``) plus solvent term
+     - ``qp``
+     - ``qp``
+   * - ``sgw-resta-pure``
+     - Resta profile with bulk :math:`\epsilon_\infty` plus solvent term
+     - ``qp``
+     - ``qp``
+   * - ``sgw-dim``, ``evgw-dim``, ``qsgw-dim``
+     - DIM/Thole-scaled profile (final iteration for ``evgw``/``qsgw``) plus solvent term
+     - ``qp``
+     - ``qp``
+   * - ``sgw`` (atom mode)
+     - sBSE RPA :math:`W`, solvent inside :math:`J`
+     - ``qp`` (``sbse`` is accepted as the same matrix)
+     - ``qp``
+   * - ``gw`` / ``sgw-anchor``, ``brus``, ``pbe``, numeric gap
+     - none (gap-only models)
+     - ``resta``, ``xs-resta``, ``dim``, ``sbse``, ``bse``
+     - ``bse`` (legacy)
 
-Two more settings matter:
+Rules enforced by the CLI:
 
-* ``eps_out``: the solvent, which should be the optical :math:`n^2`.
-* The active-space size ``nhomos``/``nlumos``: a convergence parameter, not a physical choice.
+* A Delta-W model combined with any kernel other than ``qp`` is an error. The escape hatch
+  ``--allow-inconsistent-kernel`` exists only to reproduce old results.
+* ``kernel: qp`` with a gap-only model is an error, because there is no :math:`W` to share.
+* ``kernel: qp`` is atom-resolved and requires ``two_electron_integrals: mnok``.
+* ``qp_z`` / ``dynamic_z`` with a gap-only model is an error; these models have no Z.
 
-Which combination to use
-------------------------
+For the gap-only models the kernel is an independent modelling choice. The gap model and the kernel do
+not share a :math:`W`, and the solvent term of ``gw`` does not enter the BSE.
+
+The quasiparticle weight Z
+--------------------------
+
+The Delta-W correction is :math:`\Delta\varepsilon_p = Z\cdot\tfrac12 q_p^T\Delta W q_p`. The BSE uses
+the full :math:`W`. ``qp_z`` selects Z:
+
+* ``qp_z: 1.0``: the static limit. The classical polarization terms then cancel between QP gap and
+  BSE, and S\ :sub:`1` is independent of the solvent. **Recommended with a static BSE.**
+* ``qp_z: 0.8`` (default of the one-shot models): scales the QP shift but not the BSE attraction. A
+  fraction :math:`1-Z` of the polarization energy is left over, so S\ :sub:`1` shifts with the solvent.
+  In the opposite direction to the old mismatched combination, and 5× smaller.
+* ``qp_z: derived``: empirical state-dependent :math:`Z_p` (0.94–0.97 for CdSe). Not a computed
+  self-energy derivative.
+
+A reduced Z paired with a static BSE is not a consistent pair. In full GW–BSE, the renormalization of
+the QP energies is largely compensated by the dynamical screening of the BSE kernel, which a static
+kernel omits.
+
+What consistency does to the results (CdSe 2 nm)
+------------------------------------------------
+
+Cd\ :sub:`68`\ Se\ :sub:`55`\ Cl\ :sub:`26`, spin-free, 25 × 25 active space. S\ :sub:`1` in eV.
 
 .. list-table::
    :header-rows: 1
-   :widths: 35 65
 
-   * - goal
-     - recommended
-   * - optical gap / absorption onset in a solvent
-     - ``qp_gap: env`` + ``kernel: resta`` + ``excitation_mode: bse``, with ``eps_out`` = solvent
-       :math:`n^2`. The optical gap is then solvent-consistent.
-       Add ``env_anchor_residual: true`` to include the size dependence calibrated on the monomer GW
-       anchor.
-   * - QP gap / IP–EA trend with size
-     - ``qp_gap: env`` or ``gw``. Report which, and give ``eps_out``.
-   * - exciton binding energy
-     - ``qp_gap: env`` (binding = QP − S\ :sub:`1` is environment-consistent), active space
-       ≥ 100 × 100 with Davidson (``solver.full_diag: false``).
-   * - fast screening of many structures
-     - ``excitation_mode: diagonal_bse`` for peak positions near the edge (it recovers about 98 % of
-       the S\ :sub:`1` shift for CdSe, but not the oscillator-strength distribution).
-   * - absolute S\ :sub:`1` with the older scissor models (``gw``, ``sgw-*``)
-     - only in the solvent they were calibrated for. Their optical gap moves with ``eps_out`` as much as
-       the QP gap does (:doc:`environment_cancellation`).
+   * - model
+     - vacuum QP / S\ :sub:`1`
+     - toluene (:math:`\epsilon_{\mathrm{out}}=2.24`) QP / S\ :sub:`1`
+   * - ``sgw-resta``, old mismatched kernel
+     - 3.762 / 3.535
+     - 3.253 / 3.026
+   * - ``sgw-resta``, shared W, Z = 0.8
+     - 3.762 / 2.240
+     - 3.253 / 2.383
+   * - ``sgw-resta``, shared W, Z = 1
+     - 4.021 / 2.499
+     - 3.385 / 2.515
+   * - ``sgw-dim``, shared W, Z = 1
+     - 3.809 / 2.529
+     - 3.173 / 2.531
+   * - ``qsgw-dim``, shared W
+     - 3.955 / 2.689
+     -
+   * - ``qsgw-resta``, shared W
+     - 4.234 / 2.738
+     -
+
+The results show four things:
+
+* **Solvent.** With the shared :math:`W` and Z = 1, S\ :sub:`1` changes by 2–16 meV between vacuum and
+  toluene, compared with 0.5 eV for the mismatched combination.
+* **W model.** Resta and DIM give the same S\ :sub:`1` to within 30 meV. The interior screening
+  contrast raises the QP gap and the binding by almost the same amount, just as the solvent term does.
+* **What sets S₁.** With a consistent static :math:`W`, S\ :sub:`1` ≈ DFT gap + bulk GW–PBE opening − binding
+  with bulk screening. That is about 2.5 eV spin-free, about 2.4 eV for the first bright state with SOC.
+  This is 0.3–0.5 eV below the experimental window of 2.70–2.95 eV (Yu et al. 2003 sizing curve). The
+  earlier agreement of the mismatched ``sgw-*`` runs in toluene came from the missing electron–hole
+  polarization.
+* **Orbital relaxation.** ``qsgw-*`` is higher by about 0.2 eV. Its screened-exchange operator
+  :math:`-\tfrac12 P\circ\Delta W` relaxes the orbitals and does not reduce to a classical charging energy,
+  so it is not cancelled.
 
 The comparison script
 ---------------------
 
-``benchmarks/compare_models.py`` runs the normal ``qdex`` CLI for each case, in its own directory,
-starting from your ``config.yaml``. It then writes a report ``summary.md`` (plus ``summary.csv`` and
-``summary.png``). The cases are grouped by the question they answer, so that only one factor changes
-inside a group:
+``benchmarks/compare_models.py`` runs the ``qdex`` CLI once per case, starting from your
+``config.yaml``, and writes ``summary.md``, ``summary.csv`` and ``summary.png``:
 
 .. list-table::
    :header-rows: 1
-   :widths: 10 40 50
+   :widths: 8 92
 
    * - group
      - question
-     - cases
    * - A
-     - What QP gap does each ``qp_gap`` option give?
-     - all QP options, vacuum, Resta kernel
+     - QP gap and S\ :sub:`1` of every ``qp_gap`` option, each with its compatible kernel (vacuum)
    * - B
-     - Is the optical gap insensitive to the solvent?
-     - ``gw``, ``sgw-resta``, ``sgw-dim``, ``env`` at ``eps_out`` = 1 and the solvent value;
-       ``env`` in a matched medium
+     - Is S\ :sub:`1` insensitive to the solvent, while the QP gap moves?
    * - C
-     - How much binding does each :math:`W` give?
-     - ``resta``, ``dim``, ``xs-resta``, ``sbse``, bare MNOK at the same QP gap
+     - Effect of Z (0.8, 1.0, derived) with the shared :math:`W`
    * - D
-     - Do the solver modes obey their exact relations?
-     - ``independent_dft``, ``independent_qp``, ``diagonal_bse``, triplet, Löwdin, no exchange
+     - Independent kernels for the gap-only ``gw`` model and the binding each gives
    * - E
-     - Is S\ :sub:`1` converged in the active space?
-     - 25 × 25, 50 × 50, 100 × 100 (Davidson)
-
-Run it with:
+     - Exact relations of the excitation modes, spin and charges
+   * - F
+     - Active-space convergence
+   * - L
+     - The legacy mismatched combination, for comparison
 
 .. code-block:: bash
 
-   # quick: 12 runs, about 2 minutes for the 149-atom CdSe cluster on 4 cores
-   python benchmarks/compare_models.py --system tests/CdSe --profile quick
-
-   # standard (about 25 runs) or full (32 runs), with an experimental window
-   python benchmarks/compare_models.py --system tests/CdSe --profile full --exp-gap 2.70 2.95
-
-   # your own system, only groups A and B, hexane
+   python benchmarks/compare_models.py --system tests/CdSe --profile quick           # ~12 runs
+   python benchmarks/compare_models.py --system tests/CdSe --profile full --soc --exp-gap 2.70 2.95
    python benchmarks/compare_models.py --system path/to/dir --only A,B --eps-solvent 1.89
+   python benchmarks/compare_models.py --system tests/CdSe --profile full --list    # list the runs
 
-   # see which runs a profile contains
-   python benchmarks/compare_models.py --system tests/CdSe --profile full --list
+Finished cases are reused (``--force`` recomputes them). Use ``--soc`` to compare the first bright
+state with experiment. The checks are reported as follows:
 
-Finished cases are reused, so an interrupted run can be restarted; ``--force`` recomputes them. The
-default is spin-free; ``--soc`` keeps SOC on.
-
-Checks and how to read them
----------------------------
-
-Every check is reported as PASS, WARN or FAIL.
-
-**Exact relations.** A FAIL here means a bug.
-
-* ``independent_dft`` lowest excitation = DFT gap, and ``independent_qp`` lowest = QP gap, to within
-  2 meV.
-* Full BSE S\ :sub:`1` ≤ lowest diagonal element (``diagonal_bse``). This follows from the
-  variational principle.
-* T\ :sub:`1` ≤ S\ :sub:`1`, and a singlet without exchange equals the triplet.
-* QP gap − S\ :sub:`1` > 0 for every bound exciton.
-* ``env`` in a matched medium (``eps_out`` = :math:`\epsilon_\infty`): QP gap = DFT gap + bulk
-  GW–PBE opening, because the reaction field must vanish.
-
-**Physics checks.** A WARN marks a known model limitation or an unconverged setting.
-
-* *Optical gap insensitive to solvent*: the ratio :math:`|\Delta S_1|/|\Delta E_{QP}|` between vacuum
-  and solvent. It is < 0.2 for ``env``. It is ≈ 1 for the scissor models, a known limitation rather
-  than a bug.
-* *Binding robust to the W model*: the spread of QP − S\ :sub:`1` over kernels. For CdSe this spread is
-  more than 1 eV. It shows how much the choice of :math:`W` matters, and it is why the ``resta``
-  kernel is the documented default.
-* *Converged in the active space*: the change of S\ :sub:`1` between the two largest windows is
-  < 10 meV.
-* *Within experiment*: only when ``--exp-gap`` is given.
-
-Reference results (CdSe 2 nm, full profile)
--------------------------------------------
-
-The full profile on ``tests/CdSe`` produced the tables in
-``audit/AUDIT_2026-09-25_QP_EXCITED_STATES.md`` §7. All exact relations pass. The WARNs are the
-environment check of the scissor models, the kernel spread, and the slow active-space convergence
-(binding still +8 meV per doubling at 100 × 100).
+* **FAIL**: a violated exact relation, which means a bug. Examples: ``independent_qp`` lowest ≠ QP gap;
+  full BSE S\ :sub:`1` above the lowest diagonal element; T\ :sub:`1` above S\ :sub:`1`; singlet
+  without exchange ≠ triplet; negative binding.
+* **WARN**: a model limitation or an unconverged setting. Examples: S\ :sub:`1` moving with the solvent
+  (gap-only models, or Z < 1); a large spread of the independent kernels for ``gw``; active-space
+  convergence; outside the experimental window.

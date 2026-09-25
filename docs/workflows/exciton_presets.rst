@@ -31,10 +31,10 @@ The recommended default for production calculations on colloidal nanocrystals:
    physics:
      excitation_mode: "bse"
      2e-integrals: "mnok"              # Fast semi-empirical atom-centered representation
-     kernel: "resta"                   # Thomas-Fermi electronic screening
+     kernel: "qp"                      # the DIM W of the QP model (same W in GW and BSE)
      charge_type: "mulliken"           # "mulliken" or "lowdin"
      qp_gap: "sgw-dim"                 # Microscopic polarizable dipole QP gap
-     dynamic_z: true                   # Empirical state-dependent Z_p damping
+     qp_z: 1.0                         # static limit; "derived" or another number also allowed
      nhomos: 50
      nlumos: 50
 
@@ -69,10 +69,9 @@ Exact analytical Gaussian two-electron integrals with microscopic RPA screening:
 
    physics:
      excitation_mode: "bse"
-     2e-integrals: "xs"                # Exact 4-center Gaussian integrals via Libint2
-     kernel: "xs-rpa"                  # Parameter-free microscopic ZDO-RPA screening
-     qp_gap: "qsgw-dim"                # Full AO orbital relaxation (qsGW)
-     update_orbitals: true
+     2e-integrals: "xs"                # analytical Gaussian (mu mu|nu nu) density-pair integrals via Libint2
+     kernel: "xs-rpa"                  # ZDO-RPA screening (independent kernel)
+     qp_gap: "sgw-anchor"              # gap-only QP model: the xs kernels combine only with gap-only models
      nhomos: 25
      nlumos: 25
 

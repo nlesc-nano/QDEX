@@ -133,19 +133,6 @@ def print_qp_provenance(details, dft_gap=None, target_qp_gap=None, output_file=N
             print(f"    JSON                     : {output_file}")
         return
 
-    if details.get("qp_model") == "environment_sphere":
-        print("\n  [QP Provenance] Environment model (bulk GW opening + dielectric-sphere polarization)")
-        print(f"    Material                 : {details['material']}")
-        print(f"    eps_in / eps_out         : {details['eps_in']:.2f} / {details['eps_out']:.2f}")
-        print(f"    Cavity radius            : {details['cavity_radius_ang']:.3f} Å")
-        print(f"    Bulk GW shift            : {details['bulk_gw_shift_ev']:+.3f} eV")
-        print(f"    Sigma_pol HOMO / LUMO    : {details['sigma_pol_homo_ev']:+.3f} / {details['sigma_pol_lumo_ev']:+.3f} eV")
-        if dft_gap is not None and target_qp_gap is not None:
-            print(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
-        if output_file:
-            print(f"    JSON                     : {output_file}")
-        return
-
     print("\n  [QP Provenance] Anchor-scaled PBE-to-QP model")
     print(f"    Material                 : {details['material']}")
     if "cluster_radius_ang" in details:
@@ -676,6 +663,70 @@ def _select_soc_window_indices(eps_shifted, homo_index, soc_window):
     return np.arange(start, stop, dtype=int)
         
 
+W_BASED_QP_MODELS = {
+    "sgw-dim", "sgw_dim", "sgw-dim-dz", "evgw", "evgw-dim", "evgw_dim", "qsgw", "qsgw-dim", "qsgw_dim",
+    "scgw", "scgw-dim", "scgw_dim",
+    "sgw-resta", "sgw_resta", "sgw-resta-penn", "sgw-resta-pure", "sgw-resta-bulk", "sgw-resta-dz",
+    "evgw-resta", "evgw_resta", "qsgw-resta", "qsgw_resta", "scgw-resta", "scgw_resta",
+    "sgw", "sgw-dw", "sgw_dw", "sgw-atom", "sgw-ao",
+}
+
+
+def resolve_qp_z(args, model_default_dynamic):
+    """Return (dynamic_z, Z) for a Delta-W QP model from --qp-z / --dynamic_z."""
+    qz = getattr(args, "qp_z", None)
+    if qz is None:
+        if getattr(args, "dynamic_z", False):
+            return True, 0.8
+        return bool(model_default_dynamic), 0.8
+    if str(qz).strip().lower() == "derived":
+        return True, 0.8
+    try:
+        z = float(qz)
+    except ValueError:
+        raise ValueError(f"qp_z must be 'derived' or a number, got '{qz}'")
+    if not 0.0 < z <= 1.0:
+        raise ValueError(f"qp_z = {z} is outside (0, 1]; a quasiparticle weight must lie in that range")
+    return False, z
+
+
+def resolve_bse_kernel(args, qp_w):
+    """Choose the BSE direct kernel so that GW and BSE use the same W.
+
+    Delta-W QP models (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``) define a screened interaction
+    W; the BSE must use that same W (kernel 'qp').  Gap-only models (pbe, brus,
+    gw, numeric) define no W, so any interior kernel may be chosen.
+    """
+    qp_name = str(args.qp_gap).lower()
+    kernel = args.kernel
+    if qp_w is not None:
+        label = qp_w[1]
+        equivalent = kernel in ("sbse", "sbse-atom") and qp_name in ("sgw", "sgw-dw", "sgw_dw", "sgw-atom")
+        if kernel in (None, "qp") or equivalent:
+            if args.kernel_type != "mnok":
+                raise ValueError("kernel 'qp' is atom-resolved; use two_electron_integrals: mnok with this QP model.")
+            print(f"  [Consistency] BSE direct kernel = W of the QP model ({label}).")
+            return "qp"
+        if args.allow_inconsistent_kernel:
+            print(f"  [Consistency WARNING] qp_gap '{args.qp_gap}' uses W = {label}, but the BSE uses kernel "
+                  f"'{kernel}'. GW and BSE do not share W (allowed by --allow-inconsistent-kernel).")
+            return kernel
+        raise ValueError(
+            f"qp_gap '{args.qp_gap}' is built on its own screened interaction ({label}). The BSE must use the same "
+            f"W: set kernel: qp (the default for this model). kernel '{kernel}' would use a different W in GW and "
+            "BSE. Use --allow-inconsistent-kernel only to reproduce legacy results."
+        )
+    if kernel == "qp":
+        raise ValueError(
+            f"kernel 'qp' needs a QP model that defines W (sgw-dim, sgw-resta, evgw-*, qsgw-*, sgw); "
+            f"qp_gap '{args.qp_gap}' is a gap-only model. Choose resta, xs-resta, dim, sbse or bse."
+        )
+    if kernel is None:
+        kernel = "bse"
+    print(f"  [Consistency] qp_gap '{args.qp_gap}' is gap-only (no W); the BSE uses the independent kernel '{kernel}'.")
+    return kernel
+
+
 def main():
     parser = argparse.ArgumentParser(description="QDEX - Quantum Dot Excitations & Dynamics exciton solver")
 
@@ -695,7 +746,14 @@ def main():
     parser.add_argument("--f_thresh", type=float, default=0.0)
 
     parser.add_argument("--qp_gap", type=str, default="brus",
-                        help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'env' (bulk GW-PBE opening + dielectric-sphere polarization self-energies; the same reaction field enters the BSE), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'pbe' (uncorrected), or explicit gap in eV.")
+                        help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'pbe' (uncorrected), or explicit gap in eV.")
+    parser.add_argument("--qp-z", dest="qp_z", type=str, default=None,
+                        help="Quasiparticle renormalization Z for Delta-W models: 'derived' (empirical state-dependent "
+                             "formula, see compute_dynamic_z) or a fixed number, e.g. 0.8 or 1.0. Default: model default "
+                             "(fixed 0.8 for sgw-*/sgw, derived for evgw-*/qsgw-*). Not applicable to gap-only models.")
+    parser.add_argument("--allow-inconsistent-kernel", action="store_true", default=False,
+                        help="Allow a BSE kernel whose W differs from the W of the QP model (legacy behaviour; "
+                             "only for reproducing old results).")
     parser.add_argument("--dynamic_z", action="store_true", default=False,
                         help="Apply the empirical state-dependent damping factor Z_p (heuristic one-pole form; not a computed plasmon-pole self-energy derivative).")
     parser.add_argument("--update_orbitals", "--qsgw", dest="update_orbitals", action="store_true", default=False,
@@ -704,8 +762,10 @@ def main():
     parser.add_argument("--soc_flag", action="store_true")
     parser.add_argument("--gth_file", type=str, default=None)
 
-    parser.add_argument("--kernel", choices=["bse", "resta", "mnok", "xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "dim", "xs-dim", "dipole", "xs-dipole", "sbse", "sbse-atom", "sbse-ao", "xs-sbse"], default="bse",
-                        help="Exciton interaction kernel: 'bse' (MNOK uniform), 'resta' (MNOK Resta-screened), 'dim' / 'dipole' (MNOK atomistic polarizable dipole model), 'sbse' / 'sbse-atom' (Simplified BSE atom-resolved kernel, Cho et al. 2022), 'sbse-ao' / 'xs-sbse' (Simplified BSE AO-resolved kernel), 'xs' (Xs-QDEX uniform), 'xs-resta' (Xs-QDEX Resta-screened), 'xs-rpa' (Xs-QDEX microscopic RPA screening), 'xs-dim' (Xs-QDEX atomistic polarizable dipole model).")
+    parser.add_argument("--kernel", choices=["qp", "bse", "resta", "mnok", "xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "dim", "xs-dim", "dipole", "xs-dipole", "sbse", "sbse-atom", "sbse-ao", "xs-sbse"], default=None,
+                        help="Exciton interaction kernel. 'qp': the screened W built by the QP model (default and only allowed choice for "
+                             "sgw-*, evgw-*, qsgw-* and sgw, so that GW and BSE share one W). For gap-only QP models (pbe, brus, gw, "
+                             "numeric) choose: 'bse' (MNOK uniform, legacy default), 'resta' (MNOK Resta-screened), 'dim' / 'dipole' (MNOK atomistic polarizable dipole model), 'sbse' / 'sbse-atom' (Simplified BSE atom-resolved kernel, Cho et al. 2022), 'sbse-ao' / 'xs-sbse' (Simplified BSE AO-resolved kernel), 'xs' (Xs-QDEX uniform), 'xs-resta' (Xs-QDEX Resta-screened), 'xs-rpa' (Xs-QDEX microscopic RPA screening), 'xs-dim' (Xs-QDEX atomistic polarizable dipole model).")
     parser.add_argument("--two-electron-integrals", "--two_electron_integrals", "--2e-integrals", "--2e_integrals", "--kernel_type", "--kernel-type",
                         dest="kernel_type", choices=["mnok", "xs", "xs-qdex"], default="mnok",
                         help="Two-electron integral representation: 'mnok' (semi-empirical atom-centered damped Coulomb) or 'xs' / 'xs-qdex' (exact analytical Gaussian AO four-center integrals via Libint2).")
@@ -727,15 +787,6 @@ def main():
     parser.add_argument("--vxc_ao", type=str, default=None, help="Path to cleaned CP2K AO-basis Vxc matrix text file")
     parser.add_argument("--material", type=str, default="DEFAULT")
     parser.add_argument("--eps-out", type=float, default=2.0)
-    parser.add_argument("--environment", choices=["none", "sphere"], default="none",
-                        help="Dielectric environment model shared by QP and BSE. 'sphere': reaction field of a "
-                             "dielectric sphere (eps_in = material eps_inf) in eps_out; selected automatically by "
-                             "qp_gap 'env'. Use the optical eps_out = n^2 of the solvent.")
-    parser.add_argument("--env-anchor-residual", action="store_true", default=False,
-                        help="qp_gap 'env': also add the finite-size residual A(R0/R)^p of the anchor model "
-                             "(short-range, non-polarization size dependence calibrated on the monomer GW anchor).")
-    parser.add_argument("--env-cavity-buffer", type=float, default=1.0,
-                        help="Cavity radius = largest atomic distance from the centroid + this buffer (Angstrom).")
     parser.add_argument("--qp-regularization-length", dest="qp_regularization_length", type=float, default=1.0,
                         help="Regularization length ell in angstrom for the anchor-scaled QP model.")
     parser.add_argument("--qp-residual-power", dest="qp_residual_power", type=float, default=2.0,
@@ -1055,7 +1106,6 @@ def main():
     confinement_energy = 0.0
     qp_provenance = None
     eps_qp_active = None
-    env_W = None
     
     if isinstance(args.qp_gap, str):
         if args.qp_gap.lower() == "brus":
@@ -1102,7 +1152,7 @@ def main():
 
             is_qsgw = ("qsgw" in args.qp_gap.lower()) or ("scgw" in args.qp_gap.lower()) or getattr(args, "update_orbitals", False)
             is_evgw = "evgw" in args.qp_gap.lower()
-            use_dz = is_qsgw or is_evgw or "dz" in args.qp_gap.lower() or getattr(args, "dynamic_z", False)
+            use_dz, z_val = resolve_qp_z(args, is_qsgw or is_evgw or "dz" in args.qp_gap.lower())
             model_tag = "qsGW-DIM" if is_qsgw else ("evGW-DIM" if is_evgw else ("sGW-DIM (Dynamic Z)" if use_dz else "sGW-DIM"))
             print(f"\n--- Estimating Quasiparticle Gap using {model_tag} (Atomistic Delta-W) ---")
             t0_sgw = time.time()
@@ -1120,6 +1170,7 @@ def main():
                     eps_out=args.eps_out,
                     alpha=args.alpha,
                     dynamic_z=use_dz,
+                    Z=z_val,
                     return_details=True
                 )
                 C = C_qp
@@ -1151,6 +1202,7 @@ def main():
                     atom_ao_ranges=atom_ao_ranges,
                     alpha=args.alpha,
                     dynamic_z=use_dz,
+                    Z=z_val,
                     self_consistent=is_evgw,
                     return_details=True
                 )
@@ -1171,7 +1223,7 @@ def main():
 
             is_qsgw = ("qsgw" in args.qp_gap.lower()) or ("scgw" in args.qp_gap.lower()) or getattr(args, "update_orbitals", False)
             is_evgw = "evgw" in args.qp_gap.lower()
-            use_dz = is_qsgw or is_evgw or "dz" in args.qp_gap.lower() or getattr(args, "dynamic_z", False)
+            use_dz, z_val = resolve_qp_z(args, is_qsgw or is_evgw or "dz" in args.qp_gap.lower())
             use_penn = not any(k in args.qp_gap.lower() for k in ["pure", "bulk"])
             penn_label = "Penn-scaled" if use_penn else "Pure Boundary"
             model_tag = f"qsGW-Resta ({penn_label})" if is_qsgw else (f"evGW-Resta ({penn_label})" if is_evgw else (f"sGW-Resta ({penn_label}, Dynamic Z)" if use_dz else f"sGW-Resta ({penn_label})"))
@@ -1192,6 +1244,7 @@ def main():
                     alpha=args.alpha,
                     penn_scaling=use_penn,
                     dynamic_z=use_dz,
+                    Z=z_val,
                     return_details=True
                 )
                 C = C_qp
@@ -1225,6 +1278,7 @@ def main():
                     alpha=args.alpha,
                     penn_scaling=use_penn,
                     dynamic_z=use_dz,
+                    Z=z_val,
                     self_consistent=is_evgw,
                     return_details=True
                 )
@@ -1260,6 +1314,9 @@ def main():
             eps_virt_act = eps[virt_idx_a]
 
             sgw_mode = "ao" if "ao" in args.qp_gap.lower() else "atom"
+            sgw_dz, sgw_z = resolve_qp_z(args, False)
+            if sgw_dz:
+                raise ValueError("qp_gap 'sgw' supports only a fixed Z (qp_z: <number>), not 'derived'.")
             sgw_scissor, qp_provenance = estimate_sgw_qp_gap(
                 coords=np.array(coords_ang),
                 atom_symbols=syms,
@@ -1273,6 +1330,7 @@ def main():
                 shells=shells,
                 mode=sgw_mode,
                 alpha=args.alpha,
+                Z=sgw_z,
                 nthreads=args.nthreads,
                 return_details=True
             )
@@ -1285,56 +1343,6 @@ def main():
                 print("  [QP Warning] qp_gap is set to 'sgw', which already applies the microscopic Delta-W quasiparticle correction.")
                 print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
                 print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
-        elif args.qp_gap.lower() in ["env", "gw-env", "sphere"]:
-            from qdex.environment import sphere_cavity, reaction_field_matrix, environment_qp_energies
-            if C_beta is not None:
-                raise NotImplementedError("qp_gap 'env' currently supports closed-shell references only.")
-            entry_env = MATERIAL_DB.get(args.material.upper()) if args.material else None
-            if entry_env is None or len(entry_env) < 9 or entry_env[8] == 0.0:
-                raise ValueError("qp_gap 'env' needs MATERIAL_DB bulk eps_inf, PBE and GW gaps for the material.")
-            args.environment = "sphere"
-            eps_in_env = float(entry_env[0])
-            bulk_shift_env = float(entry_env[8] - entry_env[7])
-            env_residual = 0.0
-            if args.env_anchor_residual:
-                _, anc = estimate_gw_qp_gap(np.array(coords_ang), syms, args.material, args.eps_out,
-                                            regularization_length_ang=args.qp_regularization_length,
-                                            residual_power=args.qp_residual_power, strict=args.qp_strict,
-                                            return_details=True)
-                if anc and anc.get("has_monomer_anchor"):
-                    env_residual = float(anc["anchor_residual_ev"]) * (
-                        float(anc["monomer_radius_ang"]) / float(anc["radius_used_ang"])) ** float(anc["residual_power"])
-            bulk_shift_env += env_residual
-            env_center, env_radius = sphere_cavity(np.array(coords_ang), buffer_ang=args.env_cavity_buffer)
-            env_W = reaction_field_matrix(np.array(coords_ang), eps_in_env, args.eps_out, env_radius, center=env_center)
-            n_win = max(int(args.nhomos or 0), int(args.nlumos or 0), 50)
-            eps_qp_env, env_det = environment_qp_energies(
-                eps, C, S, atom_ao_ranges, homo_index, env_W, bulk_shift_env, n_window=n_win,
-            )
-            eps_qp_active = eps_qp_env
-            target_qp_gap = float(eps_qp_env[homo_index + 1] - eps_qp_env[homo_index])
-            scissor = target_qp_gap - dft_gap
-            sig_h, sig_l = env_det["sigma_pol_homo_ev"], env_det["sigma_pol_lumo_ev"]
-            qp_provenance = {
-                "qp_model": "environment_sphere",
-                "material": args.material.upper(),
-                "eps_in": eps_in_env, "eps_out": float(args.eps_out),
-                "cavity_radius_ang": float(env_radius),
-                "cavity_buffer_ang": float(args.env_cavity_buffer),
-                "bulk_gw_shift_ev": bulk_shift_env - env_residual,
-                "anchor_residual_used_ev": env_residual,
-                "confinement_shift_ev": float(sig_h + sig_l),
-                **env_det,
-            }
-            confinement_energy = float(sig_h + sig_l)
-            print("\n  [Environment QP Model] bulk GW opening + dielectric-sphere polarization")
-            print(f"    Cavity radius          : {env_radius:.3f} Å (r_max + {args.env_cavity_buffer:.2f} Å)")
-            print(f"    eps_in / eps_out       : {eps_in_env:.2f} / {args.eps_out:.2f}")
-            print(f"    Bulk GW-PBE opening    : {bulk_shift_env - env_residual:+.3f} eV")
-            if env_residual:
-                print(f"    Anchor residual (opt.) : {env_residual:+.3f} eV")
-            print(f"    Sigma_pol HOMO / LUMO  : {sig_h:+.3f} / {sig_l:+.3f} eV")
-            print(f"    -> QP gap              : {target_qp_gap:.4f} eV")
         elif args.qp_gap.lower() == "pbe":
             scissor = 0.0
             target_qp_gap = dft_gap
@@ -1348,17 +1356,15 @@ def main():
         target_qp_gap = float(args.qp_gap)
         scissor = target_qp_gap - dft_gap
     
-    if getattr(args, "environment", "none") == "sphere" and env_W is None:
-        qp_name = str(args.qp_gap).lower()
-        if qp_name != "pbe":
-            raise ValueError(
-                "environment 'sphere' adds its own polarization self-energy; combine it with qp_gap 'env' "
-                "(or 'pbe' for a BSE-only test), not with '%s', which would double count it." % args.qp_gap
-            )
-        from qdex.environment import sphere_cavity, reaction_field_matrix
-        entry_env = MATERIAL_DB.get(args.material.upper())
-        env_center, env_radius = sphere_cavity(np.array(coords_ang), buffer_ang=args.env_cavity_buffer)
-        env_W = reaction_field_matrix(np.array(coords_ang), float(entry_env[0]), args.eps_out, env_radius, center=env_center)
+    qp_w = None
+    if qp_provenance is not None and "w_bse_ev" in qp_provenance:
+        qp_w = (qp_provenance.pop("w_bse_ev"), qp_provenance.pop("w_bse_label", "QP-model W"))
+    elif getattr(args, "qp_z", None) is not None or getattr(args, "dynamic_z", False):
+        raise ValueError(
+            f"qp_z / dynamic_z apply only to Delta-W QP models (sgw-*, evgw-*, qsgw-*, sgw); "
+            f"qp_gap '{args.qp_gap}' has no Z."
+        )
+    args.kernel = resolve_bse_kernel(args, qp_w)
 
     print(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
     print(f"  [QP]  Target Gap   : {target_qp_gap:.4f} eV")
@@ -1636,9 +1642,9 @@ def main():
         )
         calculated_soc_gap = bse_soc_E[bse_spinor_homo_idx + 1] - bse_soc_E[bse_spinor_homo_idx]
         if eps_qp_active is not None:
-            # Spinors were built from QP energies, so their gap already contains
-            # the QP opening.  Express it on the DFT reference so that every
-            # downstream "SOC gap + scissor" is the SOC QP gap.
+            # Spinors were built from QP energies (qsgw-*), so their gap already
+            # contains the QP opening.  Express it on the DFT reference so that
+            # every downstream "SOC gap + scissor" is the SOC QP gap.
             calculated_soc_gap -= scissor
 
         # --- RIGID SCISSOR APPLICATION ---
@@ -1883,7 +1889,6 @@ def main():
         include_direct_eh=args.include_direct_eh,
         estimate_qp=args.estimate_qp, material=args.material, e_thresh=args.e_thresh, f_thresh=args.f_thresh,
         mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z, eps_out=args.eps_out,
-        env_W=env_W,
         soc_U=None, soc_E=None, device=compute_device,
         vxc_ao_path=args.vxc_ao,
         nthreads=args.nthreads,
@@ -1893,6 +1898,7 @@ def main():
         n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta,
         excitation_mode=args.excitation_mode,
         kernel_type=args.kernel_type,
+        shared_W=(qp_w[0] if qp_w is not None else None),
         shells=shells,
         eps_dft=eps_dft_solver
     )
@@ -1929,7 +1935,6 @@ def main():
             include_direct_eh=args.include_direct_eh,
             estimate_qp=args.estimate_qp, material=args.material, e_thresh=args.e_thresh, f_thresh=args.f_thresh, 
             mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z, eps_out=args.eps_out,
-            env_W=env_W,
             soc_U=bse_soc_U, soc_E=bse_soc_E, device=compute_device, 
             precomputed_sigma=precalc_sigma,
             vxc_ao_path=args.vxc_ao,
@@ -1940,6 +1945,7 @@ def main():
             n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta,
             excitation_mode=args.excitation_mode,
             kernel_type=args.kernel_type,
+            shared_W=(qp_w[0] if qp_w is not None else None),
             shells=shells,
             eps_dft=eps_dft_solver
         )

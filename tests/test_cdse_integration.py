@@ -73,14 +73,6 @@ class CdSeIntegrationTest(unittest.TestCase):
         self.assertAlmostEqual(e1, 3.634, places=2)
         self.assertGreater(f1, 0.1)
 
-    def test_env_model_is_solvent_consistent(self):
-        # qp_gap env: the QP gap depends on eps_out, the optical gap must not.
-        w1, log1 = self._run("--qp_gap", "env", "--eps-out", "1.0")
-        w2, log2 = self._run("--qp_gap", "env", "--eps-out", "2.24")
-        self.assertAlmostEqual(_qp_gap(log1), 3.852, places=2)
-        self.assertGreater(_qp_gap(log1) - _qp_gap(log2), 0.5)
-        self.assertLess(abs(_first_state(w1)[0] - _first_state(w2)[0]), 0.01)
-
     def test_brus_model_runs(self):
         # Regression: the CLI passed (coords, symbols, material) to a
         # function whose signature is (material, coords, symbols).
