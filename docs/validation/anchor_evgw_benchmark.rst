@@ -5,7 +5,9 @@ Part of :doc:`/validation/index`.
 
 The CdSe "monomer" of ``MATERIAL_DB`` is the 35-atom cluster Cd\ :sub:`16`\ Se\ :sub:`13`\ Cl\ :sub:`6`
 (:math:`D\approx1.2` nm). Its PBE and evGW frontier energies, computed with CP2K, are the finite-size
-anchor of the ``gw`` model. For this cluster the reference is therefore a real evGW calculation, and
+anchor of the ``gw`` model. The evGW run starts from PBE0 (PBE single point → PBE0 single point →
+evGW, i.e. evGW\@PBE0); the QP shifts are nevertheless quoted relative to the PBE eigenvalues,
+because the QDEX input orbitals are PBE. For this cluster the reference is therefore a real evGW calculation, and
 every QP model can be compared with it directly. Inputs are in ``tests/CdSe/1.2nm``; the MO file is
 stored as ``MOs_cleaned_12ang.txt.gz``.
 
@@ -276,7 +278,7 @@ Scope
 -----
 
 This is one cluster at the size where the ``gw`` anchor is defined. It tests the finite-size term of
-each model, not its transferability to other sizes. evGW@PBE is itself an approximation to the true
+each model, not its transferability to other sizes. evGW\@PBE0 is itself an approximation to the true
 quasiparticle gap. Rerun it with:
 
 .. code-block:: bash

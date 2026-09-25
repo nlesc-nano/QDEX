@@ -208,9 +208,12 @@ not classical:
 * **Dynamical effects.** To first order they reduce the QP shift by Z and the binding by the same
   factor (Bechstedt et al., PRL 78, 1528 (1997)). QDEX applies one Z to both.
 
-The non-classical remainder that the model does not capture is calibrated on an evGW calculation
-of the smallest cluster (the anchor) and scaled to other sizes with
+The non-classical remainder that the model does not capture is calibrated on an evGW\@PBE0
+calculation of the smallest cluster (the anchor) and scaled to other sizes with
 :math:`E_{\mathrm{conf}}^{\mathrm{KS}}(R)/E_{\mathrm{conf}}^{\mathrm{KS}}(R_0)`.
+Because the anchor starts from PBE0 while the QDEX orbitals are PBE, the residual also absorbs the
+part of the PBE → PBE0 starting-point change that eigenvalue self-consistency does not remove
+(evGW keeps the PBE0 orbitals).
 
 6. The approximations and why
 -----------------------------
