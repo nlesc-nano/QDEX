@@ -182,7 +182,7 @@ with**, and QP gaps and binding energies individually are not validated.
 System: Cd₆₈Se₅₅Cl₂₆ (149 atoms, 2753 AOs, DZVP-MOLOPT-PBE-GTH), full MO set,
 DFT gap 1.4568 eV, R_eff = 9.221 Å (hull + 1.25 Å). Spin-free unless noted;
 25 occupied × 25 virtual active space; dense diagonalization. Timings on 4 CPU
-cores. Inputs in `tests/CdSe/`; runs reproducible with the commands below.
+cores. Inputs in `tests/CdSe/2.0nm/`; runs reproducible with the commands below.
 
 ### 3.1 Quasiparticle models (Resta BSE kernel, ε_out = 1 unless noted)
 
@@ -236,9 +236,9 @@ For CdSe dots of this size, use ≥ 100 × 100 with Davidson for binding energie
 ### 3.4 Reproduce
 
 ```bash
-gunzip -k tests/CdSe/MOs_cleaned_20ang.txt.gz
+gunzip -k tests/CdSe/2.0nm/MOs_cleaned_20ang.txt.gz
 QDEX_RUN_CDSE=1 python -m pytest tests/test_cdse_integration.py   # reference values
-cd tests/CdSe && qdex --config config.yaml [--qp_gap ... --eps-out ... --kernel ...]
+cd tests/CdSe/2.0nm && qdex --config config.yaml [--qp_gap ... --eps-out ... --kernel ...]
 ```
 
 ## 4. Implementation findings (new in this pass)

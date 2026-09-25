@@ -1,5 +1,5 @@
 system:
-  mo_file: "MOs_cleaned_20ang.txt"
+  mo_file: "MOs_cleaned_12ang.txt"
   xyz: "geom.xyz"
   basis_txt: "BASIS_MOLOPT_UZH"
   basis_name: "DZVP-MOLOPT-PBE-GTH"
