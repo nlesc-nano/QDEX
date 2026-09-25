@@ -31,3 +31,4 @@ namd_precomputed*/
 docs/_build/
 NAMD_STUDY
 
+tests/CdSe/MOs_cleaned_20ang.txt
