@@ -103,6 +103,28 @@ correction is dominated by this surface polarization term, evaluated with the *b
 It decays as :math:`(R_0/R)^p`, with p = 2 by default. It is fitted in vacuum and kept unchanged in
 a solvent. For Cd₁₆Se₁₃Cl₆, :math:`A = -0.42` eV.
 
+**Residual scaling** (``qp_residual_scaling``). By default the residual is scaled by the PBE confinement
+energy of the cluster instead of a power of the radius:
+
+.. math::
+
+   A(R) = A\,\frac{E_{\mathrm{conf}}(R)}{E_{\mathrm{conf}}(R_0)},\qquad
+   E_{\mathrm{conf}} = E_g^{\mathrm{PBE}}(\mathrm{cluster}) - E_g^{\mathrm{PBE}}(\mathrm{bulk}).
+
+The non-classical part is taken to be mostly band stretching, i.e. an energy-dependent bulk GW
+correction. That correction is proportional to how far the confined levels lie from the band edges,
+and each cluster's own PBE gap measures that distance. The form needs no radius definition and no
+power p; it is clipped to [0, 1]. ``qp_residual_scaling: power`` restores (R₀/R)^p. For CdSe the scale
+is 0.41 at 2 nm (0.33 with p = 2) and 0.26 at 3.2 nm (0.10 with p = 2).
+
+**Delta-W models.** The same idea applies to the Delta-W models. Running a model once on the anchor
+cluster with ``--qp-anchor-calibrate`` stores its per-edge error against evGW in
+``qdex/data/dw_anchor_residuals.json``. The key is material, model, self-energy, representation,
+populations and Z. Later runs add residual × E_conf(R)/E_conf(R₀) to all occupied orbitals (HOMO
+residual) and all virtual orbitals (LUMO residual). ``qp_anchor_residual: off`` disables it. With the
+one-shot ΔCOHSEX levels the calibrated gap residual is small: +0.08 (``sgw-resta``), +0.18 (``sgw-dim``)
+and −0.15 eV (``evgw-resta``), against +0.36 / +0.46 / +0.15 eV with the classical levels.
+
 **Exact anchor.** :math:`R_0` in ``MATERIAL_DB`` must be computed with the same radius definition as
 the target cluster (``get_cluster_size_metrics``). The CdSe entry is 5.3133 Å, recomputed from the
 anchor geometry ``tests/CdSe/1.2nm/geom.xyz`` (previously 5.258 Å). The model then returns the evGW

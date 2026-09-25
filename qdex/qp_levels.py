@@ -171,3 +171,113 @@ def orbital_qp_energies(eps, q_occ, q_virt, occ_idx, virt_idx, dW,
         "z_max_window": float(max(z_o.max(), z_v.max())),
     }
     return eps_qp, info
+
+
+def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None):
+    """Static Delta-COHSEX diagonal <n|Sigma|n> for ALL orbitals (one-shot, no orbital update).
+
+    Same form as the qsGW models, in the Löwdin basis (c = S^1/2 C):
+
+        COH_n = 1/2 sum_mu c_{mu n}^2 dW_{mu mu}
+        SEX_n = -1/2 sum_{mu nu} c_{mu n} c_{nu n} P_{mu nu} dW_{mu nu},   P = 2 c_occ c_occ^T
+
+    dW is Delta W in the atom-block (mnok, ``dW_atom``) or AO (xs, ``dW_ao``)
+    representation.  The classical charging term 1/2 q^T dW q is the limit in
+    which the occupied states act as a complete set (SEX -> -dW(r, r)); the
+    difference is the non-classical screened exchange.  Cost: one cached
+    eigh(S) and three n^3 matrix products; memory about four n_ao^2 arrays.
+    Returns (coh, sex), each of length n_mo.
+    """
+    from qdex.lowdin import lowdin_apply
+    C = C.toarray() if hasattr(C, "toarray") else np.asarray(C, dtype=float)
+    n_ao = C.shape[0]
+    Cl = lowdin_apply(S, C)
+    n_occ = homo_index + 1
+    P = Cl[:, :n_occ] @ Cl[:, :n_occ].T
+    P *= 2.0
+    if dW_ao is None:
+        owner = _owner(atom_ao_ranges, n_ao)
+        dW_atom = np.asarray(dW_atom, dtype=float)
+        block = 512
+        for i0 in range(0, n_ao, block):
+            i1 = min(n_ao, i0 + block)
+            P[i0:i1] *= dW_atom[np.ix_(owner[i0:i1], owner)]
+        diag_dW = dW_atom[owner, owner]
+    else:
+        P *= dW_ao
+        diag_dW = np.diag(dW_ao).copy()
+    MC = P @ Cl
+    del P
+    sex = -0.5 * np.einsum("mn,mn->n", Cl, MC, optimize=True)
+    del MC
+    coh = 0.5 * ((Cl * Cl).T @ diag_dW)
+    return coh, sex
+
+
+def plasmon_pole_z(sigma, eps_z, material):
+    """Vectorized compute_dynamic_z: Z = 1 / (1 + |Sigma| / omega_tilde), clipped to [0.5, 1]."""
+    from qdex.hardness import valence_plasmon_ev
+    eps_val = max(1.01, float(eps_z) if eps_z is not None else 1.01)
+    omega = valence_plasmon_ev(material) / np.sqrt(1.0 - 1.0 / eps_val)
+    return np.clip(1.0 / (1.0 + np.abs(sigma) / omega), 0.5, 1.0)
+
+
+def cohsex_qp_energies(eps, coh, sex, homo_index, bulk_shift, z_mode, z_fixed, eps_z, material,
+                       homo_fraction_bulk=0.5):
+    """QP energies of all orbitals from the one-shot Delta-COHSEX diagonal.
+
+    occupied:  e_n - f_b D_bulk + Z_n (COH_n + SEX_n)
+    virtual:   e_n + (1 - f_b) D_bulk + Z_n (COH_n + SEX_n)
+    """
+    eps = np.asarray(eps, dtype=float)
+    sig = np.asarray(coh) + np.asarray(sex)
+    z = plasmon_pole_z(sig, eps_z, material) if z_mode == "derived" else np.full_like(sig, float(z_fixed))
+    fb = float(homo_fraction_bulk)
+    bulk = np.where(np.arange(len(eps)) <= homo_index, -fb * bulk_shift, (1.0 - fb) * bulk_shift)
+    eps_qp = eps + bulk + z * sig
+    h, l = homo_index, homo_index + 1
+    occ, vir = slice(0, h + 1), slice(l, len(eps))
+    info = {
+        "qp_levels": "orbital",
+        "qp_selfenergy": "cohsex",
+        "qp_homo_shift_ev": float(eps_qp[h] - eps[h]),
+        "qp_lumo_shift_ev": float(eps_qp[l] - eps[l]),
+        "cohsex_homo_coh_ev": float(coh[h]), "cohsex_homo_sex_ev": float(sex[h]),
+        "cohsex_lumo_coh_ev": float(coh[l]), "cohsex_lumo_sex_ev": float(sex[l]),
+        "qp_shift_spread_occ_ev": float(np.ptp((eps_qp - eps)[occ])),
+        "qp_shift_spread_virt_ev": float(np.ptp((eps_qp - eps)[vir])),
+        "z_homo_orbital": float(z[h]), "z_lumo_orbital": float(z[l]),
+        "z_min_window": float(z.min()), "z_max_window": float(z.max()),
+    }
+    return eps_qp, info
+
+
+# ---------------------------------------------------------------------------
+# Anchor residuals of the Delta-W models (calibrated on the evGW anchor cluster)
+# ---------------------------------------------------------------------------
+import json as _json
+import os as _os
+
+ANCHOR_TABLE = _os.path.join(_os.path.dirname(__file__), "data", "dw_anchor_residuals.json")
+
+
+def anchor_key(material, qp_model, selfenergy, representation, populations, z_label):
+    return "|".join(str(x).lower() for x in (material, qp_model, selfenergy, representation, populations, z_label))
+
+
+def load_anchor_table(path=None):
+    path = path or ANCHOR_TABLE
+    if not _os.path.exists(path):
+        return {}
+    with open(path) as fh:
+        return _json.load(fh)
+
+
+def save_anchor_entry(key, entry, path=None):
+    path = path or ANCHOR_TABLE
+    table = load_anchor_table(path)
+    table[key] = entry
+    _os.makedirs(_os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        _json.dump(table, fh, indent=2, sort_keys=True)
+    return path

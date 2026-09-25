@@ -283,7 +283,7 @@ def extract_recombination_parameters_from_namd(
 def estimate_gw_qp_gap(
     coords, atom_symbols, material_name, eps_out, return_details=False,
     regularization_length_ang=1.0, residual_power=2.0, strict=False,
-    polarization_model="sphere",
+    polarization_model="sphere", dft_gap=None, residual_scaling="econf",
 ):
     """
     Estimate the PBE-to-QP gap correction from a finite vacuum anchor and a bulk limit.
@@ -400,16 +400,18 @@ def estimate_gw_qp_gap(
             print(f"    [Warning] {message} Using R=R0 for the QP model.")
             radius_used = R_mono
 
-        residual = anchor_residual * (R_mono / radius_used) ** p
+        res_scale, res_mode = anchor_residual_scale(m_name, radius_used, dft_gap, residual_scaling, p)
+        residual = anchor_residual * res_scale
         sigma_pol = pol_term(c_out, radius_used) + residual
         sigma_pol_vac = pol_term(c_vac, radius_used) + residual
         if pol_model == "sphere":
-            edges = anchor_edge_curves(m_name, radius_used, eps_out, residual_power=p)
+            edges = anchor_edge_curves(m_name, radius_used, eps_out, residual_power=p, decay=res_scale)
         print(f"    Finite Vacuum Anchor : R0={R_mono:.3f} Å, gap shift={anchor_gap_shift:+.3f} eV")
         if pol_model == "sphere":
             print(f"    Sphere Polarization  : F = {F_out:.4f} (vacuum {F_vac:.4f}), "
                   f"P(R) = {pol_term(c_out, radius_used):+.3f} eV")
-            print(f"    Anchor Residual A    : {anchor_residual:+.3f} eV (p={p:.3f})")
+            print(f"    Anchor Residual A    : {anchor_residual:+.3f} eV x {res_scale:.3f} "
+                  f"({'E_conf(R)/E_conf(R0)' if res_mode == 'econf' else f'(R0/R)^p, p={p:.2f}'})")
         else:
             print(f"    Anchor Residual A    : {anchor_residual:+.3f} eV (ell={ell:.3f} Å, p={p:.3f})")
     else:
@@ -455,6 +457,8 @@ def estimate_gw_qp_gap(
         "polarization_factor_solvent": float(F_out) if F_out is not None else None,
         "regularization_length_ang": ell if pol_model == "legacy" else None,
         "residual_power": p,
+        "residual_scaling": res_mode if (has_monomer_data and gap_gw_mono > 0.0) else None,
+        "residual_scale": float(res_scale) if (has_monomer_data and gap_gw_mono > 0.0) else None,
         "anchor_residual_ev": float(anchor_residual),
         "radius_used_ang": float(radius_used),
         "kappa_vacuum_ev_ang": float(kappa_vac),
@@ -598,8 +602,33 @@ def sphere_polarization_factor(eps_in, eps_out, n_terms=4000, n_grid=4000):
     return float(np.sum(rho * series))
 
 
+def anchor_residual_scale(material_name, radius_ang, dft_gap=None, mode="econf", residual_power=2.0):
+    """Size scaling of the non-classical anchor residual (1 at the anchor, 0 in bulk).
+
+    mode 'econf' (default): E_conf(R) / E_conf(R0), with E_conf the PBE confinement
+    energy E_g^PBE(cluster) - E_g^PBE(bulk).  If the residual is band stretching
+    (an energy-dependent bulk GW correction), it is proportional to how far the
+    confined levels lie from the band edges, which each cluster's own PBE gap
+    measures; no radius or power law enters.  Clipped to [0, 1].
+    mode 'power': (R0/R)^p with R clamped to R >= R0 (the earlier form); also the
+    fallback when no DFT gap is available.
+    """
+    m_name = str(material_name).upper()
+    entry = MATERIAL_DB.get(m_name)
+    if entry is None or len(entry) < 14:
+        return 0.0, "none"
+    R0 = float(entry[9])
+    if str(mode).lower() == "econf" and dft_gap is not None:
+        eg_bulk = float(entry[7])
+        e0 = (float(entry[11]) - float(entry[10])) - eg_bulk
+        if e0 > 1.0e-6:
+            return float(np.clip((float(dft_gap) - eg_bulk) / e0, 0.0, 1.0)), "econf"
+    R = max(float(radius_ang), R0)
+    return float((R0 / R) ** float(residual_power)), "power"
+
+
 def anchor_edge_curves(material_name, radius_ang, eps_out, residual_power=2.0,
-                       bulk_homo_fraction=0.5):
+                       bulk_homo_fraction=0.5, decay=None):
     """Per-edge two-anchor curves of the PBE-to-QP shift (eV, both positive).
 
     Each band edge is interpolated between the bulk GW limit and the finite
@@ -634,7 +663,8 @@ def anchor_edge_curves(material_name, radius_ang, eps_out, residual_power=2.0,
     fb = float(bulk_homo_fraction)
     A_h = d_h0 - fb * d_bulk - 0.5 * P0
     A_l = d_l0 - (1.0 - fb) * d_bulk - 0.5 * P0
-    decay = (R0 / R) ** float(residual_power)
+    if decay is None:
+        decay = (R0 / R) ** float(residual_power)
     d_h = fb * d_bulk + 0.5 * P + A_h * decay
     d_l = (1.0 - fb) * d_bulk + 0.5 * P + A_l * decay
     return {

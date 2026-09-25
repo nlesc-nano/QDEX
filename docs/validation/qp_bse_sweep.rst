@@ -62,7 +62,20 @@ max(100, nhomos, nlumos) + 10 occupied and virtual orbitals:
    \varepsilon_a^{\mathrm{QP}} = \varepsilon_a + (1-f_b)\Delta_{\mathrm{bulk}} + Z_a\sigma_a,\qquad
    \sigma_p = \tfrac12\,\mathbf q_p^{\mathsf T}\Delta W\,\mathbf q_p .
 
-Orbitals outside the window take the shift of the nearest window edge.
+This is the classical form (``qp_selfenergy: classical``). The default for the Delta-W models is the
+one-shot static ΔCOHSEX diagonal, the same form qsGW uses, applied to every orbital without an orbital
+update (``qp_selfenergy: cohsex``):
+
+.. math::
+
+   \Sigma_n = \tfrac12\sum_\mu c_{\mu n}^2\,\Delta W_{\mu\mu}
+   \;-\;\tfrac12\sum_{\mu\nu} c_{\mu n}c_{\nu n}\,P_{\mu\nu}\,\Delta W_{\mu\nu},
+   \qquad c = S^{1/2}C,\; P = 2c_{\mathrm{occ}}c_{\mathrm{occ}}^{\mathsf T}.
+
+The classical term is its limit when the occupied states act as a complete set. The difference, the
+non-classical screened exchange, does not cancel against the binding. At 1.2 nm it lifts the
+``sgw-resta`` QP gap from 5.66 to 5.96 eV (evGW: 6.03 eV) and S₁ by about 0.4 eV, to the qsGW value.
+The calibrated anchor residual (:doc:`/quasiparticles/anchor`) is then added.
 
 * **qsGW:** already returns orbital energies and orbitals, which are used as they are.
 * **gw sphere model:** the frontier shifts are pinned to the per-edge anchor curves. Every other
