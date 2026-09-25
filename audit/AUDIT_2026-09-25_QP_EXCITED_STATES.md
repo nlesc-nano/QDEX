@@ -315,3 +315,111 @@ Still to do (editorial, not mechanical):
 5. A validation table of 3–4 CdSe sizes against experiment (Aubert–Hens 2022
    sizing) and against one full GW/BSE reference (e.g. MOLGW/BerkeleyGW on
    Cd₃₃Se₃₃).
+
+**Update to §6 (after §7–§8).** Item 1 is implemented in its minimal,
+GW-consistent form: every Delta-W QP model now shares its own W with the BSE
+(§7). A separate continuum environment model was prototyped and withdrawn at
+the author's request. Item 2 still matters for the QP gap: the interior term
+dominates the 1.2 nm evGW comparison (§8). It hardly affects S₁ once W is
+shared, because a static classical change of W that enters both QP and BSE
+cancels in the optical gap.
+
+## 7. QP/BSE consistency: one W in GW and BSE
+
+**Problem.** The Delta-W QP models built a QP correction from W_QD
+(interior contrast + solvent term), but the BSE used a different kernel
+(bulk-ε∞ Resta, or any kernel the user chose). The charged excitation saw
+the solvent and the reduced interior screening; the neutral one did not.
+
+Mapping of the W actually built by each model (code inspection):
+
+| qp_gap | W of the QP model | bulk reference |
+|---|---|---|
+| sgw-resta / evgw-resta / qsgw-resta | Resta profile with ε_eff(R) (final iteration) + softened solvent term | Resta, ε∞ |
+| sgw-resta-pure | Resta, ε∞ + solvent term | Resta, ε∞ |
+| sgw-dim / evgw-dim / qsgw-dim | DIM/Thole-scaled Resta profile (η_A) + solvent term | Resta, ε∞ (= DIM with η = 1) |
+| sgw | sBSE RPA W, solvent inside J | J_AA/ε∞ (site-diagonal) |
+| gw, brus, pbe, numeric | none (gap-only) | — |
+
+**Change (commit `6e50f97`).**
+* Each Delta-W estimator returns its W; the BSE kernel `qp` uses that
+  matrix. It is the default for these models, and any other kernel is rejected.
+  `--allow-inconsistent-kernel` reproduces legacy runs.
+* `qp` is rejected for gap-only models, which keep an independent kernel.
+* `qp_z: derived | <number>` selects Z for all Delta-W models; qsGW
+  previously hard-coded 0.80.
+
+**CdSe 2 nm (Cd₆₈Se₅₅Cl₂₆, spin-free, 25 × 25), S₁ in eV, vacuum / toluene
+(ε_out = 2.24):**
+
+| setting | QP gap | S₁ |
+|---|---|---|
+| sgw-resta, old mismatched kernel | 3.762 / 3.253 | 3.535 / 3.026 |
+| sgw-resta, shared W, Z = 0.8 | 3.762 / 3.253 | 2.240 / 2.383 |
+| sgw-resta, shared W, Z = 1 | 4.021 / 3.385 | 2.499 / 2.515 |
+| sgw-dim, shared W, Z = 1 | 3.809 / 3.173 | 2.529 / 2.531 |
+| qsgw-dim / qsgw-resta, shared W | 3.955 / 4.234 (vacuum) | 2.689 / 2.738 (vacuum) |
+
+With SOC (sgw-resta, shared W, Z = 1, toluene) the first bright state is
+2.43 eV against 2.70–2.95 eV experimentally (Yu et al. 2003 sizing).
+
+**Findings.**
+* **Solvent.** With a shared W and Z = 1, S₁ is solvent independent (2–16
+  meV). With Z < 1 a fraction 1 − Z of the polarization is left over.
+  Z = 1 is the consistent choice with a static BSE: in full GW–BSE the QP
+  renormalization is largely compensated by dynamical screening in the kernel.
+* **W model and size of S₁.** Resta and DIM give the same S₁ to within 30 meV.
+  S₁ ≈ DFT gap + bulk GW–PBE opening − bulk-screened binding, 0.3–0.5 eV
+  below experiment. The earlier agreement of the mismatched sgw-* runs in
+  toluene came from the missing electron–hole polarization.
+* **qsGW is higher by about 0.2 eV.** Its screened-exchange orbital
+  relaxation, −½P∘ΔW, is non-classical and does not cancel.
+* **Two bugs found and fixed on the way.**
+  - SOC spinors were built from DFT energies when a model supplies QP
+    energies (qsgw-* + SOC had no QP correction).
+  - SOC with `--no-exchange` crashed because the spinor direct term was gated
+    on the exchange flag (commit `ed3f120`).
+
+## 8. Comparison with evGW for Cd₁₆Se₁₃Cl₆ (the gw anchor)
+
+Reference: the monomer entries of `MATERIAL_DB["CDSE"]` (CP2K PBE and evGW,
+vacuum):
+* **PBE:** HOMO/LUMO −6.4196/−3.7852 eV (gap 2.634 eV);
+* **evGW:** −7.8177/−1.7884 eV (gap 6.029 eV);
+* **shifts:** −1.398/+1.997 eV (41 %/59 %).
+
+The supplied MO file (`tests/CdSe/1.2nm`) has a DFT gap of 2.639 eV. Vacuum,
+spin-free; Δ = model − evGW in eV.
+
+| qp_gap | Z | QP gap | Δ gap | Δ HOMO | Δ LUMO |
+|---|---|---|---|---|---|
+| gw (anchor) | — | 6.009 | −0.02 | +0.01 | −0.01 |
+| brus | — | 6.220 | +0.19 | −0.08 | +0.11 |
+| sgw-resta | 0.8 | 6.215 | +0.19 | −0.45 | −0.26 |
+| sgw-resta | 1.0 | 6.792 | +0.76 | −0.74 | +0.02 |
+| sgw-resta-pure | 0.8 / 1.0 | 5.201 / 5.524 | −0.83 / −0.51 | +0.07 / −0.10 | −0.76 / −0.61 |
+| sgw-dim | 0.8 / 1.0 | 5.316 / 5.667 | −0.71 / −0.36 | −0.14 / −0.34 | −0.86 / −0.71 |
+| evgw-resta | derived 0.93 | 6.338 | +0.31 | −0.51 | −0.20 |
+| evgw-dim | derived 0.92 | 5.514 | −0.52 | −0.21 | −0.72 |
+| qsgw-resta | derived 0.93 | 6.726 | +0.70 | −0.83 | −0.13 |
+| qsgw-dim | derived 0.92 | 5.810 | −0.22 | −0.23 | −0.44 |
+| sgw (sBSE) | 0.8 / 1.0 | 6.182 / 6.750 | +0.15 / +0.72 | −0.43 / −0.72 | −0.27 / +0.00 |
+
+**Findings.**
+* **`gw` matches only by construction.** Its −20 meV comes from the radius:
+  5.313 Å from the geometry against the stored R₀ = 5.258 Å.
+* **The interior contrast separates the models.** evGW needs 2.125 eV beyond
+  the bulk opening. The solvent/surface term is the same for Resta and DIM
+  (1.29 eV at Z = 0.8). The interior contrast is 1.01 eV (Resta, ε_eff(R))
+  against 0.11 eV (DIM).
+* **Z changes the gap as much as the model does.** `sgw-resta` is +0.19 eV at
+  Z = 0.8 but +0.76 eV at Z = 1, so its good Z = 0.8 result is a cancellation
+  between Z and an interior term that is too large.
+* **Iteration does not help systematically.** `evgw-*` adds 0.1–0.2 eV;
+  `qsgw-resta` overshoots by 0.7 eV.
+* **Every Delta-W model splits the correction about 50/50 instead of 41/59.**
+  The classical charging term ½qᵀΔWq is nearly symmetric in electron and hole;
+  the asymmetry is non-classical exchange–correlation. Absolute IP/EA from
+  these models are unreliable by several tenths of an eV.
+* **Scope.** One cluster at the anchor size; this tests the finite-size term,
+  not transferability.

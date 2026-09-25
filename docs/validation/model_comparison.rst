@@ -132,6 +132,9 @@ The results show four things:
   :math:`-\tfrac12 P\circ\Delta W` relaxes the orbitals and does not reduce to a classical charging energy,
   so it is not cancelled.
 
+Against evGW for Cd\ :sub:`16`\ Se\ :sub:`13`\ Cl\ :sub:`6`, the cluster that defines the ``gw`` anchor,
+the QP gaps and HOMO/LUMO shifts of every model are compared in :doc:`anchor_evgw_benchmark`.
+
 The comparison script
 ---------------------
 
