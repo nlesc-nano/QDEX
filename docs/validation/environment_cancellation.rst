@@ -6,7 +6,7 @@ Environmental screening and optical cancellation
    :width: 100%
    :alt: environment cancellation
 
-   CdSe test. With the scissor ``gw`` model the optical gap follows the QP gap, because the Resta direct kernel has no ε_out dependence. With ``qp_gap: env`` the same reaction field enters the QP energies and the BSE: the QP gap still depends on ε_out, but the optical gap stays constant to within 3 meV.
+   CdSe test: the QP gap follows ε_out through the anchor model, but the implemented Resta direct kernel has no ε_out dependence, so the optical gap inherits the full solvent shift. The dashed line is the exact-cancellation limit.
 
 The Resta and DIM quasiparticle paths include an exterior dielectric reaction
 term through ``eps_out``. Their BSE direct kernels currently use the interior
@@ -44,6 +44,7 @@ Implementation: ``qdex.hardness.estimate_sgw_dim_qp_gap`` and
 interior BSE screening. The relevant CLI option is ``--eps-out`` and the YAML
 key is ``physics.eps_out``.
 
-The environment-consistent alternative is ``qp_gap: env``; see :doc:`/quasiparticles/environment_model`.
+QDEX now enforces a shared :math:`W` for the Delta-W models (``kernel: qp``). With ``qp_z: 1.0`` the CdSe
+optical gap changes by less than 20 meV between vacuum and toluene; see :doc:`model_comparison`.
 
 See also :doc:`/interactions/environment` and :doc:`/interactions/screening`.

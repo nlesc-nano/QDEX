@@ -10,6 +10,13 @@ Part of :doc:`/quasiparticles/index`.
    Quasiparticle options ordered by how much state resolution they provide. Only ``qsgw-*`` changes orbitals; all others enter the BSE as a rigid or edge-resolved shift.
 
 
+
+.. important::
+
+   The Delta-W QP models (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``) must be combined with the BSE kernel
+   ``qp``, which is the same screened interaction :math:`W`. Other kernels are rejected. See
+   :doc:`/validation/model_comparison` for the compatibility table and the recommended settings.
+
 .. important::
 
    The labels ``sgw``, ``evgw`` and ``qsgw`` in QDEX name reduced models. They should not be interpreted as a claim of numerical equivalence to conventional GW/QSGW calculations. Validate each against a common reference set.

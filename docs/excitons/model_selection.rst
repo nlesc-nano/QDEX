@@ -3,6 +3,13 @@ Model selection
 
 Part of :doc:`/excitons/index`.
 
+
+.. important::
+
+   The Delta-W QP models (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``) must be combined with the BSE kernel
+   ``qp``, which is the same screened interaction :math:`W`. Other kernels are rejected. See
+   :doc:`/validation/model_comparison` for the compatibility table and the recommended settings.
+
 .. rubric:: QDEX implementation
 
 Implementation entry point:

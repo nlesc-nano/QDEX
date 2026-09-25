@@ -50,7 +50,7 @@ For accurate single-point spectra without relying on calibrated monomer anchors,
      material: "CDSE"
      eps_out: 2.40
      excitation_mode: "bse"
-     kernel: "dim"
+     kernel: "qp"              # same W as the QP model (required)
      2e-integrals: "mnok"
 
 
@@ -66,7 +66,7 @@ To remove starting-point DFT eigenvalue bias without the computational overhead 
      material: "CDSE"
      eps_out: 2.40
      excitation_mode: "bse"
-     kernel: "resta"
+     kernel: "qp"              # same W as the QP model (required)
      2e-integrals: "mnok"
 
 
@@ -84,6 +84,6 @@ For core/shell quantum dots, type-II heterojunctions, or surface-passivated dots
      material: "CDSE"
      eps_out: 2.40
      excitation_mode: "bse"
-     kernel: "dim"
+     kernel: "qp"              # same W as the QP model (required)
      2e-integrals: "mnok"
 

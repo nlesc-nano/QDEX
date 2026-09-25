@@ -574,32 +574,22 @@ def fig_ta():
 # 14. Environment cancellation: QP vs optical energies vs eps_out
 # ---------------------------------------------------------------------------
 def fig_environment_cancellation():
-    # CdSe 2 nm runs (tests/CdSe, spin-free, 25x25, Resta interior kernel)
     eps_inf, R, ell = 6.2, 9.221, 1.0
     eo = np.linspace(1.0, 6.2, 100)
     dqp = 11.52 * (1 / eo - 1 / eps_inf) / (R + ell)
-    off = 11.52 * (1 / 2.4 - 1 / eps_inf) / (R + ell)
-    env_eo = [1.0, 1.9, 2.24, 6.2]
-    env_qp = [3.852, 3.223, 3.115, 2.727]
-    env_s1 = [2.501, 2.503, 2.503, 2.500]
-    fig, axes = plt.subplots(1, 2, figsize=(10.4, 3.9), sharey=True)
-    ax = axes[0]
-    ax.plot(eo, 3.203 - off + dqp, color=C_QP, lw=2, label="QP gap")
-    ax.plot(eo, 2.977 - off + dqp, color=C_VIR, lw=2, label="S₁")
-    ax.plot([1.0, 2.4], [3.861, 3.203], "o", color=C_QP)
+    fig, ax = plt.subplots(figsize=(6.6, 3.8))
+    ax.plot(eo, 3.203 - (11.52 * (1 / 2.4 - 1 / eps_inf) / (R + ell)) + dqp, color=C_QP, lw=2, label="QP gap (gw model)")
+    ax.plot(eo, 2.977 - (11.52 * (1 / 2.4 - 1 / eps_inf) / (R + ell)) + dqp, color=C_VIR, lw=2,
+            label="S₁ as implemented (W has no ε_out)")
+    s1_matched = 2.977 - (11.52 * (1 / 2.4 - 1 / eps_inf) / (R + ell))
+    ax.plot(eo, np.full_like(eo, s1_matched), color=C_KER, lw=2, ls="--",
+            label="exact-cancellation limit\n(S₁ fixed at its matched-medium value)")
     ax.plot([1.0, 2.4], [3.634, 2.977], "o", color=C_VIR)
-    ax.set_title("scissor model (qp_gap: gw): S₁ follows the QP gap", fontsize=9.5)
-    ax = axes[1]
-    ax.plot(env_eo, env_qp, "o-", color=C_QP, lw=2, label="QP gap")
-    ax.plot(env_eo, env_s1, "o-", color=C_VIR, lw=2, label="S₁")
-    ax.set_title("environment model (qp_gap: env): S₁ constant", fontsize=9.5)
-    for ax in axes:
-        ax.axhspan(2.70, 2.95, color="#fde68a", alpha=0.6, lw=0)
-        ax.set_xlabel("ε_out")
-        ax.legend(frameon=False, fontsize=8, loc="upper right")
-    axes[0].set_ylabel("energy (eV)")
-    axes[0].text(6.1, 2.72, "exp. 1S window", ha="right", fontsize=7.5)
-    fig.tight_layout()
+    ax.plot([1.0, 2.4], [3.861, 3.203], "o", color=C_QP)
+    ax.set_xlabel("ε_out")
+    ax.set_ylabel("energy (eV)")
+    ax.set_title("CdSe 2 nm test: solvent dependence of QP and optical gaps", fontsize=9.5)
+    ax.legend(frameon=False, fontsize=7.8)
     save(fig, "environment_cancellation")
 
 

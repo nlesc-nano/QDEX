@@ -1132,6 +1132,10 @@ def estimate_sgw_qp_gap(coords, atom_symbols, material_name=None, eps_out=1.0,
         "total_scissor_vacuum_ev": total_sgw_scissor,
         "qp_model": "sgw_dw"
     }
+    # The screened interaction this QP model is built on.  The CLI passes it
+    # to the BSE (kernel "qp") so that GW and BSE share the same W.
+    provenance["w_bse_ev"] = np.array(W_ev, dtype=float)
+    provenance["w_bse_label"] = "sBSE RPA W (solvent inside J)"
 
     if return_details:
         return total_sgw_scissor, provenance
@@ -1398,6 +1402,10 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
         "total_scissor_solvent_ev": total_sgw_scissor,
         "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal + (0.5 * float(Z_h * (q_h @ (((1.0 - 1.0/eps_bulk)*14.3996)/np.sqrt(R_mat_ang**2 + R_QD_ang**2)) @ q_h) + Z_l * (q_l @ (((1.0 - 1.0/eps_bulk)*14.3996)/np.sqrt(R_mat_ang**2 + R_QD_ang**2)) @ q_l))),
     }
+    # The screened interaction this QP model is built on.  The CLI passes it
+    # to the BSE (kernel "qp") so that GW and BSE share the same W.
+    provenance["w_bse_ev"] = np.array(W_qd_ev + delta_W_solv, dtype=float)
+    provenance["w_bse_label"] = "DIM W_QD + solvent term"
 
     if return_details:
         return total_sgw_scissor, provenance
@@ -1657,6 +1665,10 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
         "total_scissor_solvent_ev": total_sgw_scissor,
         "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal + (0.5 * float(Z_h * (q_h @ (((1.0 - 1.0/eps_bulk)*14.3996)/np.sqrt(R_mat_ang**2 + R_QD_ang**2)) @ q_h) + Z_l * (q_l @ (((1.0 - 1.0/eps_bulk)*14.3996)/np.sqrt(R_mat_ang**2 + R_QD_ang**2)) @ q_l))),
     }
+    # The screened interaction this QP model is built on.  The CLI passes it
+    # to the BSE (kernel "qp") so that GW and BSE share the same W.
+    provenance["w_bse_ev"] = np.array(W_qd_ev + delta_W_solv, dtype=float)
+    provenance["w_bse_label"] = "Resta W_QD(eps_eff) + solvent term"
 
     if return_details:
         return total_sgw_scissor, provenance
@@ -1693,7 +1705,7 @@ def estimate_evgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out
 
 def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
                              material_name=None, eps_out=2.4, alpha=1.0, dynamic_z=True,
-                             max_iter=25, tol=1e-4, damping=0.5, return_details=False):
+                             max_iter=25, tol=1e-4, damping=0.5, return_details=False, Z=0.8):
     """
     Computes Quasiparticle Self-Consistent GW (qsGW) by updating BOTH eigenvalues
     and molecular orbitals across the full AO basis using the Atomistic Polarizable
@@ -1825,9 +1837,9 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
             Z_l = compute_dynamic_z(sig_l_stat, gap_curr, eps_eff_med, m_name)
             Z_avg = 0.5 * (Z_h + Z_l)
         else:
-            Z_h = 0.80
-            Z_l = 0.80
-            Z_avg = 0.80
+            Z_h = float(Z)
+            Z_l = float(Z)
+            Z_avg = float(Z)
 
         Sigma_sex = -0.5 * P_low * delta_W_ao
         Sigma_coh = 0.5 * np.diag(np.diag(delta_W_ao))
@@ -1903,6 +1915,10 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
         "eps_bulk": float(eps_bulk),
         "total_scissor_ev": final_scissor,
     }
+    # The screened interaction this QP model is built on.  The CLI passes it
+    # to the BSE (kernel "qp") so that GW and BSE share the same W.
+    provenance["w_bse_ev"] = np.array(W_qd_ev + delta_W_solv, dtype=float)
+    provenance["w_bse_label"] = "DIM W_QD (final iteration) + solvent term"
 
     if return_details:
         return final_scissor, provenance, C_qp, eps_qp
@@ -1912,7 +1928,7 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
 def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
                                material_name=None, eps_out=2.4, alpha=1.0, penn_scaling=True,
                                dynamic_z=True, max_iter=25, tol=1e-4, damping=0.5,
-                               return_details=False):
+                               return_details=False, Z=0.8):
     """
     Computes Quasiparticle Self-Consistent GW (qsGW) by updating BOTH eigenvalues
     and molecular orbitals across the full AO basis using the Resta dielectric model::
@@ -2047,9 +2063,9 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
             Z_l = compute_dynamic_z(sig_l_stat, gap_curr, eps_eff_qd, m_name)
             Z_avg = 0.5 * (Z_h + Z_l)
         else:
-            Z_h = 0.80
-            Z_l = 0.80
-            Z_avg = 0.80
+            Z_h = float(Z)
+            Z_l = float(Z)
+            Z_avg = float(Z)
 
         Sigma_sex = -0.5 * P_low * delta_W_ao
         Sigma_coh = 0.5 * np.diag(np.diag(delta_W_ao))
@@ -2125,6 +2141,10 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
         "eps_eff_qd": float(eps_eff_qd),
         "total_scissor_ev": final_scissor,
     }
+    # The screened interaction this QP model is built on.  The CLI passes it
+    # to the BSE (kernel "qp") so that GW and BSE share the same W.
+    provenance["w_bse_ev"] = np.array(W_qd_ev + delta_W_solv, dtype=float)
+    provenance["w_bse_label"] = "Resta W_QD(eps_eff, final iteration) + solvent term"
 
     if return_details:
         return final_scissor, provenance, C_qp, eps_qp

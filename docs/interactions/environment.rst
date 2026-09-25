@@ -47,4 +47,3 @@ When a carrier charge :math:`q` is placed inside a sphere of core permittivity :
 * **Dielectric Matching** (:math:`\epsilon_{\mathrm{out}} = \epsilon_\infty`): Boundary polarization vanishes identically.
 * **High-Dielectric Matrix** (:math:`\epsilon_{\mathrm{out}} > \epsilon_\infty`): External screening reduces carrier charging energies, compressing the fundamental gap.
 
-For a model in which the QP gap and the BSE share one environment-aware interaction, see :doc:`/quasiparticles/environment_model`.
