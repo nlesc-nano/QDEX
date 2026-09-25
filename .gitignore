@@ -46,3 +46,4 @@ tests/CdSe/consist/
 tests/CdSe/2.0nm/MOs_cleaned_20ang.txt
 tests/CdSe/1.2nm/MOs_cleaned_12ang.txt
 tests/CdSe/*/compare_*/
+tests/CdSe/*/sweep/

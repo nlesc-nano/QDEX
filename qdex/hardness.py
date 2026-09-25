@@ -1442,6 +1442,36 @@ def compute_dynamic_z(delta_sigma_stat_ev, gap_ev=None, eps_eff=None, material_n
     return float(np.clip(Z, 0.50, 1.0))
 
 
+def expand_atom_to_ao(M_atom, atom_ao_ranges, n_ao):
+    """Expand an atom-pair matrix to AO blocks: M_ao[mu, nu] = M[A(mu), B(nu)]."""
+    owner = np.empty(n_ao, dtype=int)
+    for A, (a0, a1) in enumerate(atom_ao_ranges):
+        owner[a0:a1] = A
+    M_atom = np.asarray(M_atom, dtype=float)
+    return M_atom[np.ix_(owner, owner)]
+
+
+def ao_screening_ratio(W_atom, gamma_atom, atom_ao_ranges, n_ao):
+    """AO expansion of the atom-pair screening ratio W_AB / gamma_AB (dimensionless)."""
+    ratio = np.asarray(W_atom, dtype=float) / np.asarray(gamma_atom, dtype=float)
+    return expand_atom_to_ao(ratio, atom_ao_ranges, n_ao)
+
+
+def ao_delta_w(dW_screen_atom, gamma_atom, dW_add_atom, gamma_ao, atom_ao_ranges):
+    """Delta W in the AO density-pair (xs) representation.
+
+    The screening part of Delta W is a change of the atom-pair screening ratio,
+    Delta S_AB = Delta W_AB / gamma_AB (gamma = MNOK), and is applied to the
+    exact AO integrals (mu mu | nu nu).  Additive classical terms (solvent
+    reaction field, sphere image) are smooth and are expanded to AO blocks.
+    """
+    n_ao = gamma_ao.shape[0]
+    dW = ao_screening_ratio(dW_screen_atom, gamma_atom, atom_ao_ranges, n_ao) * gamma_ao
+    if dW_add_atom is not None:
+        dW = dW + expand_atom_to_ao(dW_add_atom, atom_ao_ranges, n_ao)
+    return dW
+
+
 def scale_w_difference(W_qd_ev, W_bulk_ev, Z_eh):
     """Kernel counterpart of the Z-renormalized QP correction.
 
@@ -1701,6 +1731,10 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
     # Delta W enters the kernel with the same Z as the QP shift (scale_w_difference).
     provenance["w_bse_ev"] = scale_w_difference(W_qd_ev + delta_W_solv, W_bulk_ev, 0.5 * (Z_h + Z_l))
     provenance["w_bse_z"] = float(0.5 * (Z_h + Z_l))
+    # Components for the xs representation and for orbital-resolved QP levels.
+    provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
+                             "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
+                             "eps_z": float(eps_eff_med), "bulk_shift": float(bulk_shift)}
     provenance["w_bse_label"] = "DIM W_QD + solvent term"
 
     if return_details:
@@ -1966,6 +2000,10 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
     # Delta W enters the kernel with the same Z as the QP shift (scale_w_difference).
     provenance["w_bse_ev"] = scale_w_difference(W_qd_ev + delta_W_solv, W_bulk_ev, 0.5 * (Z_h + Z_l))
     provenance["w_bse_z"] = float(0.5 * (Z_h + Z_l))
+    # Components for the xs representation and for orbital-resolved QP levels.
+    provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
+                             "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
+                             "eps_z": float(eps_eff_qd), "bulk_shift": float(bulk_shift)}
     provenance["w_bse_label"] = "Resta W_QD(eps_eff) + solvent term"
 
     if return_details:
@@ -2003,7 +2041,8 @@ def estimate_evgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out
 
 def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
                              material_name=None, eps_out=2.4, alpha=1.0, dynamic_z=True,
-                             max_iter=25, tol=1e-4, damping=0.5, return_details=False, Z=0.8):
+                             max_iter=25, tol=1e-4, damping=0.5, return_details=False, Z=0.8,
+                             gamma_ao=None):
     """
     Computes Quasiparticle Self-Consistent GW (qsGW) by updating BOTH eigenvalues
     and molecular orbitals across the full AO basis using the Atomistic Polarizable
@@ -2108,15 +2147,20 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
         W_qd_ev = S_dim * gamma_bare_ev
         delta_W_atom = np.maximum(0.0, W_qd_ev - W_bulk_ev) + delta_W_solv
 
-        delta_W_ao = np.zeros((n_ao, n_ao), dtype=np.float64)
-        for A, (a0, a1) in enumerate(atom_ao_ranges):
-            for B, (b0, b1) in enumerate(atom_ao_ranges):
-                delta_W_ao[a0:a1, b0:b1] = delta_W_atom[A, B]
-
-        q_h = np.array([np.sum(np.abs(C_curr[a0:a1, homo_index])**2) for a0, a1 in atom_ao_ranges])
-        q_l = np.array([np.sum(np.abs(C_curr[a0:a1, lumo_index])**2) for a0, a1 in atom_ao_ranges])
-        sig_h_stat = 0.5 * float(q_h @ delta_W_atom @ q_h)
-        sig_l_stat = 0.5 * float(q_l @ delta_W_atom @ q_l)
+        if gamma_ao is None:
+            delta_W_ao = expand_atom_to_ao(delta_W_atom, atom_ao_ranges, n_ao)
+            q_h = np.array([np.sum(np.abs(C_curr[a0:a1, homo_index])**2) for a0, a1 in atom_ao_ranges])
+            q_l = np.array([np.sum(np.abs(C_curr[a0:a1, lumo_index])**2) for a0, a1 in atom_ao_ranges])
+            sig_h_stat = 0.5 * float(q_h @ delta_W_atom @ q_h)
+            sig_l_stat = 0.5 * float(q_l @ delta_W_atom @ q_l)
+        else:
+            # xs: the same screening ratio applied to exact AO density-pair integrals
+            delta_W_ao = ao_delta_w(np.maximum(0.0, W_qd_ev - W_bulk_ev), gamma_bare_ev, delta_W_solv,
+                                    gamma_ao, atom_ao_ranges)
+            q_h = np.abs(C_curr[:, homo_index])**2
+            q_l = np.abs(C_curr[:, lumo_index])**2
+            sig_h_stat = 0.5 * float(q_h @ delta_W_ao @ q_h)
+            sig_l_stat = 0.5 * float(q_l @ delta_W_ao @ q_l)
 
         tot_sig = sig_h_stat + sig_l_stat
         if tot_sig > 1e-8:
@@ -2218,6 +2262,10 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
     # Delta W enters the kernel with the same Z as the QP shift (scale_w_difference).
     provenance["w_bse_ev"] = scale_w_difference(W_qd_ev + delta_W_solv, W_bulk_ev, Z_avg)
     provenance["w_bse_z"] = float(Z_avg)
+    # Components for the xs representation and for orbital-resolved QP levels.
+    provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
+                             "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
+                             "eps_z": float(eps_eff_med), "bulk_shift": float(bulk_shift)}
     provenance["w_bse_label"] = "DIM W_QD (final iteration) + solvent term"
 
     if return_details:
@@ -2228,7 +2276,7 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
 def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
                                material_name=None, eps_out=2.4, alpha=1.0, penn_scaling=True,
                                dynamic_z=True, max_iter=25, tol=1e-4, damping=0.5,
-                               return_details=False, Z=0.8):
+                               return_details=False, Z=0.8, gamma_ao=None):
     """
     Computes Quasiparticle Self-Consistent GW (qsGW) by updating BOTH eigenvalues
     and molecular orbitals across the full AO basis using the Resta dielectric model::
@@ -2338,15 +2386,20 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
         W_qd_ev = S_resta * gamma_bare_ev
         delta_W_atom = np.maximum(0.0, W_qd_ev - W_bulk_ev) + delta_W_solv
 
-        delta_W_ao = np.zeros((n_ao, n_ao), dtype=np.float64)
-        for A, (a0, a1) in enumerate(atom_ao_ranges):
-            for B, (b0, b1) in enumerate(atom_ao_ranges):
-                delta_W_ao[a0:a1, b0:b1] = delta_W_atom[A, B]
-
-        q_h = np.array([np.sum(np.abs(C_curr[a0:a1, homo_index])**2) for a0, a1 in atom_ao_ranges])
-        q_l = np.array([np.sum(np.abs(C_curr[a0:a1, lumo_index])**2) for a0, a1 in atom_ao_ranges])
-        sig_h_stat = 0.5 * float(q_h @ delta_W_atom @ q_h)
-        sig_l_stat = 0.5 * float(q_l @ delta_W_atom @ q_l)
+        if gamma_ao is None:
+            delta_W_ao = expand_atom_to_ao(delta_W_atom, atom_ao_ranges, n_ao)
+            q_h = np.array([np.sum(np.abs(C_curr[a0:a1, homo_index])**2) for a0, a1 in atom_ao_ranges])
+            q_l = np.array([np.sum(np.abs(C_curr[a0:a1, lumo_index])**2) for a0, a1 in atom_ao_ranges])
+            sig_h_stat = 0.5 * float(q_h @ delta_W_atom @ q_h)
+            sig_l_stat = 0.5 * float(q_l @ delta_W_atom @ q_l)
+        else:
+            # xs: the same screening ratio applied to exact AO density-pair integrals
+            delta_W_ao = ao_delta_w(np.maximum(0.0, W_qd_ev - W_bulk_ev), gamma_bare_ev, delta_W_solv,
+                                    gamma_ao, atom_ao_ranges)
+            q_h = np.abs(C_curr[:, homo_index])**2
+            q_l = np.abs(C_curr[:, lumo_index])**2
+            sig_h_stat = 0.5 * float(q_h @ delta_W_ao @ q_h)
+            sig_l_stat = 0.5 * float(q_l @ delta_W_ao @ q_l)
 
         tot_sig = sig_h_stat + sig_l_stat
         if tot_sig > 1e-8:
@@ -2445,6 +2498,10 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
     # Delta W enters the kernel with the same Z as the QP shift (scale_w_difference).
     provenance["w_bse_ev"] = scale_w_difference(W_qd_ev + delta_W_solv, W_bulk_ev, Z_avg)
     provenance["w_bse_z"] = float(Z_avg)
+    # Components for the xs representation and for orbital-resolved QP levels.
+    provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
+                             "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
+                             "eps_z": float(eps_eff_qd), "bulk_shift": float(bulk_shift)}
     provenance["w_bse_label"] = "Resta W_QD(eps_eff, final iteration) + solvent term"
 
     if return_details:
