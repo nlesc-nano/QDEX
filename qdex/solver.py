@@ -188,7 +188,8 @@ class ExcitonSolver:
                  vxc_ao_path=None, nthreads=1, spin='singlet', 
                  C_beta=None, eps_beta=None, homo_index_beta=None, charge_type='mulliken',
                   n_occ_beta=None, n_virt_beta=None, include_direct_eh=None,
-                  excitation_mode="bse", kernel_type="mnok", shells=None, eps_dft=None):
+                  excitation_mode="bse", kernel_type="mnok", shells=None, eps_dft=None,
+                  env_W=None):
 
         self.C = C
         self.eps = eps
@@ -348,6 +349,26 @@ class ExcitonSolver:
             gamma_qp, w_resta = g, g
             print(f"  [Solver] Building Bare Kernel V (alpha = 1.000, beta = 0.000)")
             gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0)
+
+        if env_W is not None:
+            # Dielectric-environment reaction field (qdex.environment): the same
+            # operator already entered the QP energies, so adding it to the
+            # direct kernel keeps charged and neutral excitations consistent.
+            if not (k_name in ["resta", "xs-resta"]):
+                raise ValueError(
+                    f"environment 'sphere' is implemented for the 'resta' and 'xs-resta' kernels, not '{k_name}' "
+                    "(sBSE and DIM carry their own eps_out treatment)."
+                )
+            env_W = np.asarray(env_W, dtype=float)
+            if w_resta.shape[0] == env_W.shape[0]:
+                w_resta = w_resta + env_W
+            else:  # AO-resolved kernel: expand the atom-pair reaction field to AO blocks
+                idx = np.empty(w_resta.shape[0], dtype=int)
+                for A, (a0, a1) in enumerate(atom_ao_ranges):
+                    idx[a0:a1] = A
+                w_resta = w_resta + env_W[np.ix_(idx, idx)]
+            print(f"  [Solver] Added dielectric-sphere reaction field to the direct kernel "
+                  f"(max |W_refl| = {np.max(np.abs(env_W)):.3f} eV).")
 
         if beta > 0.0:
             raise ValueError(
