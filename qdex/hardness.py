@@ -1492,7 +1492,7 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
                             C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None,
                             atom_ao_ranges=None, alpha=1.0, Z=0.8, dynamic_z=False,
                             self_consistent=False, max_iter=25, tol=1e-4, damping=0.5,
-                            return_details=False):
+                            return_details=False, frontier_pops=None):
     """
     Computes the Quasiparticle (GW) gap shift for a quantum dot via the microscopic
     screening difference (Delta W) approach using the Atomistic Polarizable Dipole Interaction
@@ -1559,7 +1559,10 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
     delta_W_solv = ((1.0 / eps_out_val - 1.0 / eps_bulk) * 14.3996) / np.sqrt(R_mat_ang**2 + (R_QD_ang)**2)
 
     # 4. Project onto frontier HOMO and LUMO states
-    if C_occ_low is not None and C_virt_low is not None and atom_ao_ranges is not None:
+    if frontier_pops is not None:
+        # atomic populations of HOMO and LUMO supplied by the caller (Mulliken or Löwdin)
+        q_h, q_l = (np.asarray(x, dtype=float) for x in frontier_pops)
+    elif C_occ_low is not None and C_virt_low is not None and atom_ao_ranges is not None:
         q_h = np.zeros(n_atoms)
         q_l = np.zeros(n_atoms)
         for A, (a0, a1) in enumerate(atom_ao_ranges):
@@ -1747,7 +1750,7 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
                               eps_occ=None, eps_virt=None, atom_ao_ranges=None,
                               alpha=1.0, Z=0.8, penn_scaling=True, dynamic_z=False,
                               self_consistent=False, max_iter=25, tol=1e-4, damping=0.5,
-                              return_details=False):
+                              return_details=False, frontier_pops=None):
     """
     Computes the Quasiparticle (GW) gap shift for a quantum dot via the microscopic
     screening difference (Delta W) approach using the Resta dielectric screening model::
@@ -1814,7 +1817,10 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
     delta_W_solv = ((1.0 / eps_out_val - 1.0 / eps_bulk) * 14.3996) / np.sqrt(R_mat_ang**2 + (R_QD_ang)**2)
 
     # 4. Project onto frontier orbitals
-    if C_occ_low is not None and C_virt_low is not None and atom_ao_ranges is not None:
+    if frontier_pops is not None:
+        # atomic populations of HOMO and LUMO supplied by the caller (Mulliken or Löwdin)
+        q_h, q_l = (np.asarray(x, dtype=float) for x in frontier_pops)
+    elif C_occ_low is not None and C_virt_low is not None and atom_ao_ranges is not None:
         q_h = np.zeros(n_atoms)
         q_l = np.zeros(n_atoms)
         for A, (a0, a1) in enumerate(atom_ao_ranges):
@@ -2109,10 +2115,11 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
 
     # 4. Löwdin Orthogonalization Operators
     S_dense = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
-    eigvals_S, U_S = np.linalg.eigh(S_dense)
+    from qdex.lowdin import lowdin_factor
+    eigvals_S, U_S = lowdin_factor(S_dense)
     eigvals_S = np.maximum(eigvals_S, 1e-12)
-    S_half = U_S @ np.diag(np.sqrt(eigvals_S)) @ U_S.T
-    S_inv_half = U_S @ np.diag(1.0 / np.sqrt(eigvals_S)) @ U_S.T
+    S_half = (U_S * np.sqrt(eigvals_S)[None, :]) @ U_S.T
+    S_inv_half = (U_S * (1.0 / np.sqrt(eigvals_S))[None, :]) @ U_S.T
 
     C_dense = C.toarray() if hasattr(C, "toarray") else np.asarray(C, dtype=np.float64)
     if C_dense.shape[1] != n_ao:
@@ -2122,7 +2129,7 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
         )
     C_low_init = S_half @ C_dense
     eps_dft = np.asarray(eps, dtype=np.float64)
-    H_dft_low = C_low_init @ np.diag(eps_dft) @ C_low_init.T
+    H_dft_low = (C_low_init * eps_dft[None, :]) @ C_low_init.T
 
     n_occ = homo_index + 1
     lumo_index = homo_index + 1
@@ -2342,10 +2349,11 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
 
     # 4. Löwdin Orthogonalization Operators
     S_dense = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
-    eigvals_S, U_S = np.linalg.eigh(S_dense)
+    from qdex.lowdin import lowdin_factor
+    eigvals_S, U_S = lowdin_factor(S_dense)
     eigvals_S = np.maximum(eigvals_S, 1e-12)
-    S_half = U_S @ np.diag(np.sqrt(eigvals_S)) @ U_S.T
-    S_inv_half = U_S @ np.diag(1.0 / np.sqrt(eigvals_S)) @ U_S.T
+    S_half = (U_S * np.sqrt(eigvals_S)[None, :]) @ U_S.T
+    S_inv_half = (U_S * (1.0 / np.sqrt(eigvals_S))[None, :]) @ U_S.T
 
     C_dense = C.toarray() if hasattr(C, "toarray") else np.asarray(C, dtype=np.float64)
     if C_dense.shape[1] != n_ao:
@@ -2355,7 +2363,7 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
         )
     C_low_init = S_half @ C_dense
     eps_dft = np.asarray(eps, dtype=np.float64)
-    H_dft_low = C_low_init @ np.diag(eps_dft) @ C_low_init.T
+    H_dft_low = (C_low_init * eps_dft[None, :]) @ C_low_init.T
 
     n_occ = homo_index + 1
     lumo_index = homo_index + 1

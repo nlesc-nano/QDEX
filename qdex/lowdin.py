@@ -1,6 +1,34 @@
 import numpy as np
 from qdex.device_utils import is_gpu, to_tensor, to_numpy
 
+_FACTOR_CACHE = {}
+_SQRT_CACHE = {}
+
+
+def _key(S):
+    """Cheap fingerprint of an overlap matrix (same S -> same key within a run)."""
+    S = np.asarray(S)
+    return (S.shape, float(np.trace(S)), float(S[::97, ::89].sum()), float(S[-1, ::53].sum()))
+
+
+def lowdin_factor(S):
+    """Eigen-decomposition of S (eigenvalues, eigenvectors), computed once per S and cached."""
+    S = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
+    k = _key(S)
+    if k not in _FACTOR_CACHE:
+        _FACTOR_CACHE.clear()
+        w, V = np.linalg.eigh(S)
+        _FACTOR_CACHE[k] = (np.clip(w, 1e-15, None), V)
+    return _FACTOR_CACHE[k]
+
+
+def lowdin_apply(S, X):
+    """S^{1/2} X for selected columns X without forming S^{1/2}: V (sqrt(w) * (V^T X))."""
+    w, V = lowdin_factor(S)
+    X = X.toarray() if hasattr(X, "toarray") else np.asarray(X)
+    return V @ (np.sqrt(w)[:, None] * (V.T @ X))
+
+
 def lowdin_sqrt(S, device="numpy"):
     if is_gpu(device):
         import torch
@@ -8,12 +36,17 @@ def lowdin_sqrt(S, device="numpy"):
         S_t = to_tensor(S, dev, dtype=torch.float64)
         eigvals, eigvecs = torch.linalg.eigh(S_t)
         eigvals = torch.clamp(eigvals, min=1e-15)
-        S_half = eigvecs @ torch.diag(torch.sqrt(eigvals)) @ eigvecs.T
+        S_half = (eigvecs * torch.sqrt(eigvals)[None, :]) @ eigvecs.T
         return to_numpy(S_half)
 
-    eigvals, eigvecs = np.linalg.eigh(S)
-    eigvals = np.clip(eigvals, a_min=1e-15, a_max=None)
-    return eigvecs @ np.diag(np.sqrt(eigvals)) @ eigvecs.T
+    S = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
+    k = _key(S)
+    if k not in _SQRT_CACHE:
+        _SQRT_CACHE.clear()
+        w, V = lowdin_factor(S)
+        # one GEMM; the old V @ diag(sqrt w) @ V.T did two n^3 products and an n x n diagonal
+        _SQRT_CACHE[k] = (V * np.sqrt(w)[None, :]) @ V.T
+    return _SQRT_CACHE[k]
 
 def transform_mos(C, S, device="numpy"):
     S_half = lowdin_sqrt(S, device=device)

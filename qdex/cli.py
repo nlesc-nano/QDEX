@@ -24,7 +24,7 @@ from qdex.exciton_analysis import ExcitonAnalyzer, plot_analysis_summary
 from qdex.integrals import compute_dipole_ao
 from qdex.oscillator import compute_oscillator_strengths
 from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap, build_gamma
-from qdex.qp_levels import xs_shared_w, atom_delta_w, orbital_qp_energies
+from qdex.qp_levels import xs_shared_w, atom_delta_w, orbital_qp_energies, orbital_populations
 from qdex.orbital_analysis import (
     compute_spin_character, compute_uks_soc_spin_free_channels,
     compute_uks_spin_free_channels, format_uks_soc_spin_free_character,
@@ -1131,6 +1131,10 @@ def main():
     qp_provenance = None
     eps_qp_active = None
     _xs_cache = {}
+    # QP populations follow the BSE charge partition: Löwdin for charge_type lowdin and for xs
+    # (the xs Hamiltonian is Löwdin-based), Mulliken otherwise (no diagonalization of S needed).
+    qp_pop_mode = ("lowdin" if (str(getattr(args, "charge_type", "mulliken")).lower() == "lowdin"
+                                or str(args.kernel_type).lower() in ("xs", "xs-qdex")) else "mulliken")
 
     def _xs_gamma_ao():
         """Exact AO density-pair integrals (mu mu|nu nu) in eV when two_electron_integrals: xs."""
@@ -1215,17 +1219,13 @@ def main():
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
             else:
-                S_dense = S.toarray() if hasattr(S, 'toarray') else S
-                S_half = lowdin_sqrt(S_dense, device=compute_device)
-
-                n_occ_tot = homo_index + 1
-                n_virt_tot = min(1000, len(eps) - n_occ_tot)
-                occ_idx_a = np.arange(0, n_occ_tot)
-                virt_idx_a = np.arange(n_occ_tot, n_occ_tot + n_virt_tot)
-                C_occ_act = C[:, occ_idx_a].toarray() if hasattr(C, 'toarray') else C[:, occ_idx_a]
-                C_virt_act = C[:, virt_idx_a].toarray() if hasattr(C, 'toarray') else C[:, virt_idx_a]
-                C_occ_low = S_half @ C_occ_act
-                C_virt_low = S_half @ C_virt_act
+                # The Delta-W estimators need only the HOMO and LUMO atomic populations,
+                # in the same partition as the BSE charges (Mulliken: S C only, no eigh).
+                occ_idx_a = np.array([homo_index])
+                virt_idx_a = np.array([homo_index + 1])
+                q_edge = orbital_populations(C[:, [homo_index, homo_index + 1]], S, atom_ao_ranges,
+                                             qp_pop_mode, "atom")
+                C_occ_low = C_virt_low = None
 
                 sgw_scissor, qp_provenance = estimate_sgw_dim_qp_gap(
                     coords=np.array(coords_ang),
@@ -1241,7 +1241,8 @@ def main():
                     dynamic_z=use_dz,
                     Z=z_val,
                     self_consistent=is_evgw,
-                    return_details=True
+                    return_details=True,
+                    frontier_pops=(q_edge[:, 0], q_edge[:, 1]),
                 )
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
@@ -1290,17 +1291,13 @@ def main():
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
             else:
-                S_dense = S.toarray() if hasattr(S, 'toarray') else S
-                S_half = lowdin_sqrt(S_dense, device=compute_device)
-
-                n_occ_tot = homo_index + 1
-                n_virt_tot = min(1000, len(eps) - n_occ_tot)
-                occ_idx_a = np.arange(0, n_occ_tot)
-                virt_idx_a = np.arange(n_occ_tot, n_occ_tot + n_virt_tot)
-                C_occ_act = C[:, occ_idx_a].toarray() if hasattr(C, 'toarray') else C[:, occ_idx_a]
-                C_virt_act = C[:, virt_idx_a].toarray() if hasattr(C, 'toarray') else C[:, virt_idx_a]
-                C_occ_low = S_half @ C_occ_act
-                C_virt_low = S_half @ C_virt_act
+                # The Delta-W estimators need only the HOMO and LUMO atomic populations,
+                # in the same partition as the BSE charges (Mulliken: S C only, no eigh).
+                occ_idx_a = np.array([homo_index])
+                virt_idx_a = np.array([homo_index + 1])
+                q_edge = orbital_populations(C[:, [homo_index, homo_index + 1]], S, atom_ao_ranges,
+                                             qp_pop_mode, "atom")
+                C_occ_low = C_virt_low = None
 
                 sgw_scissor, qp_provenance = estimate_sgw_resta_qp_gap(
                     coords=np.array(coords_ang),
@@ -1318,7 +1315,8 @@ def main():
                     dynamic_z=use_dz,
                     Z=z_val,
                     self_consistent=is_evgw,
-                    return_details=True
+                    return_details=True,
+                    frontier_pops=(q_edge[:, 0], q_edge[:, 1]),
                 )
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
@@ -1337,17 +1335,15 @@ def main():
 
             print(f"\n--- Estimating Quasiparticle Gap using Microscopic sGW (Delta-W formulation) ---")
             t0_sgw = time.time()
-            S_dense = S.toarray() if hasattr(S, 'toarray') else S
-            S_half = lowdin_sqrt(S_dense, device=compute_device)
-
+            from qdex.lowdin import lowdin_apply
             n_occ_tot = homo_index + 1
             n_virt_tot = min(1000, len(eps) - n_occ_tot)
             occ_idx_a = np.arange(0, n_occ_tot)
             virt_idx_a = np.arange(n_occ_tot, n_occ_tot + n_virt_tot)
             C_occ_act = C[:, occ_idx_a].toarray() if hasattr(C, 'toarray') else C[:, occ_idx_a]
             C_virt_act = C[:, virt_idx_a].toarray() if hasattr(C, 'toarray') else C[:, virt_idx_a]
-            C_occ_low = S_half @ C_occ_act
-            C_virt_low = S_half @ C_virt_act
+            C_occ_low = lowdin_apply(S, C_occ_act)   # sBSE needs all occupied (RPA response)
+            C_virt_low = lowdin_apply(S, C_virt_act)
             eps_occ_act = eps[occ_idx_a]
             eps_virt_act = eps[virt_idx_a]
 
@@ -1440,15 +1436,11 @@ def main():
 
         levels_mode = str(getattr(args, "qp_levels", "orbital")).lower()
         if levels_mode == "orbital" and eps_qp_active is None:
-            from qdex.lowdin import lowdin_sqrt
             n_win = max(100, int(args.nhomos or 0), int(args.nlumos or 0)) + 10
             occ_w = np.arange(max(0, homo_index + 1 - n_win), homo_index + 1)
             virt_w = np.arange(homo_index + 1, min(len(eps), homo_index + 1 + n_win))
-            S_dense = S.toarray() if hasattr(S, "toarray") else S
-            S_half = lowdin_sqrt(S_dense, device=compute_device)
-            C_dense_w = C[:, np.concatenate([occ_w, virt_w])]
-            C_dense_w = C_dense_w.toarray() if hasattr(C_dense_w, "toarray") else C_dense_w
-            C_low_w = S_half @ C_dense_w
+            q_w = orbital_populations(C[:, np.concatenate([occ_w, virt_w])], S, atom_ao_ranges,
+                                      qp_pop_mode, representation)
             edges = None
             if w_parts.get("anchor_edges"):
                 f_h = float(qp_provenance.get("f_homo", 0.5))
@@ -1456,9 +1448,10 @@ def main():
             z_mode = "derived" if qp_provenance.get("dynamic_z") else "fixed"
             z_fixed = float(qp_provenance.get("z_factor", 1.0))
             eps_qp, lev_info = orbital_qp_energies(
-                eps, C_low_w[:, :len(occ_w)], C_low_w[:, len(occ_w):], occ_w, virt_w, dW_levels,
-                atom_ao_ranges, representation, float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
-                w_parts.get("eps_z"), args.material, edge_shifts=edges)
+                eps, q_w[:, :len(occ_w)], q_w[:, len(occ_w):], occ_w, virt_w, dW_levels,
+                float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
+                w_parts.get("eps_z"), args.material, edge_shifts=edges, representation=representation)
+            lev_info["qp_populations"] = qp_pop_mode
             new_scissor = float(eps_qp[homo_index + 1] - eps_qp[homo_index]) - dft_gap
             print(f"\n  [QP Levels] Orbital-resolved ({representation}): {len(occ_w)} occ + {len(virt_w)} virt levels; "
                   f"HOMO {lev_info['qp_homo_shift_ev']:+.3f} eV, LUMO {lev_info['qp_lumo_shift_ev']:+.3f} eV; "

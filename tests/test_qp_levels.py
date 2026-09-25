@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from qdex.hardness import expand_atom_to_ao
-from qdex.qp_levels import atom_delta_w, orbital_qp_energies, orbital_sigma, xs_shared_w
+from qdex.qp_levels import atom_delta_w, orbital_populations, orbital_qp_energies, orbital_sigma, xs_shared_w
 
 RANGES = [(0, 2), (2, 3)]
 
@@ -17,6 +17,16 @@ def _parts():
 
 
 class QPLevelTests(unittest.TestCase):
+    def test_mulliken_and_lowdin_populations_sum_to_one(self):
+        rng = np.random.default_rng(0)
+        A = rng.normal(size=(3, 3))
+        S = A @ A.T / 3 + np.eye(3)
+        w, V = np.linalg.eigh(S)
+        C = V / np.sqrt(w)            # S-orthonormal orbitals
+        for mode in ("mulliken", "lowdin"):
+            q = orbital_populations(C, S, RANGES, mode, "atom")
+            np.testing.assert_allclose(q.sum(axis=0), 1.0, atol=1e-12)
+
     def test_xs_kernel_reduces_to_mnok_blocks(self):
         # With AO integrals equal to the expanded MNOK gamma, xs W is the expanded atom W.
         p = _parts()
@@ -28,18 +38,19 @@ class QPLevelTests(unittest.TestCase):
         p = _parts()
         dW = atom_delta_w(p)
         C = np.eye(3)
+        q = orbital_populations(C, np.eye(3), RANGES, "mulliken", "atom")
         eps = np.array([-6.0, -5.0, -2.0])
-        eps_qp, info = orbital_qp_energies(eps, C[:, :2], C[:, 2:], np.array([0, 1]), np.array([2]), dW, RANGES,
-                                           "atom", 1.0, "fixed", 1.0, None, "CDSE")
-        sig = orbital_sigma(C, dW, RANGES, "atom")
+        eps_qp, info = orbital_qp_energies(eps, q[:, :2], q[:, 2:], np.array([0, 1]), np.array([2]), dW,
+                                           1.0, "fixed", 1.0, None, "CDSE")
+        sig = orbital_sigma(q, dW)
         np.testing.assert_allclose(eps_qp, eps + np.array([-0.5 - sig[0], -0.5 - sig[1], 0.5 + sig[2]]), atol=1e-12)
         self.assertEqual(info["qp_levels"], "orbital")
 
     def test_edge_pinning_keeps_frontier_shifts(self):
         p = _parts()
-        C = np.eye(3)
-        eps_qp, _ = orbital_qp_energies(np.array([-6.0, -5.0, -2.0]), C[:, :2], C[:, 2:], np.array([0, 1]),
-                                        np.array([2]), atom_delta_w(p), RANGES, "atom", 1.0, "fixed", 1.0,
+        q = orbital_populations(np.eye(3), np.eye(3), RANGES, "lowdin", "atom")
+        eps_qp, _ = orbital_qp_energies(np.array([-6.0, -5.0, -2.0]), q[:, :2], q[:, 2:], np.array([0, 1]),
+                                        np.array([2]), atom_delta_w(p), 1.0, "fixed", 1.0,
                                         None, "CDSE", edge_shifts=(1.4, 2.0))
         self.assertAlmostEqual(eps_qp[1], -6.4, places=12)
         self.assertAlmostEqual(eps_qp[2], 0.0, places=12)
