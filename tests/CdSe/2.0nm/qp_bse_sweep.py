@@ -139,7 +139,7 @@ def build_cases_large(eps_solvent, nact, nroots, xs=True, qsgw=True, soc=True):
     """Targeted set for large dots: fixed active space, Davidson, no convergence scans.
 
     S  self-energy: classical 1/2 q^T dW q instead of Delta-COHSEX, no anchor residual,
-       and the old (R0/R)^p residual scaling for gw
+       the old softened Born solvent term, and the old (R0/R)^p residual scaling for gw
     K  kernels for the gap-only gw model: resta-sphere (consistent) vs bulk resta
     A  mnok core: each consistent QP x kernel pair, vacuum and solvent
     D  two-anchor residual power p (the main uncertainty of gw at large R)
@@ -168,6 +168,9 @@ def build_cases_large(eps_solvent, nact, nroots, xs=True, qsgw=True, soc=True):
                                                   "qp_selfenergy": "classical"}, cost=0)
         add("S", f"mnok_{m}_noanchor_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
                                             "qp_anchor_residual": "off"}, cost=0)
+        for eo, tag in envs:
+            add("S", f"mnok_{m}_born_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+                                              "qp_solvent_term": "born"}, cost=0)
     add("S", f"mnok_gw-sphere_powerscaling_eps{es}", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "mnok",
                                                       "eps_out": eps_solvent, "qp_residual_scaling": "power"}, cost=0)
     for eo, tag in envs:
@@ -224,7 +227,7 @@ def case_config(base, case, nthreads):
     if "exchange" in phys:  # deprecated alias of include_direct_eh
         phys.setdefault("include_direct_eh", phys.pop("exchange"))
     for k in ("qp_z", "qp_levels", "qp_residual_power", "charge_type", "triplet", "nroots", "qp_polarization",
-              "dynamic_z", "qp_selfenergy", "qp_residual_scaling", "qp_anchor_residual"):
+              "dynamic_z", "qp_selfenergy", "qp_residual_scaling", "qp_anchor_residual", "qp_solvent_term"):
         phys.pop(k, None)
     phys.update(case["physics"])
     c.setdefault("soc", {})["soc_flag"] = bool(case["soc"])

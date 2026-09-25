@@ -120,10 +120,18 @@ is 0.41 at 2 nm (0.33 with p = 2) and 0.26 at 3.2 nm (0.10 with p = 2).
 **Delta-W models.** The same idea applies to the Delta-W models. Running a model once on the anchor
 cluster with ``--qp-anchor-calibrate`` stores its per-edge error against evGW in
 ``qdex/data/dw_anchor_residuals.json``. The key is material, model, self-energy, representation,
-populations and Z. Later runs add residual × E_conf(R)/E_conf(R₀) to all occupied orbitals (HOMO
-residual) and all virtual orbitals (LUMO residual). ``qp_anchor_residual: off`` disables it. With the
-one-shot ΔCOHSEX levels the calibrated gap residual is small: +0.08 (``sgw-resta``), +0.18 (``sgw-dim``)
-and −0.15 eV (``evgw-resta``), against +0.36 / +0.46 / +0.15 eV with the classical levels.
+populations, Z and solvent term. Later runs add residual × E_conf(R)/E_conf(R₀) to all occupied
+orbitals (HOMO residual) and all virtual orbitals (LUMO residual). ``qp_anchor_residual: off``
+disables it.
+
+With the default sphere solvent term, the calibrated gap residuals (LUMO minus HOMO residual) are:
+
+* ΔCOHSEX: −0.54 eV (``sgw-resta``), −0.44 eV (``sgw-dim``), −0.83 eV (``evgw-resta``).
+* Classical levels: −0.21 / −0.11 / −0.48 eV.
+
+They have the same sign and size as the residual of the ``gw`` model (−0.42 eV). With the softened
+Born term (``qp_solvent_term: born``), the ΔCOHSEX residuals are +0.08 / +0.18 / −0.15 eV. They are
+smaller only because the missing l ≥ 1 image multipoles offset the non-classical correction.
 
 **Exact anchor.** :math:`R_0` in ``MATERIAL_DB`` must be computed with the same radius definition as
 the target cluster (``get_cluster_size_metrics``). The CdSe entry is 5.3133 Å, recomputed from the

@@ -29,6 +29,10 @@ flag is given in brackets.
    * - ``qp_selfenergy`` [``--qp-selfenergy``]
      - ``cohsex``
      - Delta-W levels: one-shot ΔCOHSEX (``cohsex``) or the classical ½ qᵀΔWq (``classical``).
+   * - ``qp_solvent_term`` [``--qp-solvent-term``]
+     - ``sphere``
+     - Environment part of ΔW in the Delta-W models: dielectric-sphere reaction field (``sphere``) or
+       the earlier softened Born term (``born``).
    * - ``qp_levels`` [``--qp-levels``]
      - ``orbital``
      - Correct every orbital (``orbital``) or apply one scissor (``rigid``).

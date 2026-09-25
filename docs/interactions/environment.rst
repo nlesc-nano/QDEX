@@ -12,11 +12,11 @@ Part of :doc:`/interactions/index`.
 
 .. important::
 
-   Two environment terms are in use. The Delta-W models (``sgw-*``, ``evgw-*``, ``qsgw-*``) use a
-   softened Born term, (1/ε_out − 1/ε∞) e²/√(r² + R²); it is not the full Green function of a
-   dielectric sphere. The two-anchor ``gw`` model uses the full multipole Green function of the sphere
-   (:doc:`/quasiparticles/anchor`). In both cases the same term enters the QP correction and the BSE
-   kernel (:doc:`/quasiparticles/theory`, section 4). Both change sign when ε_out exceeds ε∞.
+   All QP models that define W use the reaction field of a dielectric sphere (full multipole Green
+   function, ε∞ inside, ε_out outside): the two-anchor ``gw`` model and, by default, the Delta-W
+   models (``qp_solvent_term: sphere``). The earlier softened Born form is available as
+   ``qp_solvent_term: born``. The same term enters the QP correction and the BSE kernel
+   (:doc:`/quasiparticles/theory`, section 4).
 
 .. rubric:: QDEX implementation
 
