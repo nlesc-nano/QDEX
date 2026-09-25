@@ -24,7 +24,10 @@ from qdex.exciton_analysis import ExcitonAnalyzer, plot_analysis_summary
 from qdex.integrals import compute_dipole_ao
 from qdex.oscillator import compute_oscillator_strengths
 from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap, build_gamma
-from qdex.qp_levels import xs_shared_w, atom_delta_w, orbital_qp_energies, orbital_populations
+from qdex.qp_levels import (xs_shared_w, atom_delta_w, orbital_qp_energies, orbital_populations,
+                             cohsex_diagonal, cohsex_qp_energies, anchor_key, load_anchor_table,
+                             save_anchor_entry)
+from qdex.hardness import get_cluster_size_metrics
 from qdex.orbital_analysis import (
     compute_spin_character, compute_uks_soc_spin_free_channels,
     compute_uks_spin_free_channels, format_uks_soc_spin_free_character,
@@ -815,6 +818,20 @@ def main():
     parser.add_argument("--qp-levels", dest="qp_levels", choices=["orbital", "rigid"], default="orbital",
                         help="QP energies of models that define W: 'orbital' (default; every molecular orbital gets its "
                              "own Z_p * sigma_p) or 'rigid' (one scissor on all virtual orbitals).")
+    parser.add_argument("--qp-selfenergy", dest="qp_selfenergy", choices=["cohsex", "classical"], default="cohsex",
+                        help="Orbital QP levels of the Delta-W models: 'cohsex' (default; one-shot static Delta-COHSEX "
+                             "diagonal incl. non-classical screened exchange) or 'classical' (1/2 q^T dW q).")
+    parser.add_argument("--qp-residual-scaling", dest="qp_residual_scaling", choices=["econf", "power"],
+                        default="econf",
+                        help="Size scaling of the non-classical anchor residual: 'econf' (default; "
+                             "E_conf^PBE(R)/E_conf^PBE(R0)) or 'power' ((R0/R)^p).")
+    parser.add_argument("--qp-anchor-residual", dest="qp_anchor_residual", choices=["on", "off"], default="on",
+                        help="Apply the calibrated anchor residual to the Delta-W QP levels (default on).")
+    parser.add_argument("--qp-anchor-calibrate", dest="qp_anchor_calibrate", action="store_true",
+                        help="Run on the anchor cluster (vacuum): store the per-edge residual of this Delta-W "
+                             "model against the evGW anchor in the residual table.")
+    parser.add_argument("--qp-anchor-table", dest="qp_anchor_table", default=None,
+                        help="Path of the anchor residual table (default: qdex/data/dw_anchor_residuals.json).")
     parser.add_argument("--qp-strict", action="store_true",
                         help="Reject clusters smaller than the finite-size anchor instead of clamping to it.")
 
@@ -1193,6 +1210,8 @@ def main():
                     strict=args.qp_strict,
                     polarization_model=getattr(args, "qp_polarization", "sphere"),
                     return_details=True,
+                    dft_gap=dft_gap,
+                    residual_scaling=getattr(args, "qp_residual_scaling", "econf"),
                 )
             
             if gw_scissor is not None:
@@ -1458,18 +1477,81 @@ def main():
         if levels_mode == "orbital" and eps_qp_active is None:
             occ_w = np.arange(0, homo_index + 1)
             virt_w = np.arange(homo_index + 1, len(eps))
-            q_w = _all_populations(representation)
-            edges = None
-            if w_parts.get("anchor_edges"):
-                f_h = float(qp_provenance.get("f_homo", 0.5))
-                edges = (f_h * scissor, (1.0 - f_h) * scissor)
+            is_anchor_model = bool(w_parts.get("anchor_edges"))
             z_mode = "derived" if qp_provenance.get("dynamic_z") else "fixed"
             z_fixed = float(qp_provenance.get("z_factor", 1.0))
-            eps_qp, lev_info = orbital_qp_energies(
-                eps, q_w[:, :len(occ_w)], q_w[:, len(occ_w):], occ_w, virt_w, dW_levels,
-                float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
-                w_parts.get("eps_z"), args.material, edge_shifts=edges, representation=representation)
+            selfenergy = "classical" if is_anchor_model else str(getattr(args, "qp_selfenergy", "cohsex")).lower()
+            if selfenergy == "cohsex":
+                t0c = time.time()
+                coh, sex = cohsex_diagonal(C, S, homo_index, atom_ao_ranges,
+                                           dW_atom=None if use_xs else dW_levels,
+                                           dW_ao=dW_levels if use_xs else None)
+                eps_qp, lev_info = cohsex_qp_energies(
+                    eps, coh, sex, homo_index, float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
+                    w_parts.get("eps_z"), args.material)
+                print(f"\n  [QP Levels] One-shot Delta-COHSEX for all {len(eps)} orbitals in {time.time() - t0c:.1f} s: "
+                      f"HOMO COH {coh[homo_index]:+.3f} SEX {sex[homo_index]:+.3f} eV; "
+                      f"LUMO COH {coh[homo_index + 1]:+.3f} SEX {sex[homo_index + 1]:+.3f} eV")
+            else:
+                q_w = _all_populations(representation)
+                edges = None
+                if is_anchor_model:
+                    f_h = float(qp_provenance.get("f_homo", 0.5))
+                    edges = (f_h * scissor, (1.0 - f_h) * scissor)
+                eps_qp, lev_info = orbital_qp_energies(
+                    eps, q_w[:, :len(occ_w)], q_w[:, len(occ_w):], occ_w, virt_w, dW_levels,
+                    float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
+                    w_parts.get("eps_z"), args.material, edge_shifts=edges, representation=representation)
+                lev_info["qp_selfenergy"] = "classical"
             lev_info["qp_populations"] = qp_pop_mode
+
+            # Non-classical anchor residual of the Delta-W models (calibrated on the evGW anchor)
+            if not is_anchor_model:
+                from qdex.hardness import anchor_residual_scale
+                z_label = "derived" if z_mode == "derived" else f"{z_fixed:g}"
+                a_key = anchor_key(args.material, str(args.qp_gap).lower(), selfenergy,
+                                   "xs" if use_xs else "mnok", qp_pop_mode, z_label)
+                table_path = getattr(args, "qp_anchor_table", None)
+                ent = MATERIAL_DB.get(str(args.material).upper(), ())
+                if getattr(args, "qp_anchor_calibrate", False):
+                    if len(ent) < 14:
+                        raise ValueError("qp_anchor_calibrate needs monomer evGW data in MATERIAL_DB.")
+                    if abs(float(args.eps_out) - 1.0) > 1e-9:
+                        print("  [Anchor] Warning: calibrating with eps_out != 1; the evGW anchor is in vacuum.")
+                    d_h = float(eps_qp[homo_index] - eps[homo_index])
+                    d_l = float(eps_qp[homo_index + 1] - eps[homo_index + 1])
+                    res_h = (float(ent[12]) - float(ent[10])) - d_h
+                    res_l = (float(ent[13]) - float(ent[11])) - d_l
+                    path_w = save_anchor_entry(a_key, {"residual_homo_ev": res_h, "residual_lumo_ev": res_l,
+                                                       "anchor_dft_gap_ev": float(dft_gap),
+                                                       "model_homo_shift_ev": d_h, "model_lumo_shift_ev": d_l},
+                                               table_path)
+                    print(f"  [Anchor] Calibrated '{a_key}': residual HOMO {res_h:+.3f} eV, LUMO {res_l:+.3f} eV "
+                          f"-> {path_w}")
+                    lev_info.update({"anchor_residual_homo_ev": res_h, "anchor_residual_lumo_ev": res_l,
+                                     "anchor_residual_scale": 1.0, "anchor_key": a_key})
+                    eps_qp[:homo_index + 1] += res_h
+                    eps_qp[homo_index + 1:] += res_l
+                elif str(getattr(args, "qp_anchor_residual", "on")).lower() == "on" and len(ent) >= 14:
+                    table = load_anchor_table(table_path)
+                    if a_key in table:
+                        r_cl = qp_provenance.get("cluster_radius_ang") or get_cluster_size_metrics(
+                            np.array(coords_ang), syms, args.material)["R_eff_hull"]
+                        scale, smode = anchor_residual_scale(args.material, float(r_cl), dft_gap,
+                                                             getattr(args, "qp_residual_scaling", "econf"),
+                                                             args.qp_residual_power)
+                        res_h = float(table[a_key]["residual_homo_ev"]) * scale
+                        res_l = float(table[a_key]["residual_lumo_ev"]) * scale
+                        eps_qp[:homo_index + 1] += res_h
+                        eps_qp[homo_index + 1:] += res_l
+                        print(f"  [Anchor] Residual '{a_key}': HOMO {res_h:+.3f}, LUMO {res_l:+.3f} eV "
+                              f"(anchor values x {scale:.3f}, scaling {smode})")
+                        lev_info.update({"anchor_residual_homo_ev": res_h, "anchor_residual_lumo_ev": res_l,
+                                         "anchor_residual_scale": scale, "anchor_key": a_key})
+                    else:
+                        print(f"  [Anchor] No calibrated residual for '{a_key}' (run the anchor cluster with "
+                              f"--qp-anchor-calibrate); none applied.")
+                        lev_info["anchor_key"] = a_key
             new_scissor = float(eps_qp[homo_index + 1] - eps_qp[homo_index]) - dft_gap
             print(f"\n  [QP Levels] Orbital-resolved ({representation}): all {len(occ_w)} occ + {len(virt_w)} virt levels; "
                   f"HOMO {lev_info['qp_homo_shift_ev']:+.3f} eV, LUMO {lev_info['qp_lumo_shift_ev']:+.3f} eV; "
@@ -1522,8 +1604,11 @@ def main():
             r_split = qp_provenance.get("cluster_radius_ang")
             if r_split is None:
                 r_split = get_cluster_size_metrics(np.array(coords_ang), syms, args.material)["R_eff_hull"]
+            from qdex.hardness import anchor_residual_scale
+            dec, _ = anchor_residual_scale(args.material, float(r_split), dft_gap,
+                                           getattr(args, "qp_residual_scaling", "econf"), args.qp_residual_power)
             edges = anchor_edge_curves(args.material, float(r_split), args.eps_out,
-                                       residual_power=args.qp_residual_power)
+                                       residual_power=args.qp_residual_power, decay=dec)
             if edges is not None:
                 qp_provenance.setdefault("f_homo_micro", qp_provenance["f_homo"])
                 qp_provenance.setdefault("f_lumo_micro", qp_provenance["f_lumo"])

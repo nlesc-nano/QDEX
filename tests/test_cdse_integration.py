@@ -67,17 +67,18 @@ class CdSeIntegrationTest(unittest.TestCase):
         return work, res.stdout
 
     def test_gw_vacuum_reference(self):
-        # Sphere polarization + resta-sphere kernel (config default).
+        # Sphere polarization + resta-sphere kernel (config default), residual scaled by E_conf.
         work, log = self._run("--eps-out", "1.0")
-        self.assertAlmostEqual(_qp_gap(log), 4.053, places=2)
+        self.assertAlmostEqual(_qp_gap(log), 4.020, places=2)
         e1, f1 = _first_state(work)
-        self.assertAlmostEqual(e1, 2.494, places=2)
+        self.assertAlmostEqual(e1, 2.443, places=2)
         self.assertGreater(f1, 0.1)
 
     def test_gw_legacy_reference(self):
         # kappa/(R + ell) curve with the bulk Resta kernel.  3.869 eV with the
         # corrected anchor radius R0 = 5.3133 A (3.861 eV with the old 5.258 A).
-        work, log = self._run("--eps-out", "1.0", "--qp-polarization", "legacy", "--kernel", "resta")
+        work, log = self._run("--eps-out", "1.0", "--qp-polarization", "legacy", "--kernel", "resta",
+                              "--qp-residual-scaling", "power")
         self.assertAlmostEqual(_qp_gap(log), 3.869, places=2)
         e1, _ = _first_state(work)
         self.assertAlmostEqual(e1, 3.642, places=2)
