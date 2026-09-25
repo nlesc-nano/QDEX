@@ -962,21 +962,21 @@ def build_dim_screening_factors(coords, atom_symbols, material_name=None, eps_ou
         M[3 * i : 3 * i + 3, 3 * i : 3 * i + 3] = np.eye(3) / max(1e-4, pol[i])
 
     a_thole = 2.1304
-    for i in range(n_atoms):
-        ri = coords_bohr[i]
-        for j in range(i + 1, n_atoms):
-            rj = coords_bohr[j]
-            rij = ri - rj
-            R = np.linalg.norm(rij)
-            if R < 1e-6:
-                continue
-            u = R / max(1e-4, ((pol[i] * pol[j]) ** (1.0 / 6.0)))
-            exp_au = np.exp(-a_thole * u)
-            fT = 1.0 - (1.0 + a_thole * u + 0.5 * (a_thole * u) ** 2) * exp_au
-            fD = 1.0 - (1.0 + a_thole * u + 0.5 * (a_thole * u) ** 2 + (1.0 / 6.0) * (a_thole * u) ** 3) * exp_au
-            T_ij = (fT * np.eye(3) - 3.0 * fD * np.outer(rij, rij) / (R ** 2)) / (R ** 3)
-            M[3 * i : 3 * i + 3, 3 * j : 3 * j + 3] = T_ij
-            M[3 * j : 3 * j + 3, 3 * i : 3 * i + 3] = T_ij
+    # Thole-damped dipole tensor for all pairs at once (vectorized; same formula as before)
+    rij = coords_bohr[:, None, :] - coords_bohr[None, :, :]
+    R = np.linalg.norm(rij, axis=-1)
+    off = ~np.eye(n_atoms, dtype=bool) & (R >= 1e-6)
+    Rs = np.where(off, R, 1.0)
+    u = Rs / np.maximum(1e-4, np.outer(pol, pol) ** (1.0 / 6.0))
+    au = a_thole * u
+    exp_au = np.exp(-au)
+    fT = 1.0 - (1.0 + au + 0.5 * au ** 2) * exp_au
+    fD = 1.0 - (1.0 + au + 0.5 * au ** 2 + (1.0 / 6.0) * au ** 3) * exp_au
+    T = (fT / Rs ** 3)[:, :, None, None] * np.eye(3)[None, None, :, :] \
+        - (3.0 * fD / Rs ** 5)[:, :, None, None] * rij[:, :, :, None] * rij[:, :, None, :]
+    T[~off] = 0.0
+    M += T.transpose(0, 2, 1, 3).reshape(3 * n_atoms, 3 * n_atoms)
+    del T, rij
 
     try:
         invM = np.linalg.inv(M)
@@ -984,14 +984,11 @@ def build_dim_screening_factors(coords, atom_symbols, material_name=None, eps_ou
         invM = np.linalg.pinv(M, rcond=1e-8)
 
     # 3. Determine atom-specific effective polarizability under uniform electric fields (x, y, z)
-    p_eff = np.zeros(n_atoms, dtype=np.float64)
+    E_ext = np.zeros((3 * n_atoms, 3), dtype=np.float64)
     for dim in range(3):
-        E_ext = np.zeros(3 * n_atoms, dtype=np.float64)
-        for i in range(n_atoms):
-            E_ext[3 * i + dim] = 1.0
-        p_resp = invM @ E_ext
-        for i in range(n_atoms):
-            p_eff[i] += p_resp[3 * i + dim] / 3.0
+        E_ext[dim::3, dim] = 1.0
+    p_resp = invM @ E_ext
+    p_eff = sum(p_resp[dim::3, dim] for dim in range(3)) / 3.0
 
     p_max = np.max(p_eff) if np.max(p_eff) > 0 else 1.0
     eta_atom = np.clip(p_eff / p_max, 0.05, 1.0)
@@ -1020,16 +1017,12 @@ def build_dim_screening_factors(coords, atom_symbols, material_name=None, eps_ou
     # solvent polarization is handled exclusively by the QP model).
     # Short-range: S -> 1.0 (unscreened atomic core).
     # Long-range core: S -> 1/eps_inf_bulk.
-    S_atom = np.ones((n_atoms, n_atoms), dtype=np.float64)
-    for A in range(n_atoms):
-        for B in range(n_atoms):
-            if A != B:
-                eta_pair = np.sqrt(eta_atom[A] * eta_atom[B])
-                eps_pair = 1.0 + (eps_inf_bulk - 1.0) * eta_pair
-                k_s_au = np.sqrt(max(0.0, eps_pair - 1.0)) / max(1e-4, d_NN_au)
-                k_s_ang = k_s_au / ANG_PER_BOHR
-                c_inf = 1.0 / max(1.0, eps_pair)
-                S_atom[A, B] = c_inf + (1.0 - c_inf) * np.exp(-k_s_ang * R_mat_ang[A, B])
+    eta_pair = np.sqrt(np.outer(eta_atom, eta_atom))
+    eps_pair = 1.0 + (eps_inf_bulk - 1.0) * eta_pair
+    k_s_ang = np.sqrt(np.maximum(0.0, eps_pair - 1.0)) / max(1e-4, d_NN_au) / ANG_PER_BOHR
+    c_inf = 1.0 / np.maximum(1.0, eps_pair)
+    S_atom = c_inf + (1.0 - c_inf) * np.exp(-k_s_ang * R_mat_ang)
+    np.fill_diagonal(S_atom, 1.0)
 
     return S_atom, eta_atom, eps_inf_bulk, d_NN_ang
 
