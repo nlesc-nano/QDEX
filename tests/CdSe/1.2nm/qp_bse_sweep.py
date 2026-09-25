@@ -10,6 +10,14 @@ files it references (MO file or MO .gz, xyz, basis, GTH SOC file), then run::
     python qp_bse_sweep.py --groups A,E        # a subset
     python qp_bse_sweep.py --collect           # rebuild sweep/summary.* from finished runs
 
+For large dots (thousands of basis functions) use the targeted profile, with a
+fixed active space and Davidson instead of the convergence scans::
+
+    python qp_bse_sweep.py --profile large --list
+    python qp_bse_sweep.py --profile large --nthreads 16          # 25 x 25 active space
+    python qp_bse_sweep.py --profile large --no-xs --no-qsgw   # cheapest subset
+    python qp_bse_sweep.py --profile large --collect   # results in sweep_large/
+
 Every case gets its own folder ``sweep/<case>/`` with a complete
 ``config.yaml`` (so each combination can be inspected and rerun by hand with
 ``qdex --config config.yaml``), its log ``run.out`` and the usual QDEX outputs.
@@ -56,6 +64,7 @@ from pathlib import Path
 import yaml
 
 HERE = Path.cwd()
+SWEEP_DIR = ["sweep"]  # "sweep_large" for --profile large
 
 QP_MODELS = {
     # name: (physics overrides)
@@ -126,6 +135,58 @@ def build_cases(eps_solvent):
     return cases
 
 
+def build_cases_large(eps_solvent, nact, nroots, xs=True, qsgw=True, soc=True):
+    """Targeted set for large dots: fixed active space, Davidson, no convergence scans.
+
+    K  kernels for the gap-only gw model: resta-sphere (consistent) vs bulk resta
+    A  mnok core: each consistent QP x kernel pair, vacuum and solvent
+    D  two-anchor residual power p (the main uncertainty of gw at large R)
+    H  triplet (singlet-triplet splitting)
+    E  SOC in the solvent for the main models
+    X  xs representation for the main models (memory ~ 4-5 x n_ao^2 x 8 bytes)
+    Cases are ordered from cheap to expensive.
+    """
+    es = f"{eps_solvent:g}"
+    act = {"nhomos": nact, "nlumos": nact, "nroots": nroots}
+    dav = {"full_diag": False}
+    cases = []
+
+    def add(group, name, phys, soc_on=False, cost=0):
+        cases.append({"group": group, "name": name, "physics": {**phys, **act}, "soc": soc_on,
+                      "solver": dict(dav), "cost": cost})
+
+    envs = [(1.0, "vac"), (eps_solvent, f"eps{es}")]
+    core = ["gw-sphere", "gw-legacy", "sgw-resta", "evgw-resta", "sgw-dim", "evgw-dim"]
+    for m in core:
+        for eo, tag in envs:
+            add("A", f"mnok_{m}_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo}, cost=0)
+    for eo, tag in envs:
+        add("K", f"mnok_gw-sphere+bulkkernel_{tag}", {**QP_MODELS["gw-sphere"], "kernel": "resta",
+                                                      "two_electron_integrals": "mnok", "eps_out": eo}, cost=0)
+    for p in (1.5, 3.0):
+        add("D", f"mnok_gw-sphere_p{p:g}_eps{es}", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "mnok",
+                                                   "eps_out": eps_solvent, "qp_residual_power": p}, cost=0)
+    add("H", "mnok_gw-sphere_triplet_vac", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "mnok",
+                                            "eps_out": 1.0, "triplet": True}, cost=0)
+    if qsgw:
+        for eo, tag in envs:
+            add("A", f"mnok_qsgw-dim_{tag}", {**QP_MODELS["qsgw-dim"], "two_electron_integrals": "mnok",
+                                              "eps_out": eo}, cost=1)
+    if soc:
+        for m in ("gw-sphere", "sgw-resta", "sgw-dim"):
+            add("E", f"mnok_{m}_soc_eps{es}", {**QP_MODELS[m], "two_electron_integrals": "mnok",
+                                               "eps_out": eps_solvent}, soc_on=True, cost=2)
+    if xs:
+        for m in ("gw-sphere", "sgw-resta", "sgw-dim"):
+            for eo, tag in envs:
+                add("X", f"xs_{m}_{tag}", {**QP_MODELS[m], "two_electron_integrals": "xs", "eps_out": eo}, cost=3)
+        if soc:
+            add("X", f"xs_gw-sphere_soc_eps{es}", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "xs",
+                                                   "eps_out": eps_solvent}, soc_on=True, cost=4)
+    cases.sort(key=lambda c: c["cost"])
+    return cases
+
+
 # ---------------------------------------------------------------------------
 def input_files(cfg):
     files = []
@@ -171,7 +232,7 @@ def is_done(d):
 
 
 def run_case(case, base, files, nthreads, force, dry):
-    d = HERE / "sweep" / case["name"]
+    d = HERE / SWEEP_DIR[0] / case["name"]
     d.mkdir(parents=True, exist_ok=True)
     with open(d / "config.yaml", "w") as fh:
         yaml.safe_dump(case_config(base, case, nthreads), fh, sort_keys=False)
@@ -220,7 +281,7 @@ def main_peak(rows, frac=0.3, sigma=0.05):
 
 
 def parse_case(case):
-    d = HERE / "sweep" / case["name"]
+    d = HERE / SWEEP_DIR[0] / case["name"]
     r = {"group": case["group"], "case": case["name"], "ok": is_done(d)}
     log = (d / "run.out").read_text(errors="replace") if (d / "run.out").exists() else ""
     m = re.findall(r"\[QP\] Final QP gap: ([-\d.]+)", log)
@@ -265,7 +326,7 @@ def collect(cases):
     cols = ["group", "case", "ok", "dft_gap", "qp_gap", "qp_homo", "qp_lumo", "f_homo", "z_homo", "z_lumo",
             "z_min", "z_max", "eps_eff", "qp_levels", "spread_occ", "spread_virt", "s1", "f1", "bright", "peak",
             "s1_soc", "bright_soc", "peak_soc", "radius", "wall_s", "error"]
-    out = HERE / "sweep"
+    out = HERE / SWEEP_DIR[0]
     with open(out / "summary.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
@@ -290,7 +351,15 @@ def collect(cases):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--groups", default="ABCDEFGH", help="groups to run, e.g. A or A,E (default: all)")
+    ap.add_argument("--profile", choices=["full", "large"], default="full",
+                    help="full: 69-case sweep with convergence scans (small dots); "
+                         "large: targeted set with a fixed active space and Davidson (big dots)")
+    ap.add_argument("--nact", type=int, default=25, help="large profile: nhomos = nlumos (default 25)")
+    ap.add_argument("--nroots", type=int, default=40, help="large profile: Davidson roots (default 40)")
+    ap.add_argument("--no-xs", action="store_true", help="large profile: skip the xs cases (memory ~ 5 n_ao^2 x 8 B)")
+    ap.add_argument("--no-qsgw", action="store_true", help="large profile: skip qsGW (full AO diagonalizations)")
+    ap.add_argument("--no-soc", action="store_true", help="large profile: skip the SOC cases")
+    ap.add_argument("--groups", default=None, help="groups to run, e.g. A or A,E (default: all of the profile)")
     ap.add_argument("--only", default=None, help="regular expression on case names")
     ap.add_argument("--eps-solvent", type=float, default=2.24, help="solvent eps_out (optical, n^2); toluene 2.24")
     ap.add_argument("--nthreads", type=int, default=4, help="threads per qdex run")
@@ -302,8 +371,14 @@ def main():
     a = ap.parse_args()
 
     base = yaml.safe_load((HERE / "config.yaml").read_text())
-    groups = set(a.groups.replace(",", ""))
-    cases = [c for c in build_cases(a.eps_solvent) if c["group"] in groups]
+    if a.profile == "large":
+        SWEEP_DIR[0] = "sweep_large"
+        all_cases = build_cases_large(a.eps_solvent, a.nact, a.nroots, xs=not a.no_xs, qsgw=not a.no_qsgw,
+                                      soc=not a.no_soc)
+    else:
+        all_cases = build_cases(a.eps_solvent)
+    groups = set(a.groups.replace(",", "")) if a.groups else {c["group"] for c in all_cases}
+    cases = [c for c in all_cases if c["group"] in groups]
     if a.only:
         cases = [c for c in cases if re.search(a.only, c["name"])]
     if a.list:
@@ -316,7 +391,7 @@ def main():
         collect(cases)
         return
     files = input_files(base)
-    (HERE / "sweep").mkdir(exist_ok=True)
+    (HERE / SWEEP_DIR[0]).mkdir(exist_ok=True)
     with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
         futs = [pool.submit(run_case, c, base, files, a.nthreads, a.force, a.dry_run) for c in cases]
         for k, fu in enumerate(futs, 1):
