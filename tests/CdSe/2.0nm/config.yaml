@@ -1,0 +1,44 @@
+system:
+  mo_file: "MOs_cleaned_20ang.txt"
+  xyz: "geom.xyz"
+  basis_txt: "BASIS_MOLOPT_UZH"
+  basis_name: "DZVP-MOLOPT-PBE-GTH"
+  material: "CDSE"
+  nthreads: 12  
+
+physics:
+  qp_gap: "gw"
+  estimate_qp: false
+  exchange: true
+  kernel: "resta"
+  eps_out: 1.0   
+  nhomos: 25
+  nlumos: 25
+
+fuzzy:
+  run_fuzzy: false  
+  cif: "CdSe_zb.cif"             # Used for automated K-path generation
+  soc_window: 10.0                 # eV window around Fermi level for full SOC mixing
+  pdos_atoms: ["Cd", "Se", "Cl"]         # Which atoms to project
+  coop_pairs: ["Cd-Se", "Cd-Cd", "Se-Se"]   # Which bonds to analyze
+  fuzzy_sigma: 0.01     # Broadening for the fuzzy band heatmap
+  pdos_sigma: 0.08 
+  ewin: [-5.0, 5.0]                # Energy plotting window relative to Fermi
+
+soc:
+  soc_flag: true
+  gth_file: "GTH_SOC_POTENTIALS.txt"
+
+solver:
+  full_diag: true
+
+output:
+  cube: false
+  cube_spacing: 0.5
+  sigma: 0.03
+  plot: true
+  write_csv: true
+  csv_roots: 200
+  time: 10.0
+  save_xia: true
+
