@@ -1,6 +1,21 @@
 import numpy as np
 from qdex.device_utils import is_gpu, to_tensor, to_numpy
 
+def _initial_guess(diag, nroots):
+    """Unit vectors on the lowest diagonal elements (standard Davidson guess).
+
+    A small deterministic perturbation breaks exact degeneracies so that the
+    guess spans every symmetry sector of a degenerate diagonal.
+    """
+    diag = np.real(np.asarray(diag))
+    n = len(diag)
+    V = np.zeros((n, nroots), dtype=np.complex128)
+    V[np.argsort(diag, kind="stable")[:nroots], np.arange(nroots)] = 1.0
+    rng = np.random.default_rng(0)
+    V += 1.0e-3 * (rng.standard_normal((n, nroots)) + 1j * rng.standard_normal((n, nroots)))
+    return V
+
+
 def davidson(matvec, diag, nroots, max_iter=500, tol=1e-6, max_subspace=None, device="numpy"):
     
     n = len(diag)
@@ -14,8 +29,7 @@ def davidson(matvec, diag, nroots, max_iter=500, tol=1e-6, max_subspace=None, de
         diag_t = to_tensor(diag, dev)
 
         # Complex arithmetic is required for SOC/spinor Hamiltonians.
-        rng = np.random.default_rng(0)
-        V_np = rng.standard_normal((n, nroots)) + 1j * rng.standard_normal((n, nroots))
+        V_np = _initial_guess(diag, nroots)
         V = to_tensor(V_np, dev, dtype=torch.complex128)
         V, _ = torch.linalg.qr(V)
 
@@ -58,12 +72,13 @@ def davidson(matvec, diag, nroots, max_iter=500, tol=1e-6, max_subspace=None, de
                     new_vecs.append(delta)
 
             for delta in new_vecs:
-                for j in range(V.shape[1]):
-                    overlap = torch.vdot(V[:, j], delta)
-                    delta = delta - overlap * V[:, j]
-
+                # Normalize first so the linear-independence test is relative;
+                # an absolute threshold stalls once residuals approach tol.
+                delta = delta / torch.linalg.norm(delta)
+                for _ in range(2):  # re-orthogonalize for numerical stability
+                    delta = delta - V @ (V.conj().T @ delta)
                 norm = torch.linalg.norm(delta)
-                if norm > 1e-5:
+                if norm > 1e-8:
                     delta = delta / norm
                     V = torch.column_stack((V, delta))
                     AV = torch.column_stack((AV, eval_mv(delta)))
@@ -74,8 +89,7 @@ def davidson(matvec, diag, nroots, max_iter=500, tol=1e-6, max_subspace=None, de
 
     # Complex arithmetic is required for SOC/spinor Hamiltonians.  It is also
     # harmless for a real Hermitian problem and keeps one reference path.
-    rng = np.random.default_rng(0)
-    V = rng.standard_normal((n, nroots)) + 1j * rng.standard_normal((n, nroots))
+    V = _initial_guess(diag, nroots)
     V, _ = np.linalg.qr(V)
 
     def eval_mv_np(vec):
@@ -135,14 +149,16 @@ def davidson(matvec, diag, nroots, max_iter=500, tol=1e-6, max_subspace=None, de
 
         # Modified Gram-Schmidt orthogonalization
         for delta in new_vecs:
-            # Orthogonalize against all existing vectors in V
-            for j in range(V.shape[1]):
-                overlap = np.vdot(V[:, j], delta)
-                delta -= overlap * V[:, j]
-            
+            # Normalize first so the linear-independence test is relative;
+            # an absolute threshold stalls once residuals approach tol.
+            delta = delta / np.linalg.norm(delta)
+            # Orthogonalize (twice, for numerical stability) against V
+            for _ in range(2):
+                delta = delta - V @ (V.conj().T @ delta)
+
             norm = np.linalg.norm(delta)
             # Only add to subspace if it is sufficiently linearly independent
-            if norm > 1e-5:
+            if norm > 1e-8:
                 delta /= norm
                 V = np.column_stack((V, delta))
                 # Compute matvec ONLY for the new vector and append to AV

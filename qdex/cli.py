@@ -682,9 +682,9 @@ def main():
     parser.add_argument("--f_thresh", type=float, default=0.0)
 
     parser.add_argument("--qp_gap", type=str, default="brus",
-                        help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (eigenvalue self-consistent GW with DIM), 'qsgw-dim' / 'qsgw' (quasiparticle self-consistent GW with full AO orbital update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (eigenvalue self-consistent GW with Resta), 'qsgw-resta' (qsGW with Resta and full AO orbital update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (Cho et al. sBSE Delta-W), 'brus' (effective mass), 'pbe' (uncorrected), or explicit gap in eV.")
+                        help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'pbe' (uncorrected), or explicit gap in eV.")
     parser.add_argument("--dynamic_z", action="store_true", default=False,
-                        help="Compute state-dependent dynamic renormalization factor Z_p from the plasmon-pole f-sum rule.")
+                        help="Apply the empirical state-dependent damping factor Z_p (heuristic one-pole form; not a computed plasmon-pole self-energy derivative).")
     parser.add_argument("--update_orbitals", "--qsgw", dest="update_orbitals", action="store_true", default=False,
                         help="Perform full AO-basis Quasiparticle Self-Consistent GW (qsGW) orbital update.")
     parser.add_argument("--soc", type=float, default=0.0)
@@ -1036,7 +1036,7 @@ def main():
     
     if isinstance(args.qp_gap, str):
         if args.qp_gap.lower() == "brus":
-            target_qp_gap = estimate_brus_qp_gap(np.array(coords_ang), syms, args.material)
+            target_qp_gap = estimate_brus_qp_gap(material_name=args.material, coords=np.array(coords_ang), atom_symbols=syms)
             if target_qp_gap is not None:
                 scissor = target_qp_gap - dft_gap
                 confinement_energy = target_qp_gap - MATERIAL_DB.get(args.material.upper(), [0]*9)[3]

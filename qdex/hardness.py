@@ -795,7 +795,7 @@ def build_sbse_kernel(atom_symbols, coords, atom_ao_ranges=None, shells=None,
                       nthreads=1, eta_dict=HARDNESS_DICT, return_eps_info=False):
     """
     Constructs the simplified Bethe-Salpeter Equation (sBSE) screened interaction kernel W
-    following Cho, Bintrim, and Berkelbach [J. Chem. Theory Comput. 18, 3054 (2022)]::
+    following Cho, Bintrim, and Berkelbach [J. Chem. Theory Comput. 18, 3438 (2022), doi:10.1021/acs.jctc.2c00087]::
 
         W = (I + J_solv * Pi^0)^{-1} * J_solv
 
@@ -995,7 +995,7 @@ def build_sbse_kernel(atom_symbols, coords, atom_ao_ranges=None, shells=None,
     print(f"\n    ==========================================================================")
     print(f"    [Kernel: sBSE (Simplified Bethe-Salpeter Equation, mode='{mode_str}')]")
     print(f"    ==========================================================================")
-    print(f"    Reference Theory        : Cho, Bintrim, Berkelbach [JCTC 18, 3054 (2022)]")
+    print(f"    Reference Theory        : Cho, Bintrim, Berkelbach [JCTC 18, 3438 (2022)]")
     print(f"    Material                = {m_name}")
     print(f"    epsilon_in (bulk)       = {eps_bulk:.3f}")
     print(f"    epsilon_out (solvent)   = {eps_out_val:.3f}")
@@ -1140,14 +1140,16 @@ def estimate_sgw_qp_gap(coords, atom_symbols, material_name=None, eps_out=1.0,
 
 def compute_dynamic_z(delta_sigma_stat_ev, gap_ev, eps_eff, material_name=None, omega_p_ev=15.0):
     """
-    Computes the state-dependent dynamic quasiparticle renormalization factor (weight) Z
-    from the Plasmon-Pole Model (PPM) constrained by the f-sum rule::
+    Empirical quasiparticle damping factor used by the ``dynamic_z`` option::
 
-        Z = [1 - d(Re Sigma)/d omega]^-1 = [1 + Delta Sigma_stat / omega_tilde]^-1
+        Z = [1 + max(0, Delta Sigma_stat) / max(1 eV, omega_tilde)]^-1,
+        omega_tilde = sqrt( omega_p^2 / (max(1.01, eps_eff) - 1) + max(0.1, gap)^2 )
 
-    where omega_tilde is the screened plasmon pole::
-
-        omega_tilde = sqrt( omega_p^2 / max(1.0, eps_eff - 1.0) + gap_ev^2 )
+    clipped to [0.50, 0.99].  This is a one-pole-inspired heuristic: no
+    frequency-dependent response, plasmon-pole fit or f-sum rule is evaluated,
+    ``omega_p_ev`` is a fixed default (15 eV) and ``material_name`` is unused.
+    It must not be read as the quasiparticle residue [1 - dRe Sigma/d omega]^-1
+    of a computed self-energy.
     """
     eps_eff_val = max(1.01, float(eps_eff))
     gap_val = max(0.1, float(gap_ev))

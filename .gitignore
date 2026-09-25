@@ -32,3 +32,8 @@ docs/_build/
 NAMD_STUDY
 
 tests/CdSe/MOs_cleaned_20ang.txt
+
+# CdSe benchmark run directories (outputs, symlinks)
+tests/CdSe/run1/
+tests/CdSe/sweep/
+tests/CdSe/MOs_cleaned_20ang.txt
