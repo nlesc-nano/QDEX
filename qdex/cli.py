@@ -23,7 +23,8 @@ from qdex.constants import HA_TO_EV, BOHR_PER_ANG
 from qdex.exciton_analysis import ExcitonAnalyzer, plot_analysis_summary
 from qdex.integrals import compute_dipole_ao
 from qdex.oscillator import compute_oscillator_strengths
-from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap
+from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap, build_gamma
+from qdex.qp_levels import xs_shared_w, atom_delta_w, orbital_qp_energies
 from qdex.orbital_analysis import (
     compute_spin_character, compute_uks_soc_spin_free_channels,
     compute_uks_spin_free_channels, format_uks_soc_spin_free_character,
@@ -715,8 +716,8 @@ def resolve_bse_kernel(args, qp_w):
         label = qp_w[1]
         equivalent = kernel in ("sbse", "sbse-atom") and qp_name in ("sgw", "sgw-dw", "sgw_dw", "sgw-atom")
         if kernel in (None, "qp") or equivalent:
-            if args.kernel_type != "mnok":
-                raise ValueError("kernel 'qp' is atom-resolved; use two_electron_integrals: mnok with this QP model.")
+            if str(args.kernel_type).lower() not in ("mnok", "xs", "xs-qdex"):
+                raise ValueError(f"kernel 'qp' supports two_electron_integrals mnok or xs, not '{args.kernel_type}'.")
             print(f"  [Consistency] BSE direct kernel = W of the QP model ({label}).")
             return "qp"
         if args.allow_inconsistent_kernel:
@@ -811,6 +812,9 @@ def main():
                         help="HOMO/LUMO split of the QP correction for absolute IP/EA: 'anchor' (per-edge two-anchor "
                              "curves calibrated on the monomer evGW, default when MATERIAL_DB has monomer data) or "
                              "'model' (the Delta-W model's own, nearly symmetric split).")
+    parser.add_argument("--qp-levels", dest="qp_levels", choices=["orbital", "rigid"], default="orbital",
+                        help="QP energies of models that define W: 'orbital' (default; every orbital of the active "
+                             "window gets its own Z_p * sigma_p) or 'rigid' (one scissor on all virtual orbitals).")
     parser.add_argument("--qp-strict", action="store_true",
                         help="Reject clusters smaller than the finite-size anchor instead of clamping to it.")
 
@@ -1126,6 +1130,17 @@ def main():
     confinement_energy = 0.0
     qp_provenance = None
     eps_qp_active = None
+    _xs_cache = {}
+
+    def _xs_gamma_ao():
+        """Exact AO density-pair integrals (mu mu|nu nu) in eV when two_electron_integrals: xs."""
+        if str(args.kernel_type).lower() not in ("xs", "xs-qdex"):
+            return None
+        if "gamma" not in _xs_cache:
+            from qdex.integrals import compute_two_electron_ao
+            print("  [xs] Computing exact AO density-pair integrals for the shared W ...")
+            _xs_cache["gamma"] = compute_two_electron_ao(shells, nthreads=args.nthreads) * HA_TO_EV
+        return _xs_cache["gamma"]
     
     if isinstance(args.qp_gap, str):
         if args.qp_gap.lower() == "brus":
@@ -1192,7 +1207,8 @@ def main():
                     alpha=args.alpha,
                     dynamic_z=use_dz,
                     Z=z_val,
-                    return_details=True
+                    return_details=True,
+                    gamma_ao=_xs_gamma_ao(),
                 )
                 C = C_qp
                 eps_qp_active = eps_qp
@@ -1266,7 +1282,8 @@ def main():
                     penn_scaling=use_penn,
                     dynamic_z=use_dz,
                     Z=z_val,
-                    return_details=True
+                    return_details=True,
+                    gamma_ao=_xs_gamma_ao(),
                 )
                 C = C_qp
                 eps_qp_active = eps_qp
@@ -1394,9 +1411,69 @@ def main():
         w_sphere = build_sphere_reaction_field(np.array(coords_ang), syms, args.material, args.eps_out)
         qp_w = (w_resta + w_sphere, f"Resta(eps_inf) + sphere reaction field (eps_out = {args.eps_out:.2f})")
         qp_provenance["bse_kernel_model"] = "resta_plus_sphere_reaction_field"
+        qp_provenance["w_parts"] = {"w_qd": w_resta, "w_bulk": w_resta, "w_add": w_sphere,
+                                    "gamma": build_gamma(syms, np.array(coords_ang), 1.0, 0.0),
+                                    "eps_z": None, "bulk_shift": qp_provenance.get("bulk_gw_shift_ev", 0.0),
+                                    "anchor_edges": True}
         args.kernel = None
     elif args.kernel == "resta-sphere":
         raise ValueError("kernel 'resta-sphere' requires qp_gap: gw with qp_polarization: sphere.")
+
+    w_parts = qp_provenance.pop("w_parts", None) if qp_provenance is not None else None
+    use_xs = str(args.kernel_type).lower() in ("xs", "xs-qdex")
+    if qp_w is not None and use_xs and w_parts is None:
+        raise ValueError(f"qp_gap '{args.qp_gap}' provides W only in the atom (mnok) representation; "
+                         "use two_electron_integrals: mnok with this model.")
+    shared_gamma_ao = None
+    if w_parts is not None:
+        z_eh = float(qp_provenance.get("z_factor", 1.0)) if not w_parts.get("anchor_edges") else 1.0
+        if use_xs:
+            gamma_ao = _xs_gamma_ao()
+            W_kernel_ao, _, dW_levels = xs_shared_w(w_parts, z_eh, gamma_ao, atom_ao_ranges)
+            qp_w = (W_kernel_ao, qp_w[1] + " [xs: same screening on exact AO integrals]")
+            shared_gamma_ao = gamma_ao
+            representation = "ao"
+        else:
+            dW_levels = atom_delta_w(w_parts)
+            representation = "atom"
+        qp_provenance["two_electron_representation"] = "xs" if use_xs else "mnok"
+
+        levels_mode = str(getattr(args, "qp_levels", "orbital")).lower()
+        if levels_mode == "orbital" and eps_qp_active is None:
+            from qdex.lowdin import lowdin_sqrt
+            n_win = max(100, int(args.nhomos or 0), int(args.nlumos or 0)) + 10
+            occ_w = np.arange(max(0, homo_index + 1 - n_win), homo_index + 1)
+            virt_w = np.arange(homo_index + 1, min(len(eps), homo_index + 1 + n_win))
+            S_dense = S.toarray() if hasattr(S, "toarray") else S
+            S_half = lowdin_sqrt(S_dense, device=compute_device)
+            C_dense_w = C[:, np.concatenate([occ_w, virt_w])]
+            C_dense_w = C_dense_w.toarray() if hasattr(C_dense_w, "toarray") else C_dense_w
+            C_low_w = S_half @ C_dense_w
+            edges = None
+            if w_parts.get("anchor_edges"):
+                f_h = float(qp_provenance.get("f_homo", 0.5))
+                edges = (f_h * scissor, (1.0 - f_h) * scissor)
+            z_mode = "derived" if qp_provenance.get("dynamic_z") else "fixed"
+            z_fixed = float(qp_provenance.get("z_factor", 1.0))
+            eps_qp, lev_info = orbital_qp_energies(
+                eps, C_low_w[:, :len(occ_w)], C_low_w[:, len(occ_w):], occ_w, virt_w, dW_levels,
+                atom_ao_ranges, representation, float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
+                w_parts.get("eps_z"), args.material, edge_shifts=edges)
+            new_scissor = float(eps_qp[homo_index + 1] - eps_qp[homo_index]) - dft_gap
+            print(f"\n  [QP Levels] Orbital-resolved ({representation}): {len(occ_w)} occ + {len(virt_w)} virt levels; "
+                  f"HOMO {lev_info['qp_homo_shift_ev']:+.3f} eV, LUMO {lev_info['qp_lumo_shift_ev']:+.3f} eV; "
+                  f"spread occ {lev_info['qp_shift_spread_occ_ev']:.3f} / virt {lev_info['qp_shift_spread_virt_ev']:.3f} eV; "
+                  f"Z in [{lev_info['z_min_window']:.3f}, {lev_info['z_max_window']:.3f}]")
+            if abs(new_scissor - scissor) > 1e-4:
+                print(f"  [QP Levels] Gap correction {scissor:+.4f} -> {new_scissor:+.4f} eV "
+                      f"({'xs integrals' if use_xs else 'same formula, all orbitals'}).")
+            lev_info["model_scissor_ev"] = float(scissor)
+            qp_provenance.update(lev_info)
+            scissor = new_scissor
+            target_qp_gap = dft_gap + scissor
+            eps_qp_active = eps_qp
+        else:
+            qp_provenance["qp_levels"] = "orbital (qsGW)" if eps_qp_active is not None else "rigid"
     args.kernel = resolve_bse_kernel(args, qp_w)
 
     print(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
@@ -1952,6 +2029,7 @@ def main():
         excitation_mode=args.excitation_mode,
         kernel_type=args.kernel_type,
         shared_W=(qp_w[0] if qp_w is not None else None),
+        shared_gamma_bare=shared_gamma_ao,
         shells=shells,
         eps_dft=eps_dft_solver
     )
@@ -1999,6 +2077,7 @@ def main():
             excitation_mode=args.excitation_mode,
             kernel_type=args.kernel_type,
             shared_W=(qp_w[0] if qp_w is not None else None),
+            shared_gamma_bare=shared_gamma_ao,
             shells=shells,
             eps_dft=eps_dft_solver
         )

@@ -31,9 +31,8 @@ class KernelConsistencyTests(unittest.TestCase):
     def test_sbse_kernel_is_the_same_w_for_sgw(self):
         self.assertEqual(resolve_bse_kernel(_args(qp_gap="sgw", kernel="sbse"), W), "qp")
 
-    def test_shared_w_requires_atom_representation(self):
-        with self.assertRaises(ValueError):
-            resolve_bse_kernel(_args(kernel_type="xs"), W)
+    def test_shared_w_in_xs_representation(self):
+        self.assertEqual(resolve_bse_kernel(_args(kernel_type="xs"), W), "qp")
 
     def test_gap_only_models(self):
         self.assertEqual(resolve_bse_kernel(_args(qp_gap="gw", kernel="resta"), None), "resta")

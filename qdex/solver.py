@@ -189,7 +189,7 @@ class ExcitonSolver:
                  C_beta=None, eps_beta=None, homo_index_beta=None, charge_type='mulliken',
                   n_occ_beta=None, n_virt_beta=None, include_direct_eh=None,
                   excitation_mode="bse", kernel_type="mnok", shells=None, eps_dft=None,
-                  shared_W=None):
+                  shared_W=None, shared_gamma_bare=None):
 
         self.C = C
         self.eps = eps
@@ -264,11 +264,19 @@ class ExcitonSolver:
             if shared_W is None:
                 raise ValueError("kernel 'qp' requires the W matrix of the quasiparticle model.")
             shared_W = np.asarray(shared_W, dtype=float)
-            if shared_W.shape != (len(atom_symbols), len(atom_symbols)):
-                raise ValueError("kernel 'qp' requires an atom-resolved W (use the atom mode of the QP model).")
-            print("  [Solver] Using the screened interaction of the QP model as direct kernel (kernel = qp).")
+            n_ao_tot = C.shape[0]
+            if shared_W.shape == (len(atom_symbols), len(atom_symbols)):
+                print("  [Solver] Using the screened interaction of the QP model as direct kernel (kernel = qp, mnok).")
+                gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0)
+            elif shared_W.shape == (n_ao_tot, n_ao_tot):
+                if shared_gamma_bare is None:
+                    raise ValueError("kernel 'qp' in the xs representation needs the bare AO integrals.")
+                print("  [Solver] Using the screened interaction of the QP model as direct kernel (kernel = qp, xs).")
+                k_type = "xs"
+                gamma_bare = np.asarray(shared_gamma_bare, dtype=float)
+            else:
+                raise ValueError(f"kernel 'qp': W has shape {shared_W.shape}; expected atom or AO dimensions.")
             gamma_qp, w_resta = shared_W, shared_W
-            gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0)
         elif is_xs:
             if shells is None:
                 raise ValueError("Xs-QDEX kernel requires Libint2 shell objects passed as `shells`.")
