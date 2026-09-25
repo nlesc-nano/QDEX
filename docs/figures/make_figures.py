@@ -8,7 +8,7 @@ Figures are written to ``docs/_static/figures``.  Schematics are drawn with
 matplotlib so that they can be regenerated and edited in one place.  The
 data-driven panels (anchor QP model, Resta screening profile) evaluate the
 same constants and formulas as ``qdex.hardness``; the CdSe energy ladder uses
-the numbers of the ``tests/CdSe`` benchmark run (see
+the numbers of the ``tests/CdSe/2.0nm`` benchmark run (see
 ``docs/validation/cdse_benchmark.rst``).
 """
 import os

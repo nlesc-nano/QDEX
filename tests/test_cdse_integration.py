@@ -1,4 +1,4 @@
-"""End-to-end regression on the CdSe 2.0 nm example in ``tests/CdSe``.
+"""End-to-end regression on the CdSe 2.0 nm example in ``tests/CdSe/2.0nm``.
 
 The MO file is large, so this test is opt-in::
 
@@ -6,7 +6,7 @@ The MO file is large, so this test is opt-in::
 
 It decompresses ``MOs_cleaned_20ang.txt.gz`` into a temporary directory when the
 plain-text file is absent.  Reference values were produced on the spin-free
-path with the configuration in ``tests/CdSe/config.yaml`` (25 x 25 active
+path with the configuration in ``tests/CdSe/2.0nm/config.yaml`` (25 x 25 active
 space, Resta-MNOK direct kernel, dense diagonalization).
 """
 import csv
@@ -19,7 +19,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent / "CdSe"
+HERE = Path(__file__).resolve().parent / "CdSe" / "2.0nm"
 RUN = os.environ.get("QDEX_RUN_CDSE") == "1"
 
 

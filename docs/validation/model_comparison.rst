@@ -161,10 +161,10 @@ The comparison script
 
 .. code-block:: bash
 
-   python benchmarks/compare_models.py --system tests/CdSe --profile quick           # ~12 runs
-   python benchmarks/compare_models.py --system tests/CdSe --profile full --soc --exp-gap 2.70 2.95
+   python benchmarks/compare_models.py --system tests/CdSe/2.0nm --profile quick           # ~12 runs
+   python benchmarks/compare_models.py --system tests/CdSe/2.0nm --profile full --soc --exp-gap 2.70 2.95
    python benchmarks/compare_models.py --system path/to/dir --only A,B --eps-solvent 1.89
-   python benchmarks/compare_models.py --system tests/CdSe --profile full --list    # list the runs
+   python benchmarks/compare_models.py --system tests/CdSe/2.0nm --profile full --list    # list the runs
 
 Finished cases are reused (``--force`` recomputes them). Use ``--soc`` to compare the first bright
 state with experiment. The checks are reported as follows:

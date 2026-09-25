@@ -26,8 +26,8 @@ scissor-type QP models).
 
 Usage::
 
-    python benchmarks/compare_models.py --system tests/CdSe --profile standard
-    python benchmarks/compare_models.py --system tests/CdSe --profile quick --exp-gap 2.70 2.95
+    python benchmarks/compare_models.py --system tests/CdSe/2.0nm --profile standard
+    python benchmarks/compare_models.py --system tests/CdSe/2.0nm --profile quick --exp-gap 2.70 2.95
     python benchmarks/compare_models.py --system my/dir --only A,B --eps-solvent 2.02
 
 ``--system`` must contain the ``config.yaml`` and the files it references.

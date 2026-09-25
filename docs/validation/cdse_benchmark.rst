@@ -38,7 +38,7 @@ and ``physics.qp_gap``.
 Available 2.0 nm example
 ------------------------
 
-The example in ``tests/CdSe`` (MO file stored as ``MOs_cleaned_20ang.txt.gz``)
+The example in ``tests/CdSe/2.0nm`` (MO file stored as ``MOs_cleaned_20ang.txt.gz``)
 contains a 149-atom, chloride-passivated geometry (68 Cd, 55 Se, 26 Cl), a
 CP2K MO file, 2,753 AO basis functions, configurations and saved output.
 Its QDEX provenance file reports a geometry-derived effective radius of
