@@ -113,9 +113,10 @@ physics
   - ``"independent_qp"``: Non-interacting single-particle transitions with scaled GW scissor gap.
   - ``"independent_dft"``: Non-interacting single-particle transitions with bare DFT gap.
 * **qp_gap** (*str or float*):
+  - ``"env"``: Bulk GW–PBE opening plus dielectric-sphere polarization self-energies. The same reaction field is added to the BSE direct kernel, so QP and optical gaps treat the solvent consistently. Recommended for optical gaps in a solvent; see :doc:`/quasiparticles/environment_model`.
   - ``"sgw-anchor"`` (or ``"gw"``): Scaled GW model with two anchors (vacuum cluster and bulk limit) and dielectric polarization.
   - ``"sgw-dim"``: Microscopic atomistic polarizable dipole screening difference model.
-  - ``"sgw-resta"``: Resta electronic Thomas-Fermi screening model with Penn size-dependent dielectric scaling.
+  - ``"sgw-resta"``: Resta electronic Thomas-Fermi screening model with a gap-based size-dependent dielectric interpolation (see the note in :doc:`/interactions/qp_screening`).
   - ``"evgw-dim"`` / ``"evgw-resta"``: Effective-gap self-consistent screening models.
   - ``"qsgw-dim"`` / ``"qsgw-resta"``: Static AO-basis COHSEX-like orbital-relaxation models; these are not conventional QSGW.
   - ``"brus"``: Brus effective mass confinement model.
@@ -129,7 +130,10 @@ physics
 * **include_exchange** (*bool*): Include bare repulsive :math:`K^x` independently of :math:`K^d` (default ``true``). CLI: ``--include-exchange`` / ``--no-exchange``.
 * **soc** (*bool*): Enable fully relativistic 2-component spinor Hamiltonian.
 * **soc_window_ev** (*float*): Energy window in eV around the Fermi level for selecting active MOs in SOC.
-* **eps_out** (*float*): Surrounding solvent or matrix dielectric constant (default 2.0).
+* **eps_out** (*float*): Surrounding solvent or matrix dielectric constant (default 2.0). For vertical excitations use the optical value :math:`n^2` (hexane 1.89, toluene 2.24, vacuum 1.0).
+* **environment** (*str*): ``"none"`` (default) or ``"sphere"``. Set automatically by ``qp_gap: env``; with ``qp_gap: pbe`` it adds only the BSE reaction field (test mode).
+* **env_cavity_buffer** (*float*): Cavity radius = largest atomic distance from the centroid + this buffer, in Å (default 1.0).
+* **env_anchor_residual** (*bool*): For ``qp_gap: env``, add the anchor-model residual :math:`A(R_0/R)^p` (default ``false``).
 * **nhomos** / **nlumos** (*int*): Number of occupied and virtual frontier molecular orbitals to include in the active space.
 * **triplet** (*bool*): Perform triplet BSE calculation (omits repulsive exchange :math:`2K^x`).
 * **charge_type** (*str*): Method for computing transition charges: ``"mulliken"`` or ``"lowdin"``.

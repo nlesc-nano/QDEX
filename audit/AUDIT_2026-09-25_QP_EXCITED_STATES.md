@@ -315,3 +315,41 @@ Still to do (editorial, not mechanical):
 5. A validation table of 3–4 CdSe sizes against experiment (Aubert–Hens 2022
    sizing) and against one full GW/BSE reference (e.g. MOLGW/BerkeleyGW on
    Cd₃₃Se₃₃).
+
+## 7. Follow-up: environment-consistent W implemented (`qp_gap: env`)
+
+Implemented recommendation §6.1 with the agreed choices:
+* bulk ε∞ interior screening (Resta);
+* the anchor residual off by default (opt-in `--env-anchor-residual`);
+* a spherical cavity;
+* `eps_out` = optical n².
+
+`qdex/environment.py` builds the dielectric-sphere reaction field
+W^refl_AB (multipole series; checked against the Born term, the Kelvin image
+and the matched-medium limit in `tests/test_environment.py`). The same matrix
+gives state-resolved QP shifts ±½ q_pᵀW^refl q_p, added to the bulk GW–PBE
+opening, and is added to the Resta or xs-resta direct kernel.
+
+Found and fixed along the way: with `soc_flag: true`, every model that passes
+QP energies instead of a rigid scissor (`qsgw-*`, and now `env`) built the SOC
+spinors from **DFT** energies. The SOC BSE therefore had no QP correction at all
+(qsgw-dim: SOC S₁ would sit near the DFT gap). The spinor Hamiltonian now uses
+the QP energies, and the SOC gap printout no longer double counts the scissor.
+
+CdSe 2 nm, full comparison suite (`benchmarks/compare_models.py --profile full`),
+32 runs, 0 FAIL:
+
+| model | ε_out | QP gap | S₁ | binding |
+|---|---|---|---|---|
+| gw | 1.0 → 2.24 | 3.861 → 3.237 | 3.634 → 3.010 | 0.227 (fixed) |
+| env | 1.0 → 2.24 → 6.2 | 3.852 → 3.115 → 2.727 | 2.501 → 2.503 → 2.500 | 1.351 → 0.612 → 0.227 |
+| env + residual | 1.0 → 2.24 | 4.041 → 3.304 | 2.690 → 2.692 | 1.351 → 0.612 |
+
+The optical gap is now solvent independent (dS₁/dQP = 0.00). Its value is set
+by the interior physics: without the residual it is 0.2 eV below the
+experimental window (2.70–2.95 eV, Yu et al. 2003 sizing curve); with the
+monomer-calibrated residual it sits at the lower edge. The vacuum binding
+(1.35 eV) is plausible in magnitude for an unscreened ~2 nm cluster, but it has not
+been checked against a full GW–BSE reference.
+The remaining gap to experiment points to the next step, recommendation 2: a
+size-dependent interior screening and self-energy, consistent in QP and BSE.
