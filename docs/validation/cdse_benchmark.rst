@@ -127,5 +127,6 @@ Reference values are enforced by the opt-in test
 For comparison, the first-exciton absorption of CdSe dots with
 D ≈ 1.6–2.0 nm lies near 2.7–3.0 eV (Yu, Qu, Guo, Peng, Chem. Mater. 15, 2854
 (2003) sizing curve; to be cross-checked with Aubert et al., Nano Lett. 22, 1778
-(2022)). Only the solvent-screened runs fall in that window, and the binding energy is
-not environment-consistent (see :doc:`environment_cancellation`).
+(2022)). These runs predate the shared W; with it the solvent dependence of S₁ largely cancels
+(:doc:`/quasiparticles/theory`, section 4). Current results: :doc:`qp_bse_sweep` and
+:doc:`anchor_evgw_benchmark`.

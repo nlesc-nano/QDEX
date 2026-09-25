@@ -1,5 +1,5 @@
-Dynamic z
-=========
+Quasiparticle weight Z
+======================
 
 Part of :doc:`/quasiparticles/index`.
 
@@ -73,7 +73,8 @@ With a shared W, the BSE kernel of a Delta-W model is
    W_{\mathrm{BSE}} = W_{\mathrm{bulk}} + \bar Z\,(W_{\mathrm{QD}} - W_{\mathrm{bulk}}),
    \qquad \bar Z = \tfrac12 (Z_H + Z_L)
 
-(``scale_w_difference``). The same pole that reduces the QP shift also makes the electron–hole
+with Z_H and Z_L the weights of the HOMO and LUMO in the QP levels (ΔCOHSEX by default), so the
+QP correction and the kernel use the same Z (``scale_w_difference``). The same pole that reduces the QP shift also makes the electron–hole
 interaction dynamical, and to first order the two effects cancel in the neutral excitation
 (Bechstedt et al., PRL 78, 1528 (1997)). Scaling :math:`\Delta W` by the same Z keeps that
 cancellation in the static kernel. The surface-polarization term then still drops out of S₁.

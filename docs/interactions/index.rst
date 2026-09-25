@@ -11,4 +11,3 @@ Topics in two-body interactions pair each derivation with the QDEX callable, CLI
    screening
    environment
    asymptotics
-   qp_screening

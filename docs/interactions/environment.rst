@@ -12,7 +12,11 @@ Part of :doc:`/interactions/index`.
 
 .. important::
 
-   The solvent reaction term is a softened dielectric-boundary model. Its sign reverses when the exterior electronic permittivity exceeds the bulk value. It is not the complete Green function of a dielectric sphere.
+   Two environment terms are in use. The Delta-W models (``sgw-*``, ``evgw-*``, ``qsgw-*``) use a
+   softened Born term, (1/ε_out − 1/ε∞) e²/√(r² + R²); it is not the full Green function of a
+   dielectric sphere. The two-anchor ``gw`` model uses the full multipole Green function of the sphere
+   (:doc:`/quasiparticles/anchor`). In both cases the same term enters the QP correction and the BSE
+   kernel (:doc:`/quasiparticles/theory`, section 4). Both change sign when ε_out exceeds ε∞.
 
 .. rubric:: QDEX implementation
 

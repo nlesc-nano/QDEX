@@ -152,7 +152,7 @@ LUMO.
 
 The asymmetry therefore sits in the non-classical residual. It is exact at :math:`R_0` and fades
 toward the bulk split for large dots. The Delta-W models use the same split for absolute IP/EA by
-default (``qp_edge_split: anchor``; see :doc:`/quasiparticles/edge_partition`).
+default (``qp_edge_split: anchor``; see :doc:`/quasiparticles/models`).
 
 The BSE kernel of the two-anchor model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
