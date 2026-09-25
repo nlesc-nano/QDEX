@@ -71,5 +71,9 @@ namespace licpp
         const std::vector<Eigen::Vector3d>& points,
         int nthreads);
  
+    // --- EXACT TWO-ELECTRON COULOMB INTEGRALS (XsTD-DFT) ---
+    // Evaluates exact (mu mu | nu nu) diagonal 2-center/1-center repulsion integrals.
+    Matrix compute_aabb_coulomb(const std::vector<libint2::Shell>& shells, int nthreads = 1);
+
 } // namespace licpp
 

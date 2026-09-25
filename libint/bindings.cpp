@@ -238,4 +238,15 @@ PYBIND11_MODULE(libint_cpp, m)
           "Instant raw binary loader",
           py::arg("filename"), py::arg("n_ao"));
 
+    m.def("compute_aabb_coulomb",
+          [](py::list py_shells, int nthreads) {
+              auto shells = convert_shells(py_shells);
+              libint2::initialize();
+              Matrix G = licpp::compute_aabb_coulomb(shells, nthreads);
+              libint2::finalize();
+              return G;
+          },
+          py::arg("shells"), py::arg("nthreads") = 1,
+          "Computes exact (mu mu | nu nu) 2-electron Coulomb integral matrix in Hartree.");
+
 }

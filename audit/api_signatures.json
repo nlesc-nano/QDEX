@@ -1,0 +1,1586 @@
+[
+  {
+    "file": "qdex/analysis/md_exciton_tools.py",
+    "line": 11,
+    "name": "main",
+    "signature": "main()"
+  },
+  {
+    "file": "qdex/analysis/md_exciton_tools.py",
+    "line": 78,
+    "name": "get_decay_time",
+    "signature": "get_decay_time(corr_array, dt)"
+  },
+  {
+    "file": "qdex/auger.py",
+    "line": 129,
+    "name": "compute_transition_density_charges",
+    "signature": "compute_transition_density_charges(C: np.ndarray, S: np.ndarray, atom_ao_ranges: List[Tuple[int, int]], i_indices: Union[List[int], np.ndarray], j_indices: Union[List[int], np.ndarray], spinor: bool=False, U_spinor_alpha: Optional[np.ndarray]=None, U_spinor_beta: Optional[np.ndarray]=None)"
+  },
+  {
+    "file": "qdex/auger.py",
+    "line": 207,
+    "name": "compute_auger_matrix_element",
+    "signature": "compute_auger_matrix_element(q_recomb: np.ndarray, q_eject_1: np.ndarray, q_eject_2: np.ndarray, W_resta: np.ndarray, q_recomb_alt: Optional[np.ndarray]=None)"
+  },
+  {
+    "file": "qdex/auger.py",
+    "line": 234,
+    "name": "calculate_auger_rates",
+    "signature": "calculate_auger_rates(C: np.ndarray, eps: np.ndarray, S: np.ndarray, atom_ao_ranges: List[Tuple[int, int]], coords: np.ndarray, atom_symbols: List[str], homo_idx: int, W_resta: Optional[np.ndarray]=None, material_name: Optional[str]='DEFAULT', eps_out: float=2.0, sigma_ev: float=0.05, broadening_mode: str='gaussian', channel: str='all', n_initial_elec: int=1, n_initial_hole: int=1, e_search_sigma_factor: float=4.0, spinor: bool=False, U_spinor_alpha: Optional[np.ndarray]=None, U_spinor_beta: Optional[np.ndarray]=None, lambda_reorg_ev: Optional[float]=None, temperature_k: float=300.0, eps_eff: Optional[float]=None, verbose: bool=True)"
+  },
+  {
+    "file": "qdex/auger.py",
+    "line": 630,
+    "name": "auger_rates_from_config",
+    "signature": "auger_rates_from_config(config: Dict[str, Any])"
+  },
+  {
+    "file": "qdex/auger.py",
+    "line": 712,
+    "name": "compute_trajectory_auger_rates",
+    "signature": "compute_trajectory_auger_rates(step_files: List[str], atom_ao_ranges: List[Tuple[int, int]], coords: np.ndarray, atom_symbols: List[str], homo_idx: int, material_name: Optional[str]='DEFAULT', sigma_ev: float=0.05, broadening_mode: str='gaussian', max_frames: Optional[int]=None, verbose: bool=True)"
+  },
+  {
+    "file": "qdex/auger.py",
+    "line": 843,
+    "name": "extract_auger_kinetics_from_trajectory",
+    "signature": "extract_auger_kinetics_from_trajectory(times_fs: np.ndarray, instantaneous_rates_ps: np.ndarray, verbose: bool=True)"
+  },
+  {
+    "file": "qdex/auger.py",
+    "line": 85,
+    "name": "summary_table",
+    "signature": "summary_table(self)"
+  },
+  {
+    "file": "qdex/auger.py",
+    "line": 364,
+    "name": "eval_lineshape",
+    "signature": "eval_lineshape(dE: float)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 54,
+    "name": "transform_ao_operator",
+    "signature": "transform_ao_operator(mu_ao, c_left, c_right, device='numpy')"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 79,
+    "name": "setup_run_logging",
+    "signature": "setup_run_logging(log_file)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 97,
+    "name": "print_qp_provenance",
+    "signature": "print_qp_provenance(details, dft_gap=None, target_qp_gap=None, output_file=None)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 163,
+    "name": "write_qp_provenance",
+    "signature": "write_qp_provenance(details, dft_gap, target_qp_gap, scissor, args, filename='qp_provenance.json')"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 187,
+    "name": "estimate_periodic_bulk_gw_scissor",
+    "signature": "estimate_periodic_bulk_gw_scissor(material_name)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 213,
+    "name": "run_solver_and_analysis",
+    "signature": "run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, mu_ia_z, dft_gap, scissor, confinement_energy, args, suffix='', soc_gap=None, soc_U=None, soc_E=None)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 558,
+    "name": "validate_args",
+    "signature": "validate_args(args, parser)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 586,
+    "name": "_apply_config",
+    "signature": "_apply_config(args, config_data, explicit_cli_args=None)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 647,
+    "name": "_select_soc_window_indices",
+    "signature": "_select_soc_window_indices(eps_shifted, homo_index, soc_window)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 663,
+    "name": "main",
+    "signature": "main()"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 39,
+    "name": "__init__",
+    "signature": "__init__(self, *streams)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 42,
+    "name": "write",
+    "signature": "write(self, data)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 47,
+    "name": "flush",
+    "signature": "flush(self)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 87,
+    "name": "close_log",
+    "signature": "close_log()"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 246,
+    "name": "project_spinor_vec_to_spatial",
+    "signature": "project_spinor_vec_to_spatial(vec)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 1720,
+    "name": "transform_dipole_chan",
+    "signature": "transform_dipole_chan(mu_ao, C_occ_ch, C_virt_ch)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 1746,
+    "name": "transform_dipole",
+    "signature": "transform_dipole(mu_ao)"
+  },
+  {
+    "file": "qdex/cli.py",
+    "line": 1567,
+    "name": "__init__",
+    "signature": "__init__(self)"
+  },
+  {
+    "file": "qdex/davidson.py",
+    "line": 4,
+    "name": "davidson",
+    "signature": "davidson(matvec, diag, nroots, max_iter=500, tol=1e-06, max_subspace=None, device='numpy')"
+  },
+  {
+    "file": "qdex/davidson.py",
+    "line": 81,
+    "name": "eval_mv_np",
+    "signature": "eval_mv_np(vec)"
+  },
+  {
+    "file": "qdex/davidson.py",
+    "line": 22,
+    "name": "eval_mv",
+    "signature": "eval_mv(vec)"
+  },
+  {
+    "file": "qdex/device_utils.py",
+    "line": 12,
+    "name": "has_torch",
+    "signature": "has_torch()"
+  },
+  {
+    "file": "qdex/device_utils.py",
+    "line": 16,
+    "name": "resolve_device",
+    "signature": "resolve_device(device_str='auto', verbose=False)"
+  },
+  {
+    "file": "qdex/device_utils.py",
+    "line": 72,
+    "name": "to_tensor",
+    "signature": "to_tensor(arr, device, dtype=None)"
+  },
+  {
+    "file": "qdex/device_utils.py",
+    "line": 90,
+    "name": "to_numpy",
+    "signature": "to_numpy(t)"
+  },
+  {
+    "file": "qdex/device_utils.py",
+    "line": 99,
+    "name": "is_gpu",
+    "signature": "is_gpu(device)"
+  },
+  {
+    "file": "qdex/exciton_analysis.py",
+    "line": 5,
+    "name": "coherent_mulliken_ao_populations",
+    "signature": "coherent_mulliken_ao_populations(coeff, overlap_coeff, density)"
+  },
+  {
+    "file": "qdex/exciton_analysis.py",
+    "line": 177,
+    "name": "plot_analysis_summary",
+    "signature": "plot_analysis_summary(analysis_results, physics_metrics=None, filename=None, show=False, broadening='gaussian', sigma=0.1)"
+  },
+  {
+    "file": "qdex/exciton_analysis.py",
+    "line": 15,
+    "name": "__init__",
+    "signature": "__init__(self, solver, atom_coords, atom_symbols)"
+  },
+  {
+    "file": "qdex/exciton_analysis.py",
+    "line": 95,
+    "name": "get_particle_densities",
+    "signature": "get_particle_densities(self, bse_vec)"
+  },
+  {
+    "file": "qdex/exciton_analysis.py",
+    "line": 134,
+    "name": "analyze_state",
+    "signature": "analyze_state(self, bse_vec, energy, f_osc)"
+  },
+  {
+    "file": "qdex/exciton_cube.py",
+    "line": 11,
+    "name": "write_cube",
+    "signature": "write_cube(filename, symbols, coords, origin, spacing, N, density, use_cpp=True)"
+  },
+  {
+    "file": "qdex/exciton_cube.py",
+    "line": 66,
+    "name": "generate_cubes",
+    "signature": "generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells, symbols, coords, spacing_ang=0.5, margin_ang=3.5, nthreads=4, use_cpp=True)"
+  },
+  {
+    "file": "qdex/exciton_cube.py",
+    "line": 209,
+    "name": "generate_exciton_cubes",
+    "signature": "generate_exciton_cubes(solver, bse_vec, shells, symbols, coords, prefix, spacing_ang=0.5, margin_ang=3.5, nthreads=4, use_cpp=True)"
+  },
+  {
+    "file": "qdex/exciton_cube.py",
+    "line": 187,
+    "name": "get_lbl",
+    "signature": "get_lbl(idx, ref_idx, is_spinor=False)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 9,
+    "name": "__init__",
+    "signature": "__init__(self, C, eps, overlap, atom_ao_ranges, homo_index, n_occ, n_virt, scissor_ev, gamma_qp, gamma_bse, material=None, gamma_bare=None, gamma_penalty=None, alpha=1.0, include_exchange=False, estimate_qp=False, e_thresh=None, f_thresh=0.0, mu_ia_x=None, mu_ia_y=None, mu_ia_z=None, charge_type='mulliken', soc_U=None, soc_E=None, device='numpy', precomputed_sigma=None, vxc_ao_path=None, nthreads=1, spin='singlet', C_beta=None, eps_beta=None, homo_index_beta=None, n_occ_beta=None, n_virt_beta=None, excitation_mode='bse', kernel_type='mnok')"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 514,
+    "name": "init_uks_spin_preserving",
+    "signature": "init_uks_spin_preserving(self, C_alpha, eps_alpha, homo_index_alpha, n_occ_alpha, n_virt_alpha, C_beta, eps_beta, homo_index_beta, n_occ_beta, n_virt_beta, overlap, atom_ao_ranges, scissor_ev, e_thresh, f_thresh, mu_ia_x, mu_ia_y, mu_ia_z, charge_type, device, soc_U=None, soc_E=None, excitation_mode='bse', kernel_type=None)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 818,
+    "name": "build_spinor_basis",
+    "signature": "build_spinor_basis(self, U_mo, soc_E, e_thresh)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 1045,
+    "name": "build_spinor_basis_uks",
+    "signature": "build_spinor_basis_uks(self, U_mo, soc_E, e_thresh)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 1145,
+    "name": "kernel_actions",
+    "signature": "kernel_actions(self, x)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 1256,
+    "name": "independent_transition_energies",
+    "signature": "independent_transition_energies(self, mode)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 1322,
+    "name": "matvec",
+    "signature": "matvec(self, x)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 1332,
+    "name": "get_transition_dipoles",
+    "signature": "get_transition_dipoles(self, mu_ia_x, mu_ia_y, mu_ia_z)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 1389,
+    "name": "map_dipole",
+    "signature": "map_dipole(mu_spatial)"
+  },
+  {
+    "file": "qdex/exciton_hamiltonian.py",
+    "line": 1372,
+    "name": "map_dipole_uks",
+    "signature": "map_dipole_uks(mu_a, mu_b)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 8,
+    "name": "generate_automated_kpath",
+    "signature": "generate_automated_kpath(cif_path, coords_ang, line_density=50, return_reciprocal=False)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 77,
+    "name": "make_reciprocal_replicas",
+    "signature": "make_reciprocal_replicas(reciprocal_matrix, g_shell)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 83,
+    "name": "fuzzy_energy_mask",
+    "signature": "fuzzy_energy_mask(eps_dft, ewin, sigma_ev, qp_energies=None)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 91,
+    "name": "fuzzy_energy_indices",
+    "signature": "fuzzy_energy_indices(eps_dft, ewin, sigma_ev, homo_index=None, qp_energies=None)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 101,
+    "name": "compute_fuzzy_intensity",
+    "signature": "compute_fuzzy_intensity(C_dense, shells, kpts_cart, nthreads, fold_to_bz=False, g_shell=0, reciprocal_matrix=None, mo_indices=None)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 133,
+    "name": "build_qp_energies",
+    "signature": "build_qp_energies(eps_dft, homo_index, scissor_ev=None, sigma_occ=None, sigma_virt=None)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 151,
+    "name": "build_qp_energies_vacuum",
+    "signature": "build_qp_energies_vacuum(eps_abs, homo_index, qp_homo=None, qp_lumo=None, occ_shift=None, virt_shift=None)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 162,
+    "name": "build_soc_qp_energies_vacuum",
+    "signature": "build_soc_qp_energies_vacuum(soc_E_abs, soc_U, eps_abs_spin, eps_qp_abs_spin)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 167,
+    "name": "auto_energy_window",
+    "signature": "auto_energy_window(*energy_arrays, sigma_ev=0.03)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 189,
+    "name": "build_smeared_fuzzy",
+    "signature": "build_smeared_fuzzy(intensity, eps_plot, ewin, sigma_ev)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 205,
+    "name": "smear_and_export_fuzzy",
+    "signature": "smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix='sf')"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 242,
+    "name": "smear_and_export_spin_fuzzy",
+    "signature": "smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_beta, labels, ewin, sigma_ev, prefix='uks')"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 274,
+    "name": "_matmul_real_matrix",
+    "signature": "_matmul_real_matrix(A_real, B, device='numpy')"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 295,
+    "name": "run_fuzzy_bands_and_pdos",
+    "signature": "run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_index, e_homo, e_lumo, e_fermi_raw, syms, coords_ang, shells, pops_sf, soc_active_indices=None, soc_E_act=None, soc_U_act=None, spinor_homo_idx=None, qp_energies=None, eps_abs=None, qp_energies_abs=None, soc_E_abs_act=None, C_beta_dense=None, eps_beta_shifted=None, eps_beta_abs=None, homo_index_beta=None, qp_energies_beta=None, qp_energies_beta_abs=None, soc_active_indices_beta=None)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 446,
+    "name": "take_alpha",
+    "signature": "take_alpha(indices)"
+  },
+  {
+    "file": "qdex/fuzzy_bands.py",
+    "line": 459,
+    "name": "take_beta",
+    "signature": "take_beta(indices)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 129,
+    "name": "get_refractive_index",
+    "signature": "get_refractive_index(material_name)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 139,
+    "name": "compute_radiative_rates",
+    "signature": "compute_radiative_rates(E_ev, f_osc, refractive_index=2.0)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 157,
+    "name": "compute_energy_gap_law_rate",
+    "signature": "compute_energy_gap_law_rate(E_gap_ev, E_LO_ev=0.018, S_hr=1.0, A_nr=10000000000000.0)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 176,
+    "name": "compute_fcwd_rate",
+    "signature": "compute_fcwd_rate(E_gap_ev, V_el_ev, lambda_ev, sigma_ev)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 205,
+    "name": "extract_recombination_parameters_from_namd",
+    "signature": "extract_recombination_parameters_from_namd(var_E_gap_ev2, dominant_freq_cm1=None, temp_k=300.0, mean_nac_fs=None, material_name=None)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 277,
+    "name": "estimate_gw_qp_gap",
+    "signature": "estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 431,
+    "name": "compute_delta_xc",
+    "signature": "compute_delta_xc(material)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 454,
+    "name": "get_cluster_size_metrics",
+    "signature": "get_cluster_size_metrics(coords_ang, atom_symbols=None, material_name=None)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 511,
+    "name": "build_gamma",
+    "signature": "build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 544,
+    "name": "build_resta_mnok",
+    "signature": "build_resta_mnok(atom_symbols, coords, alpha, material_name, eps_out=2.0, eta_dict=HARDNESS_DICT)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 645,
+    "name": "build_dim_screening_factors",
+    "signature": "build_dim_screening_factors(coords, atom_symbols, material_name=None, eps_out=2.4, alpha=1.0)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 745,
+    "name": "build_dim_mnok",
+    "signature": "build_dim_mnok(atom_symbols, coords, material_name=None, alpha=1.0, eta_dict=HARDNESS_DICT, **kwargs)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 791,
+    "name": "build_sbse_kernel",
+    "signature": "build_sbse_kernel(atom_symbols, coords, atom_ao_ranges=None, shells=None, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, C_occ_b_low=None, C_virt_b_low=None, eps_occ_b=None, eps_virt_b=None, mode='atom', eps_out=1.0, material_name=None, alpha=1.0, nthreads=1, eta_dict=HARDNESS_DICT, return_eps_info=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 1026,
+    "name": "estimate_sgw_qp_gap",
+    "signature": "estimate_sgw_qp_gap(coords, atom_symbols, material_name=None, eps_out=1.0, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, atom_ao_ranges=None, shells=None, mode='atom', alpha=1.0, Z=0.8, nthreads=1, return_details=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 1138,
+    "name": "compute_dynamic_z",
+    "signature": "compute_dynamic_z(delta_sigma_stat_ev, gap_ev, eps_eff, material_name=None, omega_p_ev=15.0)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 1158,
+    "name": "estimate_sgw_dim_qp_gap",
+    "signature": "estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, atom_ao_ranges=None, alpha=1.0, Z=0.8, dynamic_z=False, self_consistent=False, max_iter=25, tol=0.0001, damping=0.5, return_details=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 1395,
+    "name": "estimate_sgw_resta_qp_gap",
+    "signature": "estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4, dft_gap=None, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, atom_ao_ranges=None, alpha=1.0, Z=0.8, penn_scaling=True, dynamic_z=False, self_consistent=False, max_iter=25, tol=0.0001, damping=0.5, return_details=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 1647,
+    "name": "estimate_evgw_dim_qp_gap",
+    "signature": "estimate_evgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, atom_ao_ranges=None, alpha=1.0, max_iter=25, tol=0.0001, damping=0.5, return_details=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 1660,
+    "name": "estimate_evgw_resta_qp_gap",
+    "signature": "estimate_evgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4, dft_gap=None, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, atom_ao_ranges=None, alpha=1.0, max_iter=25, tol=0.0001, damping=0.5, return_details=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 1675,
+    "name": "estimate_qsgw_dim_qp_gap",
+    "signature": "estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index, material_name=None, eps_out=2.4, alpha=1.0, dynamic_z=True, max_iter=25, tol=0.0001, damping=0.5, return_details=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 1884,
+    "name": "estimate_qsgw_resta_qp_gap",
+    "signature": "estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index, material_name=None, eps_out=2.4, alpha=1.0, penn_scaling=True, dynamic_z=True, max_iter=25, tol=0.0001, damping=0.5, return_details=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 2097,
+    "name": "build_xs_kernel",
+    "signature": "build_xs_kernel(shells, atom_symbols, coords, atom_ao_ranges, material_name=None, kernel_mode='bse', alpha=1.0, nthreads=1, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, C_occ_b_low=None, C_virt_b_low=None, eps_occ_b=None, eps_virt_b=None, eps_out=2.4, return_eps_info=False)"
+  },
+  {
+    "file": "qdex/hardness.py",
+    "line": 2460,
+    "name": "estimate_brus_qp_gap",
+    "signature": "estimate_brus_qp_gap(material_name, coords, atom_symbols)"
+  },
+  {
+    "file": "qdex/integrals.py",
+    "line": 5,
+    "name": "compute_dipole_ao",
+    "signature": "compute_dipole_ao(shells, origin=None, nthreads=1)"
+  },
+  {
+    "file": "qdex/integrals.py",
+    "line": 17,
+    "name": "compute_cross_overlap_ao",
+    "signature": "compute_cross_overlap_ao(shells1, shells2, nthreads=1)"
+  },
+  {
+    "file": "qdex/integrals.py",
+    "line": 25,
+    "name": "compute_two_electron_ao",
+    "signature": "compute_two_electron_ao(shells, nthreads=1)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 20,
+    "name": "read_xyz",
+    "signature": "read_xyz(path)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 42,
+    "name": "parse_basis",
+    "signature": "parse_basis(fname, wanted, required_elements=None)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 132,
+    "name": "build_shell_dicts",
+    "signature": "build_shell_dicts(syms, coords_ang, basis_dict)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 161,
+    "name": "count_ao_from_shells",
+    "signature": "count_ao_from_shells(shells)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 169,
+    "name": "build_atom_ao_ranges",
+    "signature": "build_atom_ao_ranges(shells)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 203,
+    "name": "_extract_numbers",
+    "signature": "_extract_numbers(s)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 210,
+    "name": "read_mos_mbse",
+    "signature": "read_mos_mbse(path, n_ao_total, verbose=False)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 278,
+    "name": "write_mos_mbse",
+    "signature": "write_mos_mbse(path, C, eps, occ, n_occ=None, n_elec=None, flags=1, version=2)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 314,
+    "name": "read_mos_auto",
+    "signature": "read_mos_auto(path, n_ao_total, verbose=False, cache=False)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 382,
+    "name": "read_mos_uks",
+    "signature": "read_mos_uks(path_alpha, path_beta, n_ao, verbose=False, cache=False)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 395,
+    "name": "read_mos_txt_cc",
+    "signature": "read_mos_txt_cc(path, n_ao_total, verbose=False)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 414,
+    "name": "parse_gth_soc_potentials",
+    "signature": "parse_gth_soc_potentials(path, elements_to_parse)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 461,
+    "name": "get_vxc_ao_matrix",
+    "signature": "get_vxc_ao_matrix(txt_path, n_ao)"
+  },
+  {
+    "file": "qdex/io_utils.py",
+    "line": 419,
+    "name": "_collect_coeffs",
+    "signature": "_collect_coeffs(line_iter, n, init)"
+  },
+  {
+    "file": "qdex/lowdin.py",
+    "line": 4,
+    "name": "lowdin_sqrt",
+    "signature": "lowdin_sqrt(S, device='numpy')"
+  },
+  {
+    "file": "qdex/lowdin.py",
+    "line": 18,
+    "name": "transform_mos",
+    "signature": "transform_mos(C, S, device='numpy')"
+  },
+  {
+    "file": "qdex/lowdin.py",
+    "line": 22,
+    "name": "build_lowdin_transition_charges_flat",
+    "signature": "build_lowdin_transition_charges_flat(C_occ_act, C_virt_act, S, atom_ao_ranges, valid_i, valid_a, device='numpy')"
+  },
+  {
+    "file": "qdex/lowdin.py",
+    "line": 70,
+    "name": "build_xs_transition_densities_flat",
+    "signature": "build_xs_transition_densities_flat(C_occ_act, C_virt_act, S, valid_i, valid_a, device='numpy')"
+  },
+  {
+    "file": "qdex/lowdin.py",
+    "line": 102,
+    "name": "build_xs_state_densities",
+    "signature": "build_xs_state_densities(C_occ_act, C_virt_act, S, device='numpy')"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 9,
+    "name": "natural_sort_key",
+    "signature": "natural_sort_key(s)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 13,
+    "name": "fit_exponential_lifetime",
+    "signature": "fit_exponential_lifetime(times, values)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 29,
+    "name": "compute_band_edge_arrival_times",
+    "signature": "compute_band_edge_arrival_times(times, values, tau, temp_k=300.0)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 83,
+    "name": "format_time_fs",
+    "signature": "format_time_fs(val, t_max=None)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 92,
+    "name": "compute_nac_energy_gap_data",
+    "signature": "compute_nac_energy_gap_data(precompute_dir, max_steps=20, max_sample_pairs=5000)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 170,
+    "name": "compute_band_gap_dynamics_and_spectral_density",
+    "signature": "compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_exciton=True, temp_k=300.0)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 313,
+    "name": "compute_spectral_density",
+    "signature": "compute_spectral_density(signal, dt_fs)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 346,
+    "name": "analyze_and_plot_namd_results",
+    "signature": "analyze_and_plot_namd_results(times_fs, mean_energies_ev, populations, out_cfg, qp_gap_ev, pump_energy_ev, mean_excess_e=None, mean_excess_h=None, trajectory_energies=None, all_energies=None, precompute_dir=None, recombination_info=None, std_energies_ev=None, std_excess_e=None, std_excess_h=None, n_origins=1)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 847,
+    "name": "generate_interactive_plotly_dashboard",
+    "signature": "generate_interactive_plotly_dashboard(times_fs, mean_energies_ev, mean_excess_e, mean_excess_h, excess_total, qp_gap_ev, pump_energy_ev, tau_total, tau_e, tau_h, pop_se=None, pop_sh=None, pop_hot_e=None, pop_hot_h=None, pop_1s=None, nac_data=None, bg_data=None, precompute_dir=None, html_file='carrier_cooling.html')"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1140,
+    "name": "load_trajectory_orbital_energies",
+    "signature": "load_trajectory_orbital_energies(precompute_dir)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1202,
+    "name": "compute_pair_spectral_density",
+    "signature": "compute_pair_spectral_density(eps_1, eps_2, dt_fs, n_fft=None, w_max_cm=400.0)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1249,
+    "name": "compute_time_resolved_spectral_density",
+    "signature": "compute_time_resolved_spectral_density(times_fs, eps_occ_traj, eps_virt_traj, hop_records=None, pme_flux_records=None, n_trajectories=1000, sigma_t_fs=15.0, w_max_cm=400.0, bg_data=None, method_name='PME')"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1461,
+    "name": "plot_time_resolved_spectral_density",
+    "signature": "plot_time_resolved_spectral_density(tr_sd_data, plot_file='time_resolved_spectral_density.png', html_file='time_resolved_spectral_density.html', material_name='CsPbBr3', method_name='PME')"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1656,
+    "name": "export_time_resolved_spectral_density",
+    "signature": "export_time_resolved_spectral_density(tr_sd_data, output_npz='time_resolved_spectral_density.npz', output_csv='time_resolved_spectral_density.csv')"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1701,
+    "name": "compute_2d_vibronic_action_map",
+    "signature": "compute_2d_vibronic_action_map(tr_sd_data, n_fft=2048, detrend_mode='linear', wmax_acc=250.0, wmax_prom=350.0)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1815,
+    "name": "plot_2d_vibronic_action_map",
+    "signature": "plot_2d_vibronic_action_map(vib2d_data, output_png='2d_vibronic_action_map.png', output_html='2d_vibronic_action_map.html', material_name='CsPbBr3', method_name=None)"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1972,
+    "name": "export_2d_vibronic_action_map",
+    "signature": "export_2d_vibronic_action_map(vib2d_data, output_npz='2d_vibronic_action_map.npz', output_csv='2d_vibronic_action_projections.csv')"
+  },
+  {
+    "file": "qdex/namd/analysis.py",
+    "line": 1297,
+    "name": "_get_pair_psd",
+    "signature": "_get_pair_psd(channel, u, v)"
+  },
+  {
+    "file": "qdex/namd/ensemble.py",
+    "line": 30,
+    "name": "compute_energy_autocorrelation_time",
+    "signature": "compute_energy_autocorrelation_time(times_fs, series)"
+  },
+  {
+    "file": "qdex/namd/ensemble.py",
+    "line": 70,
+    "name": "estimate_pilot_cooling_time",
+    "signature": "estimate_pilot_cooling_time(precompute_dir, qp_gap_ev, pump_energy_ev, dyn_cfg=None, temp_k=300.0, max_pilot_steps=120)"
+  },
+  {
+    "file": "qdex/namd/ensemble.py",
+    "line": 167,
+    "name": "auto_calibrate_ensemble_origins",
+    "signature": "auto_calibrate_ensemble_origins(precompute_dir, qp_gap_ev, pump_energy_ev, dyn_cfg=None, config=None)"
+  },
+  {
+    "file": "qdex/namd/ensemble.py",
+    "line": 286,
+    "name": "load_origin_frame_data",
+    "signature": "load_origin_frame_data(precompute_dir, k0, frame0=None)"
+  },
+  {
+    "file": "qdex/namd/ensemble.py",
+    "line": 337,
+    "name": "sample_origin_initial_states",
+    "signature": "sample_origin_initial_states(precompute_dir, k0, pump_excess_ev, dyn_mask, dyn_cfg, n_trajectories, frame0=None)"
+  },
+  {
+    "file": "qdex/namd/ensemble.py",
+    "line": 379,
+    "name": "aggregate_multi_origin_results",
+    "signature": "aggregate_multi_origin_results(origin_results, times_fs)"
+  },
+  {
+    "file": "qdex/namd/initial_condition.py",
+    "line": 3,
+    "name": "sample_initial_states",
+    "signature": "sample_initial_states(energies, f_osc, pump_energy_ev, pulse_fwhm_ev=0.08, n_trajectories=1000, filter_dark_states=True, min_f_thresh=1e-05, random_seed=None, mask=None)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 9,
+    "name": "build_effective_hamiltonian",
+    "signature": "build_effective_hamiltonian(E_vec, d_mat)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 22,
+    "name": "step_unitary_matrix_exp",
+    "signature": "step_unitary_matrix_exp(c, H_eff, dt_elec)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 33,
+    "name": "step_cayley",
+    "signature": "step_cayley(c, H_eff, dt_elec)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 46,
+    "name": "step_rk4",
+    "signature": "step_rk4(c, H_eff, dt_elec)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 63,
+    "name": "apply_edc_decoherence",
+    "signature": "apply_edc_decoherence(c, active_surface, E_vec, dt_elec, c_param=0.1, n_atoms=1, temp_k=300.0, decay_type='exponential')"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 111,
+    "name": "apply_gdc_decoherence",
+    "signature": "apply_gdc_decoherence(c, active_surface, E_vec, dt_elec, c_param=0.1, n_atoms=1, temp_k=300.0)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 123,
+    "name": "apply_edc_decoherence_batch",
+    "signature": "apply_edc_decoherence_batch(C, active_surfaces, E_batch, dt_fs, tau_mat=None, c_param=0.1, n_atoms=775, temp_k=300.0, min_tau_fs=1.0, max_tau_fs=500.0, decay_type='exponential')"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 195,
+    "name": "apply_gdc_decoherence_batch",
+    "signature": "apply_gdc_decoherence_batch(C, active_surfaces, E_batch, dt_fs, tau_mat=None, c_param=0.1, n_atoms=775, temp_k=300.0, min_tau_fs=1.0, max_tau_fs=500.0)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 228,
+    "name": "step_dish_batch",
+    "signature": "step_dish_batch(C, active_surfaces, E_batch, dt_fs, tau_mat=None, beta=None, detailed_balance=True, min_tau_fs=1.0)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 317,
+    "name": "propagate_electronic_substeps",
+    "signature": "propagate_electronic_substeps(c_init, E_k, E_kplus1, d_mat, dt_nuc_fs, n_substeps=500, active_surface=None, decoherence='edc', tau_dec_const_fs=15.0, integrator='unitary_matrix_exp')"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 393,
+    "name": "propagate_channel_rk4",
+    "signature": "propagate_channel_rk4(c, E_k, E_kplus1, d_mat, dt_nuc_fs, n_substeps=50)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 421,
+    "name": "accumulate_fssh_flux",
+    "signature": "accumulate_fssh_flux(C, active_idx, d_mat, dt_sub, flux)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 441,
+    "name": "propagate_channel_batch_rk4",
+    "signature": "propagate_channel_batch_rk4(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_fs, n_substeps=50, active_idx=None)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 484,
+    "name": "propagate_channel_batch_strang",
+    "signature": "propagate_channel_batch_strang(C, E_k_batch, E_kplus1_batch, d_mat, dt_nuc_fs, n_substeps=2, device='auto', active_idx=None)"
+  },
+  {
+    "file": "qdex/namd/integrator.py",
+    "line": 406,
+    "name": "H_apply",
+    "signature": "H_apply(c_in)"
+  },
+  {
+    "file": "qdex/namd/master_equation.py",
+    "line": 5,
+    "name": "compute_rate_matrix",
+    "signature": "compute_rate_matrix(E_vec, d_mat, temp_k=300.0, tau_dec_fs=15.0)"
+  },
+  {
+    "file": "qdex/namd/master_equation.py",
+    "line": 49,
+    "name": "run_master_equation_step",
+    "signature": "run_master_equation_step(P_current, R_matrix, dt_fs)"
+  },
+  {
+    "file": "qdex/namd/master_equation.py",
+    "line": 65,
+    "name": "propagate_pme_tensor",
+    "signature": "propagate_pme_tensor(P_mat, E_mat, d_occ, d_virt, dt_fs, temp_k=300.0, tau_dec_fs=None, n_substeps=20, eps_occ=None, eps_virt=None, n_atoms=775, k_loss=None, return_flux=False)"
+  },
+  {
+    "file": "qdex/namd/master_equation.py",
+    "line": 142,
+    "name": "_row_stochastic",
+    "signature": "_row_stochastic(k_from_to, dt_sub)"
+  },
+  {
+    "file": "qdex/namd/master_equation.py",
+    "line": 171,
+    "name": "_extract_sparse_flux",
+    "signature": "_extract_sparse_flux(p_vec, k_mat, max_transitions=50)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 18,
+    "name": "natural_sort_key",
+    "signature": "natural_sort_key(s)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 23,
+    "name": "_trivial_crossing_permutation",
+    "signature": "_trivial_crossing_permutation(S_mat, lock_above=0.5)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 44,
+    "name": "align_phases_and_crossings",
+    "signature": "align_phases_and_crossings(S_mat, C_next, track_crossings=True, lock_above=0.5)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 76,
+    "name": "align_spinor_phases_and_crossings",
+    "signature": "align_spinor_phases_and_crossings(S_mat, U_list, track_crossings=True, lock_above=0.5)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 110,
+    "name": "compute_frame_diagonal_bse",
+    "signature": "compute_frame_diagonal_bse(xyz_path, mo_path, basis_dict, n_ao, atom_ao_ranges, scissor, f_homo=0.5, f_lumo=0.5, w_resta=None, nhomos=None, nlumos=None, excitation_mode='diagonal_bse', include_exchange=True, energy_window=None, fixed_pair_mask=None, compute_dipoles=True, nthreads=1, soc=False, gth_file=None, device='numpy', verbose_soc=False)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 374,
+    "name": "precompute_namd_data",
+    "signature": "precompute_namd_data(config)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 744,
+    "name": "compact_precomputed_data",
+    "signature": "compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 847,
+    "name": "compute_trajectory_decoherence_times",
+    "signature": "compute_trajectory_decoherence_times(precompute_dir, out_file='decoherence_times.npz', min_tau_fs=1.0, max_tau_fs=500.0, update_metadata=True, verbose=True)"
+  },
+  {
+    "file": "qdex/namd/precompute.py",
+    "line": 762,
+    "name": "get_dir_size_mb",
+    "signature": "get_dir_size_mb(path)"
+  },
+  {
+    "file": "qdex/namd/surface_hopping.py",
+    "line": 32,
+    "name": "pair_energy_matrix",
+    "signature": "pair_energy_matrix(eps_occ, eps_virt, i_pairs, a_pairs, E_pairs)"
+  },
+  {
+    "file": "qdex/namd/surface_hopping.py",
+    "line": 41,
+    "name": "rescale_legacy_oscillator_strengths",
+    "signature": "rescale_legacy_oscillator_strengths(f_pairs, soc=False, f_convention=None)"
+  },
+  {
+    "file": "qdex/namd/surface_hopping.py",
+    "line": 53,
+    "name": "resolve_optin_auger_rate_fs",
+    "signature": "resolve_optin_auger_rate_fs(config, dyn_cfg)"
+  },
+  {
+    "file": "qdex/namd/surface_hopping.py",
+    "line": 81,
+    "name": "build_exciton_coupling_matrix",
+    "signature": "build_exciton_coupling_matrix(i_pairs, a_pairs, S_occ, S_virt, dt_nuc_fs)"
+  },
+  {
+    "file": "qdex/namd/surface_hopping.py",
+    "line": 134,
+    "name": "propagate_single_namd_origin",
+    "signature": "propagate_single_namd_origin(k0, n_win_steps, n_trajectories, precompute_dir, frame0, E0_pairs, f0_pairs, i_pairs0, a_pairs0, qp_gap_0, pump_energy_ev, pulse_fwhm_ev, filter_dark, dyn_mask, dyn_occ_active, dyn_virt_active, occ_to_sub, virt_to_sub, n_occ, n_virt, n_occ_dyn, n_virt_dyn, n_steps_base, dt_nuc_fs, method, decoherence, decoherence_decay_type, tau_dec_fs, integrator_type, n_substeps, device_cfg, temp_k, beta, detailed_balance, pair_lookup, tau_occ_dyn, tau_virt_dyn, is_surface_hopping, is_biexciton, ecsh_auger, k_auger_fs, ecsh_window_ev, k_loss_mat, run_tr_sd, hop_records=None, pme_flux_records=None, verbose=True, origin_idx=0, n_origins=1)"
+  },
+  {
+    "file": "qdex/namd/surface_hopping.py",
+    "line": 754,
+    "name": "run_namd_dynamics",
+    "signature": "run_namd_dynamics(config)"
+  },
+  {
+    "file": "qdex/namd/transient_absorption.py",
+    "line": 22,
+    "name": "compute_transient_absorption",
+    "signature": "compute_transient_absorption(times_fs: np.ndarray, populations: np.ndarray, E_pairs: np.ndarray, f_pairs: np.ndarray, i_pairs: np.ndarray, a_pairs: np.ndarray, sigma_ev: float=0.03, e_range: Optional[Tuple[float, float]]=None, n_e_points: int=300, include_se: bool=False, all_energies: Optional[np.ndarray]=None, state_degeneracy: float=2.0, include_esa: bool=False, f_elec_esa: Optional[np.ndarray]=None, e_elec_esa: Optional[np.ndarray]=None)"
+  },
+  {
+    "file": "qdex/namd/transient_absorption.py",
+    "line": 194,
+    "name": "fit_bleach_rise_kinetics",
+    "signature": "fit_bleach_rise_kinetics(times_fs: np.ndarray, delta_A_1s: np.ndarray)"
+  },
+  {
+    "file": "qdex/namd/transient_absorption.py",
+    "line": 262,
+    "name": "plot_transient_absorption",
+    "signature": "plot_transient_absorption(ta_data: Dict[str, Any], plot_file: str='transient_absorption_map.png', delay_slices_fs: Optional[List[float]]=None, material_name: str='CSPBBR3')"
+  },
+  {
+    "file": "qdex/namd/transient_absorption.py",
+    "line": 372,
+    "name": "export_transient_absorption_data",
+    "signature": "export_transient_absorption_data(ta_data: Dict[str, Any], kinetics_csv: str='ta_bleach_kinetics.csv', map_npz: Optional[str]='ta_2d_map.npz')"
+  },
+  {
+    "file": "qdex/namd/transient_absorption.py",
+    "line": 228,
+    "name": "rise_model",
+    "signature": "rise_model(t, a0, tau, c0)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 8,
+    "name": "transition_matrix_spatial",
+    "signature": "transition_matrix_spatial(solver, vec, soc_U=None)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 43,
+    "name": "compute_nto_pairs",
+    "signature": "compute_nto_pairs(x_mat)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 60,
+    "name": "nto_compactness",
+    "signature": "nto_compactness(weights)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 76,
+    "name": "_atom_population_from_coeffs",
+    "signature": "_atom_population_from_coeffs(coeff_ao, sc_ao, atom_ao_ranges)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 84,
+    "name": "_population_weights",
+    "signature": "_population_weights(pop_atom)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 94,
+    "name": "_spatial_descriptors",
+    "signature": "_spatial_descriptors(q_atom, coords)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 105,
+    "name": "_element_summary",
+    "signature": "_element_summary(q_atom, symbols, max_items=3)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 113,
+    "name": "_dipole_pair_contribution",
+    "signature": "_dipole_pair_contribution(mu_ia, u_pair, v_pair, singular_value)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 119,
+    "name": "spatial_transition_dipoles",
+    "signature": "spatial_transition_dipoles(solver, mu_ia)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 133,
+    "name": "build_nto_context",
+    "signature": "build_nto_context(solver)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 145,
+    "name": "analyze_nto_state",
+    "signature": "analyze_nto_state(solver, vec, energy_ev, f_osc, state_index, coords, symbols, mu_ia=None, soc_U=None, top_n=3, context=None)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 201,
+    "name": "selected_state_indices",
+    "signature": "selected_state_indices(args, n_states)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 209,
+    "name": "print_nto_analysis",
+    "signature": "print_nto_analysis(states, label)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 237,
+    "name": "write_nto_csv",
+    "signature": "write_nto_csv(states, filename)"
+  },
+  {
+    "file": "qdex/nto.py",
+    "line": 261,
+    "name": "run_nto_analysis",
+    "signature": "run_nto_analysis(solver, vectors, energies_ev, f_strengths, coords, symbols, mu_ia=None, args=None, suffix='', soc_U=None)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 3,
+    "name": "compute_spin_character",
+    "signature": "compute_spin_character(vec, soc_U, n_occ_sp, n_virt_sp, valid_mask=None)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 33,
+    "name": "spin_label_from_S",
+    "signature": "spin_label_from_S(S)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 45,
+    "name": "spin_multiplicity_name",
+    "signature": "spin_multiplicity_name(S)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 59,
+    "name": "infer_reference_spin",
+    "signature": "infer_reference_spin(n_alpha, n_beta)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 63,
+    "name": "compute_uks_soc_spin_character",
+    "signature": "compute_uks_soc_spin_character(vec, ham, soc_U, n_alpha_ref, n_beta_ref)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 124,
+    "name": "format_spin_character",
+    "signature": "format_spin_character(sectors)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 130,
+    "name": "compute_uks_soc_spin_free_channels",
+    "signature": "compute_uks_soc_spin_free_channels(vec, ham, soc_U, n_alpha_ref, n_beta_ref)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 202,
+    "name": "compute_uks_spin_free_channels",
+    "signature": "compute_uks_spin_free_channels(vec, ham, n_alpha_ref, n_beta_ref)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 251,
+    "name": "format_uks_soc_spin_free_character",
+    "signature": "format_uks_soc_spin_free_character(character)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 267,
+    "name": "format_uks_spin_free_character",
+    "signature": "format_uks_spin_free_character(character)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 279,
+    "name": "_normalize_population_tags",
+    "signature": "_normalize_population_tags(population_bars, n_atoms)"
+  },
+  {
+    "file": "qdex/orbital_analysis.py",
+    "line": 321,
+    "name": "print_orbital_summary",
+    "signature": "print_orbital_summary(energies_eV, occ, homo_idx, pops, syms, shells, is_soc=False, offset=0, print_range=15, population_bars=None)"
+  },
+  {
+    "file": "qdex/oscillator.py",
+    "line": 4,
+    "name": "compute_oscillator_strengths",
+    "signature": "compute_oscillator_strengths(eigvals_ev, eigvecs, mu_ia, is_spinor=False, spin_resolved=False)"
+  },
+  {
+    "file": "qdex/pdos_coop.py",
+    "line": 10,
+    "name": "_ao_metadata",
+    "signature": "_ao_metadata(shells)"
+  },
+  {
+    "file": "qdex/pdos_coop.py",
+    "line": 43,
+    "name": "_normalize_population_bar_tags",
+    "signature": "_normalize_population_bar_tags(population_bars, atom_symbols)"
+  },
+  {
+    "file": "qdex/pdos_coop.py",
+    "line": 98,
+    "name": "export_pdos_coop_data",
+    "signature": "export_pdos_coop_data(analysis, eps_eV, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix='sf', population_bars=None)"
+  },
+  {
+    "file": "qdex/pdos_coop.py",
+    "line": 169,
+    "name": "export_population_bar_plot",
+    "signature": "export_population_bar_plot(analysis, eps_eV, pdos_atoms, ewin, prefix='sf', population_bars=None)"
+  },
+  {
+    "file": "qdex/pdos_coop.py",
+    "line": 278,
+    "name": "compute_pdos_and_coop",
+    "signature": "compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix='sf', pops=None, population_bars=None, device='numpy')"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 10,
+    "name": "load_fuzzy",
+    "signature": "load_fuzzy(npz_path)"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 30,
+    "name": "load_pdos_csv",
+    "signature": "load_pdos_csv(csv_path)"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 35,
+    "name": "load_dict_csv",
+    "signature": "load_dict_csv(csv_path)"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 40,
+    "name": "load_ipr_csv",
+    "signature": "load_ipr_csv(csv_path)"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 45,
+    "name": "prepare_fuzzy_display",
+    "signature": "prepare_fuzzy_display(Z, fuzzy_display_mode='raw')"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 109,
+    "name": "build_wireframe_agnostic",
+    "signature": "build_wireframe_agnostic(atoms)"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 126,
+    "name": "parse_cube",
+    "signature": "parse_cube(filepath)"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 154,
+    "name": "generate_interactive_plot",
+    "signature": "generate_interactive_plot(prefix='sf', material='DEFAULT', ef=0.0, e_homo=None, e_lumo=None, normalize_coop=False, energy_label='Energy (eV)', output_html=None, fuzzy_display_mode='raw')"
+  },
+  {
+    "file": "qdex/plot_fuzzy.py",
+    "line": 319,
+    "name": "extract_idx",
+    "signature": "extract_idx(name)"
+  },
+  {
+    "file": "qdex/profiler.py",
+    "line": 17,
+    "name": "get_memory_info_mb",
+    "signature": "get_memory_info_mb()"
+  },
+  {
+    "file": "qdex/profiler.py",
+    "line": 82,
+    "name": "get_gpu_memory_info_mb",
+    "signature": "get_gpu_memory_info_mb()"
+  },
+  {
+    "file": "qdex/profiler.py",
+    "line": 102,
+    "name": "__init__",
+    "signature": "__init__(self)"
+  },
+  {
+    "file": "qdex/profiler.py",
+    "line": 110,
+    "name": "start_stage",
+    "signature": "start_stage(self, name)"
+  },
+  {
+    "file": "qdex/profiler.py",
+    "line": 122,
+    "name": "end_stage",
+    "signature": "end_stage(self, name=None)"
+  },
+  {
+    "file": "qdex/profiler.py",
+    "line": 159,
+    "name": "stage",
+    "signature": "stage(self, name)"
+  },
+  {
+    "file": "qdex/profiler.py",
+    "line": 167,
+    "name": "print_summary",
+    "signature": "print_summary(self, device=None, nthreads=None)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 14,
+    "name": "get_angular_momentum_matrices",
+    "signature": "get_angular_momentum_matrices(l)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 38,
+    "name": "_build_h_soc",
+    "signature": "_build_h_soc(k_coeffs, nprj)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 48,
+    "name": "_build_soc_projectors",
+    "signature": "_build_soc_projectors(atom_symbols, coords_ang, soc_tbl)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 83,
+    "name": "_ortho_active_coeffs",
+    "signature": "_ortho_active_coeffs(C_act, S_AO, SC_act=None)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 93,
+    "name": "_project_active_overlaps",
+    "signature": "_project_active_overlaps(C_AO, active_indices, B_raw, S_AO, assume_orthonormal=False, SC_AO=None)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 104,
+    "name": "_accumulate_soc_component",
+    "signature": "_accumulate_soc_component(B_left, B_right, h_soc, L, out)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 115,
+    "name": "_get_sparse_soc_projector_matrices",
+    "signature": "_get_sparse_soc_projector_matrices(proj_groups)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 154,
+    "name": "_assemble_rks_soc_blocks",
+    "signature": "_assemble_rks_soc_blocks(B_mo, proj_groups, device='numpy')"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 183,
+    "name": "_assemble_uks_soc_chunk",
+    "signature": "_assemble_uks_soc_chunk(keys, B_alpha, B_beta, proj_groups, col_offsets, device='numpy')"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 260,
+    "name": "_assemble_uks_soc_blocks",
+    "signature": "_assemble_uks_soc_blocks(B_alpha, B_beta, proj_groups, device='numpy')"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 284,
+    "name": "prepare_soc_overlap_cache",
+    "signature": "prepare_soc_overlap_cache(atom_symbols, coords_ang, shells, gth_file, nthreads=1)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 298,
+    "name": "compute_spinor_subspace",
+    "signature": "compute_spinor_subspace(atom_symbols, coords_ang, shells, C_AO, eps_Ha, S_AO, active_indices, gth_file, nthreads=1, soc_cache=None, assume_orthonormal=False, SC_AO=None, device='numpy', verbose=True)"
+  },
+  {
+    "file": "qdex/soc_utils.py",
+    "line": 376,
+    "name": "compute_spinor_subspace_uks",
+    "signature": "compute_spinor_subspace_uks(atom_symbols, coords_ang, shells, C_alpha_AO, eps_alpha_Ha, active_alpha_indices, C_beta_AO, eps_beta_Ha, active_beta_indices, S_AO, gth_file, nthreads=1, soc_cache=None, assume_orthonormal=False, SC_alpha_AO=None, SC_beta_AO=None, device='numpy')"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 11,
+    "name": "_assemble_truncated_exchange",
+    "signature": "_assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_full_elements=12000000, device='numpy')"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 66,
+    "name": "__init__",
+    "signature": "__init__(self, parent)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 73,
+    "name": "T",
+    "signature": "T(self)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 76,
+    "name": "conj",
+    "signature": "conj(self)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 79,
+    "name": "conjugate",
+    "signature": "conjugate(self)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 82,
+    "name": "__matmul__",
+    "signature": "__matmul__(self, other)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 97,
+    "name": "__init__",
+    "signature": "__init__(self, dim, order, dtype=np.complex128)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 105,
+    "name": "__len__",
+    "signature": "__len__(self)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 108,
+    "name": "__getitem__",
+    "signature": "__getitem__(self, key)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 155,
+    "name": "T",
+    "signature": "T(self)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 158,
+    "name": "conj",
+    "signature": "conj(self)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 161,
+    "name": "conjugate",
+    "signature": "conjugate(self)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 164,
+    "name": "__matmul__",
+    "signature": "__matmul__(self, other)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 170,
+    "name": "__array__",
+    "signature": "__array__(self, dtype=None)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 183,
+    "name": "__init__",
+    "signature": "__init__(self, C, eps, occ, overlap, atom_symbols, atom_coords, atom_ao_ranges, homo_index, n_occ, n_virt, scissor_ev, kernel, alpha, beta=0.0, material=None, include_exchange=False, estimate_qp=False, e_thresh=None, f_thresh=0.0, mu_ia_x=None, mu_ia_y=None, mu_ia_z=None, eps_out=2.0, soc_U=None, soc_E=None, device='numpy', precomputed_sigma=None, vxc_ao_path=None, nthreads=1, spin='singlet', C_beta=None, eps_beta=None, homo_index_beta=None, charge_type='mulliken', n_occ_beta=None, n_virt_beta=None, include_direct_eh=None, excitation_mode='bse', kernel_type='mnok', shells=None)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 378,
+    "name": "solve",
+    "signature": "solve(self, nroots=10, full_diag=False, tol=1e-05, excitation_mode='bse')"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 666,
+    "name": "expectation_components",
+    "signature": "expectation_components(self, vec)"
+  },
+  {
+    "file": "qdex/solver.py",
+    "line": 686,
+    "name": "main_transition",
+    "signature": "main_transition(self, vec)"
+  },
+  {
+    "file": "qdex/spectrum.py",
+    "line": 3,
+    "name": "generate_spectrum",
+    "signature": "generate_spectrum(energies, f_strengths, e_min=0.0, e_max=10.0, n_points=1000, sigma=0.1, profile='gaussian')"
+  },
+  {
+    "file": "qdex/spectrum.py",
+    "line": 19,
+    "name": "plot_spectrum",
+    "signature": "plot_spectrum(x_grid, y_grid, energies, f_strengths, filename='spectrum.png', show=False)"
+  },
+  {
+    "file": "qdex/subspace.py",
+    "line": 3,
+    "name": "build_subspace",
+    "signature": "build_subspace(homo_index, n_occ, n_virt, n_mo)"
+  }
+]
