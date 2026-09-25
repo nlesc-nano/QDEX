@@ -6,7 +6,7 @@
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2026-09-25T10:01:27.344608</dc:date>
+    <dc:date>2026-09-25T10:37:43.131930</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
@@ -40,7 +40,7 @@ C 93.756757 82.390923 85.521189 102.273345 85.521189 123.001967
 C 85.521189 143.730589 93.756757 163.613011 108.414107 178.270361 
 C 123.071456 192.92771 142.953878 201.163279 163.6825 201.163279 
 z
-" clip-path="url(#p573e75e39d)" style="fill: #fef3c7; stroke: #d97706; stroke-width: 1.8; stroke-linejoin: miter"/>
+" clip-path="url(#pef93e3f46c)" style="fill: #fef3c7; stroke: #d97706; stroke-width: 1.8; stroke-linejoin: miter"/>
    </g>
    <g id="patch_3">
     <path d="M 187.130893 117.530675 
@@ -53,7 +53,7 @@ C 181.536834 108.028887 180.877989 109.619481 180.877989 111.27777
 C 180.877989 112.93606 181.536834 114.526654 182.709422 115.699242 
 C 183.88201 116.87183 185.472604 117.530675 187.130893 117.530675 
 z
-" clip-path="url(#p573e75e39d)" style="fill: #dc2626"/>
+" clip-path="url(#pef93e3f46c)" style="fill: #dc2626"/>
    </g>
    <g id="text_1">
     <!-- Charged excitation (QP gap) -->
@@ -1713,7 +1713,7 @@ C 413.338576 82.390923 405.103007 102.273345 405.103007 123.001967
 C 405.103007 143.730589 413.338576 163.613011 427.995925 178.270361 
 C 442.653274 192.92771 462.535696 201.163279 483.264318 201.163279 
 z
-" clip-path="url(#p16ae458c8e)" style="fill: #fef3c7; stroke: #d97706; stroke-width: 1.8; stroke-linejoin: miter"/>
+" clip-path="url(#p60ecdd59c7)" style="fill: #fef3c7; stroke: #d97706; stroke-width: 1.8; stroke-linejoin: miter"/>
    </g>
    <g id="patch_5">
     <path d="M 510.620777 115.576643 
@@ -1726,7 +1726,7 @@ C 505.026718 106.074854 504.367872 107.665448 504.367872 109.323738
 C 504.367872 110.982027 505.026718 112.572621 506.199306 113.745209 
 C 507.371894 114.917797 508.962487 115.576643 510.620777 115.576643 
 z
-" clip-path="url(#p16ae458c8e)" style="fill: #dc2626"/>
+" clip-path="url(#p60ecdd59c7)" style="fill: #dc2626"/>
    </g>
    <g id="patch_6">
     <path d="M 459.815925 137.071003 
@@ -1739,12 +1739,12 @@ C 454.221865 127.569215 453.56302 129.159809 453.56302 130.818098
 C 453.56302 132.476388 454.221865 134.066982 455.394453 135.23957 
 C 456.567041 136.412158 458.157635 137.071003 459.815925 137.071003 
 z
-" clip-path="url(#p16ae458c8e)" style="fill: #2563eb"/>
+" clip-path="url(#p60ecdd59c7)" style="fill: #2563eb"/>
    </g>
    <g id="line2d_1">
     <path d="M 465.678023 128.473259 
 L 504.758679 111.668577 
-" clip-path="url(#p16ae458c8e)" style="fill: none; stroke-dasharray: 1.5,2.475; stroke-dashoffset: 0; stroke: #059669; stroke-width: 1.5"/>
+" clip-path="url(#p60ecdd59c7)" style="fill: none; stroke-dasharray: 1.5,2.475; stroke-dashoffset: 0; stroke: #059669; stroke-width: 1.5"/>
    </g>
    <g id="text_27">
     <!-- Neutral excitation (optical gap) -->
@@ -2154,10 +2154,10 @@ z
   </g>
  </g>
  <defs>
-  <clipPath id="p573e75e39d">
+  <clipPath id="pef93e3f46c">
    <rect x="34.716336" y="5.76" width="257.932328" height="238.392"/>
   </clipPath>
-  <clipPath id="p16ae458c8e">
+  <clipPath id="p60ecdd59c7">
    <rect x="354.298154" y="5.76" width="257.932328" height="238.392"/>
   </clipPath>
  </defs>

@@ -9,6 +9,7 @@ Topics in quasiparticle models pair each derivation with the QDEX callable, CLI 
    foundations
    dft_reference
    anchor
+   environment_model
    delta_w
    delta_w_implementation
    edge_partition
