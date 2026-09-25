@@ -98,7 +98,8 @@ def build_cases(eps_solvent, eps_inf):
         ("E", "charges:lowdin", ["--qp_gap", "gw", "--kernel", "resta", "--charge_type", "lowdin"], F),
         ("E", "no-exchange", ["--qp_gap", "gw", "--kernel", "resta", "--no-exchange"], F),
         # F: active-space convergence (sgw-resta, shared W, Z=1)
-        ("F", "as:50x50", ["--qp_gap", "sgw-resta", *qp, "--qp-z", "1.0", "--nhomos", "50", "--nlumos", "50"], STD),
+        ("F", "as:50x50", ["--qp_gap", "sgw-resta", *qp, "--qp-z", "1.0", "--nhomos", "50", "--nlumos", "50",
+                           "--nroots", "10", "__davidson__"], STD),
         ("F", "as:100x100", ["--qp_gap", "sgw-resta", *qp, "--qp-z", "1.0", "--nhomos", "100", "--nlumos", "100",
                              "--nroots", "10", "__davidson__"], F),
         # L: legacy mismatched combination
