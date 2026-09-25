@@ -3,9 +3,9 @@ Configuration
 
 Part of :doc:`/relativity/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.soc_utils``
 * Callable: ``qdex.soc_utils.compute_spinor_subspace``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_spinor_subspace(atom_symbols, coords_ang, shells, C_AO, eps_Ha, S_AO, active_indices, gth_file, nthreads=1, soc_cache=None, assume_orthonormal=False, SC_AO=None, device='numpy', verbose=True)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part2_soc/index.rst:243-245``
 
 7. CLI Flags & YAML Configuration Reference
 -------------------------------------------
 
-
-.. rubric:: From ``docs/part2_soc/index.rst:246-271``
 
 Command-Line Arguments
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -52,8 +47,6 @@ Command-Line Arguments
      - ``False``
      - Enable SOC specifically for Non-Adiabatic Molecular Dynamics trajectory precomputation.
 
-
-.. rubric:: From ``docs/part2_soc/index.rst:272-286``
 
 YAML Configuration Example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

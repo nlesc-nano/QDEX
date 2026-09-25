@@ -1,6 +1,13 @@
 CdSe benchmark provenance
 =========================
 
+
+.. figure:: /_static/figures/cdse_energy_ladder.svg
+   :width: 100%
+   :alt: cdse energy ladder
+
+   Energy decomposition for the CdSe test run (gw QP model, Resta direct kernel, 25×25 active space, spin-free).
+
 ``MATERIAL_DB["CDSE"]`` currently stores a bulk PBE gap of 0.64 eV, a bulk GW
 gap of 1.91 eV, and an optical dielectric constant of 6.2. The bulk gap
 opening used by the corresponding calibrated models is therefore 1.27 eV.
@@ -31,8 +38,7 @@ and ``physics.qp_gap``.
 Available 2.0 nm example
 ------------------------
 
-The supplied example at
-``/Users/ivaninfante/Documents/University/Programs/miniBSE/CdSe/2.0nm``
+The example in ``tests/CdSe`` (MO file stored as ``MOs_cleaned_20ang.txt.gz``)
 contains a 149-atom, chloride-passivated geometry (68 Cd, 55 Se, 26 Cl), a
 CP2K MO file, 2,753 AO basis functions, configurations and saved output.
 Its QDEX provenance file reports a geometry-derived effective radius of
@@ -54,3 +60,72 @@ than making eight pass/fail assertions. In particular, its stored result for
 the solvent pathology is a stale fixed string, and its “discarded in CLI”
 field is hard-coded ``true`` despite the current CLI wiring repair. Use the
 actual printed values and current source when assessing those two fixes.
+
+
+Results of the 25 September 2026 run
+------------------------------------
+
+Spin-free, 25 × 25 active space, dense diagonalization, ``eps_out = 1`` unless
+stated. Full tables and discussion: ``audit/AUDIT_2026-09-25_QP_EXCITED_STATES.md``.
+Reference values are enforced by the opt-in test
+``QDEX_RUN_CDSE=1 pytest tests/test_cdse_integration.py``.
+
+.. list-table:: Quasiparticle model (Resta direct kernel)
+   :header-rows: 1
+
+   * - ``qp_gap``
+     - QP gap (eV)
+     - S\ :sub:`1` (eV)
+     - binding (eV)
+   * - ``gw``
+     - 3.861
+     - 3.634
+     - 0.227
+   * - ``gw``, ``eps_out = 2.4``
+     - 3.203
+     - 2.977
+     - 0.226
+   * - ``sgw-resta``
+     - 3.762
+     - 3.535
+     - 0.227
+   * - ``sgw-dim``
+     - 3.593
+     - 3.366
+     - 0.227
+   * - ``qsgw-dim``
+     - 3.955
+     - 3.728
+     - 0.227
+   * - ``qsgw-resta``
+     - 4.234
+     - 4.005
+     - 0.229
+
+.. list-table:: Direct kernel at fixed QP gap (``gw``, 3.861 eV)
+   :header-rows: 1
+
+   * - kernel
+     - S\ :sub:`1` (eV)
+     - binding (eV)
+   * - Resta
+     - 3.634
+     - 0.227
+   * - DIM
+     - 3.540
+     - 0.321
+   * - ``xs-resta``
+     - 3.594
+     - 0.267
+   * - sBSE (atom)
+     - 2.482
+     - 1.379
+   * - bare MNOK
+     - 2.184
+     - 1.677
+
+For comparison, the first-exciton absorption of CdSe dots with
+D ≈ 1.6–2.0 nm lies near 2.7–3.0 eV (Yu, Qu, Guo, Peng, Chem. Mater. 15, 2854
+(2003) sizing curve; to be cross-checked with Aubert et al., Nano Lett. 22, 1778
+(2022)). Only the solvent-screened runs fall in that window, and the binding energy is
+not environment-consistent (see :doc:`environment_cancellation`).

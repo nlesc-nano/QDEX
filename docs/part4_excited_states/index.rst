@@ -8,6 +8,7 @@ This historical chapter has been reorganized by scientific topic. Its full origi
 Original RST: :download:`part4_excited_states source <../_legacy_parts/part4_excited_states.rst>`.
 
 Start with:
+
 * :doc:`/excitons/index`
 * :doc:`/interactions/index`
 * :doc:`/spectroscopy/index`

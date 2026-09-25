@@ -3,9 +3,9 @@ Energy gap law
 
 Part of :doc:`/recombination/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.compute_energy_gap_law_rate``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_energy_gap_law_rate(E_gap_ev, E_LO_ev=0.018, S_hr=1.0, A_nr=10000000000000.0)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:919-945``
 
 3. Non-Radiative Decay Across Large Gaps: Englman-Jortner Energy Gap Law
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -3,13 +3,20 @@ Screening
 
 Part of :doc:`/interactions/index`.
 
+.. figure:: /_static/figures/screening_profile.svg
+   :width: 100%
+   :alt: screening profile
+
+   Resta-MNOK screening used by the direct kernel for CdSe (ε∞ = 6.2, d_NN = 2.60 Å). Short-range pairs are unscreened; long-range pairs are screened by 1/ε∞. The MNOK damping keeps the on-site value finite.
+
+
 .. important::
 
    Resta and DIM screening builders omit external-medium screening from their BSE direct kernel. This is a model choice; their QP paths include an external reaction term. The two pieces have not been shown to cancel for arbitrary electron and hole densities.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.build_xs_kernel``
@@ -20,17 +27,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    build_xs_kernel(shells, atom_symbols, coords, atom_ao_ranges, material_name=None, kernel_mode='bse', alpha=1.0, nthreads=1, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, C_occ_b_low=None, C_virt_b_low=None, eps_occ_b=None, eps_virt_b=None, eps_out=2.4, return_eps_info=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:225-229``
 
 4. Dielectric Screening Kernels (``kernel``)
 --------------------------------------------
 
 The direct electron-hole attraction :math:`K^d` is mediated by the screened interaction :math:`W`. ``QDEX`` provides five distinct dielectric screening kernels:
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:230-252``
 
 1. Resta Screened Dielectric Kernel (``kernel: resta``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -56,8 +58,6 @@ Damped over atomic centers with Ohno-Klopman hardness parameters, the discrete k
    W_{AB}^{\mathrm{Resta}} = \frac{1}{\epsilon_\infty \sqrt{R_{AB}^2 + a_{AB}^2}} + \frac{1 - \epsilon_\infty^{-1}}{\sqrt{R_{AB}^2 + a_{AB}^2}} \exp\left( -\frac{\sqrt{R_{AB}^2 + a_{AB}^2}}{\lambda_s} \right).
 
 
-.. rubric:: From ``docs/part4_excited_states/index.rst:253-263``
-
 2. Atomistic Discrete Dipole Interaction Kernel (``kernel: dim``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -69,8 +69,6 @@ Evaluates screening via the Discrete Dipole Interaction Model (DIM / Thole model
 
 yielding an atom-specific screened potential :math:`W_{AB}^{\mathrm{DIM}} = S_{AB} \, \gamma_{AB}`.
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:264-276``
 
 3. Parameter-Free Microscopic ZDO-RPA Kernel (``kernel: rpa`` / ``xs-rpa``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -86,8 +84,6 @@ Computes microscopic dielectric screening directly from the non-interacting tran
    \boldsymbol{\epsilon} = \mathbf{I} + \boldsymbol{\Gamma} \boldsymbol{\Pi}^0, \quad \mathbf{W} = \boldsymbol{\epsilon}^{-1} \boldsymbol{\Gamma}.
 
 
-.. rubric:: From ``docs/part4_excited_states/index.rst:277-285``
-
 4. Simplified BSE Kernel (``kernel: sbse``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -97,8 +93,6 @@ Constructs the screened interaction according to Cho, Bintrim, and Berkelbach:
 
    \mathbf{W} = (\mathbf{I} + \mathbf{J}_{\mathrm{solv}} \boldsymbol{\Pi}^0)^{-1} \mathbf{J}_{\mathrm{solv}}.
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:286-290``
 
 5. Uniform Dielectric Kernel (``kernel: bse``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

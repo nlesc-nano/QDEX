@@ -8,4 +8,5 @@ This historical chapter has been reorganized by scientific topic. Its full origi
 Original RST: :download:`part5_exciton_analysis source <../_legacy_parts/part5_exciton_analysis.rst>`.
 
 Start with:
+
 * :doc:`/exciton_analysis/index`

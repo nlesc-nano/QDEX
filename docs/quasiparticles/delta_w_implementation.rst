@@ -7,9 +7,9 @@ Part of :doc:`/quasiparticles/index`.
 
    DIM maps a three-field polarizability response to pairwise screening with additional normalization. The mapping is heuristic and must be benchmarked against a microscopic dielectric response.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_sgw_dim_qp_gap``
@@ -20,9 +20,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, atom_ao_ranges=None, alpha=1.0, Z=0.8, dynamic_z=False, self_consistent=False, max_iter=25, tol=0.0001, damping=0.5, return_details=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:430-468``
 
 Implementation in QDEX (``sgw-dim``, ``sgw-resta``, ``sgw``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -61,4 +58,3 @@ The microscopic :math:`\Delta W` algorithms are implemented in :mod:`qdex.hardne
    # Resta Thomas-Fermi screening
    qdex --mos ground_state.mos --material CDSE --qp_gap sgw-resta --dynamic_z --eps-out 2.40
 
----

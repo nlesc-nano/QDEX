@@ -3,13 +3,20 @@ Model selection
 
 Part of :doc:`/quasiparticles/index`.
 
+.. figure:: /_static/figures/qp_hierarchy.svg
+   :width: 100%
+   :alt: qp hierarchy
+
+   Quasiparticle options ordered by how much state resolution they provide. Only ``qsgw-*`` changes orbitals; all others enter the BSE as a rigid or edge-resolved shift.
+
+
 .. important::
 
    The labels ``sgw``, ``evgw`` and ``qsgw`` in QDEX name reduced models. They should not be interpreted as a claim of numerical equivalence to conventional GW/QSGW calculations. Validate each against a common reference set.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
@@ -20,9 +27,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:165-188``
 
 5. Hierarchy of Quasiparticle Models in QDEX
 --------------------------------------------
@@ -46,10 +50,6 @@ To bypass this bottleneck across diverse computational regimes, ``QDEX`` provide
      - ``evgw-dim``, ``evgw-resta``, ``qsgw-dim``, ``qsgw-resta``
      - Iterative eigenvalue self-consistency (:math:`evGW`) and static AO-basis orbital relaxation (``qsgw-*``) with empirical damping factor :math:`Z_p`.
 
----
-
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1001-1062``
 
 12. Comprehensive Quasiparticle Options Matrix
 ----------------------------------------------
@@ -111,4 +111,3 @@ The following table summarizes all quasiparticle modes supported by ``QDEX``:
      - :math:`0\text{ s}`
      - Uncorrected Kohn-Sham DFT eigenvalues.
 
----

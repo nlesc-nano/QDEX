@@ -3,9 +3,9 @@ Dashboards
 
 Part of :doc:`/exciton_analysis/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.nto``
 * Callable: ``qdex.nto.analyze_nto_state``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    analyze_nto_state(solver, vec, energy_ev, f_osc, state_index, coords, symbols, mu_ia=None, soc_U=None, top_n=3, context=None)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:209-222``
 
 5. Interactive Plotly 6-Panel Dashboard
 ---------------------------------------
@@ -32,4 +29,3 @@ When running with ``--plot``, ``QDEX`` exports a self-contained, interactive HTM
 5. **Spatial Pearson Correlation** (:math:`R_{eh}`) (distinguishing bound from dissociated excitons).
 6. **Simulated UV-Vis Absorption Spectrum** with oscillator strength stick spectra and Gaussian broadening.
 
----

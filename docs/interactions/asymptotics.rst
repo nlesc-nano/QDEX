@@ -3,9 +3,9 @@ Asymptotics
 
 Part of :doc:`/interactions/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.build_gamma``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:356-387``
 
 Spatial Asymptotics of the Dielectric Kernel: Why Screening Fits Nanocrystals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

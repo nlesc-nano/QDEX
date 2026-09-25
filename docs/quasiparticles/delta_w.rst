@@ -7,9 +7,9 @@ Part of :doc:`/quasiparticles/index`.
 
    These routines use static atom-centered screened-interaction contrasts and charging energies. They do not evaluate a dynamical GW self-energy; ``v_xc`` cancellation is an approximation and is least reliable near reconstructed or trapped surfaces.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_sgw_resta_qp_gap``
@@ -20,17 +20,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4, dft_gap=None, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None, atom_ao_ranges=None, alpha=1.0, Z=0.8, penn_scaling=True, dynamic_z=False, self_consistent=False, max_iter=25, tol=0.0001, damping=0.5, return_details=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:261-265``
 
 7. Avenue 2: Microscopic Dielectric Shift Model (:math:`\Delta W`)
 ------------------------------------------------------------------
 
 When finite anchor clusters are unavailable or when state-specific orbital self-energies are required, the Microscopic :math:`\Delta W` Model computes the quasiparticle shift directly from the difference between the confined nanocrystal screened interaction :math:`W^{\mathrm{QD}}` and the bulk crystal screened interaction :math:`W^{\mathrm{bulk}}`.
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:266-280``
 
 The Physical Rationale: Cancellation of :math:`v_{xc}`
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -47,8 +42,6 @@ In semiconductors, the short-range exchange-correlation potential :math:`v_{xc}^
 
    \Delta \Sigma(\mathbf{r}, \mathbf{r}') = \Sigma^{\mathrm{QD}}(\mathbf{r}, \mathbf{r}') - \Sigma^{\mathrm{bulk}}(\mathbf{r}, \mathbf{r}') \approx \Delta \Sigma^{\mathrm{COH}}(\mathbf{r}, \mathbf{r}') + \Delta \Sigma^{\mathrm{SEX}}(\mathbf{r}, \mathbf{r}').
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:281-317``
 
 Screened COHSEX Operator
 ~~~~~~~~~~~~~~~~~~~~~~~~

@@ -3,9 +3,16 @@ Pipeline
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. figure:: /_static/figures/namd_workflow.svg
+   :width: 100%
+   :alt: namd workflow
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+   Non-adiabatic dynamics pipeline and its observables.
+
+
+.. rubric:: QDEX implementation
+
+Implementation entry point:
 
 * Module: ``qdex.namd.precompute``
 * Callable: ``qdex.namd.precompute.precompute_namd_data``
@@ -16,19 +23,11 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    precompute_namd_data(config)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:1-9``
-
 
 Following the photoexcitation of a semiconductor nanocrystal or quantum dot by an ultrashort laser pulse, high-energy ("hot") electrons and holes rapidly dissipate their excess energy through electron-phonon scattering and non-adiabatic transitions. Carriers cascade down the dense ladder of excited states, cooling toward the band edges before recombining to the ground state.
 
 ``QDEX`` features an advanced, high-throughput **Non-Adiabatic Molecular Dynamics (NAMD)** engine designed to simulate carrier relaxation, phonon bottleneck phenomena, surface defect trapping/de-trapping, and photoluminescence recombination along *ab initio* molecular dynamics (AIMD) trajectories. ``--namd-run`` is a cooling calculation. Auger recombination, energy-conserving two-body hops, and a biexciton initial state are off unless ``--auger``, ``--namd-ecsh-auger``, or ``--namd-biexciton`` is set.
 
----
-
-
-.. rubric:: From ``docs/part6_namd/index.rst:10-44``
 
 1. Overview & The NAMD Pipeline Architecture
 --------------------------------------------
@@ -63,4 +62,3 @@ The NAMD simulation workflow is decoupled into three modular stages:
      ├─ Track Trap Hopping / De-Hopping Kinetics
      └─ Compute Photoluminescence Quantum Yield (PLQY) & 6-Panel Figure
 
----

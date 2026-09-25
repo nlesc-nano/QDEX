@@ -3,9 +3,9 @@ Dft reference
 
 Part of :doc:`/quasiparticles/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:135-153``
 
 3. The DFT Band Gap Problem
 ---------------------------
@@ -37,4 +34,3 @@ The failure of Kohn-Sham DFT with semi-local functionals (LDA, PBE) to predict f
 2. **Self-Interaction Error (SIE)**:
    In semi-local functionals, an electron spuriously interacts with its own charge density through the Hartree term. This unphysical electrostatic repulsion artificially destabilizes occupied states and over-delocalizes frontier wavefunctions.
 
----

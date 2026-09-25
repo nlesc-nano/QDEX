@@ -7,9 +7,9 @@ Part of :doc:`/excitons/index`.
 
    ``bse`` solves the resonant/Tamm-Dancoff matrix. Davidson returns selected roots; ``diagonal_bse`` uses the Hamiltonian diagonal without an iterative eigensolve.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.davidson``
 * Callable: ``qdex.davidson.davidson``
@@ -20,9 +20,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    davidson(matvec, diag, nroots, max_iter=500, tol=1e-06, max_subspace=None, device='numpy')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:396-410``
 
 7. Full BSE & The Davidson Iterative Solver
 -------------------------------------------
@@ -37,4 +34,3 @@ To solve for the lowest :math:`k` roots without dense :math:`O(N_{\mathrm{pairs}
 
 This reduces memory requirements from :math:`O(N_{\mathrm{pairs}}^2)` to :math:`O(N_{\mathrm{pairs}} \times k)`.
 
----

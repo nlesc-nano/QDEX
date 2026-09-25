@@ -7,9 +7,9 @@ Part of :doc:`/quasiparticles/index`.
 
    The current CLI may reconstruct absolute edges from monomer entries in ``MATERIAL_DB`` even for an anchor-free gap model. Distinguish a computed gap from calibrated vacuum-level alignment.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
@@ -20,9 +20,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:601-618``
 
 10. Rigid Scissor Operator & Frontier Splitting Strategies (Approach A vs. Approach B)
 --------------------------------------------------------------------------------------
@@ -43,8 +40,6 @@ where :math:`f_{\mathrm{homo}} + f_{\mathrm{lumo}} = 1.0`. By referencing eigenv
 ``QDEX`` provides two distinct physical strategies for determining :math:`f_{\mathrm{homo}}` and :math:`f_{\mathrm{lumo}}`:
 
 
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:619-637``
-
 Approach A: Database Monomer Anchor Frontier Splitting (Used by ``sgw-anchor``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -64,8 +59,6 @@ The asymmetry fractions are:
 
 *Applicability*: Fast and reliable for pristine, stoichiometric nanocrystals with tabulated material data.
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:638-668``
 
 Approach B: Microscopic Wavefunction Asymmetry (Used by ``sgw-dim``, ``sgw-resta``, ``evgw``, ``qsgw``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -99,8 +92,6 @@ Furthermore, in the static AO-basis orbital-relaxation model (``qsgw-*``), this 
 3. **Physical Soundness**: Reflects the actual orbital localization of the frontier states rather than an idealized small-molecule surrogate.
 
 
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:669-699``
-
 Implementation in QDEX (Frontier Alignment & CLI)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -130,4 +121,3 @@ Frontier level alignment is orchestrated between :mod:`qdex.hardness` and the ma
 4. **Absolute IP & EA Output**:
    When ``--qp_energy_reference vacuum`` is set (the default), the CLI reports the absolute Ionization Potential (:math:`\mathrm{IP} = -\varepsilon_{\mathrm{HOMO}}^{\mathrm{QP}}`) and Electron Affinity (:math:`\mathrm{EA} = -\varepsilon_{\mathrm{LUMO}}^{\mathrm{QP}}`), establishing direct contact with ultraviolet photoelectron spectroscopy (UPS) and cyclic voltammetry experiments.
 
----

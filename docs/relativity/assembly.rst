@@ -3,9 +3,9 @@ Assembly
 
 Part of :doc:`/relativity/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.soc_utils``
 * Callable: ``qdex.soc_utils.compute_spinor_subspace``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_spinor_subspace(atom_symbols, coords_ang, shells, C_AO, eps_Ha, S_AO, active_indices, gth_file, nthreads=1, soc_cache=None, assume_orthonormal=False, SC_AO=None, device='numpy', verbose=True)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part2_soc/index.rst:187-204``
 
 5. High-Performance Sparse Assembly & DGEMM Optimization
 --------------------------------------------------------
@@ -36,4 +33,3 @@ For large nanocrystals containing :math:`> 10,000` AOs and thousands of molecula
 3. **In-Place Contiguous Memory Allocation**:
    The four blocks of :math:`\mathbf{H}_{\mathrm{total}}` are populated directly into a single contiguous :math:`(2N_{\mathrm{act}} \times 2N_{\mathrm{act}})` complex array, eliminating auxiliary memory copies before LAPACK ``zheevd`` eigensolving.
 
----

@@ -3,9 +3,9 @@ Configuration
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.precompute``
 * Callable: ``qdex.namd.precompute.precompute_namd_data``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    precompute_namd_data(config)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:1361-1363``
 
 11. CLI Flags & YAML Configuration Reference
 --------------------------------------------
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:1364-1416``
 
 Command-Line Arguments
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -79,8 +74,6 @@ Command-Line Arguments
      - ``None`` (auto)
      - Simulation window duration in fs per origin (when unset, calibrated automatically from pilot cooling :math:`3\tau_{\mathrm{cool}}`).
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:1417-1448``
 
 YAML Configuration Example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

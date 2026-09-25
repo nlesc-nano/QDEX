@@ -7,9 +7,9 @@ Part of :doc:`/reference/index`.
 
    Material entries are model inputs, with scalar-relativistic PBE and GW gap conventions where given. Current ``MATERIAL_DB["CDSE"]`` uses 0.64 eV PBE, 1.91 eV GW, and epsilon_inf=6.2; alternative CdSe numbers must be separate, cited data sets.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
@@ -20,17 +20,12 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:700-704``
 
 11. Material Database Reference
 -------------------------------
 
 Every energy in the tables below is spin-free. The two bulk columns are a scalar PBE fundamental gap and a spin-free GW gap. Their difference is :math:`\Delta_{\mathrm{bulk}}`. The cluster columns are the same difference on the finite anchor cluster, plus the separate HOMO and LUMO shifts that fix :math:`f_{\mathrm{homo}}` and :math:`f_{\mathrm{lumo}}`.
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:705-782``
 
 Perovskites
 ~~~~~~~~~~~
@@ -110,8 +105,6 @@ Perovskites
      - 
      - 
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:783-890``
 
 II–VI Semiconductors
 ~~~~~~~~~~~~~~~~~~~~
@@ -222,8 +215,6 @@ II–VI Semiconductors
      - 0.66
 
 
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:891-1000``
-
 III–V Semiconductors
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -332,4 +323,3 @@ III–V Semiconductors
      - 0.42
      - 0.58
 
----

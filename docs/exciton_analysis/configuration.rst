@@ -3,9 +3,9 @@ Configuration
 
 Part of :doc:`/exciton_analysis/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.nto``
 * Callable: ``qdex.nto.analyze_nto_state``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    analyze_nto_state(solver, vec, energy_ev, f_osc, state_index, coords, symbols, mu_ia=None, soc_U=None, top_n=3, context=None)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:223-225``
 
 6. CLI Flags & YAML Configuration Reference
 -------------------------------------------
 
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:226-260``
 
 Command-Line Arguments
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -61,8 +56,6 @@ Command-Line Arguments
      - ``False``
      - Display interactive plots in the web browser upon calculation completion.
 
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:261-276``
 
 YAML Configuration Example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

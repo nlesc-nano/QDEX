@@ -3,26 +3,21 @@ Descriptors
 
 Part of :doc:`/exciton_analysis/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.exciton_analysis``
 * Callable: ``qdex.exciton_analysis.ExcitonAnalyzer``
 * CLI: ``--nto, --nto-states``
 * YAML: ``analysis.nto, analysis.nto_states``
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:61-65``
 
 2. Rigorous Plasser-Dreuw Spatial Descriptors
 ---------------------------------------------
 
 From the normalized atomic hole populations :math:`q_A^h` and electron populations :math:`q_A^e`, ``QDEX`` computes eight rigorous physical metrics:
 
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:66-75``
 
 1. Spatial Centroids (:math:`\langle \mathbf{r}_h \rangle, \langle \mathbf{r}_e \rangle`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -34,8 +29,6 @@ The center-of-mass positions of the hole and electron probability distributions:
    \langle \mathbf{r}_h \rangle = \sum_{A=1}^{N_{\mathrm{atoms}}} q_A^h \mathbf{R}_A, \quad
    \langle \mathbf{r}_e \rangle = \sum_{A=1}^{N_{\mathrm{atoms}}} q_A^e \mathbf{R}_A
 
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:76-87``
 
 2. Charge-Transfer Distance (:math:`d_{\mathrm{CT}}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -49,8 +42,6 @@ The absolute vector distance between the electron centroid and the hole centroid
 * :math:`d_{\mathrm{CT}} \approx 0\text{ Å}`: Localized or spherically symmetric excitation.
 * :math:`d_{\mathrm{CT}} > 3\text{ Å}`: Macroscopic dipolar charge separation (e.g. core-to-surface or type-II heterojunction state).
 
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:88-102``
 
 3. Root-Mean-Square Particle Sizes (:math:`\sigma_h, \sigma_e`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -68,8 +59,6 @@ The spatial spread (standard deviation) of the hole and electron clouds around t
 In quantum dots, comparing :math:`\sigma_e` with :math:`\sigma_h` reveals whether the electron is more delocalized than the heavier hole, identifying quantum confinement asymmetry.
 
 
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:103-113``
-
 4. Electron-Hole Spatial Covariance (:math:`\mathrm{Cov}_{eh}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -81,8 +70,6 @@ Measures the extent to which the electron and hole coordinate fluctuations move 
 
 where :math:`\mathbf{r}_i = \sum_A P_{A, i} \mathbf{R}_A` is the spatial center of orbital :math:`\phi_i`.
 
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:114-126``
 
 5. Pearson Correlation Coefficient (:math:`R_{eh}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -98,8 +85,6 @@ Normalizes the covariance by the individual particle spreads:
 * :math:`R_{eh} < 0`: **Anti-correlated / Charge Transfer**. When the hole localizes on one facet, the electron is displaced to the opposing facet.
 
 
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:127-137``
-
 6. True Root-Mean-Square Exciton Size (:math:`d_{eh}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -112,8 +97,6 @@ The true RMS separation between the electron and hole coordinates:
 Note that :math:`d_{eh} \neq d_{\mathrm{CT}}`. For a centrosymmetric Wannier exciton, :math:`d_{\mathrm{CT}} = 0`, but :math:`d_{eh}` correctly reports the finite Bohr radius of the electron-hole pair.
 
 
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:138-146``
-
 7. Charge-Transfer Ratio (:math:`\mathrm{CT}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -123,8 +106,6 @@ The fraction of the exciton size attributable to net dipolar displacement:
 
    \mathrm{CT} = \frac{d_{\mathrm{CT}}}{d_{eh}} \in [0, 1]
 
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:147-160``
 
 8. Exciton Participation Ratio (:math:`\mathrm{PR}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -138,4 +119,3 @@ Quantifies configuration interaction delocalization across electron-hole basis p
 * :math:`\mathrm{PR} = 1.0`: Pure single-configuration transition (:math:`|i \to a\rangle`).
 * :math:`\mathrm{PR} \gg 1`: Strong multi-configurational mixing, characteristic of delocalized Wannier excitons in semiconductor nanocrystals.
 
----

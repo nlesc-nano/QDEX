@@ -3,9 +3,9 @@ Exciton presets
 
 Part of :doc:`/workflows/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    main()
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:461-463``
 
 9. Recommended Workflow Presets
 -------------------------------
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:464-485``
 
 Preset 1: Standard Colloidal QD Absorption Spectrum
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -49,8 +44,6 @@ The recommended default for production calculations on colloidal nanocrystals:
      tol: 1.0e-5
 
 
-.. rubric:: From ``docs/part4_excited_states/index.rst:486-500``
-
 Preset 2: Ultrafast Non-Adiabatic Molecular Dynamics (NAMD)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -66,8 +59,6 @@ Optimized for high-speed trajectory propagation across thousands of frames:
      nhomos: 30
      nlumos: 30
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:501-520``
 
 Preset 3: Benchmark First-Principles Calculation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -90,8 +81,6 @@ Exact analytical Gaussian two-electron integrals with microscopic RPA screening:
      full_diag: false
 
 
-.. rubric:: From ``docs/part4_excited_states/index.rst:521-543``
-
 Preset 4: Spin-Orbit Coupling & Dark Excitons
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -113,4 +102,3 @@ Relativistic 2-component spinor Bethe-Salpeter calculation:
      nroots: 20
      full_diag: false
 
----

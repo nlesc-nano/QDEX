@@ -3,9 +3,16 @@ Overview
 
 Part of :doc:`/workflows/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. figure:: /_static/figures/pipeline.svg
+   :width: 100%
+   :alt: pipeline
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+   End-to-end QDEX workflow.
+
+
+.. rubric:: QDEX implementation
+
+Implementation entry point:
 
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
@@ -15,10 +22,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 .. code-block:: python
 
    main()
-
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part7_examples/index.rst:1-14``
 
 
 This tutorial series walks you through the entire ``QDEX`` workflow using a representative :math:`\text{CsPbBr}_3` perovskite quantum dot. The tutorials mirror the exact progressive curriculum from Parts 1 through 6:
@@ -30,4 +33,3 @@ This tutorial series walks you through the entire ``QDEX`` workflow using a repr
 5. Wavefunction analysis (Plasser-Dreuw metrics and Natural Transition Orbitals).
 6. Non-adiabatic carrier cooling dynamics, emission rates, and PLQY.
 
----

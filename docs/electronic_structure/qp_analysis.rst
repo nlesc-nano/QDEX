@@ -3,9 +3,9 @@ Qp analysis
 
 Part of :doc:`/electronic_structure/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.pdos_coop``
 * Callable: ``qdex.pdos_coop.compute_pdos_and_coop``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix='sf', pops=None, population_bars=None, device='numpy')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1131-1146``
 
 14. Combining Electronic Structure Analysis with QP Shifts
 ----------------------------------------------------------
@@ -34,4 +31,3 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
 Controlled via ``--dashboard_energy_mode {dft, qp, both}``.
 
----

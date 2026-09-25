@@ -1,6 +1,13 @@
 QDEX documentation
 ==================
 
+
+.. figure:: /_static/figures/pipeline.svg
+   :width: 100%
+   :alt: pipeline
+
+   QDEX workflow. Each stage links to a topic group below; optional stages (SOC, dynamics, recombination) reuse the orbitals, QP energies and kernels of the earlier stages.
+
 QDEX connects post-DFT electronic structure, quasiparticle models, BSE/TDA excitations and carrier dynamics for molecules and semiconductor nanoclusters.
 
 The topic pages place the physical equations beside the QDEX function, flags and YAML configuration that implement them. Model-status notes distinguish established results from QDEX approximations.

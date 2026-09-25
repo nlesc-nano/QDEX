@@ -3,9 +3,9 @@ Cubes
 
 Part of :doc:`/exciton_analysis/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.nto``
 * Callable: ``qdex.nto.analyze_nto_state``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    analyze_nto_state(solver, vec, energy_ev, f_osc, state_index, coords, symbols, mu_ia=None, soc_U=None, top_n=3, context=None)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part5_exciton_analysis/index.rst:196-208``
 
 4. 3D Volumetric Visualization (.cube Files)
 --------------------------------------------
@@ -31,4 +28,3 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
 Positive values in the difference cube indicate regions of net electron accumulation (photo-induced negative charge), while negative values indicate regions of hole accumulation (photo-induced positive charge).
 
----

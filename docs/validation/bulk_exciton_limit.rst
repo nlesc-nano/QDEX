@@ -7,12 +7,12 @@ Part of :doc:`/validation/index`.
 
    The Wannier–Mott limit requires converged coupled BSE transitions, effective masses and a macroscopic screened tail. It is not guaranteed by a pair potential alone, and diagonal BSE does not generally recover finite bulk binding.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.solver``
-* Callable: ``qdex.solver.solve``
+* Callable: ``qdex.solver.ExcitonSolver.solve``
 * CLI: ``--nroots, --tol``
 * YAML: ``bse.nroots, bse.tol``
 
@@ -20,9 +20,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    solve(self, nroots=10, full_diag=False, tol=1e-05, excitation_mode='bse')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:291-313``
 
 Spatial Asymptotics & Wannier-Mott Bulk Limit
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -45,4 +42,3 @@ As established in the quasiparticle theory (:doc:`../part3_gw_scissor/index`), t
 
    with bulk exciton Bohr radius :math:`a_{\mathrm{exc}} = a_0 \epsilon_\infty (m_0 / \mu)`. Consequently, as the nanocrystal diameter surpasses the Bohr radius (:math:`R_{\mathrm{QD}} \gg a_{\mathrm{exc}}`), a converged bulk BSE optical transition should approach the bulk band edge minus the Wannier-Mott binding energy: :math:`\Omega_1 \to E_g^{\mathrm{bulk}} - E_b^{\mathrm{bulk}}`.
 
----

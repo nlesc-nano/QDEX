@@ -3,13 +3,20 @@ Orbital iteration
 
 Part of :doc:`/quasiparticles/index`.
 
+.. figure:: /_static/figures/qsgw_loop.svg
+   :width: 100%
+   :alt: qsgw loop
+
+   The ``qsgw-*`` orbital-relaxation loop as implemented in ``estimate_qsgw_dim_qp_gap`` / ``estimate_qsgw_resta_qp_gap``.
+
+
 .. important::
 
    The ``qsgw-*`` implementation relaxes orbitals with a static atom-block COHSEX-like operator. It is distinct from conventional QSGW. The CLI now passes its returned QP eigenvalues to the BSE solver with zero additional scissor, while retaining DFT eigenvalues separately for the DFT framework and filtering.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_qsgw_dim_qp_gap``
@@ -20,9 +27,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index, material_name=None, eps_out=2.4, alpha=1.0, dynamic_z=True, max_iter=25, tol=0.0001, damping=0.5, return_details=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:520-550``
 
 Quasiparticle Self-Consistent GW (``qsgw-dim``, ``qsgw-resta``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -56,8 +60,6 @@ When orbital wavefunctions undergo significant polarization (e.g. in core/shell 
       \mathcal{F}_p = |\langle \psi_p^{(0)} | \psi_p^{(n)} \rangle| = | (\mathbf{C}_p^{(0)})^\dagger \mathbf{S} \, \mathbf{C}_p^{(n)} |.
 
 
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:551-580``
-
 Implementation in QDEX (``qsgw-dim``, ``qsgw-resta``, ``--update_orbitals``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -86,4 +88,3 @@ Full AO-basis orbital relaxation is implemented in :func:`qdex.hardness.estimate
    # Full qsGW orbital update with DIM polarizable dipoles
    qdex --mos ground_state.mos --material CDSE --qp_gap qsgw-dim --update_orbitals --dynamic_z --eps-out 2.40
 
----

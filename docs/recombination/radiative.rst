@@ -3,9 +3,9 @@ Radiative
 
 Part of :doc:`/recombination/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.compute_radiative_rates``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_radiative_rates(E_ev, f_osc, refractive_index=2.0)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:891-918``
 
 2. Einstein Radiative Rate: Single-Frame vs. NAMD Trajectory Averaging
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

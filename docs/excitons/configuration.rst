@@ -3,12 +3,12 @@ Configuration
 
 Part of :doc:`/excitons/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.solver``
-* Callable: ``qdex.solver.solve``
+* Callable: ``qdex.solver.ExcitonSolver.solve``
 * CLI: ``--excitation-mode, --include-direct-eh, --include-exchange``
 * YAML: ``physics.excitation_mode, physics.include_direct_eh, physics.include_exchange``
 
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    solve(self, nroots=10, full_diag=False, tol=1e-05, excitation_mode='bse')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:544-546``
 
 10. CLI Flags & YAML Configuration Reference
 --------------------------------------------
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:547-592``
 
 Command-Line Arguments
 ~~~~~~~~~~~~~~~~~~~~~~

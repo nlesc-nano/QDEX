@@ -3,9 +3,9 @@ Qp presets
 
 Part of :doc:`/workflows/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    main()
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1063-1065``
 
 13. Recommended Workflow Presets
 --------------------------------
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1066-1080``
 
 Preset 1: Ultra-Fast NAMD Trajectory Dynamics (``sgw-anchor``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -41,8 +36,6 @@ For non-adiabatic dynamics across 1,000–10,000 time steps, ``sgw-anchor`` prov
      kernel: "resta"
      2e-integrals: "mnok"
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1081-1096``
 
 Preset 2: First-Principles Nanocrystal Screening (``sgw-dim``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -61,8 +54,6 @@ For accurate single-point spectra without relying on calibrated monomer anchors,
      2e-integrals: "mnok"
 
 
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1097-1111``
-
 Preset 3: Eigenvalue Self-Consistency (``evgw-dim``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -78,8 +69,6 @@ To remove starting-point DFT eigenvalue bias without the computational overhead 
      kernel: "resta"
      2e-integrals: "mnok"
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:1112-1130``
 
 Preset 4: Full Quasiparticle Self-Consistency (``qsgw-dim``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -98,4 +87,3 @@ For core/shell quantum dots, type-II heterojunctions, or surface-passivated dots
      kernel: "dim"
      2e-integrals: "mnok"
 
----

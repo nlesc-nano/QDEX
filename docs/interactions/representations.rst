@@ -7,9 +7,9 @@ Part of :doc:`/interactions/index`.
 
    The ``xs`` backend evaluates analytical Gaussian integrals of the restricted form ``(mu mu | nu nu)``. It does not store the full four-index electron-repulsion tensor; the MO interactions are density-pair approximations. The MNOK heteronuclear damping currently uses the mean of inverse hardnesses, not ``2/(eta_A+eta_B)``.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.integrals``
 * Callable: ``qdex.integrals.compute_two_electron_ao``
@@ -20,15 +20,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_two_electron_ao(shells, nthreads=1)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:143-145``
 
 3. Two-Electron Integral Representations (``2e-integrals``)
 -----------------------------------------------------------
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:146-179``
 
 Semi-Empirical Atom-Centered Representation (``2e-integrals: mnok``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -60,12 +55,16 @@ where :math:`\gamma_{AB}^{\mathrm{Ohno}}` is the Mataga-Nishimoto-Ohno-Klopman (
 
    \gamma_{AB}^{\mathrm{Ohno}} = \frac{1}{\sqrt{R_{AB}^2 + a_{AB}^2}}
 
-and :math:`a_{AB} = 2 / (\eta_A + \eta_B)` is the Ohno-Klopman damping parameter derived from atomic chemical hardnesses :math:`\eta_A` and :math:`\eta_B`.
+and the damping length implemented in ``build_gamma`` (and in every screened builder) is the arithmetic mean of the inverse hardnesses, in atomic units,
+
+.. math::
+
+   a_{AB} = \frac{1}{2}\left(\frac{1}{\eta_A} + \frac{1}{\eta_B}\right),
+
+so that :math:`\gamma_{AA} = \eta_A` on site. The Klopman-type mixing :math:`a_{AB} = 2/(\eta_A+\eta_B)` used in some sTDA codes agrees only for homonuclear pairs; for Cd (3.50 eV) and Se (5.48 eV) the two rules differ by about 5 % in :math:`a_{AB}`.
 
 **Advantages**: The atom-pair kernel stores :math:`O(N_{\mathrm{atoms}}^2)` elements; actual memory depends on system size and solver intermediates.
 
-
-.. rubric:: From ``docs/part4_excited_states/index.rst:180-206``
 
 Analytical AO Density-Pair Representation (``2e-integrals: xs``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -95,8 +94,6 @@ The molecular orbital matrix elements are constructed by density-pair AO-to-MO c
 **Advantages**: Preserves non-spherical orbital angular momentum components (e.g. anisotropic :math:`p` and :math:`d` orbital bonding interactions), eliminating any reliance on spherical atomic charge partitioning.
 
 
-.. rubric:: From ``docs/part4_excited_states/index.rst:207-224``
-
 Implementation in QDEX (``2e-integrals``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -113,4 +110,3 @@ The two-electron integral representations are managed across :mod:`qdex.hardness
    - Calculates exact two-electron Gaussian repulsion integrals :math:`(\mu \mu | \nu \nu)` over contracted GTO basis shells.
    - Preserves complete angular orbital anisotropy without spherical approximations. Recommended for molecular benchmarks and small nanoclusters (:math:`\le 500` atoms).
 
----

@@ -3,9 +3,9 @@ Decoherence
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.integrator``
 * Callable: ``qdex.namd.integrator.apply_edc_decoherence``
@@ -16,15 +16,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    apply_edc_decoherence(c, active_surface, E_vec, dt_elec, c_param=0.1, n_atoms=1, temp_k=300.0, decay_type='exponential')
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:622-624``
 
 6. Electronic Decoherence: Origin, Computation, and Rationale
 -------------------------------------------------------------
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:625-643``
 
 Physical Origin of Electronic Decoherence
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -46,15 +41,11 @@ The electronic coherence is proportional to the nuclear wavepacket overlap:
 As soon as the wavepackets separate spatially (:math:`\langle \chi_2 | \chi_1 \rangle \to 0`), electronic coherence is destroyed. This process is called **electronic decoherence** or **quantum dephasing**.
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:644-648``
-
 Why Dephasing is Ultrafast in Nanocrystals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A quantum dot possesses thousands of vibrational normal modes. Each phonon mode slightly modulates the electronic transition energy. Because these fluctuations are largely uncorrelated, their destructive phase interference leads to **ultrafast dephasing within 5 to 25 femtoseconds**. Once dephased, the system behaves as a statistical mixture of classical probabilities, justifying the Master Equation.
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:649-685``
 
 Automated Ab Initio Cumulant Decoherence
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -93,8 +84,6 @@ Why We Compute It This Way
 1. **Parameter-Free**: Eliminates arbitrary empirical fitting parameters from NAMD simulations.
 2. **Temperature & Lattice Sensitive**: Soft, anharmonic lattices (such as lead halide perovskites) exhibit large thermal gap fluctuations (:math:`\sigma_E \approx 50 - 100\text{ meV}`), correctly yielding short dephasing times (:math:`\tau_{\mathrm{dec}} \approx 7 - 12\text{ fs}`), whereas rigid covalent quantum dots (like InAs or Si) yield longer dephasing times (:math:`\tau_{\mathrm{dec}} \approx 20 - 40\text{ fs}`).
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:686-746``
 
 State-Pair Pure-Dephasing Matrices (tau_ij)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -157,9 +146,6 @@ To prevent numerical singularities along the diagonal (:math:`i = j` where :math
 The resulting pairwise dephasing matrices are precomputed via ``qdex --namd-decoherence`` and cached in ``decoherence_times.npz``, where both **CPA-FSSH-EDC** and **DISH** dynamically consume them at run time.
 
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:747-786``
-
 Surface Hopping Schemes: FSSH-EDC vs. DISH
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -198,4 +184,3 @@ To prevent the Quantum Zeno effect (where resetting wavepackets at every nuclear
 
 In dense semiconductor nanocrystals, DISH analytically recovers the Pauli Master Equation cooling rates while maintaining individual trajectory statistics.
 
----

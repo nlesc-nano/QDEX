@@ -6,16 +6,16 @@ Topics in quasiparticle models pair each derivation with the QDEX callable, CLI 
 .. toctree::
    :maxdepth: 1
 
-   alignment
+   foundations
+   dft_reference
    anchor
-   configuration
-   cost
    delta_w
    delta_w_implementation
-   dft_reference
-   dynamic_z
    edge_partition
-   foundations
+   alignment
+   dynamic_z
    gap_iteration
-   model_selection
    orbital_iteration
+   model_selection
+   cost
+   configuration

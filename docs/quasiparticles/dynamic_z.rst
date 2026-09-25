@@ -7,9 +7,9 @@ Part of :doc:`/quasiparticles/index`.
 
    ``compute_dynamic_z`` is an empirical scalar damping formula. It does not evaluate the derivative of a computed frequency-dependent self-energy or enforce an f-sum rule. The default pole energy is 15 eV; material-specific plasmon energies are not read from a database.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.compute_dynamic_z``
@@ -20,15 +20,10 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    compute_dynamic_z(delta_sigma_stat_ev, gap_ev, eps_eff, material_name=None, omega_p_ev=15.0)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:469-471``
 
 8. Avenue 3: Dynamic Renormalization & Self-Consistency
 -------------------------------------------------------
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:472-488``
 
 Dynamic Renormalization Factor :math:`Z_p` (``--dynamic_z``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -47,8 +42,6 @@ where :math:`\Delta \Sigma_p^{\mathrm{stat}}` is the static COHSEX self-energy s
 
 Here :math:`\Omega_p = \sqrt{4\pi n_v e^2 / m_e}` is the valence electron plasmon energy (:math:`\approx 15 - 20\text{ eV}`). In large quantum dots with strong screening (:math:`\epsilon_{\mathrm{eff}} \gg 1`), :math:`Z_p \to 0.80 - 0.85`; in ultra-small clusters with suppressed screening, :math:`Z_p \to 0.90 - 0.95`.
 
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:489-498``
 
 Implementation in QDEX (``--dynamic_z``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

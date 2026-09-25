@@ -7,9 +7,9 @@ Part of :doc:`/quasiparticles/index`.
 
    Frontier fractions are model allocations of a gap correction. Signed solvent contributions are evaluated separately; the fractions are bounded and default to 50:50 when the relevant contrast vanishes. Absolute IP/EA still require a vacuum reference or a declared monomer-anchor reconstruction.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
@@ -20,9 +20,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part3_gw_scissor/index.rst:388-429``
 
 Approach B: Microscopic Wavefunction Asymmetry (:math:`f_H^{\mathrm{micro}}, f_L^{\mathrm{micro}}`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

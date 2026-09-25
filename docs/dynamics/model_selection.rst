@@ -3,9 +3,9 @@ Model selection
 
 Part of :doc:`/dynamics/index`.
 
-.. rubric:: Theory and QDEX implementation
+.. rubric:: QDEX implementation
 
-The detailed theory and worked equations follow below. The corresponding entry point is:
+Implementation entry point:
 
 * Module: ``qdex.namd.precompute``
 * Callable: ``qdex.namd.precompute.precompute_namd_data``
@@ -16,9 +16,6 @@ The detailed theory and worked equations follow below. The corresponding entry p
 
    precompute_namd_data(config)
 
-.. rubric:: Detailed derivations and reference material
-
-.. rubric:: From ``docs/part6_namd/index.rst:154-187``
 
 3. Method Selection: PME vs. CPA-FSSH-EDC vs. DISH
 --------------------------------------------------
@@ -55,8 +52,6 @@ A central methodological decision in non-adiabatic dynamics is choosing among a 
      - **Fast Stochastic**: Unitary sub-stepping without continuous damping, with vectorized Poisson branching.
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:188-200``
-
 The Phonon Bottleneck Case (:math:`1P_e \to 1S_e`)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -71,21 +66,18 @@ Because this energy gap greatly exceeds the energy of a single longitudinal opti
 * **Why FSSH or DISH is Recommended for Bottlenecks**: The :math:`1P_e \to 1S_e` transition is mediated by rare multi-phonon wavepacket coincidences, non-adiabatic surface crossings, or Auger-type electron-hole energy exchange. CPA-FSSH and DISH explicitly evolve the time-dependent Schrödinger equation, capturing quantum interference between discrete electronic states and vibrational wavepackets, and resolving whether the bottleneck persists or is bypassed.
 
 
-.. rubric:: From ``docs/part6_namd/index.rst:201-211``
-
 Surface Trap States: Hopping & De-Hopping Kinetics
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Colloidal quantum dots frequently contain under-coordinated surface atoms, halide vacancies, or localized ligand termination defects. These defects introduce discrete electronic levels located inside the fundamental band gap (surface traps).
 
 When a hot carrier cools to the band edge:
+
 1. **Carrier Trapping (Hopping into Trap)**: The carrier transitions from a delocalized core state (:math:`1S`) into a spatially localized defect level. This is accompanied by strong local lattice distortion (large polaron or Jahn-Teller rearrangement).
 2. **Carrier De-Trapping (Hopping out of Trap)**: Thermal fluctuations from the nuclear bath can impart sufficient energy to kick the carrier back from the defect into the delocalized band states (thermally activated de-trapping).
 
 * **Why Stochastic Methods (FSSH / DISH) are Recommended for Traps**: Trapping and de-trapping are stochastic, trajectory-dependent barrier-crossing events. A deterministic rate equation (PME) treats trapping as an irreversible, memoryless Markovian decay that washes out individual carrier dwell times and trapping/detrapping equilibrium fluctuations. Surface hopping tracks individual stochastic trajectories: some trajectories get trapped permanently, while others hop into the trap, reside there for several picoseconds, and subsequently de-hop back into the band. Capturing this physics accurately requires either **CPA-FSSH-EDC** or **DISH** along **extended AIMD trajectories** (typically :math:`> 10 - 50\text{ ps}`).
 
-
-.. rubric:: From ``docs/part6_namd/index.rst:212-221``
 
 Summary Decision Rule
 ~~~~~~~~~~~~~~~~~~~~~
@@ -95,4 +87,3 @@ Summary Decision Rule
 * Choose **``method: "dish"``** when simulating dense nanocrystals where Tully's derivative flux causes overcoherence or stiffness, recovering PME cooling rates while preserving single-trajectory stochastic statistics, dwell times, and trap residence kinetics.
 
 
----
