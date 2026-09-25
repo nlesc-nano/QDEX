@@ -901,7 +901,7 @@ class ExcitonHamiltonian:
                     term_b = np.sum(C_sp_virt_b[a0:a1, :].conj() * SC_sp_virt_b[a0:a1, :], axis=0).real
                     self.q_elec_spinor_diag[:, A] = term_a + term_b
 
-            if self.include_exchange:
+            if self.include_direct_eh:
                 self.W_elec_spinor_diag = self.q_elec_spinor_diag @ self.W_resta.T
 
             print(f"  -> Spinor diagonal populations compiled in {time.time() - t_sp:.2f}s")
@@ -918,7 +918,7 @@ class ExcitonHamiltonian:
             q_trans_b = torch.einsum("ip,iaA,aq->pqA", U_occ_b_t.conj(), q_ov_t, U_virt_b_t)
             self.q_spinor = to_numpy((q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_features))
 
-            if self.include_exchange:
+            if self.include_direct_eh:
                 q_occ_t = to_tensor(self.q_occ, dev)
                 q_virt_t = to_tensor(self.q_virt, dev)
                 q_hole_sp = (
@@ -940,7 +940,7 @@ class ExcitonHamiltonian:
             self.q_spinor = (q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_features)
             del q_trans_a, q_trans_b
 
-            if self.include_exchange:
+            if self.include_direct_eh:
                 self.q_hole_spinor = (
                     np.einsum("ip,ijA,jq->pqA", U_occ_a.conj(), self.q_occ, U_occ_a, optimize=True)
                     + np.einsum("ip,ijA,jq->pqA", U_occ_b.conj(), self.q_occ, U_occ_b, optimize=True)
@@ -950,7 +950,7 @@ class ExcitonHamiltonian:
                     + np.einsum("ap,abA,bq->pqA", U_virt_b.conj(), self.q_virt, U_virt_b, optimize=True)
                 )
 
-            if self.include_exchange:
+            if self.include_direct_eh:
                 qe = self.q_elec_spinor.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_features)
                 self.W_elec_spinor = (qe @ self.W_resta.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_features)
 
@@ -1022,7 +1022,7 @@ class ExcitonHamiltonian:
             chunk_size = 50000
             self.kd_diag = np.zeros(self.dim, dtype=np.float64)
             self.kx_diag = np.zeros(self.dim, dtype=np.float64)
-            if self.include_exchange:
+            if self.include_direct_eh:
                 for p0 in range(0, self.dim, chunk_size):
                     p1 = min(p0 + chunk_size, self.dim)
                     full_idx_ch = self.valid_spinor_idx[p0:p1]
@@ -1030,6 +1030,7 @@ class ExcitonHamiltonian:
                     A_ch = full_idx_ch % self.n_virt_spinor
                     self.kd_diag[p0:p1] = np.sum(self.q_hole_spinor_diag[I_ch, :] * self.W_elec_spinor_diag[A_ch, :], axis=1)
 
+            if self.include_exchange:
                 if self.excitation_mode == "diagonal_bse":
                     print(f"  Building spinor transition charges & exchange in streaming chunks...")
                     gamma = to_numpy(self.gamma)
@@ -1107,7 +1108,7 @@ class ExcitonHamiltonian:
             q_trans_b = torch.einsum("ip,iaA,aq->pqA", U_occ_b_t.conj(), q_ov_b_t, U_virt_b_t)
             self.q_spinor = to_numpy((q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_features))
 
-            if self.include_exchange:
+            if self.include_direct_eh:
                 q_occ_a_t = to_tensor(self.q_occ_a, dev)
                 q_occ_b_t = to_tensor(self.q_occ_b, dev)
                 q_virt_a_t = to_tensor(self.q_virt_a, dev)
@@ -1130,7 +1131,7 @@ class ExcitonHamiltonian:
             q_trans_b = np.einsum("ip,iaA,aq->pqA", U_occ_b.conj(), self.q_ov_b, U_virt_b, optimize=True)
             self.q_spinor = (q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_features)
 
-            if self.include_exchange:
+            if self.include_direct_eh:
                 self.q_hole_spinor = (
                     np.einsum("ip,ijA,jq->pqA", U_occ_a.conj(), self.q_occ_a, U_occ_a, optimize=True)
                     + np.einsum("ip,ijA,jq->pqA", U_occ_b.conj(), self.q_occ_b, U_occ_b, optimize=True)
