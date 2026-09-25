@@ -197,6 +197,28 @@ def _csv(path):
         return list(csv.DictReader(fh))
 
 
+def main_peak(rows, frac=0.3, sigma=0.05):
+    """First absorption peak: first local maximum of the Gaussian-broadened
+    stick spectrum (sigma in eV) that reaches frac x its global maximum.
+
+    With SOC the band-edge oscillator strength spreads over many weak lines, so
+    a threshold on single lines (f > 0.05) can pick a weak side line; the
+    broadened spectrum picks the first band that actually dominates the edge.
+    """
+    import numpy as np
+    E = np.array([float(x["Energy_eV"]) for x in rows])
+    f = np.array([float(x["f_osc"]) for x in rows])
+    if len(E) == 0 or f.max() <= 0.0:
+        return None
+    grid = np.arange(E.min() - 0.2, E.max() + 0.2, 0.002)
+    spec = (f[None, :] * np.exp(-0.5 * ((grid[:, None] - E[None, :]) / sigma) ** 2)).sum(axis=1)
+    top = spec.max()
+    for i in range(1, len(grid) - 1):
+        if spec[i] >= frac * top and spec[i] >= spec[i - 1] and spec[i] >= spec[i + 1]:
+            return float(grid[i])
+    return float(grid[int(spec.argmax())])
+
+
 def parse_case(case):
     d = HERE / "sweep" / case["name"]
     r = {"group": case["group"], "case": case["name"], "ok": is_done(d)}
@@ -225,10 +247,12 @@ def parse_case(case):
         r["f1"] = float(sf[0]["f_osc"])
         b = [x for x in sf if float(x["f_osc"]) > 0.05]
         r["bright"] = float(b[0]["Energy_eV"]) if b else None
+        r["peak"] = main_peak(sf)
     if soc:
         r["s1_soc"] = float(soc[0]["Energy_eV"])
         b = [x for x in soc if float(x["f_osc"]) > 0.05]
         r["bright_soc"] = float(b[0]["Energy_eV"]) if b else None
+        r["peak_soc"] = main_peak(soc)
     w = d / "wall_s.txt"
     r["wall_s"] = float(w.read_text()) if w.exists() else None
     err = re.findall(r"^(\w*Error: .*)$", log, flags=re.M)
@@ -239,8 +263,8 @@ def parse_case(case):
 def collect(cases):
     rows = [parse_case(c) for c in cases]
     cols = ["group", "case", "ok", "dft_gap", "qp_gap", "qp_homo", "qp_lumo", "f_homo", "z_homo", "z_lumo",
-            "z_min", "z_max", "eps_eff", "qp_levels", "spread_occ", "spread_virt", "s1", "f1", "bright",
-            "s1_soc", "bright_soc", "radius", "wall_s", "error"]
+            "z_min", "z_max", "eps_eff", "qp_levels", "spread_occ", "spread_virt", "s1", "f1", "bright", "peak",
+            "s1_soc", "bright_soc", "peak_soc", "radius", "wall_s", "error"]
     out = HERE / "sweep"
     with open(out / "summary.csv", "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
@@ -251,14 +275,14 @@ def collect(cases):
         return "—" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else str(v))
 
     lines = [f"# QP x BSE sweep: {HERE}", "",
-             "| group | case | QP gap | HOMO | LUMO | Z_H / Z_L | S1 | f(S1) | bright | bright SOC | status |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| group | case | QP gap | HOMO | LUMO | Z_H / Z_L | S1 | bright | peak | S1 SOC | peak SOC | status |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         z = "—" if r.get("z_homo") is None else f"{r['z_homo']:.3f} / {r['z_lumo']:.3f}"
         st = "ok" if r["ok"] else (r.get("error") or "missing")
         lines.append(f"| {r['group']} | `{r['case']}` | {f(r.get('qp_gap'))} | {f(r.get('qp_homo'))} | "
-                     f"{f(r.get('qp_lumo'))} | {z} | {f(r.get('s1'))} | {f(r.get('f1'))} | {f(r.get('bright'))} | "
-                     f"{f(r.get('bright_soc'))} | {st} |")
+                     f"{f(r.get('qp_lumo'))} | {z} | {f(r.get('s1'))} | {f(r.get('bright'))} | {f(r.get('peak'))} | "
+                     f"{f(r.get('s1_soc'))} | {f(r.get('peak_soc'))} | {st} |")
     (out / "summary.md").write_text("\n".join(lines) + "\n")
     n_ok = sum(r["ok"] for r in rows)
     print(f"{n_ok}/{len(rows)} cases finished. Summary: {out / 'summary.md'} and summary.csv")
