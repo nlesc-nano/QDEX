@@ -38,8 +38,10 @@ Command-Line Arguments
      - ``mnok``
      - Two-electron integral representation: ``mnok`` (semi-empirical atom-centered) or ``xs`` (analytical Gaussian AO density-pair integrals).
    * - ``--kernel <choice>``
-     - ``bse``
-     - Dielectric screening kernel: ``resta``, ``dim``, ``rpa``, ``sbse``, ``xs-resta``, ``xs-dim``, ``xs-rpa``, or ``bse``.
+     - model default
+     - Set by the QP model: ``qp`` (Resta, DIM), ``resta-sphere`` (``gw``). Only models without W
+       (``pbe``, ``brus``, numeric gap) take ``resta``, ``dim``, ``rpa``, ``sbse``, ``xs-*`` or ``bse``
+       (default ``bse``); see :doc:`screened_kernel`.
    * - ``--nhomos <int>``
      - ``25``
      - Number of occupied frontier orbitals to include in the BSE active space.

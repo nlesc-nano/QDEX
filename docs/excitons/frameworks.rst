@@ -9,77 +9,70 @@ Part of :doc:`/excitons/index`.
 
    The four ``excitation_mode`` choices, shown as the structure of the transition-space matrix.
 
-
-.. important::
-
-   ``diagonal_bse`` omits all off-diagonal transition mixing. It can miss a substantial part of binding; it cannot generally be assumed to reproduce the bulk Wannier exciton. Exchange and direct attraction have independent switches.
-
 .. rubric:: QDEX implementation
 
-Implementation entry point:
+* Module: ``qdex.exciton_hamiltonian``, ``qdex.solver``
+* CLI: ``--excitation-mode``, ``--include-direct-eh``, ``--include-exchange``
+* YAML: ``physics.excitation_mode``, ``physics.include_direct_eh``, ``physics.include_exchange``
 
-* Module: ``qdex.exciton_hamiltonian``
-* Callable: ``qdex.exciton_hamiltonian.ExcitonHamiltonian.independent_transition_energies``
-* CLI: ``--excitation-mode, --include-direct-eh, --include-exchange``
-* YAML: ``physics.excitation_mode, physics.include_direct_eh, physics.include_exchange``
-
-.. code-block:: python
-
-   independent_transition_energies(self, mode)
-
-
-5. The Four Excitation Frameworks (``excitation_mode``)
--------------------------------------------------------
-
-``QDEX`` provides four progressive levels of physical theory via ``--excitation-mode``:
+The four frameworks differ in which energies they use and which parts of K\ :sup:`x` and K\ :sup:`d`
+they keep. In all of them K\ :sup:`x` is built with the bare v and K\ :sup:`d` with the W of the QP
+model (:doc:`screened_kernel`).
 
 .. list-table::
-   :widths: 22 28 50
    :header-rows: 1
+   :widths: 18 26 18 38
 
-   * - Framework Mode
-     - Energy Expression
-     - Physical Characteristics
-   * - **(A) `independent_dft`**
-     - :math:`\Omega_{ia} = \varepsilon_a^{\mathrm{DFT}} - \varepsilon_i^{\mathrm{DFT}}`
-     - Bare Kohn-Sham transitions. Completely ignores quasiparticle self-energy corrections and electron-hole Coulomb interactions.
-   * - **(B) `independent_qp`**
-     - :math:`\Omega_{ia} = \varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}}`
-     - Non-interacting quasiparticles. Applies the scaled GW scissor shift :math:`\Delta_{\mathrm{GW}}`, opening the gap to experimental values, but neglects electron-hole binding (:math:`E_b = 0`).
-   * - **(C) `diagonal_bse`**
-     - :math:`\Omega_{ia} = (\varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}}) + 2 K_{ia,ia}^x - K_{ia,ia}^d`
-     - Diagonal BSE. Accounts for both quasiparticle self-energy and diagonal electron-hole Coulomb binding, but omits off-diagonal configuration mixing. Extremely fast.
-   * - **(D) `bse` (sTDA)**
-     - Full diagonalization of :math:`A_{ia, jb}`
-     - Fully coupled configuration interaction. Solves the complete resonant matrix, capturing spatial exciton delocalization, state mixing, and oscillator strength redistribution.
+   * - ``excitation_mode``
+     - Energy
+     - K\ :sup:`x`, K\ :sup:`d`
+     - What it describes
+   * - ``independent_dft``
+     - :math:`\varepsilon_a - \varepsilon_i`
+     - none
+     - KS transitions; no QP correction, no electron–hole interaction.
+   * - ``independent_qp``
+     - :math:`\varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}}`
+     - none
+     - Non-interacting quasiparticles. The QP gap contains the full ΔW self-image, and nothing
+       compensates it: the energies are far too high and strongly solvent dependent.
+   * - ``diagonal_bse``
+     - :math:`\varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}} + 2K^x_{ia,ia} - K^d_{ia,ia}`
+     - diagonal only
+     - Each transition with its own exchange and its own electron–hole attraction, no mixing. The
+       mutual image of each pair compensates its QP self-image, so most of the ΔW cancellation
+       (:doc:`cancellation`) is already there.
+   * - ``bse``
+     - eigenvalues of :math:`A_{ia,jb}`
+     - full
+     - Coupled TDA BSE: transitions mix, the electron and hole correlate, and the oscillator
+       strength redistributes.
 
+**K**\ :sup:`x` **in each framework.** The diagonal element :math:`K^x_{ia,ia}` is the self-interaction
+of the transition density. It shifts singlets up relative to triplets. The off-diagonal elements
+couple transitions with large transition densities and push oscillator strength to the bright state.
+Triplets (``--triplet``) have no K\ :sup:`x`. With SOC the spinor BSE has :math:`K^x - K^d` with no
+factor 2.
 
-Why Diagonal BSE Works in Nanocrystals
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+**K**\ :sup:`d` **in each framework.** :math:`K^d_{ia,ia}` is the attraction of the electron density
+:math:`|\psi_a|^2` to the hole density :math:`|\psi_i|^2` through W. With a shared W it contains the
+mutual image. The off-diagonal :math:`K^d_{ia,jb}` mixes transitions and lowers S₁ further through
+correlation.
 
-In standard BSE, diagonalizing the full :math:`A_{ia, jb}` matrix requires :math:`O(N_{\mathrm{pairs}}^3)` operations. In a quantum dot with 100 occupied and 100 virtual orbitals, :math:`N_{\mathrm{pairs}} = 10,000`, requiring gigabytes of memory and long compute times.
+Why diagonal BSE works in nanocrystals
+--------------------------------------
 
-The **Diagonal BSE** framework omits off-diagonal configuration interaction (:math:`ia \neq jb`), evaluating:
+The coupled BSE costs :math:`\mathcal O(N_{\mathrm{pairs}})` memory per root with Davidson and
+:math:`\mathcal O(N_{\mathrm{pairs}}^3)` with full diagonalization. The diagonal BSE costs
+:math:`\mathcal O(N_{\mathrm{pairs}})`:
 
 .. math::
 
-   \Omega_{ia} = \varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}} + 2 K_{ia, ia}^x - K_{ia, ia}^d.
+   \Omega_{ia} = \varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}} + 2K^x_{ia,ia} - K^d_{ia,ia}.
 
-* **Dominance of Diagonal Coulomb Attraction**: In quantum dots, the diagonal term :math:`K_{ia, ia}^d` represents the direct electrostatic attraction between the electron distribution :math:`|\phi_a|^2` and hole distribution :math:`|\phi_i|^2`, whose share of the coupled exciton binding energy is system-dependent; the supplied CdSe example gives 58.3% for diagonal BSE.
-* **Essential for NAMD**: In non-adiabatic molecular dynamics simulations where excited states must be evaluated at every time step (e.g. 5,000 steps), full BSE diagonalization is computationally prohibitive. Diagonal BSE provides a less expensive approximate surface; its error must be checked against coupled BSE for the chosen active space.
-
-
-Implementation in QDEX (``--excitation-mode``)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The excitation frameworks are implemented across :mod:`qdex.cli`, :mod:`qdex.exciton_hamiltonian`, and :mod:`qdex.solver`:
-
-1. **Bare DFT Transitions (``independent_dft``)**:
-   Returns raw differences :math:`\Omega_{ia} = \varepsilon_a^{\mathrm{DFT}} - \varepsilon_i^{\mathrm{DFT}}` directly from Kohn-Sham eigenvalues without building two-body Coulomb matrices.
-2. **Quasiparticle Transitions (``independent_qp``)**:
-   Applies the QP scissor shifts :math:`\varepsilon^{\mathrm{QP}}` from Part 3: :math:`\Omega_{ia} = \varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}}`. Evaluates single-particle transition dipoles :math:`\boldsymbol{\mu}_{ia}` and oscillator strengths without electron-hole binding.
-3. **Diagonal BSE (``diagonal_bse``)**:
-   Implemented via :func:`qdex.solver.ExcitonSolver.solve`. Builds only the diagonal elements :math:`A_{ia, ia} = (\varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}}) + 2 K_{ia,ia}^x - K_{ia,ia}^d` in :math:`O(N_{\mathrm{pairs}})` time. Completely bypasses matrix diagonalization, making it the ideal engine for multi-thousand step non-adiabatic dynamics.
-4. **Coupled Bethe-Salpeter Equation (``bse``)**:
-   Implemented via :func:`qdex.davidson.davidson`. Constructs the active space transition basis, applies energy truncation thresholds (``--e_thresh``), and solves for the lowest :math:`N_{\mathrm{roots}}` exciton eigenvectors using a block-Davidson iterative subspace algorithm.
-
+* **Most of the binding is diagonal.** In a strongly confined dot the band-edge exciton is dominated
+  by one or a few transitions. The share of the binding recovered is system dependent: 58 % for the
+  supplied CdSe example.
+* **Dynamics.** In non-adiabatic molecular dynamics the excited states are needed at every step.
+  Diagonal BSE gives an approximate surface at low cost; check its error against the coupled BSE for
+  the chosen active space.

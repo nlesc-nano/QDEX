@@ -26,7 +26,10 @@ Implementation entry point:
 
 The description of neutral optical excitations in semiconductor nanostructures requires treating the two-particle correlated motion of an electron promoted to the conduction band and the hole left behind in the valence band.
 
-``QDEX`` provides four distinct theoretical frameworks for computing excited states, ranging from non-interacting single-particle transitions to the fully coupled **Bethe-Salpeter Equation (BSE)** under the Tamm-Dancoff Approximation (TDA), coupled with a clear separation between **Two-Electron Integral Representations** and **Dielectric Screening Kernels**.
+QDEX provides four frameworks, from non-interacting transitions to the coupled Bethe–Salpeter
+equation (BSE) in the Tamm–Dancoff approximation (TDA) (:doc:`frameworks`). The QP energies come from
+:doc:`/quasiparticles/index`; the screened interaction of the direct term is the W of the same QP
+model (:doc:`screened_kernel`).
 
 
 1. The Two-Particle Excitation Problem
@@ -85,6 +88,20 @@ The elements of the resonant matrix :math:`A_{ia, jb}` depend on the spin multip
 .. math::
 
    A_{ia, jb}^{\mathrm{triplet}} = \left( \varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}} \right) \delta_{ij} \delta_{ab} - K_{ia, jb}^d.
+
+with the exchange and direct terms
+
+.. math::
+
+   K^x_{ia,jb} = (ia|v|jb) = \iint \psi_i^*(\mathbf r)\psi_a(\mathbf r)\,v(\mathbf r,\mathbf r')\,\psi_j(\mathbf r')\psi_b^*(\mathbf r'),
+
+.. math::
+
+   K^d_{ia,jb} = (ij|W|ab) = \iint \psi_i^*(\mathbf r)\psi_j(\mathbf r)\,W(\mathbf r,\mathbf r')\,\psi_a(\mathbf r')\psi_b^*(\mathbf r').
+
+K\ :sup:`x` uses the bare Coulomb interaction and K\ :sup:`d` the static screened interaction of the
+QP model. Their representation (MNOK or ZDO xs) is the one used for the QP correction
+(:doc:`/quasiparticles/representation`).
 
 The exchange term :math:`K^x` describes virtual annihilation of the electron–hole pair and its recreation elsewhere (the local-field term). In a closed-shell reference the spin-adapted singlet combination :math:`(|i\alpha\to a\alpha\rangle+|i\beta\to a\beta\rangle)/\sqrt2` couples to this process with weight 2, whereas the triplet combinations have zero net transition density and do not couple at all. This gives the factor :math:`2K^x` for singlets, :math:`0` for triplets, and the singlet–triplet (dark–bright, before SOC) splitting.
 

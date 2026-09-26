@@ -1,263 +1,380 @@
-QP models with a shared W
-=========================
+Approximations for ΔW
+=====================
 
-Part of :doc:`/quasiparticles/index`. Background: :doc:`/quasiparticles/theory`.
+Part of :doc:`/quasiparticles/index`. Background: :doc:`gw`.
 
-Every QP model in QDEX that defines a screened interaction W passes that W to the BSE, so the QP
-correction and the electron–hole attraction come from one W (theory, section 4). This page gives
-the formulas of the models as implemented.
+Every QP model in QDEX has the form derived in :doc:`gw`:
+
+.. math::
+
+   \varepsilon_n^{\mathrm{QP}} = \varepsilon_n \mp \tfrac12\Delta_{\mathrm{bulk}}
+   + Z_n\,\Delta\Sigma_n[\Delta W] + r_{H/L}\,s(R),
+
+with − and :math:`r_H` for occupied, + and :math:`r_L` for empty states. The terms are:
+
+* the KS energy;
+* the tabulated bulk GW correction;
+* the finite-size self-energy of ΔW, weighted by Z;
+* the anchor residual, which calibrates what the model misses (:doc:`anchor`).
+
+The models differ in how much of ΔW they build, in order of increasing detail:
 
 .. list-table::
    :header-rows: 1
-   :widths: 22 40 38
+   :widths: 20 40 40
 
    * - ``qp_gap``
-     - W of the QP correction
-     - BSE kernel
+     - ΔW
+     - ΔΣ
+   * - ``brus``
+     - none (ΔW = 0)
+     - none; effective-mass confinement on the experimental bulk gap
    * - ``gw`` (two-anchor)
-     - bulk Resta W + reaction field of a dielectric sphere
-     - ``resta-sphere``: the same W
-   * - ``sgw-resta``, ``evgw-resta``, ``qsgw-resta``
-     - Resta W with the Penn ε_in(R) + sphere reaction field
-     - ``qp``: the same W
-   * - ``sgw-dim``, ``evgw-dim``, ``qsgw-dim``
-     - DIM/Thole W + sphere reaction field
-     - ``qp``: the same W
+     - reaction field of a dielectric sphere with ε∞ inside
+     - classical self-image, residual fixed at the anchor
+   * - ``sgw-resta``
+     - Resta profile with a size-dependent ε_in(R) + sphere reaction field
+     - ΔCOHSEX for every orbital
+   * - ``sgw-dim``
+     - atom-resolved screening from polarizable dipoles + sphere reaction field
+     - ΔCOHSEX for every orbital
 
-Combining a model with a different kernel is an error; ``--allow-inconsistent-kernel`` exists only
-to reproduce old results. ``two_electron_integrals`` (``mnok`` or ``xs``) selects the representation
-of that one W for both the QP correction and the kernel.
+``evgw-*`` and ``qsgw-*`` iterate the Resta and DIM models (section 7). The same W, including ΔW, is
+the BSE kernel (:doc:`/excitons/screened_kernel`).
 
-1. Common ingredients
----------------------
+1. No anchor: ``brus``
+----------------------
 
-**Bare interaction (MNOK).** For atoms A and B with hardness η:
-
-.. math::
-
-   \gamma_{AB} = \frac{1}{\sqrt{r_{AB}^2 + a_{AB}^2}},\qquad a_{AB} = \tfrac12\big(\eta_A^{-1} + \eta_B^{-1}\big).
-
-**Resta screening profile** with dielectric constant ε, and the bulk reference:
+**ΔW = 0.** The dot is treated as bulk material with a kinetic confinement energy (Brus 1984,
+without the polarization terms):
 
 .. math::
 
-   S_\epsilon(r) = \frac1\epsilon + \Big(1 - \frac1\epsilon\Big)e^{-k_s r},\qquad k_s = \frac{\sqrt{\epsilon-1}}{d_{NN}},
-   \qquad W^{\mathrm{bulk}}_{AB} = S_{\epsilon_\infty}(r_{AB})\,\gamma_{AB}.
+   E_g^{\mathrm{QP}}(R) = E_g^{\mathrm{exp}}(\mathrm{bulk}) + \frac{\hbar^2\pi^2}{2\mu R^2},
+   \qquad
+   E_g^{\mathrm{QP}}(R) = \sqrt{E_g^2 + 2E_g\,\frac{\hbar^2\pi^2}{2\mu R^2}}\quad (E_g < 2\ \mathrm{eV}).
 
-**Solvent / surface term.** The reaction field of a dielectric sphere with ε∞ inside and ε_out
-outside, the same Green function as the two-anchor model (section 7):
+* :math:`E_g^{\mathrm{exp}}(\mathrm{bulk})`: the experimental bulk gap. It replaces the KS gap plus
+  Δ_bulk.
+* :math:`\hbar^2\pi^2/2\mu R^2`: the kinetic energy of an electron–hole pair of reduced mass μ in a
+  sphere with infinite walls. The hyperbolic form corrects the non-parabolicity of narrow-gap
+  materials.
+
+The KS levels are shifted rigidly so that their gap equals :math:`E_g^{\mathrm{QP}}(R)`.
+
+**Why.** It is the limit in which the dot has bulk screening everywhere. It needs no DFT gap, only
+two bulk parameters.
+
+**What it misses.**
+
+* The surface polarization, so the QP gap is too small and does not depend on the solvent.
+* The effective-mass kinetic term overestimates confinement in small dots.
+
+With ΔW = 0 the consistent BSE kernel is the bulk W (``kernel: resta``). The missing surface
+polarization then largely cancels in S₁ (:doc:`/excitons/cancellation`), so S₁ is more reliable than
+the QP gap.
+
+2. Two anchors: ``gw``
+----------------------
+
+**ΔW = the reaction field of a dielectric sphere.** The dot is a sphere of radius R with the bulk
+ε∞ inside and ε_out outside. The potential at r of the polarization induced by a unit charge at r′
+is
 
 .. math::
 
-   W^{\mathrm{add}}_{AB} = G(\mathbf r_A,\mathbf r_B) = \frac{e^2}{R}\sum_{l\ge0}
+   \Delta W(\mathbf r,\mathbf r') = G(\mathbf r,\mathbf r') = \frac{e^2}{R}\sum_{l\ge0}
    \frac{(\epsilon_\infty-\epsilon_{\mathrm{out}})(l+1)}{\epsilon_\infty\,[l\epsilon_\infty+(l+1)\epsilon_{\mathrm{out}}]}
-   \Big(\frac{r_A r_B}{R^2}\Big)^l P_l(\cos\theta_{AB}).
+   \Big(\frac{rr'}{R^2}\Big)^l P_l(\cos\theta).
 
-Its diagonal grows toward the surface through the l ≥ 1 multipoles. The earlier softened Born form,
-:math:`(1/\epsilon_{\mathrm{out}} - 1/\epsilon_\infty)\,e^2/\sqrt{r_{AB}^2 + R^2}`, has no position
-dependence of the self-image; it is available as ``qp_solvent_term: born``.
+* l = 0 is the Born term, constant inside the sphere.
+* l ≥ 1 are the higher image multipoles. They grow toward the surface.
 
-**The finite-size part of W:**
+**ΔΣ in the classical limit** (:doc:`gw`, section 6). Each carrier sees its own image. Averaged over
+the 1S envelope, the gap opens by
 
 .. math::
 
-   \Delta W_{AB} = \max\big(0,\; W^{\mathrm{QD}}_{AB} - W^{\mathrm{bulk}}_{AB}\big) + W^{\mathrm{add}}_{AB} .
+   P(R) = F(\epsilon_\infty,\epsilon_{\mathrm{out}})\,\frac{e^2}{R},\qquad
+   F = \Big\langle\sum_{l\ge0}\frac{(\epsilon_\infty-\epsilon_{\mathrm{out}})(l+1)}
+   {\epsilon_\infty[l\epsilon_\infty+(l+1)\epsilon_{\mathrm{out}}]}\Big(\frac rR\Big)^{2l}\Big\rangle_{1S},
 
-The models differ only in :math:`W^{\mathrm{QD}}`.
+with F = 0.937 for CdSe in vacuum.
 
-2. ``sgw-resta``: Resta screening with a Penn interior dielectric constant
---------------------------------------------------------------------------
+**The two anchors.** The QP correction interpolates between the bulk (Δ_bulk) and an evGW
+calculation of the smallest cluster (radius R₀):
 
-The interior of a dot screens less than the bulk because confinement opens the gaps of the states
-that do the screening. In the Penn model (one oscillator), ε − 1 = (ħω_p/E_P)², and confinement
-shifts the average gap E_P by ΔE:
+.. math::
+
+   \Delta_{\mathrm{GW}}(R) = \Delta_{\mathrm{bulk}} + P(R;\epsilon_\infty,\epsilon_{\mathrm{out}})
+   + A\,s(R),\qquad
+   A = \Delta_{\mathrm{evGW}}(R_0) - \Delta_{\mathrm{bulk}} - P(R_0;\epsilon_\infty,1).
+
+* A collects everything that is not the classical polarization of a sharp sphere with bulk ε∞: the
+  reduced interior screening, the non-classical screened exchange, and the energy dependence of the
+  bulk correction. For CdSe, A = −0.42 eV.
+* :math:`s(R) = E_{\mathrm{conf}}(R)/E_{\mathrm{conf}}(R_0)` is the KS confinement energy relative to
+  the anchor (:doc:`anchor`).
+* Each band edge has its own curve, so the HOMO and LUMO reproduce the evGW frontier shifts at R₀.
+* Every other orbital adds its own image term relative to the frontier orbital.
+
+**Why.** Tight-binding GW for Si nanocrystals finds that the finite-size self-energy is dominated
+by this surface polarization, with the *bulk* ε∞ inside (Delerue, Lannoo and Allan 2000, 2003).
+The model is exact at R₀ by construction, exact in the bulk, and exact classical electrostatics at
+large R. It costs nothing.
+
+**What it misses.**
+
+* **Everything non-classical is in one number, A.** Its size dependence, s(R), is assumed, not
+  computed.
+* **Only the radius enters.** Shape, facets, ligands and the actual orbitals enter only through R
+  and the KS gap.
+* **No screened exchange** beyond the classical limit.
+
+3. Why an atomistic ΔW: Resta and DIM
+-------------------------------------
+
+The two-anchor model treats the dot as a uniform dielectric with bulk ε∞ and a sharp surface. Four
+things are missing:
+
+1. **Reduced interior screening.** A small dot has a larger gap, so it screens less:
+   :math:`\epsilon_{\mathrm{in}}(R) < \epsilon_\infty` (Wang and Zunger, PRL 73, 1039 (1994)). Part of
+   ΔW is therefore not at the surface but everywhere inside the dot.
+2. **No screening at short range.** Electrons cannot screen a charge on the scale of a bond.
+   :math:`W(r)\to v(r)` for r below the nearest-neighbour distance, and only at large r does
+   :math:`W\to v/\epsilon`. A uniform 1/ε is wrong exactly where the orbitals overlap.
+3. **The full ΔW(r, r′).** ΔSEX (:doc:`gw`, section 5) samples ΔW between points where orbital n and
+   the occupied orbitals overlap, not only on the diagonal. The non-classical screened exchange
+   needs ΔW as a matrix, with the right short-range behaviour.
+4. **Geometry.** Facets, vertices, ligands, non-spherical shapes and core/shell structures screen
+   differently from a sphere.
+
+Resta covers 1–3 with one number per dot, ε_in(R). DIM covers 1–4 with one polarizability per atom.
+Both have :math:`W_{\mathrm{QD}}\to W_{\mathrm{bulk}}` for large dots, so ΔW → 0 and the bulk limit is
+exact. Both use the same sphere reaction field as ``gw`` for the environment (section 6). Both then
+evaluate ΔΣ with the actual orbitals (section 4).
+
+What follows is written on atom pairs A, B with the bare interaction :math:`\gamma_{AB}` (:doc:`representation`).
+
+Resta: ``sgw-resta``
+~~~~~~~~~~~~~~~~~~~~
+
+.. figure:: /_static/figures/screening_profile.svg
+   :width: 100%
+   :alt: screening profile
+
+   Resta screening for CdSe (ε∞ = 6.2, d_NN = 2.60 Å): unscreened at short range, 1/ε∞ at long range.
+
+**Screening profile** (Resta, PRB 16, 2717 (1977)). Screening switches on over the Thomas–Fermi
+length:
+
+.. math::
+
+   S_\epsilon(r) = \frac1\epsilon + \Big(1 - \frac1\epsilon\Big)e^{-k_s r},\qquad
+   k_s = \frac{\sqrt{\epsilon-1}}{d_{NN}},\qquad
+   W_{AB} = S_\epsilon(r_{AB})\,\gamma_{AB}.
+
+* :math:`S_\epsilon \to 1` for r → 0: no screening on site and within a bond.
+* :math:`S_\epsilon \to 1/\epsilon` for r → ∞: macroscopic screening.
+* :math:`d_{NN}` is the nearest-neighbour distance, which sets the length over which the valence
+  electrons screen.
+
+**Interior dielectric constant** (Penn model, one oscillator). ε − 1 = (ħω_p/E_P)². Confinement
+opens the average gap E_P by the KS confinement energy ΔE:
 
 .. math::
 
    \epsilon_{\mathrm{in}}(R) = 1 + (\epsilon_\infty - 1)\Big[\frac{E_P}{E_P + \Delta E}\Big]^2,\qquad
    E_P = \frac{\hbar\omega_p}{\sqrt{\epsilon_\infty - 1}},\qquad
-   \Delta E = E_g^{\mathrm{PBE}}(\mathrm{QD}) - E_g^{\mathrm{PBE}}(\mathrm{bulk}),
+   \Delta E = E_g^{\mathrm{PBE}}(\mathrm{QD}) - E_g^{\mathrm{PBE}}(\mathrm{bulk}).
+
+* ħω_p is the free-electron plasmon of the bulk valence (s, p) density: 14.1 eV for CdSe, so
+  E_P = 6.2 eV.
+* ε_in = 3.97 at 1.2 nm and 5.06 at 2 nm for CdSe.
+
+**ΔW:**
 
 .. math::
 
-   W^{\mathrm{QD}}_{AB} = S_{\epsilon_{\mathrm{in}}}(r_{AB})\,\gamma_{AB}.
+   W^{\mathrm{QD}}_{AB} = S_{\epsilon_{\mathrm{in}}}(r_{AB})\,\gamma_{AB},\qquad
+   W^{\mathrm{bulk}}_{AB} = S_{\epsilon_\infty}(r_{AB})\,\gamma_{AB}.
 
-ħω_p is the free-electron plasmon of the bulk valence (s, p) density: 14.1 eV for CdSe, so
-E_P = 6.2 eV. For CdSe, ε_in = 3.97 at 1.2 nm and 5.06 at 2 nm.
+**Why.** It is the simplest W that is right at both ends, unscreened at short range and bulk at long
+range. One parameter, fixed by the dot's own KS gap, carries the size dependence.
 
-*Why:* the Resta profile keeps the correct bulk limit at long range and becomes unscreened at short
-range, and one parameter (ε_in) carries the size dependence. It is the cheapest W that is right at
-both ends. ``sgw-resta-pure`` keeps ε_in = ε∞ (surface term only).
+**What it misses.** The dot is uniform inside, so there is no surface or ligand dependence of the
+screening. ``sgw-resta-pure`` keeps ε_in = ε∞, leaving only the surface term.
 
-3. ``sgw-dim``: atomistic dipole screening
-------------------------------------------
+DIM: ``sgw-dim``
+~~~~~~~~~~~~~~~~
 
-Each atom carries a polarizability α_A. The induced dipoles in a uniform field solve
+**Induced dipoles** (Applequist 1972; Thole 1981). Each atom, ligands included, carries a tabulated
+polarizability α_A. In a uniform field E the induced dipoles solve
 
 .. math::
 
    (\boldsymbol\alpha^{-1} + \mathbf T)\,\mathbf p = \mathbf E,
 
-with Thole-damped dipole tensors T (Applequist 1972; Thole 1981). The response of each atom
-relative to the most polarizable one, :math:`\eta_A = p_A/\max_B p_B \in [0.05, 1]`, measures its
-local screening. Surface atoms with fewer neighbours respond less. The pair dielectric constant and
-W are:
+with Thole-damped dipole tensors T. An atom surrounded by other polarizable atoms responds more,
+and an under-coordinated surface atom responds less.
+
+**Local screening.** The response of each atom relative to the most polarizable one,
+:math:`\eta_A = p_A/\max_B p_B \in [0.05, 1]`, sets a pair dielectric constant:
 
 .. math::
 
    \epsilon_{AB} = 1 + (\epsilon_\infty - 1)\sqrt{\eta_A\eta_B},\qquad
    W^{\mathrm{QD}}_{AB} = S_{\epsilon_{AB}}(r_{AB})\,\gamma_{AB} .
 
-*Why:* the reduction of screening is placed where it physically occurs, at under-coordinated
-surface atoms, and follows the actual geometry and ligand shell. For CdSe the interior contrast is
-smaller than with the Penn scaling. After calibration, Resta and DIM agree within 0.1 eV in the QP gap
-and S₁ at 2 nm.
+The Resta profile is kept, so short range stays unscreened.
 
-4. QP energies of all orbitals: one-shot ΔCOHSEX
-------------------------------------------------
+**Why.** The reduction of screening is placed where it occurs: at surface atoms, vertices and
+ligands. It follows the actual geometry, so it is the model for non-spherical dots, core/shell
+structures and ligand-rich surfaces.
 
-The finite-size self-energy of every orbital n (theory, section 3) is evaluated in the Löwdin basis
-c = S^½ C, with ΔW expanded to AO blocks :math:`\Delta W_{\mu\nu} = \Delta W_{A(\mu)B(\nu)}` and the
-density matrix :math:`P = 2\,c_{\mathrm{occ}} c_{\mathrm{occ}}^{\mathsf T}`:
+**What it misses.**
+
+* The polarizabilities are static and tabulated per element; they do not change with confinement
+  (``evgw-dim`` rescales them with the gap, section 7).
+* The mixing of η into ε is a model choice.
+
+For spherical CdSe dots, Resta and DIM agree within 0.1 eV in the QP gap and S₁ at 2 nm after
+calibration.
+
+4. ΔΣ for all orbitals: one-shot ΔCOHSEX
+----------------------------------------
+
+For Resta and DIM, :math:`\Delta\Sigma_n` of :doc:`gw` (section 5) is evaluated for every orbital. In
+the Löwdin basis :math:`c = S^{1/2}C`, with ΔW expanded to AO blocks
+:math:`\Delta W_{\mu\nu} = \Delta W_{A(\mu)B(\nu)}` and :math:`P = 2\,c_{\mathrm{occ}}c_{\mathrm{occ}}^{\mathsf T}`:
 
 .. math::
 
    \Delta\mathrm{COH}_n = \tfrac12\sum_\mu c_{\mu n}^2\,\Delta W_{\mu\mu},
    \qquad
-   \Delta\mathrm{SEX}_n = -\tfrac12\sum_{\mu\nu} c_{\mu n}c_{\nu n}\,P_{\mu\nu}\,\Delta W_{\mu\nu},
-   \qquad
-   \Delta\Sigma_n = \Delta\mathrm{COH}_n + \Delta\mathrm{SEX}_n .
+   \Delta\mathrm{SEX}_n = -\tfrac12\sum_{\mu\nu} c_{\mu n}c_{\nu n}\,P_{\mu\nu}\,\Delta W_{\mu\nu}.
 
-Quasiparticle weight from one plasmon pole of the same dielectric model
-(:doc:`/quasiparticles/dynamic_z`):
+These are the continuous formulas with the integrals represented on the basis (:doc:`representation`).
+
+* **Classical limit.** For a constant ΔW = c: ΔCOH = c/2 for every orbital, ΔSEX = −c (occupied)
+  and 0 (empty), so the gap opens by c.
+* **Beyond it.** The actual ΔW varies over the dot. At 1.2 nm (``sgw-resta``):
+
+  - ΔSEX = −3.01 eV for the HOMO and −0.22 eV for the LUMO;
+  - ΔCOH = +1.55 and +1.67 eV.
+
+  The screened exchange raises the QP gap from 6.24 eV (classical) to 6.57 eV (evGW: 6.03 eV).
+* **Classical option.** ``qp_selfenergy: classical`` replaces ΔΣ_n by ±½ q_nᵀΔW q_n, with q_n the
+  atomic populations.
+* **Cost.** One cached eigendecomposition of S and three matrix products for all orbitals.
+
+5. Quasiparticle weight Z
+-------------------------
 
 .. math::
 
    Z_n = \Big[1 + \frac{|\Delta\Sigma_n|}{\tilde\omega}\Big]^{-1},\qquad
-   \tilde\omega = \frac{\omega_p}{\sqrt{1 - 1/\epsilon_{\mathrm{eff}}}} .
+   \tilde\omega = \frac{\omega_p}{\sqrt{1 - 1/\epsilon_{\mathrm{eff}}}},
 
-Here ε_eff is ε_in (Resta) or the median inter-atom screening (DIM).
+from one plasmon pole of the same dielectric model. ε_eff is ε_in (Resta) or the median pair
+screening (DIM). Z ≈ 0.94–0.97 in vacuum and 0.98–0.99 in toluene (:doc:`dynamic_z`).
 
-QP energies, with :math:`\Delta_{\mathrm{bulk}} = E_g^{\mathrm{GW}}(\mathrm{bulk}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})`:
+6. The environment term
+-----------------------
+
+The environment enters every model through the same sphere reaction field as ``gw``, with ε∞
+inside:
 
 .. math::
 
-   \varepsilon_n^{\mathrm{QP}} = \varepsilon_n - \tfrac12\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n + r_H\,s(R)\quad (n\ \mathrm{occupied}),
+   W^{\mathrm{add}}_{AB} = G(\mathbf r_A,\mathbf r_B),\qquad
+   \Delta W_{AB} = \max\big(0,\,W^{\mathrm{QD}}_{AB} - W^{\mathrm{bulk}}_{AB}\big) + W^{\mathrm{add}}_{AB}.
 
-.. math::
+The interior part is clipped at zero: a dot never screens more than the bulk.
+``qp_solvent_term: born`` replaces G by the older softened Born form
+:math:`(1/\epsilon_{\mathrm{out}} - 1/\epsilon_\infty)\,e^2/\sqrt{r_{AB}^2 + R^2}`, which has no
+position dependence of the self-image.
 
-   \varepsilon_n^{\mathrm{QP}} = \varepsilon_n + \tfrac12\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n + r_L\,s(R)\quad (n\ \mathrm{virtual}).
+7. Iterated variants
+--------------------
 
-**Anchor residual.** r_H and r_L are the model's HOMO and LUMO errors against the evGW anchor,
-calibrated once per material and model (:doc:`/quasiparticles/anchor`). The size scaling is:
+* **``evgw-resta`` / ``evgw-dim``.** ΔW is iterated against the QP gap, then section 4 is applied
+  with the converged ΔW. With the current gap :math:`E_g^{(k)}`:
+
+  - Resta recomputes ε_in with :math:`\Delta E = E_g^{(k)} - E_g^{\mathrm{GW}}(\mathrm{bulk})`;
+  - DIM scales the polarizabilities by :math:`E_g^{\mathrm{GW}}(\mathrm{bulk})/E_g^{(k)}`.
+
+  The loop is damped and stops when the gap changes by less than 10⁻⁴ eV. A larger QP gap screens
+  less, so ΔW and the gap grow together.
+* **``qsgw-resta`` / ``qsgw-dim``.** The same ΔW and COHSEX operators as a matrix in the Löwdin basis,
+  diagonalized self-consistently:
+
+  .. math::
+
+     H^{\mathrm{eff}} = H^{\mathrm{KS}} + H^{\mathrm{bulk}} + Z\big(\Sigma^{\mathrm{SEX}} + \Sigma^{\mathrm{COH}}\big),\qquad
+     \Sigma^{\mathrm{SEX}} = -\tfrac12 P\circ\Delta W,\quad \Sigma^{\mathrm{COH}} = \tfrac12\,\mathrm{diag}\,\Delta W .
+
+  Orbitals and energies are updated until convergence. This adds orbital relaxation to ΔCOHSEX, at
+  the cost of one diagonalization per iteration.
+
+Both are self-consistent in ΔW only; the bulk part stays the tabulated Δ_bulk.
+
+8. Anchor residual
+------------------
+
+Each Resta and DIM model is run once on the anchor cluster, Cd₁₆Se₁₃Cl₆ in vacuum, and compared with
+evGW\@PBE0. The HOMO and LUMO errors r_H and r_L are stored and added to all occupied and all empty
+orbitals, scaled by
 
 .. math::
 
    s(R) = \frac{E_g^{\mathrm{PBE}}(\mathrm{QD}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})}
-               {E_g^{\mathrm{PBE}}(\mathrm{anchor}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})} \in [0, 1].
+               {E_g^{\mathrm{PBE}}(\mathrm{anchor}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})} \in [0,1]
 
-s(R) is 1 at the anchor, 0.41 at 2 nm and 0.26 at 3.2 nm for CdSe.
-
-For a constant ΔW = c this gives ΔCOH = c/2 for every orbital, ΔSEX = −c (occupied) and 0 (empty),
-so the gap opens by c: the classical limit. The actual ΔW varies over the dot, and the screened
-exchange then depends on each orbital's overlap with the occupied states. At 1.2 nm
-(``sgw-resta``) ΔSEX is −3.01 eV for the HOMO and −0.22 eV for the LUMO, and ΔCOH is +1.55 and
-+1.67 eV. This part does not cancel against the binding.
-
-* **Classical option.** ``qp_selfenergy: classical`` replaces ΔΣ_n by the classical charging term
-  ±½ q_nᵀ ΔW q_n, with q_n the atomic populations.
-* **Cost.** One eigendecomposition of S (cached) and three matrix products for all orbitals.
-
-5. The BSE kernel
------------------
-
-.. math::
-
-   W^{\mathrm{BSE}} = W^{\mathrm{bulk}} + \bar Z\,\big(W^{\mathrm{QD}} + W^{\mathrm{add}} - W^{\mathrm{bulk}}\big),
-   \qquad \bar Z = \tfrac12 (Z_{\mathrm{HOMO}} + Z_{\mathrm{LUMO}}),
-
-with the same Z as the QP levels. The same pole that reduces the QP shift also makes the
-electron–hole interaction dynamical; to first order the two cancel in the neutral excitation
-(Bechstedt et al. 1997). The TDA Hamiltonian is
-
-.. math::
-
-   A_{ia,jb} = (\varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}})\delta_{ij}\delta_{ab}
-   + 2\sum_{AB} q^{ia}_A\,\gamma_{AB}\,q^{jb}_B - \sum_{AB} q^{ij}_A\,W^{\mathrm{BSE}}_{AB}\,q^{ab}_B,
-
-with transition charges q (Mulliken by default).
-
-6. Iterated variants
---------------------
-
-* **``evgw-resta`` / ``evgw-dim``.** W is iterated against the gap, then section 4 is applied with
-  the converged W. With the current QP gap :math:`E_g^{(k)}`:
-  - Resta recomputes ε_in with :math:`\Delta E = E_g^{(k)} - E_g^{\mathrm{GW}}(\mathrm{bulk})`;
-  - DIM scales the atomic polarizabilities by :math:`E_g^{\mathrm{GW}}(\mathrm{bulk})/E_g^{(k)}`.
-
-  The loop is damped and stops when the gap changes by less than 10⁻⁴ eV.
-* **``qsgw-resta`` / ``qsgw-dim``.** The same ΔW and the same COHSEX operators, but as a matrix in the
-  Löwdin AO basis, diagonalized self-consistently:
-
-  .. math::
-
-     H^{\mathrm{eff}} = H^{\mathrm{DFT}} + H^{\mathrm{bulk}} + Z\big(\Sigma^{\mathrm{SEX}} + \Sigma^{\mathrm{COH}}\big),\qquad
-     \Sigma^{\mathrm{SEX}} = -\tfrac12 P\circ\Delta W,\quad \Sigma^{\mathrm{COH}} = \tfrac12\,\mathrm{diag}\,\Delta W .
-
-  Orbitals and energies are updated until convergence. This adds orbital relaxation to the one-shot
-  ΔCOHSEX, at the cost of one full diagonalization per iteration.
-
-7. The two-anchor ``gw`` model
-------------------------------
-
-``gw`` interpolates the PBE → QP correction between bulk GW and the evGW anchor. The finite-size
-term is the self-image energy of a dielectric sphere,
-:math:`P(R) = F(\epsilon_\infty,\epsilon_{\mathrm{out}})\,e^2/R`. The non-classical residual A is
-fixed at the anchor and scaled by s(R). Each band edge has its own curve
-(:doc:`/quasiparticles/anchor`).
-
-The kernel is the bulk Resta W plus the reaction field of the same sphere,
-
-.. math::
-
-   G(\mathbf r,\mathbf r') = \frac{e^2}{R}\sum_{l\ge0}
-   \frac{(\epsilon_\infty-\epsilon_{\mathrm{out}})(l+1)}{\epsilon_\infty\,[l\epsilon_\infty+(l+1)\epsilon_{\mathrm{out}}]}
-   \Big(\frac{rr'}{R^2}\Big)^l P_l(\cos\theta).
-
-The HOMO and LUMO shifts come from the anchor curves. Every other orbital adds its own image term
-relative to the frontier orbital. ``gw`` has no screened-exchange term: it is exact at the anchor by
-construction and classical elsewhere.
-
-8. The xs representation
-------------------------
-
-With ``two_electron_integrals: xs`` the same W is represented on exact AO density-pair integrals:
-
-.. math::
-
-   W_{\mu\nu} = \frac{W_{A(\mu)B(\nu)}}{\gamma_{A(\mu)B(\nu)}}\,(\mu\mu|\nu\nu) + W^{\mathrm{add}}_{A(\mu)B(\nu)}.
-
-ΔCOHSEX and the kernel then use AO populations. The two representations agree at long range. At
-short range xs gives more binding: −0.6 eV in S₁ at 1.2 nm, −0.05 eV at 2 nm.
+(1 at the anchor, 0.41 at 2 nm, 0.26 at 3.2 nm for CdSe). The gap residuals are −0.54 eV
+(``sgw-resta``), −0.44 eV (``sgw-dim``) and −0.83 eV (``evgw-resta``), the same sign and size as the
+two-anchor A. They contain what ΔCOHSEX misses and the PBE → PBE0 starting point of the reference
+(:doc:`anchor`). ``qp_anchor_residual: off`` removes them.
 
 9. Absolute levels (IP/EA)
 --------------------------
 
-The model's gap correction is split between HOMO and LUMO with the per-edge anchor curves, which
-are exact at the anchor (41/59 % for CdSe) and tend to the bulk split for large dots. The split is
-applied to vacuum-referenced PBE levels. ``qp_edge_split: model`` uses the model's own split.
+The gap correction is split between HOMO and LUMO with the per-edge anchor curves, which are exact at
+the anchor (41 %/59 % for CdSe) and tend to the bulk split for large dots. ``qp_edge_split: model``
+uses the model's own split.
 
-10. Other options
------------------
+10. Summary of the approximations
+---------------------------------
 
-* ``pbe``: no correction.
-* ``brus``: effective-mass kinetic confinement on the experimental gap. It defines no W and uses an
-  independent kernel.
-* ``gw`` with ``qp_polarization: legacy``: the older κ/(R + ℓ) curve with the bulk kernel.
-* ``sgw``: site-diagonal ΔW on the sBSE monopole RPA. It underscreens CdSe (ε_eff ≈ 1) and is kept
-  for reference only.
+.. list-table::
+   :header-rows: 1
+   :widths: 24 38 38
 
-These models are not consistent in the sense of section 4.
+   * - Approximation
+     - Why
+     - What it keeps / loses
+   * - Bulk + ΔW split, Δ_bulk from a table
+     - The bulk self-energy is transferable; only ΔW depends on the dot.
+     - Exact bulk gap; the energy dependence of the bulk correction only through the residual.
+   * - Static ΔCOHSEX
+     - ΔW is long-range polarization with plasmon frequencies far above the level spacings.
+     - Exact classical limit plus non-classical screened exchange; dynamics to first order via Z.
+   * - Model dielectric (sphere, Resta, DIM) instead of an RPA χ₀
+     - An RPA over the cluster costs as much as the GW it replaces.
+     - Bulk screening at long range, size and surface dependence; no local-field detail beyond the
+       atom.
+   * - Penn ε_in(R) (Resta)
+     - One oscillator whose gap opens with confinement.
+     - Uniform interior reduction; no surface resolution.
+   * - Thole dipoles (DIM)
+     - Screening follows coordination and geometry.
+     - Surface and ligand resolution; tabulated static polarizabilities.
+   * - Plasmon-pole Z
+     - Dynamics of ΔW to first order, without a frequency grid.
+     - Z ≈ 0.94–0.99.
+   * - Anchor residual
+     - Catches what the model misses at one size.
+     - Exact at the anchor; the E_conf scaling to other sizes is an assumption.
 
 11. Which model
 ---------------
@@ -269,12 +386,19 @@ These models are not consistent in the sense of section 4.
    * - Purpose
      - Recommendation
    * - Optical spectra, size series
-     - ``sgw-resta`` or ``sgw-dim`` (ΔCOHSEX + anchor residual), mnok, in the solvent; or ``gw``
-       with ``resta-sphere`` for the cheapest classical estimate. Add SOC for the band edge.
+     - ``sgw-resta`` (spherical dots) or ``sgw-dim`` (shape, ligands, core/shell), mnok, in the
+       solvent. ``gw`` for the cheapest classical estimate. Add SOC for the band edge.
    * - QP gap, IP/EA
-     - Any calibrated Delta-W model or ``gw``; all reproduce evGW at the anchor.
+     - Any calibrated Resta/DIM model or ``gw``; all reproduce evGW at the anchor.
    * - Orbital relaxation
-     - ``qsgw-*``; S₁ within about 0.1 eV of the one-shot ΔCOHSEX value, at much higher cost for large dots.
+     - ``qsgw-*``; S₁ within about 0.1 eV of ΔCOHSEX, at much higher cost for large dots.
    * - Reproduce old results
      - ``qp_selfenergy: classical``, ``qp_anchor_residual: off``, ``qp_residual_scaling: power``,
-       ``qp_polarization: legacy``.
+       ``qp_solvent_term: born``, ``qp_polarization: legacy``.
+
+**Other options,** kept for reference and not consistent in the sense of
+:doc:`/excitons/cancellation`:
+
+* ``pbe``: no correction.
+* ``gw`` with ``qp_polarization: legacy``: the older κ/(R + ℓ) curve with the bulk kernel.
+* ``sgw``: site-diagonal ΔW on the sBSE monopole RPA. It underscreens CdSe (ε_eff ≈ 1).

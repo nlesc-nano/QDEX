@@ -10,7 +10,7 @@ Original RST: :download:`part4_excited_states source <../_legacy_parts/part4_exc
 Start with:
 
 * :doc:`/excitons/index`
-* :doc:`/interactions/index`
+* :doc:`/excitons/screened_kernel`
 * :doc:`/spectroscopy/index`
 * :doc:`/validation/index`
 * :doc:`/workflows/index`
