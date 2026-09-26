@@ -155,10 +155,10 @@ Here :math:`\delta_H` is the downward shift of the HOMO and :math:`\delta_L` the
 LUMO.
 
 * **Polarization.** Symmetric between electron and hole, since both see the same sphere.
-* **Bulk opening.** Split by :math:`f_b`; 0.5 unless tabulated.
+* **Bulk opening.** Split by :math:`f_b` (the anchor-derived bulk HOMO fraction, :math:`f_b = d_{h0} / (d_{h0} + d_{l0}) \approx 41.2\%` for CdSe, matching first-principles bulk GW literature).
 * **Residuals.** :math:`A_H` and :math:`A_L` are fitted so that each edge reproduces the evGW
-  frontier shifts of the anchor: −1.398 / +1.997 eV for CdSe, i.e. 41 %/59 %. For CdSe,
-  :math:`A_H = -0.52` eV and :math:`A_L = +0.08` eV.
+  frontier shifts of the anchor: :math:`d_{h0} = 1.398` eV and :math:`d_{l0} = 1.997` eV for CdSe, i.e. 41.2% / 58.8%.
+  For CdSe, :math:`A_H = -0.40` eV and :math:`A_L = -0.02` eV (summing to the gap residual :math:`A = -0.42` eV).
 
 The asymmetry therefore sits in the non-classical residual. It is exact at :math:`R_0` and fades
 toward the bulk split for large dots. The Resta and DIM models use the same split for absolute IP/EA by

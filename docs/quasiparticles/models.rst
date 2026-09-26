@@ -7,15 +7,38 @@ Every QP model in QDEX has the form derived in :doc:`gw`:
 
 .. math::
 
-   \varepsilon_n^{\mathrm{QP}} = \varepsilon_n \mp \tfrac12\Delta_{\mathrm{bulk}}
-   + Z_n\,\Delta\Sigma_n[\Delta W] + r_{H/L}\,s(R),
+   \varepsilon_n^{\mathrm{QP}} = \begin{cases}
+   \varepsilon_n - f_b\,\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n[\Delta W] + r_H\,s(R), & n \in \mathrm{occ}, \\
+   \varepsilon_n + (1 - f_b)\,\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n[\Delta W] + r_L\,s(R), & n \in \mathrm{virt},
+   \end{cases}
 
-with − and :math:`r_H` for occupied, + and :math:`r_L` for empty states. The terms are:
+where:
 
-* the KS energy;
-* the tabulated bulk GW correction;
-* the finite-size self-energy of ΔW, weighted by Z;
-* the anchor residual, which calibrates what the model misses (:doc:`anchor`).
+* :math:`\varepsilon_n` is the KS (DFT) energy;
+* :math:`\Delta_{\mathrm{bulk}}` is the tabulated bulk GW gap opening, split asymmetrically by :math:`f_b` (the anchor-derived bulk valence fraction: :math:`f_b = d_{h0} / (d_{h0} + d_{l0}) \approx 41.2\%` for CdSe, matching first-principles bulk GW literature);
+* :math:`Z_n\,\Delta\Sigma_n[\Delta W]` is the finite-size self-energy correction of :math:`\Delta W`, weighted by the plasmon-pole renormalization factor :math:`Z_n`;
+* :math:`r_{H/L}` (:math:`r_H` for occupied / valence states, :math:`r_L` for empty / conduction states) is the **anchor residual**, scaled by the confinement decay function :math:`s(R)` (:doc:`anchor`).
+
+What is the anchor residual :math:`r_{H/L}`?
+--------------------------------------------
+
+At the anchor monomer :math:`R_0`, high-level benchmark calculations (evGW@PBE0 with complete basis sets) provide reference quasiparticle levels for the HOMO (:math:`\varepsilon_H^{\mathrm{ref}}`) and LUMO (:math:`\varepsilon_L^{\mathrm{ref}}`). This defines the benchmark band-edge shifts from PBE to QP:
+:math:`d_{h0} = -(\varepsilon_H^{\mathrm{ref}} - \varepsilon_H^{\mathrm{PBE}})` (positive downward shift) and :math:`d_{l0} = \varepsilon_L^{\mathrm{ref}} - \varepsilon_L^{\mathrm{PBE}}` (positive upward shift).
+
+The anchor residual :math:`r_{H/L}` is the signed difference between this benchmark shift and the shift predicted by the microscopic model at the anchor geometry :math:`R_0`:
+
+.. math::
+
+   r_H = d_{h0} - \left( f_b\,\Delta_{\mathrm{bulk}} + Z_H\,\Delta\Sigma_H[\Delta W](R_0) \right), \qquad
+   r_L = d_{l0} - \left( (1 - f_b)\,\Delta_{\mathrm{bulk}} + Z_L\,\Delta\Sigma_L[\Delta W](R_0) \right).
+
+The total gap residual is :math:`r_{\mathrm{gap}} = r_H + r_L`. Physically, :math:`r_{H/L}` captures all physical effects absent from a static dielectric model:
+
+1. **Dynamic screening beyond the single-plasmon pole:** Dynamical vertex corrections and multiexcitonic/plasmon satellite screening not captured by static ΔCOHSEX.
+2. **Starting-point and hybrid DFT effects:** The benchmark uses an evGW@PBE0 reference, while the nanocrystal KS orbitals are computed at PBE. The starting-point difference (band stretching from exact exchange) is naturally absorbed into :math:`r_{H/L}`.
+3. **Microscopic chemical asymmetry & passivation:** Atomistic coordination, surface chlorine/ligand passivations, and localized atomic multipoles at the molecular boundary that continuous dielectric models smoothen out.
+
+As dot radius :math:`R` increases toward the bulk crystal, the decay factor :math:`s(R) \in [0, 1]` smoothly turns off this molecular correction (:math:`s(R_0) = 1` and :math:`s(R \to \infty) = 0`), ensuring seamless convergence to the bulk GW limit.
 
 The models differ in how much of ΔW they build, in order of increasing detail:
 
