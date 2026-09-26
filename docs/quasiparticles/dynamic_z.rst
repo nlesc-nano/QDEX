@@ -5,7 +5,7 @@ Part of :doc:`/quasiparticles/index`.
 
 .. important::
 
-   ``qp_z: derived`` is the default for every Delta-W model (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``). Z is
+   ``qp_z: derived`` is the default for every Resta and DIM model (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``). Z is
    evaluated from one plasmon pole whose frequency follows from the same dielectric constant that
    builds the model's W. It is a linearized one-pole estimate, not the derivative of a computed
    frequency-dependent self-energy. A fixed value (``qp_z: 1.0``) is still accepted.
@@ -27,8 +27,8 @@ Implementation entry point:
 One-pole quasiparticle weight
 -----------------------------
 
-The finite-size correction of a Delta-W model is a static screened interaction,
-:math:`\sigma_p^{\mathrm{stat}} = \tfrac12\,\mathbf q_p^{\mathsf T}\Delta W\,\mathbf q_p`. Write the
+The finite-size correction of a Resta or DIM model is the static ΔCOHSEX self-energy
+:math:`\sigma_p^{\mathrm{stat}} = \Delta\Sigma_p` (:doc:`gw`, section 5). Write the
 frequency dependence of :math:`\Delta W` as a single pole of frequency :math:`\tilde\omega`:
 :math:`\Delta\Sigma_p(\omega)` then has static value :math:`\sigma_p^{\mathrm{stat}}` and slope
 :math:`\partial\Delta\Sigma_p/\partial\omega = -|\sigma_p^{\mathrm{stat}}|/\tilde\omega`. The linearized QP
@@ -66,20 +66,8 @@ Typical values for CdSe are Z ≈ 0.94–0.95 in vacuum and ≈ 0.98 in toluene.
 Z in the BSE kernel
 -------------------
 
-With a shared W, the BSE kernel of a Delta-W model is
-
-.. math::
-
-   W_{\mathrm{BSE}} = W_{\mathrm{bulk}} + \bar Z\,(W_{\mathrm{QD}} - W_{\mathrm{bulk}}),
-   \qquad \bar Z = \tfrac12 (Z_H + Z_L)
-
-with Z_H and Z_L the weights of the HOMO and LUMO in the QP levels (ΔCOHSEX by default), so the
-QP correction and the kernel use the same Z (``scale_w_difference``). The same pole that reduces the QP shift also makes the electron–hole
-interaction dynamical, and to first order the two effects cancel in the neutral excitation
-(Bechstedt et al., PRL 78, 1528 (1997)). Scaling :math:`\Delta W` by the same Z keeps that
-cancellation in the static kernel. The surface-polarization term then still drops out of S₁.
-Without it, a fraction 1 − Z of the solvent term would leak into S₁. For Z = 1 the kernel is
-:math:`W_{\mathrm{QD}}`, as before.
+The same Z̄ = ½(Z_H + Z_L) scales ΔW in the BSE kernel, so the QP correction and the direct term
+see the same dynamical reduction (:doc:`/excitons/screened_kernel`).
 
 Limits
 ------

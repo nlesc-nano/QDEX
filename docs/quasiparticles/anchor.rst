@@ -1,5 +1,5 @@
-Anchor
-======
+Anchor calibration
+==================
 
 Part of :doc:`/quasiparticles/index`.
 
@@ -12,7 +12,9 @@ Part of :doc:`/quasiparticles/index`.
 
 .. important::
 
-   ``sgw-anchor`` interpolates a bulk gap correction and one finite vacuum anchor. The finite-size shape is the classical surface polarization of a dielectric sphere. The residual exponent :math:`p` is a model parameter; two endpoints do not fix it uniquely.
+   The anchor is an evGW\@PBE0 calculation of the smallest cluster (Cd₁₆Se₁₃Cl₆ for CdSe). It fixes
+   the residual A of the two-anchor ``gw`` model and the residuals r_H, r_L of the Resta and DIM
+   models. Its size scaling to larger dots, E_conf(R)/E_conf(R₀), is an assumption.
 
 .. rubric:: QDEX implementation
 
@@ -28,10 +30,11 @@ Implementation entry point:
    estimate_gw_qp_gap(coords, atom_symbols, material_name, eps_out, return_details=False, regularization_length_ang=1.0, residual_power=2.0, strict=False, polarization_model="sphere")
 
 
-6. Avenue 1: Two-Anchor Scaled GW (``sgw-anchor``)
---------------------------------------------------
+The two anchors
+---------------
 
-Instead of guessing empirical parameters, ``sgw-anchor`` (historically called ``gw``) anchors the quasiparticle gap between a finite-cluster calibration and a bulk reference:
+The two-anchor model ``gw`` (also ``sgw-anchor``) places the QP correction between a finite-cluster
+calibration and a bulk reference:
 
 .. list-table::
    :widths: 25 25 50
@@ -42,7 +45,7 @@ Instead of guessing empirical parameters, ``sgw-anchor`` (historically called ``
      - Theoretical Characterization
    * - **Anchor 1: Smallest Vacuum Anchor** (:math:`R_0`)
      - Monomer or smallest stoichiometric Wulff cluster
-     - Relaxed cluster computed in vacuum with hybrid DFT (:math:`\text{PBE0}`) and eigenvalue-self-consistent GW (``EV_GW_ITER 4``).
+     - Relaxed cluster in vacuum: PBE single point → PBE0 single point → eigenvalue-self-consistent GW (``EV_GW_ITER 4``), i.e. evGW\@PBE0 (CP2K). The QP shifts are taken relative to the PBE eigenvalues, because the QDEX input orbitals are PBE.
    * - **Anchor 2: Bulk Limit** (:math:`R \to \infty`)
      - Periodic crystal
      - High-accuracy bulk :math:`G_0W_0` quasiparticle gap (:math:`E_g^{\mathrm{GW, bulk}}`), calibrated against experimental ARPES.
@@ -60,7 +63,7 @@ difference is:
    \Delta_{\mathrm{GW}}(R)
    = \Delta_{\mathrm{bulk}}
    + P(R;\epsilon_\infty,\epsilon_{\mathrm{out}})
-   + A\left(\frac{R_0}{R}\right)^{p},
+   + A\,s(R),
    \qquad \Delta_{\mathrm{bulk}} = E_g^{\mathrm{GW,bulk}} - E_g^{\mathrm{PBE,bulk}} .
 
 **Polarization term.** :math:`P` is the classical self-polarization energy of the electron plus the
@@ -100,8 +103,7 @@ correction is dominated by this surface polarization term, evaluated with the *b
 * non-locality of the polarization;
 * exchange–correlation effects.
 
-It decays as :math:`(R_0/R)^p`, with p = 2 by default. It is fitted in vacuum and kept unchanged in
-a solvent. For Cd₁₆Se₁₃Cl₆, :math:`A = -0.42` eV.
+It is fitted in vacuum, kept unchanged in a solvent, and scaled with size by s(R) (below). For Cd₁₆Se₁₃Cl₆, :math:`A = -0.42` eV.
 
 **Residual scaling** (``qp_residual_scaling``). By default the residual is scaled by the PBE confinement
 energy of the cluster instead of a power of the radius:
@@ -117,7 +119,7 @@ and each cluster's own PBE gap measures that distance. The form needs no radius 
 power p; it is clipped to [0, 1]. ``qp_residual_scaling: power`` restores (R₀/R)^p. For CdSe the scale
 is 0.41 at 2 nm (0.33 with p = 2) and 0.26 at 3.2 nm (0.10 with p = 2).
 
-**Delta-W models.** The same idea applies to the Delta-W models. Running a model once on the anchor
+**Resta and DIM models.** The same idea applies to the Resta and DIM models. Running a model once on the anchor
 cluster with ``--qp-anchor-calibrate`` stores its per-edge error against evGW in
 ``qdex/data/dw_anchor_residuals.json``. The key is material, model, self-energy, representation,
 populations, Z and solvent term. Later runs add residual × E_conf(R)/E_conf(R₀) to all occupied
@@ -146,8 +148,8 @@ Each band edge gets its own two-anchor curve (``anchor_edge_curves``):
 
 .. math::
 
-   \delta_H(R) &= f_b\,\Delta_{\mathrm{bulk}} + \tfrac12 P(R) + A_H (R_0/R)^p ,\\
-   \delta_L(R) &= (1-f_b)\,\Delta_{\mathrm{bulk}} + \tfrac12 P(R) + A_L (R_0/R)^p .
+   \delta_H(R) &= f_b\,\Delta_{\mathrm{bulk}} + \tfrac12 P(R) + A_H\,s(R) ,\\
+   \delta_L(R) &= (1-f_b)\,\Delta_{\mathrm{bulk}} + \tfrac12 P(R) + A_L\,s(R) .
 
 Here :math:`\delta_H` is the downward shift of the HOMO and :math:`\delta_L` the upward shift of the
 LUMO.
@@ -159,36 +161,17 @@ LUMO.
   :math:`A_H = -0.52` eV and :math:`A_L = +0.08` eV.
 
 The asymmetry therefore sits in the non-classical residual. It is exact at :math:`R_0` and fades
-toward the bulk split for large dots. The Delta-W models use the same split for absolute IP/EA by
+toward the bulk split for large dots. The Resta and DIM models use the same split for absolute IP/EA by
 default (``qp_edge_split: anchor``; see :doc:`/quasiparticles/models`).
 
 The BSE kernel of the two-anchor model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The QP gap contains :math:`P(R)`, the surface polarization of a separated electron and hole. The
-bulk Resta kernel has no surface term. The electron–hole image attraction is then missing from the
-BSE, and the whole of :math:`P(R)` ends up in S₁. For Cd₁₆Se₁₃Cl₆ that gives S₁ = 5.58 eV in vacuum
-and 3.97 eV in toluene.
+The kernel ``resta-sphere`` (bulk Resta W plus the same sphere reaction field) is described in
+:doc:`/excitons/screened_kernel`.
 
-The default kernel for ``qp_gap: gw`` with the sphere model is therefore ``resta-sphere``: the bulk
-Resta W plus the reaction field of the same dielectric sphere,
-
-.. math::
-
-   G(\mathbf r,\mathbf r') = \frac{e^2}{R}\sum_{n\ge0}
-   \frac{(\epsilon_\infty-\epsilon_{\mathrm{out}})(n+1)}{\epsilon_\infty\,[n\epsilon_\infty+(n+1)\epsilon_{\mathrm{out}}]}
-   \Big(\frac{r r'}{R^2}\Big)^n P_n(\cos\theta)
-
-(``build_sphere_reaction_field``). The diagonal of G is the self-image term of P(R), so QP and BSE
-see one dielectric model. The surface polarization then cancels in the neutral excitation
-(Brus 1984; Delerue et al. 2000). The results for Cd₁₆Se₁₃Cl₆:
-
-* S₁ = 3.18 eV in vacuum and 3.13 eV in toluene;
-* the QP gap moves by 1.6 eV between the two;
-* the gw S₁ is within 0.15 eV of the shared-W Delta-W models.
-
-The residual A and the bulk shift stay in the QP gap only. Atom positions are capped at r/R = 0.9
-because the series diverges at the boundary; this is a regularization choice.
+Legacy curve
+~~~~~~~~~~~~
 
 ``--kernel resta`` restores the bulk-only kernel, and ``--qp-polarization legacy`` restores the old
 curve:

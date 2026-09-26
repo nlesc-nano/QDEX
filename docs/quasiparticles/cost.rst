@@ -4,7 +4,7 @@ Cost
 Part of :doc:`/quasiparticles/index`.
 
 Full G₀W₀ scales as N⁴ (localized basis) and needs the response of thousands of empty states. That
-is prohibitive for dots of 10³–10⁴ atoms beyond single calculations (:doc:`theory`, section 3). The
+is prohibitive for dots of 10³–10⁴ atoms beyond single calculations (:doc:`gw`, section 3). The
 QDEX models cost, with n_ao basis functions and N_at atoms:
 
 .. list-table::

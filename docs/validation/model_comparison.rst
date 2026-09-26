@@ -72,7 +72,7 @@ not share a :math:`W`, and the solvent term of ``gw`` does not enter the BSE.
 The quasiparticle weight Z
 --------------------------
 
-The Delta-W correction is :math:`\Delta\varepsilon_p = Z_p\cdot\tfrac12 q_p^T\Delta W q_p`. The BSE uses
+The Delta-W correction is :math:`\Delta\varepsilon_p = Z_p\,\Delta\Sigma_p` (ΔCOHSEX; :doc:`/quasiparticles/models`). The BSE uses
 :math:`W_{\mathrm{bulk}} + \bar Z\,(W_{\mathrm{QD}}-W_{\mathrm{bulk}})`, with the same Z
 (:doc:`/quasiparticles/dynamic_z`). ``qp_z`` selects Z:
 

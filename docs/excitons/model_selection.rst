@@ -3,72 +3,46 @@ Model selection
 
 Part of :doc:`/excitons/index`.
 
-
-.. important::
-
-   The Delta-W QP models (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``) must be combined with the BSE kernel
-   ``qp``, which is the same screened interaction :math:`W`. Other kernels are rejected. See
-   :doc:`/validation/model_comparison` for the compatibility table and the recommended settings.
-
-.. rubric:: QDEX implementation
-
-Implementation entry point:
-
-* Module: ``qdex.solver``
-* Callable: ``qdex.solver.ExcitonSolver.solve``
-* CLI: ``--excitation-mode, --include-direct-eh, --include-exchange``
-* YAML: ``physics.excitation_mode, physics.include_direct_eh, physics.include_exchange``
-
-.. code-block:: python
-
-   solve(self, nroots=10, full_diag=False, tol=1e-05, excitation_mode='bse')
-
-
-8. Comprehensive Exciton Calculation Matrix
--------------------------------------------
+The QP model fixes the BSE kernel (:doc:`screened_kernel`). What remains to choose is the framework,
+the representation and the active space.
 
 .. list-table::
-   :widths: 18 15 15 14 38
    :header-rows: 1
+   :widths: 22 16 14 48
 
-   * - ``excitation_mode``
+   * - ``qp_gap``
+     - ``excitation_mode``
      - ``2e-integrals``
-     - ``kernel``
-     - Complexity
-     - Recommended Purpose
-   * - ``bse``
+     - Purpose
+   * - ``sgw-resta`` / ``sgw-dim``
+     - ``bse``
      - ``mnok``
-     - ``resta``
-     - :math:`O(N_{\mathrm{atoms}}^2)`
-     - **Production Standard**: Absorption spectra for large colloidal quantum dots (up to 10,000 atoms).
-   * - ``bse``
+     - **Production:** absorption spectra and size series of colloidal dots, in the solvent. DIM for
+       shape, ligand or shell effects.
+   * - ``gw``
+     - ``bse``
      - ``mnok``
-     - ``dim``
-     - :math:`O(N_{\mathrm{atoms}}^2)`
-     - Core/shell or anisotropic nanocrystals with polarizable dielectric boundaries.
-   * - ``diagonal_bse``
+     - Cheapest consistent estimate (kernel ``resta-sphere``).
+   * - ``qsgw-*``
+     - ``bse``
      - ``mnok``
-     - ``resta``
-     - :math:`O(N_{\mathrm{pairs}})`
-     - **NAMD Production**: Ultrafast excited-state dynamics and non-adiabatic trajectories.
-   * - ``bse``
+     - Orbital relaxation; small and medium dots.
+   * - any of the above
+     - ``bse``
      - ``xs``
-     - ``rpa``
-     - :math:`O(N_{\mathrm{ao}}^4)`
-     - **Ab Initio Benchmark**: Analytical AO density-pair Coulomb integrals and model RPA screening; benchmark accuracy requires validation.
-   * - ``bse``
-     - ``xs``
-     - ``dim``
-     - :math:`O(N_{\mathrm{ao}}^4)`
-     - Exact Gaussian integrals with atomistic polarizable dipole screening.
-   * - ``independent_qp``
-     - None
-     - None
-     - :math:`O(N_{\mathrm{pairs}})`
-     - Single-particle joint density of states with quasiparticle gap correction.
-   * - ``independent_dft``
-     - None
-     - None
-     - :math:`O(1)`
-     - Uncorrected baseline Kohn-Sham single-particle transitions.
+     - Small clusters and molecules, where the short range matters.
+   * - any of the above
+     - ``diagonal_bse``
+     - ``mnok``
+     - Non-adiabatic dynamics; check against ``bse``.
+   * - ``brus``
+     - ``bse``
+     - ``mnok``
+     - ΔW = 0 limit; use ``kernel: resta``.
+   * - any
+     - ``independent_qp`` / ``independent_dft``
+     - —
+     - Joint density of states; reference only.
 
+**Active space.** S₁ converges slowly with the number of transitions at 2 nm (2.499 → 2.443 eV from
+25 × 25 to 100 × 100). Keep the active space fixed within a comparison.

@@ -17,7 +17,7 @@ flag is given in brackets.
        ``qsgw-dim``; also ``sgw``, ``brus``, ``pbe`` or a gap in eV (:doc:`models`).
    * - ``kernel`` [``--kernel``]
      - model default
-     - ``qp`` for the Delta-W models and ``resta-sphere`` for ``gw``, set automatically. Other kernels
+     - ``qp`` for the Resta and DIM models and ``resta-sphere`` for ``gw``, set automatically. Other kernels
        only for models that define no W.
    * - ``two_electron_integrals`` [``--two-electron-integrals``]
      - ``mnok``
@@ -28,10 +28,10 @@ flag is given in brackets.
      - Optical dielectric constant of the environment (vacuum 1, toluene 2.24).
    * - ``qp_selfenergy`` [``--qp-selfenergy``]
      - ``cohsex``
-     - Delta-W levels: one-shot ΔCOHSEX (``cohsex``) or the classical ½ qᵀΔWq (``classical``).
+     - Resta/DIM levels: one-shot ΔCOHSEX (``cohsex``) or the classical ½ qᵀΔWq (``classical``).
    * - ``qp_solvent_term`` [``--qp-solvent-term``]
      - ``sphere``
-     - Environment part of ΔW in the Delta-W models: dielectric-sphere reaction field (``sphere``) or
+     - Environment part of ΔW in the Resta and DIM models: dielectric-sphere reaction field (``sphere``) or
        the earlier softened Born term (``born``).
    * - ``qp_levels`` [``--qp-levels``]
      - ``orbital``
@@ -44,7 +44,7 @@ flag is given in brackets.
      - Transition charges of the BSE; the QP populations follow the same partition (xs uses Löwdin).
    * - ``qp_anchor_residual`` [``--qp-anchor-residual``]
      - ``on``
-     - Add the calibrated per-edge anchor residual to the Delta-W levels.
+     - Add the calibrated per-edge anchor residual to the Resta and DIM levels.
    * - ``qp_residual_scaling`` [``--qp-residual-scaling``]
      - ``econf``
      - Size scaling of the anchor residual: E_conf(R)/E_conf(R₀) (``econf``) or (R₀/R)^p (``power``).

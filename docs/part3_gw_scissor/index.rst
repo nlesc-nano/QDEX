@@ -10,7 +10,7 @@ Original RST: :download:`part3_gw_scissor source <../_legacy_parts/part3_gw_scis
 Start with:
 
 * :doc:`/electronic_structure/index`
-* :doc:`/interactions/index`
+* :doc:`/quasiparticles/representation`
 * :doc:`/quasiparticles/index`
 * :doc:`/reference/index`
 * :doc:`/workflows/index`
