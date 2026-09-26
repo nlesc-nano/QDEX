@@ -1452,7 +1452,7 @@ def main():
             and args.kernel in (None, "resta-sphere")):
         # Anchor-scaled gw model: the BSE sees the same dielectric sphere as the
         # QP polarization term, W = Resta(eps_inf) + sphere reaction field.
-        from qdex.hardness import build_resta_mnok, build_sphere_reaction_field
+        from qdex.hardness import build_resta_mnok, build_sphere_reaction_field, anchor_bulk_homo_fraction
         w_resta, _ = build_resta_mnok(syms, np.array(coords_ang), args.alpha, args.material, eps_out=args.eps_out)
         w_sphere = build_sphere_reaction_field(np.array(coords_ang), syms, args.material, args.eps_out)
         qp_w = (w_resta + w_sphere, f"Resta(eps_inf) + sphere reaction field (eps_out = {args.eps_out:.2f})")
@@ -1460,6 +1460,7 @@ def main():
         qp_provenance["w_parts"] = {"w_qd": w_resta, "w_bulk": w_resta, "w_add": w_sphere,
                                     "gamma": build_gamma(syms, np.array(coords_ang), 1.0, 0.0),
                                     "eps_z": None, "bulk_shift": qp_provenance.get("bulk_gw_shift_ev", 0.0),
+                                    "bulk_homo_fraction": anchor_bulk_homo_fraction(args.material),
                                     "anchor_edges": True}
         args.kernel = None
     elif args.kernel == "resta-sphere":
@@ -1491,6 +1492,7 @@ def main():
             is_anchor_model = bool(w_parts.get("anchor_edges"))
             z_mode = "derived" if qp_provenance.get("dynamic_z") else "fixed"
             z_fixed = float(qp_provenance.get("z_factor", 1.0))
+            fb = float(w_parts.get("bulk_homo_fraction", 0.5))
             selfenergy = "classical" if is_anchor_model else str(getattr(args, "qp_selfenergy", "cohsex")).lower()
             if selfenergy == "cohsex":
                 t0c = time.time()
@@ -1499,7 +1501,7 @@ def main():
                                            dW_ao=dW_levels if use_xs else None)
                 eps_qp, lev_info = cohsex_qp_energies(
                     eps, coh, sex, homo_index, float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
-                    w_parts.get("eps_z"), args.material)
+                    w_parts.get("eps_z"), args.material, homo_fraction_bulk=fb)
                 print(f"\n  [QP Levels] One-shot Delta-COHSEX for all {len(eps)} orbitals in {time.time() - t0c:.1f} s: "
                       f"HOMO COH {coh[homo_index]:+.3f} SEX {sex[homo_index]:+.3f} eV; "
                       f"LUMO COH {coh[homo_index + 1]:+.3f} SEX {sex[homo_index + 1]:+.3f} eV")
@@ -1512,7 +1514,8 @@ def main():
                 eps_qp, lev_info = orbital_qp_energies(
                     eps, q_w[:, :len(occ_w)], q_w[:, len(occ_w):], occ_w, virt_w, dW_levels,
                     float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
-                    w_parts.get("eps_z"), args.material, edge_shifts=edges, representation=representation)
+                    w_parts.get("eps_z"), args.material, homo_fraction_bulk=fb, edge_shifts=edges,
+                    representation=representation)
                 lev_info["qp_selfenergy"] = "classical"
             lev_info["qp_populations"] = qp_pop_mode
 

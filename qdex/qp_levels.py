@@ -208,9 +208,9 @@ def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None):
         diag_dW = np.diag(dW_ao).copy()
     MC = P @ Cl
     del P
-    sex = -0.5 * np.einsum("mn,mn->n", Cl, MC, optimize=True)
+    sex = -0.5 * np.einsum("mn,mn->n", Cl.conj(), MC, optimize=True).real
     del MC
-    coh = 0.5 * ((Cl * Cl).T @ diag_dW)
+    coh = 0.5 * ((np.abs(Cl) ** 2).T @ diag_dW)
     return coh, sex
 
 
