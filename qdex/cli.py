@@ -832,10 +832,9 @@ def main():
                         help="Finite-size term of the anchor-scaled QP model: 'sphere' (classical surface polarization "
                              "of a dielectric sphere, 1S-averaged, Delerue-Lannoo-Allan; default) or 'legacy' "
                              "(11.52 eV A (1/eps_out - 1/eps_inf)/(R + ell)).")
-    parser.add_argument("--qp-edge-split", dest="qp_edge_split", choices=["anchor", "model"], default="anchor",
-                        help="HOMO/LUMO split of the QP correction for absolute IP/EA: 'anchor' (per-edge two-anchor "
-                             "curves calibrated on the monomer evGW, default when MATERIAL_DB has monomer data) or "
-                             "'model' (the Delta-W model's own, nearly symmetric split).")
+    parser.add_argument("--qp-edge-split", dest="qp_edge_split", choices=["anchor", "model"], default="model",
+                        help="HOMO/LUMO split of the QP correction for absolute IP/EA: 'model' (the model's own "
+                             "levels, default) or 'anchor' (legacy per-edge curves fitted to the monomer evGW).")
     parser.add_argument("--qp-levels", dest="qp_levels", choices=["orbital", "rigid"], default="orbital",
                         help="QP energies of models that define W: 'orbital' (default; every molecular orbital gets its "
                              "own Z_p * sigma_p) or 'rigid' (one scissor on all virtual orbitals).")
@@ -856,8 +855,9 @@ def main():
                         default="econf",
                         help="Size scaling of the non-classical anchor residual: 'econf' (default; "
                              "E_conf^PBE(R)/E_conf^PBE(R0)) or 'power' ((R0/R)^p).")
-    parser.add_argument("--qp-anchor-residual", dest="qp_anchor_residual", choices=["on", "off"], default="on",
-                        help="Apply the calibrated anchor residual to the Delta-W QP levels (default on).")
+    parser.add_argument("--qp-anchor-residual", dest="qp_anchor_residual", choices=["on", "off"], default=None,
+                        help="Add the residual calibrated on the monomer evGW: default off for the Delta-W models "
+                             "(the approximation is used as it is); the two-anchor gw model always has it.")
     parser.add_argument("--qp-anchor-calibrate", dest="qp_anchor_calibrate", action="store_true",
                         help="Run on the anchor cluster (vacuum): store the per-edge residual of this Delta-W "
                              "model against the evGW anchor in the residual table.")
@@ -1269,7 +1269,7 @@ def main():
                     return_details=True,
                     dft_gap=dft_gap,
                     residual_scaling=getattr(args, "qp_residual_scaling", "econf"),
-                    anchor_residual=getattr(args, "qp_anchor_residual", "on"),
+                    anchor_residual=getattr(args, "qp_anchor_residual", None) or "on",
                 )
             
             if gw_scissor is not None:
@@ -1678,7 +1678,7 @@ def main():
                                      "anchor_residual_scale": 1.0, "anchor_key": a_key})
                     eps_qp[:homo_index + 1] += res_h
                     eps_qp[homo_index + 1:] += res_l
-                elif str(getattr(args, "qp_anchor_residual", "on")).lower() == "on" and len(ent) >= 14:
+                elif str(getattr(args, "qp_anchor_residual", None) or "off").lower() == "on" and len(ent) >= 14:
                     table = load_anchor_table(table_path)
                     if a_key in table:
                         r_cl = qp_provenance.get("cluster_radius_ang") or get_cluster_size_metrics(
@@ -1741,7 +1741,7 @@ def main():
         print("    Note             : absolute IP/EA levels are not assigned in periodic mode.")
 
     elif qp_provenance is not None and "f_homo" in qp_provenance and "f_lumo" in qp_provenance:
-        if (getattr(args, "qp_edge_split", "anchor") == "anchor"
+        if (getattr(args, "qp_edge_split", "model") == "anchor"
                 and qp_provenance.get("edge_split_source") is None
                 and entry is not None and len(entry) >= 14):
             # Delta-W models split the correction almost 50/50 (classical charging);
@@ -1978,7 +1978,7 @@ def main():
             zn_arr = qp_provenance.get("z_factors", np.ones(len(eps)))
             d_sig_arr = qp_provenance.get("delta_sigmas", np.zeros(len(eps)))
             r_scale = float(qp_provenance.get("anchor_residual_scale", 1.0))
-            if str(getattr(args, "qp_anchor_residual", "on")).lower() == "off":
+            if str(getattr(args, "qp_anchor_residual", None) or "off").lower() == "off":
                 r_scale = 0.0
             r_h = float(qp_provenance.get("anchor_residual_homo_ev", 0.0)) / max(r_scale, 1e-12) if r_scale > 0 else 0.0
             r_l = float(qp_provenance.get("anchor_residual_lumo_ev", 0.0)) / max(r_scale, 1e-12) if r_scale > 0 else 0.0
@@ -1993,7 +1993,7 @@ def main():
             pol = pol_solv if args.eps_out > 1.0 else pol_vac
             d_sig_arr = np.where(np.arange(len(eps)) <= homo_index, -f_h * pol, f_l * pol)
             r_scale = float(qp_provenance.get("residual_scale", 1.0))
-            if str(getattr(args, "qp_anchor_residual", "on")).lower() == "off":
+            if str(getattr(args, "qp_anchor_residual", None) or "on").lower() == "off":
                 r_scale = 0.0
             r_h = float(qp_provenance.get("edge_residual_homo_ev", 0.0))
             r_l = float(qp_provenance.get("edge_residual_lumo_ev", 0.0))

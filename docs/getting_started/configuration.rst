@@ -17,7 +17,7 @@ A QDEX input file is organised by what each block controls:
      - the QP correction of the orbital energies (:doc:`/quasiparticles/index`)
    * - ``integrals``
      - the representation of the two-electron integrals, MNOK or ZDO xs
-       (:doc:`/quasiparticles/representation`)
+       (:doc:`/integrals/index`)
    * - ``excitations``
      - the excited-state framework, the BSE kernel and the active space (:doc:`/excitons/index`)
    * - ``soc``
@@ -85,7 +85,7 @@ system
    * - ``basis_txt``, ``basis_name``
      - basis-set file and basis name
    * - ``material`` [``--material``]
-     - ``MATERIAL_DB`` entry (bulk gaps, ε∞, anchor, masses), e.g. ``CDSE``, ``CSPBBR3``
+     - ``MATERIAL_DB`` entry (bulk gaps, ε∞, effective masses), e.g. ``CDSE``, ``CSPBBR3``
    * - ``gth_file``
      - GTH SOC pseudopotential file
    * - ``nthreads``, ``device``
@@ -138,18 +138,6 @@ quasiparticles
    * - ``solvent_term`` [``--qp-solvent-term``]
      - ``sphere``
      - environment part of ΔW: dielectric-sphere reaction field, or the older ``born`` form
-   * - ``anchor_residual`` [``--qp-anchor-residual``]
-     - ``on``
-     - add the calibrated evGW\@PBE0 residual (:doc:`/quasiparticles/anchor`)
-   * - ``residual_scaling`` [``--qp-residual-scaling``], ``residual_power``
-     - ``econf``
-     - size scaling of the residual: E_conf(R)/E_conf(R₀), or ``power`` (R₀/R)^p
-   * - ``anchor_calibrate`` [``--qp-anchor-calibrate``], ``anchor_table``
-     - off
-     - run on the anchor cluster to store the model's residual
-   * - ``edge_split`` [``--qp-edge-split``]
-     - ``anchor``
-     - HOMO/LUMO split for absolute IP/EA
    * - ``energy_reference``
      - ``vacuum``
      - QP energies relative to the vacuum or to the Fermi level (``fermi``)
@@ -189,12 +177,12 @@ excitations
      - ``bse``
      - ``independent_dft``, ``independent_qp``, ``diagonal_bse``, ``bse``; ``sbse`` and ``diagonal_sbse``
        are the same solvers, named for use with ``quasiparticles.model: none`` and a bulk kernel
-       (:doc:`/excitons/frameworks`)
+       (:doc:`/excitons/index`)
    * - ``kernel`` [``--kernel``]
      - model default
      - W of K\ :sup:`d`. Set by the QP model (``qp`` for Resta and DIM). Models without W (``none``,
        ``brus``, ``pbe``, a gap) take ``resta``, ``dim``, ``rpa``, ``sbse``, ``xs-*`` or ``bse``
-       (:doc:`/excitons/screened_kernel`)
+       (:doc:`/excitons/kernel`)
    * - ``nhomos``, ``nlumos``
      - all
      - active occupied and virtual orbitals
