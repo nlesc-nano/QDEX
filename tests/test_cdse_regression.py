@@ -21,6 +21,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent / "CdSe"
+REPO = Path(__file__).resolve().parent.parent
 RUN = os.environ.get("QDEX_RUN_REGRESSION") == "1"
 RUN_LARGE = RUN and os.environ.get("QDEX_RUN_CDSE") == "1"
 TOL = 0.005  # eV
@@ -103,7 +104,9 @@ class CdSeRegressionTest(unittest.TestCase):
                 os.symlink(f.resolve(), work / f.name)
         cmd = [sys.executable, "-c", "from qdex.cli import main; main()", "--config", "config.yaml",
                "--eps-out", str(eps), *flags]
-        res = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=1800)
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(REPO), env.get("PYTHONPATH")]))  # qdex, libint_cpp
+        res = subprocess.run(cmd, cwd=work, capture_output=True, text=True, timeout=1800, env=env)
         self.assertEqual(res.returncode, 0, res.stdout[-3000:] + res.stderr[-3000:])
         s1, bright = _states(work)
         self.assertAlmostEqual(_qp_gap(res.stdout), qp_ref, delta=TOL, msg=f"{name}: QP gap")
