@@ -13,12 +13,16 @@ system:
   gth_file: "/Users/ivaninfante/Documents/University/Programs/miniBSE/CsPbBr3_Sergio/GTH_SOC_POTENTIALS.txt"
   nthreads: 8
 
-physics:
-  excitation_mode: "diagonal_bse"
-  qp_gap: "gw"
-  exchange: true
-  kernel: "resta"
+environment:
   eps_out: 2.4
+
+quasiparticles:
+  model: "gw"
+
+excitations:
+  mode: "diagonal_bse"
+  kernel: "resta"
+  include_direct_eh: true
   nhomos: 100                  # Optical BSE active space; Auger continuum accesses all 2500 MOs
   nlumos: 100
 

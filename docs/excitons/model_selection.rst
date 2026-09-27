@@ -10,19 +10,19 @@ the representation and the active space.
    :header-rows: 1
    :widths: 22 16 14 48
 
-   * - ``qp_gap``
-     - ``excitation_mode``
-     - ``2e-integrals``
+   * - ``quasiparticles.model``
+     - ``excitations.mode``
+     - ``integrals.representation``
      - Purpose
    * - ``sgw-resta`` / ``sgw-dim``
      - ``bse``
      - ``mnok``
      - **Production:** absorption spectra and size series of colloidal dots, in the solvent. DIM for
        shape, ligand or shell effects.
-   * - ``gw``
-     - ``bse``
+   * - ``none``
+     - ``sbse``
      - ``mnok``
-     - Cheapest consistent estimate (kernel ``resta-sphere``).
+     - S₁ with bulk W and no finite-size QP term (kernel ``resta`` or ``dim``).
    * - ``qsgw-*``
      - ``bse``
      - ``mnok``

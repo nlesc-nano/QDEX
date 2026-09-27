@@ -10,7 +10,7 @@ Implementation entry point:
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
 * CLI: ``--config``
-* YAML: ``system.*, physics.*, namd.*``
+* YAML: ``system``, ``environment``, ``quasiparticles``, ``integrals``, ``excitations``, ``namd``
 
 .. code-block:: python
 
@@ -34,28 +34,26 @@ Configuration File (``tutorial5_analysis.yaml``)
      basis_txt: "BASIS_MOLOPT"
      basis_name: "DZVP-MOLOPT-PBE-GTH"
 
-   physics:
-     excitation_mode: "bse"
-     kernel: "resta"
-     qp_gap: "gw"
      material: "CSPBBR3"
+
+   quasiparticles:
+     model: sgw-resta
+
+   excitations:
+     mode: bse
      nhomos: 30
      nlumos: 30
-
-   bse:
      nroots: 10
 
-   analysis:
+   output:
      nto: true
      nto_states: [1, 2, 3]
      nto_top: 2
      nto_csv: true
      plot: true
-
-   cube:
-     export: true
+     cube: true
      bse_states: [1]
-     spacing_ang: 0.5
+     cube_spacing: 0.5
 
 
 Execution

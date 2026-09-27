@@ -12,7 +12,7 @@ The formulas of :doc:`gw` and :doc:`models` contain integrals of the form
 
 with X = ΔW for the self-energy. The BSE uses the same integrals with X = W (direct term) and X = v
 (exchange term). Computing them exactly needs the full four-index tensor, which is out of reach for
-10⁴ basis functions. QDEX offers two approximations, selected by ``two_electron_integrals``. The
+10⁴ basis functions. QDEX offers two approximations, selected by ``integrals.representation``. The
 choice applies to ΔW in the QP correction and to W and v in the BSE at the same time.
 
 MNOK: atom-condensed densities (``mnok``)

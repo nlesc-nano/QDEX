@@ -14,7 +14,7 @@ Implementation entry point:
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.estimate_gw_qp_gap``
 * CLI: ``--material``
-* YAML: ``system.material, physics.material``
+* YAML: ``system.material``
 
 .. code-block:: python
 

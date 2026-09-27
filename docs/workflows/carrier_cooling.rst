@@ -10,7 +10,7 @@ Implementation entry point:
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
 * CLI: ``--config``
-* YAML: ``system.*, physics.*, namd.*``
+* YAML: ``system``, ``environment``, ``quasiparticles``, ``integrals``, ``excitations``, ``namd``
 
 .. code-block:: python
 
@@ -44,11 +44,17 @@ Configuration File (``tutorial6_namd.yaml``)
      basis_txt: "BASIS_MOLOPT"
      basis_name: "DZVP-MOLOPT-PBE-GTH"
 
-   physics:
-     excitation_mode: "diagonal_bse"
-     kernel: "resta"
-     qp_gap: "gw"
      material: "CSPBBR3"
+
+   environment:
+     eps_out: 2.4
+
+   quasiparticles:
+     model: gw                   # the NAMD precompute supports gw, brus, pbe or a gap in eV
+
+   excitations:
+     mode: diagonal_bse
+     kernel: resta
      nhomos: 25
      nlumos: 25
 

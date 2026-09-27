@@ -381,7 +381,8 @@ def precompute_namd_data(config):
     namd_cfg = config.get("namd", {})
     traj_cfg = namd_cfg.get("trajectory", {})
     sys_cfg = config.get("system", {})
-    phys_cfg = config.get("physics", {})
+    from qdex.config_schema import flatten_config
+    phys_cfg = flatten_config(config)
     storage_cfg = namd_cfg.get("storage", {})
     track_cfg = namd_cfg.get("tracking", {})
 
@@ -401,7 +402,7 @@ def precompute_namd_data(config):
     qp_model = phys_cfg.get("qp_gap", "gw")
     eps_out = float(phys_cfg.get("eps_out", 2.4))
     excitation_mode = phys_cfg.get("excitation_mode", "diagonal_bse").lower()
-    include_exchange = phys_cfg.get("exchange", True)
+    include_exchange = phys_cfg.get("include_exchange", phys_cfg.get("exchange", True))
     kernel = phys_cfg.get("kernel", "resta")
     alpha = float(phys_cfg.get("alpha", 1.0))
 
@@ -411,7 +412,7 @@ def precompute_namd_data(config):
     hungarian_tracking = track_cfg.get("hungarian_tracking", True)
     completeness_thresh = float(track_cfg.get("completeness_threshold", 0.99))
 
-    soc = bool(phys_cfg.get("soc", False) or namd_cfg.get("soc", False))
+    soc = bool(phys_cfg.get("soc_flag", False) or phys_cfg.get("soc") is True or namd_cfg.get("soc", False))
     gth_file = sys_cfg.get("gth_file", None)
     if soc:
         if not gth_file:

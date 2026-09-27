@@ -34,7 +34,7 @@ The audit's numerical comparison and remaining limitations are recorded in
 ``audit/SCIENTIFIC_AUDIT.md``. The implementation sources are
 ``qdex.hardness.MATERIAL_DB`` and ``qdex.hardness.estimate_gw_qp_gap``;
 use CLI ``--material CDSE --qp_gap sgw-anchor`` or YAML ``system.material``
-and ``physics.qp_gap``.
+and ``quasiparticles.model``.
 
 Available 2.0 nm example
 ------------------------

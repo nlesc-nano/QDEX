@@ -6,7 +6,7 @@ Part of :doc:`/excitons/index`.
 .. important::
 
    The direct term K\ :sup:`d` uses the W of the QP model, including its finite-size part ΔW. QDEX
-   sets the kernel automatically: ``qp`` for the Resta and DIM models, ``resta-sphere`` for ``gw``.
+   sets the kernel automatically to ``qp`` for the Resta and DIM models.
    A kernel with a different W is rejected unless ``--allow-inconsistent-kernel`` is given.
 
 1. Why the same W
@@ -32,18 +32,16 @@ QP gap and the exciton binding must come from one W. What happens when they do n
    :header-rows: 1
    :widths: 20 20 60
 
-   * - ``qp_gap``
-     - ``kernel``
+   * - ``quasiparticles.model``
+     - ``excitations.kernel``
      - W in K\ :sup:`d`
-   * - ``none`` / ``bulk``
+   * - ``none``
      - ``resta`` or ``dim``
-     - :math:`W^{\mathrm{bulk}}_{AB}`: pure bulk screening (Resta or atomistic DIM), completely bypassing finite-size QP corrections
+     - :math:`W^{\mathrm{bulk}}_{AB}`: bulk screening (Resta or DIM) with no ΔW, like the QP energies:
+       the sBSE
    * - ``brus``
      - ``resta`` (recommended)
      - :math:`W^{\mathrm{bulk}}_{AB} = S_{\epsilon_\infty}(r_{AB})\,\gamma_{AB}`: no ΔW, like the QP gap
-   * - ``gw``
-     - ``resta-sphere``
-     - :math:`W^{\mathrm{bulk}}_{AB} + G(\mathbf r_A,\mathbf r_B)`: the sphere of the QP correction
    * - ``sgw-resta``, ``evgw-resta``, ``qsgw-resta``
      - ``qp``
      - :math:`W^{\mathrm{bulk}} + \bar Z\,(W^{\mathrm{QD}} + W^{\mathrm{add}} - W^{\mathrm{bulk}})`, Resta ε_in(R)
@@ -107,9 +105,6 @@ the singlet–triplet (bright–dark) splitting.
    * -
      - E_b vacuum (eV)
      - E_b toluene (eV)
-   * - ``gw`` + ``resta-sphere``
-     - 1.58
-     - 0.69
    * - ``sgw-resta``
      - 1.55
      - 0.73
@@ -129,7 +124,7 @@ the singlet–triplet (bright–dark) splitting.
 * **All shared-W models bind alike.** They share the sphere term, which dominates. The interior part
   of ΔW adds a little (Resta, DIM), and evGW slightly more because its converged ε_in is smaller.
 * **The QP gap and E_b move together** with the solvent (about 0.9 eV at 2 nm), so S₁ moves by only
-  0.04–0.12 eV (:doc:`cancellation`).
+  0.09–0.12 eV (:doc:`cancellation`).
 * **Resta vs DIM.** For spherical dots the difference is below 0.1 eV. DIM matters when the surface
   screening is inhomogeneous: shape, ligands, shells.
 * **mnok vs xs.** xs binds more at short range: −0.6 eV in S₁ at 1.2 nm, −0.05 eV at 2 nm.
@@ -137,7 +132,7 @@ the singlet–triplet (bright–dark) splitting.
 5. Kernels for models without W
 -------------------------------
 
-``pbe``, a numeric gap and ``gw`` with ``qp_polarization: legacy`` define no W. The kernel can then be
+``none``, ``brus``, ``pbe`` and a numeric gap define no ΔW. The kernel can then be
 chosen freely. None of these kernels contains the ΔW of a QP model:
 
 * ``resta`` / ``xs-resta``: bulk Resta W, :math:`S_{\epsilon_\infty}(r)\,\gamma`.

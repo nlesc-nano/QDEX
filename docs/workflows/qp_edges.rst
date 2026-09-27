@@ -10,7 +10,7 @@ Implementation entry point:
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
 * CLI: ``--config``
-* YAML: ``system.*, physics.*, namd.*``
+* YAML: ``system``, ``environment``, ``quasiparticles``, ``integrals``, ``excitations``, ``namd``
 
 .. code-block:: python
 
@@ -35,17 +35,18 @@ Configuration File (``tutorial3_gw.yaml``)
      basis_name: "DZVP-MOLOPT-PBE-GTH"
      cif: "CsPbBr3_bulk.cif"
 
-   physics:
-     qp_gap: "gw"
      material: "CSPBBR3"
-     eps_out: 2.25
-     qp_regularization_length: 1.0
-     qp_residual_power: 2.0
 
-   fuzzy:
-     run: true
-     dashboard_energy_mode: "both"
-     qp_energy_reference: "vacuum"
+   environment:
+     eps_out: 2.25
+
+   quasiparticles:
+     model: sgw-resta
+     energy_reference: vacuum    # absolute IP/EA
+
+   analysis:
+     run_fuzzy: true
+     dashboard_energy_mode: both
      pdos_atoms: ["Pb", "Br"]
 
 

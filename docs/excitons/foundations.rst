@@ -17,7 +17,7 @@ Implementation entry point:
 * Module: ``qdex.solver``
 * Callable: ``qdex.solver.ExcitonSolver.solve``
 * CLI: ``--excitation-mode, --include-direct-eh, --include-exchange``
-* YAML: ``physics.excitation_mode, physics.include_direct_eh, physics.include_exchange``
+* YAML: ``excitations.mode``, ``excitations.include_direct_eh``, ``excitations.include_exchange``
 
 .. code-block:: python
 

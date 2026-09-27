@@ -5,10 +5,10 @@ Part of :doc:`/quasiparticles/index`.
 
 .. important::
 
-   ``qp_z: derived`` is the default for every Resta and DIM model (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``). Z is
+   ``quasiparticles.z: derived`` is the default for every Resta and DIM model (``sgw-*``, ``evgw-*``, ``qsgw-*``, ``sgw``). Z is
    evaluated from one plasmon pole whose frequency follows from the same dielectric constant that
    builds the model's W. It is a linearized one-pole estimate, not the derivative of a computed
-   frequency-dependent self-energy. A fixed value (``qp_z: 1.0``) is still accepted.
+   frequency-dependent self-energy. A fixed value (``z: 1.0``) is still accepted.
 
 .. rubric:: QDEX implementation
 
@@ -17,7 +17,7 @@ Implementation entry point:
 * Module: ``qdex.hardness``
 * Callable: ``qdex.hardness.compute_dynamic_z``
 * CLI: ``--qp-z derived|<number>``
-* YAML: ``physics.qp_z``
+* YAML: ``quasiparticles.z``
 
 .. code-block:: python
 

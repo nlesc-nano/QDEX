@@ -10,7 +10,7 @@ Implementation entry point:
 * Module: ``qdex.soc_utils``
 * Callable: ``qdex.soc_utils.compute_spinor_subspace``
 * CLI: ``--soc_flag, --gth_file``
-* YAML: ``physics.soc, physics.soc_window_ev``
+* YAML: ``soc.enabled``, ``soc.window``
 
 .. code-block:: python
 
@@ -53,13 +53,13 @@ YAML Configuration Example
 
 .. code-block:: yaml
 
-   physics:
-     soc: true
-     soc_window_ev: 8.0
-     gth_potentials: "GTH_SOC_POTENTIALS.txt"
+   soc:
+     enabled: true
+     window: 8.0
 
    system:
      mo_file: "CsPbI3_MOs.mbse"
      xyz: "CsPbI3_QD.xyz"
      basis_txt: "BASIS_MOLOPT"
      basis_name: "DZVP-MOLOPT-SR-GTH"
+     gth_file: "GTH_SOC_POTENTIALS.txt"

@@ -8,6 +8,7 @@ import time
 import gc
 import platform
 import yaml 
+from qdex.config_schema import SECTIONS, section_dest
 
 import libint_cpp
 
@@ -648,20 +649,22 @@ def _apply_config(args, config_data, explicit_cli_args=None):
             continue
 
         if isinstance(parameters, dict):
+            if section == "physics":
+                print("  [Config] The 'physics' section is the old layout; it still works. New layout: "
+                      "quasiparticles, environment, integrals, excitations (see docs, Configuration).")
             for key, value in parameters.items():
-                norm_key = key.replace("-", "_")
-                if norm_key in ["two_electron_integrals", "2e_integrals"]:
-                    norm_key = "kernel_type"
+                dest = section_dest(section, key)
+                if dest is None:
+                    valid = ", ".join(sorted(SECTIONS[section]))
+                    raise ValueError(f"Unknown YAML key '{section}.{key}'. Valid keys: {valid}")
                 if (
                     key in explicit_cli_args
-                    or norm_key in explicit_cli_args
-                    or (norm_key == "kernel_type" and any(k in explicit_cli_args for k in ["kernel_type", "2e_integrals", "two_electron_integrals"]))
+                    or dest in explicit_cli_args
+                    or (dest == "kernel_type" and any(k in explicit_cli_args for k in ["kernel_type", "2e_integrals", "two_electron_integrals"]))
                 ):
                     continue
-                if hasattr(args, norm_key):
-                    setattr(args, norm_key, value)
-                elif hasattr(args, key):
-                    setattr(args, key, value)
+                if hasattr(args, dest):
+                    setattr(args, dest, value)
                 else:
                     raise ValueError(f"Unknown YAML key '{section}.{key}'")
         else:
@@ -911,7 +914,7 @@ def main():
     parser.add_argument("--skip-orthonormality-check", dest="skip_orthonormality_check", action="store_true",
                         help="Skip the C^T S C = I check (a full n_ao^3 product); use only for MO files already "
                              "known to be orthonormal (SOC still re-orthonormalizes its small active window). YAML: "
-                             "physics.skip_orthonormality_check: true")
+                             "system.skip_orthonormality_check: true")
     parser.add_argument("--orthonormality-tol", type=float, default=1e-5,
                         help="Abort when max|C^dagger S C-I| exceeds this tolerance.")
     parser.add_argument("--nthreads", type=int, default=1)
@@ -987,7 +990,7 @@ def main():
         _apply_config(args, config_data, explicit_cli_args=explicit_cli_args)
 
     if getattr(args, "namd_soc", False):
-        config_data.setdefault("physics", {})["soc"] = True
+        config_data.setdefault("soc", {})["enabled"] = True
     if getattr(args, "gth_file", None):
         config_data.setdefault("system", {})["gth_file"] = args.gth_file
 

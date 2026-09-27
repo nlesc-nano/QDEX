@@ -897,6 +897,24 @@ class TestXsKernel(unittest.TestCase):
         _apply_config(args3, cfg3, explicit_cli_args=explicit)
         self.assertEqual(args3.kernel_type, "xs")
 
+        # Test 4: current layout with short keys
+        parser.add_argument("--excitation-mode", dest="excitation_mode", default="bse")
+        parser.add_argument("--eps-out", dest="eps_out", type=float, default=2.0)
+        args4 = parser.parse_args([])
+        cfg4 = {
+            "environment": {"eps_out": 2.24},
+            "quasiparticles": {"model": "sgw-resta"},
+            "integrals": {"representation": "xs"},
+            "excitations": {"mode": "sbse"},
+        }
+        _apply_config(args4, cfg4, explicit_cli_args=set())
+        self.assertEqual((args4.qp_gap, args4.kernel_type, args4.excitation_mode, args4.eps_out),
+                         ("sgw-resta", "xs", "sbse", 2.24))
+
+        # Test 5: a key in the wrong section is rejected
+        with self.assertRaises(ValueError):
+            _apply_config(parser.parse_args([]), {"quasiparticles": {"kernel": "qp"}}, explicit_cli_args=set())
+
 
 if __name__ == '__main__':
     unittest.main()

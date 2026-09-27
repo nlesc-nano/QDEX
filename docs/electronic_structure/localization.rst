@@ -10,7 +10,7 @@ Implementation entry point:
 * Module: ``qdex.pdos_coop``
 * Callable: ``qdex.pdos_coop.compute_pdos_and_coop``
 * CLI: ``--charge_type, --run_fuzzy``
-* YAML: ``physics.charge_type, fuzzy.run``
+* YAML: ``integrals.charges``, ``analysis.run_fuzzy``
 
 .. code-block:: python
 

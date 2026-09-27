@@ -10,7 +10,7 @@ Implementation entry point:
 * Module: ``qdex.soc_utils``
 * Callable: ``qdex.soc_utils.compute_spinor_subspace``
 * CLI: ``--soc_flag, --gth_file``
-* YAML: ``physics.soc, physics.soc_window_ev``
+* YAML: ``soc.enabled``, ``soc.window``
 
 .. code-block:: python
 
