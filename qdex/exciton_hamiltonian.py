@@ -12,7 +12,8 @@ class ExcitonHamiltonian:
                  vxc_ao_path=None, nthreads=1, spin='singlet', C_beta=None, eps_beta=None, homo_index_beta=None,
                  n_occ_beta=None, n_virt_beta=None, excitation_mode="bse", kernel_type="mnok",
                  include_direct_eh=True, eps_dft=None, selection=None, selection_energy=7.0,
-                 selection_pt=1e-4):
+                 selection_pt=1e-4, selection_shift=True):
+        self.selection_shift = bool(selection_shift)
         self.selection = (str(selection).lower() if selection not in (None, False) else "none")
         self.selection_energy = float(selection_energy if selection_energy is not None else 7.0)
         self.selection_pt = float(selection_pt if selection_pt is not None else 1e-4)
@@ -424,7 +425,7 @@ class ExcitonHamiltonian:
             sys.exit(1)
             
         # 3. Feed the corrected QP energies into the diagonal
-        if pt_shift is not None:
+        if pt_shift is not None and self.selection_shift:
             qp_gap_matrix = qp_gap_matrix + pt_shift
         self.D_spatial = qp_gap_matrix[self.valid_mask] + scissor_ev
         self.D = self.D_spatial

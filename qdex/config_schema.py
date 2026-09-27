@@ -88,6 +88,7 @@ SECTIONS = {
         "selection": "selection",
         "selection_energy": "selection_energy",
         "selection_pt": "selection_pt",
+        "selection_shift": "selection_shift",
         "functional": "stda_functional",
         "ax": "stda_ax",
     },
