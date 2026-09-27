@@ -17,7 +17,75 @@ BOHR_PER_ANGSTROM = BOHR_PER_ANG
 # XYZ READER
 # ============================================================
 
+def is_h5_file(path):
+    """Checks whether the file has HDF5 magic header bytes."""
+    if not os.path.exists(path) or os.path.getsize(path) < 8:
+        return False
+    try:
+        with open(path, "rb") as f:
+            magic = f.read(8)
+        return magic == b"\x89HDF\r\n\x1a\n"
+    except Exception:
+        return False
+
+
+def read_geometry_h5(path):
+    """
+    Reads atomic symbols and Cartesian coordinates (in Angstroms)
+    from a TREXIO HDF5 file containing the 'nucleus' group.
+
+    Parameters:
+        path: str or Path
+            Path to the HDF5 file (e.g. orbitals.h5).
+
+    Returns:
+        syms: list of str
+            Element symbols (e.g. ['Cd', 'Se', ...]).
+        coords_ang: np.ndarray of shape (N, 3)
+            Cartesian coordinates in Angstroms.
+    """
+    try:
+        import h5py
+    except ImportError:
+        raise ImportError(
+            "h5py is required to read HDF5 files. Install it with 'pip install h5py'."
+        )
+    with h5py.File(path, "r") as f:
+        if "nucleus" not in f or "nucleus_coord" not in f["nucleus"] or "nucleus_label" not in f["nucleus"]:
+            raise ValueError(f"HDF5 file '{path}' does not contain required 'nucleus' group.")
+        raw_labels = f["nucleus/nucleus_label"][:]
+        syms = [l.decode("utf-8") if isinstance(l, bytes) else str(l) for l in raw_labels]
+        coords_bohr = np.asarray(f["nucleus/nucleus_coord"][:], dtype=np.float64)
+        coords_ang = coords_bohr / BOHR_PER_ANG
+    return syms, coords_ang
+
+
+def write_xyz(path, syms, coords_ang, comment=""):
+    """
+    Writes atomic symbols and coordinates (in Angstroms) to an XYZ file.
+
+    Parameters:
+        path: str or Path
+            Target XYZ filepath.
+        syms: list of str
+            Element symbols.
+        coords_ang: np.ndarray of shape (N, 3)
+            Cartesian coordinates in Angstroms.
+        comment: str, optional
+            Comment line (default empty).
+    """
+    coords_ang = np.asarray(coords_ang, dtype=np.float64)
+    with open(path, "w") as f:
+        f.write(f"{len(syms)}\n{comment}\n")
+        for s, (x, y, z) in zip(syms, coords_ang):
+            f.write(f"{s:<4} {x:16.8f} {y:16.8f} {z:16.8f}\n")
+
+
 def read_xyz(path):
+    ext = os.path.splitext(path)[-1].lower()
+    if ext in (".h5", ".hdf5") or is_h5_file(path):
+        return read_geometry_h5(path)
+
     with open(path) as f:
         lines = f.readlines()
 
@@ -311,9 +379,277 @@ def write_mos_mbse(path, C, eps, occ, n_occ=None, n_elec=None, flags=1, version=
         f.write(occ.tobytes())
 
 
+def build_trexio_to_cp2k_ao_map(shell_ang_mom):
+    """
+    Constructs the 0-based mapping array `mapping` such that
+    `mapping[i_trexio] = j_cp2k` for spherical Gaussian orbitals.
+
+    In CP2K's TREXIO export (src/trexio_utils.F):
+      DO ishell = 1, shell_num
+         l = shell_ang_mom(ishell)
+         DO k = 1, 2*l + 1
+            m = (-1)**k * FLOOR(REAL(k) / 2.0)
+            cp2k_to_trexio_ang_mom(i + k) = i + l + 1 + m
+         END DO
+         i = i + 2*l + 1
+      END DO
+
+    This maps TREXIO's real spherical harmonic order (0, +1, -1, +2, -2, ...)
+    back to CP2K/Libint standard order (-l, -l+1, ..., 0, ..., +l).
+    """
+    mapping = []
+    offset = 0
+    for l in shell_ang_mom:
+        nbf = 2 * int(l) + 1
+        for k in range(1, nbf + 1):
+            m = ((-1) ** k) * (k // 2)
+            mapping.append(offset + int(l) + m)
+        offset += nbf
+    return np.array(mapping, dtype=np.int64)
+
+
+def read_mos_h5(path, n_ao_total=None, spin=None, shell_ang_mom=None, verbose=False):
+    """
+    Reads molecular orbitals, orbital energies (in Hartree), and occupations
+    from an HDF5 file (TREXIO format or generic HDF5).
+
+    Parameters:
+        path: str or Path
+            Path to the HDF5 file (e.g. orbitals.h5).
+        n_ao_total: int, optional
+            Expected total number of AOs for consistency check.
+        spin: str, int, or None, optional
+            For unrestricted (UKS) calculations:
+            - 'alpha' or 0: extract alpha spin channel (mo_spin == 0)
+            - 'beta' or 1: extract beta spin channel (mo_spin == 1)
+            - None: return all orbitals or the single spin channel if restricted.
+        shell_ang_mom: sequence of int, optional
+            Angular momentum l per shell. If omitted, read from 'basis/basis_shell_ang_mom'.
+        verbose: bool, default False
+            If True, prints file load statistics and timing.
+
+    Returns:
+        C: np.ndarray of shape (n_ao, n_mo)
+            MO coefficient matrix in standard CP2K/Libint AO basis.
+        eps: np.ndarray of shape (n_mo,)
+            Orbital energies in Hartree (atomic units).
+        occ: np.ndarray of shape (n_mo,)
+            Orbital occupation numbers.
+    """
+    try:
+        import h5py
+    except ImportError:
+        raise ImportError(
+            "h5py is required to read HDF5 orbital files. Install it with 'pip install h5py'."
+        )
+
+    t0 = time.perf_counter()
+    with h5py.File(path, "r") as f:
+        # 1. TREXIO format ('mo' group)
+        if "mo" in f and "mo_coefficient" in f["mo"]:
+            mo_grp = f["mo"]
+            raw_C = np.asarray(mo_grp["mo_coefficient"][:], dtype=np.float64)  # shape (n_mo, n_ao)
+            eps = np.asarray(mo_grp["mo_energy"][:], dtype=np.float64)
+            occ = np.asarray(mo_grp["mo_occupation"][:], dtype=np.float64)
+            mo_spin = (
+                np.asarray(mo_grp["mo_spin"][:], dtype=np.int64)
+                if "mo_spin" in mo_grp
+                else np.zeros(len(eps), dtype=np.int64)
+            )
+
+            # Filter spin channel if requested
+            if spin is not None:
+                target_spin = 0 if str(spin).lower() in ("0", "alpha", "a") else 1
+                mask = mo_spin == target_spin
+                if not np.any(mask):
+                    raise ValueError(
+                        f"Requested spin channel '{spin}' (target={target_spin}) not found in {path}. "
+                        f"Available spins: {np.unique(mo_spin)}."
+                    )
+                raw_C = raw_C[mask, :]
+                eps = eps[mask]
+                occ = occ[mask]
+
+            n_mo, n_ao = raw_C.shape
+            if n_ao_total is not None and n_ao != n_ao_total:
+                raise ValueError(
+                    f"AO count mismatch in {path}: file contains {n_ao} AOs, "
+                    f"but current basis set requires {n_ao_total} AOs."
+                )
+
+            # Check spherical vs cartesian
+            is_cartesian = False
+            if "ao" in f and "ao_cartesian" in f["ao"].attrs:
+                is_cartesian = bool(f["ao"].attrs["ao_cartesian"])
+            elif "ao" in f and "ao_cartesian" in f["ao"]:
+                is_cartesian = bool(np.squeeze(f["ao/ao_cartesian"][:]))
+
+            if not is_cartesian:
+                # Spherical harmonics: resolve shell angular momentum
+                if shell_ang_mom is None and "basis" in f and "basis_shell_ang_mom" in f["basis"]:
+                    shell_ang_mom = f["basis/basis_shell_ang_mom"][:]
+
+                if shell_ang_mom is not None:
+                    mapping = build_trexio_to_cp2k_ao_map(shell_ang_mom)
+                    if len(mapping) != n_ao:
+                        raise ValueError(
+                            f"Shell angular momentum basis generates {len(mapping)} AOs, "
+                            f"which does not match n_ao={n_ao} in {path}."
+                        )
+                    C = np.zeros((n_ao, n_mo), dtype=np.float64)
+                    C[mapping, :] = raw_C.T
+                else:
+                    C = np.ascontiguousarray(raw_C.T, dtype=np.float64)
+            else:
+                C = np.ascontiguousarray(raw_C.T, dtype=np.float64)
+
+        # 2. Direct QDEX HDF5 format ('C', 'eps', 'occ')
+        elif "C" in f and "eps" in f and "occ" in f:
+            C = np.asarray(f["C"][:], dtype=np.float64)
+            eps = np.asarray(f["eps"][:], dtype=np.float64)
+            occ = np.asarray(f["occ"][:], dtype=np.float64)
+            if n_ao_total is not None and C.shape[0] != n_ao_total and C.shape[1] == n_ao_total:
+                C = C.T
+            if n_ao_total is not None and C.shape[0] != n_ao_total:
+                raise ValueError(
+                    f"AO count mismatch in {path}: file contains {C.shape[0]} AOs, "
+                    f"expected {n_ao_total}."
+                )
+        else:
+            raise ValueError(
+                f"Unrecognized HDF5 orbital format in '{path}'. "
+                "Expected TREXIO structure ('mo' group) or direct 'C', 'eps', 'occ' datasets."
+            )
+
+    if verbose:
+        dt = time.perf_counter() - t0
+        size_gib = os.path.getsize(path) / (1024.0 ** 3)
+        rate = size_gib / dt if dt > 0.0 else float("inf")
+        print(
+            f"[MOs:HDF5] Loaded {size_gib * 1024.0:.2f} MiB in {dt:.4f} s "
+            f"({rate:.2f} GiB/s) | C shape {C.shape} (n_mo={C.shape[1]})"
+        )
+
+    return C, eps, occ
+
+
+def write_mos_h5(
+    path,
+    C,
+    eps,
+    occ,
+    shell_ang_mom=None,
+    labels=None,
+    coords_ang=None,
+    mo_spin=None,
+    is_cartesian=False,
+    mo_type="Canonical",
+):
+    """
+    Writes molecular orbitals to an HDF5 file following the TREXIO format standard.
+
+    Parameters:
+        path: str or Path
+            Output HDF5 filepath.
+        C: np.ndarray of shape (n_ao, n_mo)
+            MO coefficient matrix in CP2K/Libint order.
+        eps: np.ndarray of shape (n_mo,)
+            Orbital energies in Hartree.
+        occ: np.ndarray of shape (n_mo,)
+            Orbital occupations.
+        shell_ang_mom: sequence of int, optional
+            Angular momentum l for each shell. Required for spherical basis transformation.
+        labels: list of str, optional
+            Atomic symbols for nucleus group.
+        coords_ang: np.ndarray of shape (natoms, 3), optional
+            Atomic coordinates in Angstroms for nucleus group.
+        mo_spin: np.ndarray of shape (n_mo,), optional
+            Spin channel per MO (0 for alpha, 1 for beta).
+        is_cartesian: bool, default False
+            Whether Cartesian basis is used.
+        mo_type: str, default "Canonical"
+            Type of MOs.
+    """
+    try:
+        import h5py
+    except ImportError:
+        raise ImportError(
+            "h5py is required to write HDF5 orbital files. Install it with 'pip install h5py'."
+        )
+
+    C = np.asarray(C, dtype=np.float64)
+    eps = np.asarray(eps, dtype=np.float64)
+    occ = np.asarray(occ, dtype=np.float64)
+    n_ao, n_mo = C.shape
+
+    if eps.shape != (n_mo,):
+        raise ValueError(f"eps shape {eps.shape} does not match n_mo {n_mo}")
+    if occ.shape != (n_mo,):
+        raise ValueError(f"occ shape {occ.shape} does not match n_mo {n_mo}")
+
+    if mo_spin is None:
+        mo_spin = np.zeros(n_mo, dtype=np.int64)
+    else:
+        mo_spin = np.asarray(mo_spin, dtype=np.int64)
+
+    # Convert C to TREXIO orientation and ordering
+    if not is_cartesian and shell_ang_mom is not None:
+        mapping = build_trexio_to_cp2k_ao_map(shell_ang_mom)
+        if len(mapping) != n_ao:
+            raise ValueError(
+                f"shell_ang_mom implies {len(mapping)} AOs, but C has {n_ao} rows."
+            )
+        raw_C = np.zeros((n_mo, n_ao), dtype=np.float64)
+        raw_C[:, :] = C[mapping, :].T
+    else:
+        raw_C = np.ascontiguousarray(C.T, dtype=np.float64)
+
+    with h5py.File(path, "w") as f:
+        # mo group
+        mo_grp = f.create_group("mo")
+        mo_grp.attrs["mo_num"] = np.int64(n_mo)
+        mo_grp.attrs["mo_type"] = mo_type.encode("utf-8")
+        mo_grp.create_dataset("mo_coefficient", data=raw_C)
+        mo_grp.create_dataset("mo_energy", data=eps)
+        mo_grp.create_dataset("mo_occupation", data=occ)
+        mo_grp.create_dataset("mo_spin", data=mo_spin)
+
+        # ao group
+        ao_grp = f.create_group("ao")
+        ao_grp.attrs["ao_num"] = np.int64(n_ao)
+        ao_grp.attrs["ao_cartesian"] = np.int64(1 if is_cartesian else 0)
+
+        # basis group
+        if shell_ang_mom is not None:
+            basis_grp = f.create_group("basis")
+            ang_arr = np.asarray(shell_ang_mom, dtype=np.int64)
+            basis_grp.attrs["basis_shell_num"] = np.int64(len(ang_arr))
+            basis_grp.attrs["basis_type"] = b"Gaussian"
+            basis_grp.create_dataset("basis_shell_ang_mom", data=ang_arr)
+
+        # electron group
+        elec_grp = f.create_group("electron")
+        n_elec = int(np.round(np.sum(occ)))
+        elec_grp.attrs["electron_num"] = np.int64(n_elec)
+        elec_grp.attrs["electron_up_num"] = np.int64(n_elec // 2)
+        elec_grp.attrs["electron_dn_num"] = np.int64(n_elec - n_elec // 2)
+
+        # nucleus group (if provided)
+        if labels is not None and coords_ang is not None:
+            nuc_grp = f.create_group("nucleus")
+            nuc_grp.attrs["nucleus_num"] = np.int64(len(labels))
+            encoded_labels = np.array([str(s).encode("utf-8") for s in labels], dtype="O")
+            nuc_grp.create_dataset("nucleus_label", data=encoded_labels)
+            coords_bohr = np.asarray(coords_ang, dtype=np.float64) * BOHR_PER_ANG
+            nuc_grp.create_dataset("nucleus_coord", data=coords_bohr)
+
+
 def read_mos_auto(path, n_ao_total, verbose=False, cache=False):
 
     ext = os.path.splitext(path)[-1].lower()
+
+    if ext in (".h5", ".hdf5") or is_h5_file(path):
+        return read_mos_h5(path, n_ao_total=n_ao_total, verbose=verbose)
 
     if ext == ".npz":
         d = np.load(path, allow_pickle=False)
@@ -379,6 +715,7 @@ def read_mos_auto(path, n_ao_total, verbose=False, cache=False):
             )
     return C, eps, occ
 
+
 def read_mos_uks(path_alpha, path_beta, n_ao, verbose=False, cache=False):
     """
     Reads alpha and beta MO files from a CP2K UKS calculation.
@@ -387,6 +724,10 @@ def read_mos_uks(path_alpha, path_beta, n_ao, verbose=False, cache=False):
         C_alpha, eps_alpha, occ_alpha  — alpha spin channel
         C_beta,  eps_beta,  occ_beta   — beta spin channel
     """
+    if path_alpha == path_beta and (path_alpha.lower().endswith((".h5", ".hdf5")) or is_h5_file(path_alpha)):
+        C_alpha, eps_alpha, occ_alpha = read_mos_h5(path_alpha, n_ao, spin="alpha", verbose=verbose)
+        C_beta,  eps_beta,  occ_beta  = read_mos_h5(path_beta,  n_ao, spin="beta",  verbose=verbose)
+        return C_alpha, eps_alpha, occ_alpha, C_beta, eps_beta, occ_beta
     C_alpha, eps_alpha, occ_alpha = read_mos_auto(path_alpha, n_ao, verbose=verbose, cache=cache)
     C_beta,  eps_beta,  occ_beta  = read_mos_auto(path_beta,  n_ao, verbose=verbose, cache=cache)
     return C_alpha, eps_alpha, occ_alpha, C_beta, eps_beta, occ_beta

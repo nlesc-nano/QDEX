@@ -17,7 +17,8 @@ if __package__ is None or __package__ == "":
 
 from qdex.io_utils import (
     read_xyz, parse_basis, build_shell_dicts,
-    count_ao_from_shells, build_atom_ao_ranges, read_mos_auto, read_mos_uks
+    count_ao_from_shells, build_atom_ao_ranges, read_mos_auto, read_mos_uks,
+    read_geometry_h5, is_h5_file
 )
 from qdex.solver import ExcitonSolver
 from qdex.constants import HA_TO_EV, BOHR_PER_ANG
@@ -1149,7 +1150,16 @@ def main():
     tracker.start_stage("Geometry & Basis Parsing")
     print("\n--- Parsing Geometry and Basis Set ---")
     t0_parse = time.time()
-    syms, coords_ang = read_xyz(args.xyz)
+    if (
+        getattr(args, "xyz", None)
+        and not os.path.exists(args.xyz)
+        and os.path.exists(getattr(args, "mo_file", ""))
+        and (str(args.mo_file).lower().endswith((".h5", ".hdf5")) or is_h5_file(args.mo_file))
+    ):
+        print(f"  [Geometry] '{args.xyz}' not found on disk; extracting nuclear geometry directly from HDF5 '{args.mo_file}'")
+        syms, coords_ang = read_geometry_h5(args.mo_file)
+    else:
+        syms, coords_ang = read_xyz(args.xyz)
     basis_dict = parse_basis(args.basis_txt, args.basis_name, required_elements=set(syms))
     shells = build_shell_dicts(syms, coords_ang, basis_dict)
     shells = [{**sh, 'pure': True} for sh in shells] # Use Sphericals 
