@@ -14,7 +14,7 @@ Implementation entry point:
 * Module: ``qdex.solver``
 * Callable: ``qdex.solver.ExcitonSolver.solve``
 * CLI: ``--nroots, --tol``
-* YAML: ``bse.nroots, bse.tol``
+* YAML: ``excitations.nroots``, ``excitations.tol``
 
 .. code-block:: python
 
@@ -24,10 +24,10 @@ Implementation entry point:
 Spatial Asymptotics & Wannier-Mott Bulk Limit
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-As established in the quasiparticle theory (:doc:`../part3_gw_scissor/index`), the screened interaction :math:`W(r)` connects short-range atomic scales to the macroscopic crystal:
+As established in :doc:`/quasiparticles/gw`, the screened interaction :math:`W(r)` connects short-range atomic scales to the macroscopic crystal:
 
 1. **Short-Range Limit** (:math:`r \to 0`): :math:`W(r) \to v(r) = 1/r` (:math:`\epsilon \to 1`). Electronic screening ceases at sub-nanometer distances because the valence electrons cannot instantaneously compress inside an atomic core. This prevents the catastrophic underestimation of singlet-triplet exchange splitting and on-site Coulomb repulsion.
-2. **Nanocrystal Boundary** (:math:`r \sim R_{\mathrm{QD}}`): Dielectric mismatch between the dot (:math:`\epsilon_\infty`) and the solvent (:math:`\epsilon_{\mathrm{out}}`) generates an image-charge reaction field :math:`W^{\mathrm{solv}}`. In a consistent charged/neutral treatment this boundary can change optical energies; QDEX currently does not include ``eps_out`` in its Resta/DIM BSE direct kernel.
+2. **Nanocrystal Boundary** (:math:`r \sim R_{\mathrm{QD}}`): Dielectric mismatch between the dot (:math:`\epsilon_\infty`) and the solvent (:math:`\epsilon_{\mathrm{out}}`) generates an image-charge reaction field :math:`W^{\mathrm{solv}}`. It enters both the QP energies and K\ :sup:`d` through the shared W, and largely cancels in the optical energies (:doc:`/excitons/cancellation`).
 3. Asymptotic Bulk Limit (:math:`r \to \infty`, :math:`R_{\mathrm{QD}} \to \infty`): :math:`W(r) \to \frac{1}{\epsilon_\infty r}`. In this limit, the Bethe-Salpeter equation continuously reduces to the hydrogenic Wannier-Mott exciton equation:
 
    .. math::

@@ -29,23 +29,19 @@ Consistency rule: one W for QP and BSE
   correction and the BSE kernel use the same representation.
 * Delta-W QP models (sgw-*, evgw-*, qsgw-*; Resta or DIM) define W; the BSE uses
   that W (``kernel: qp``). Resta and DIM are never mixed.
-* ``gw`` (two-anchor) with the sphere polarization uses ``resta-sphere``:
-  bulk Resta W plus the reaction field of the same dielectric sphere.
-* ``gw`` with the legacy curve and ``brus`` define no W. They use the bulk
-  Resta kernel; this is the legacy (not consistent) reference.
+* sBSE: ``qp_gap: none`` (KS + bulk GW) with a bulk kernel (resta or dim) and
+  ``excitation_mode: sbse``: Delta-W is dropped from both sides.
+* ``brus`` defines no W and uses the bulk Resta kernel.
 
 Groups
 ------
 A  core matrix: integrals {mnok, xs} x QP model x eps_out {1, solvent}
-   QP models: gw (sphere), gw (legacy), brus, sgw/evgw/qsgw x {resta, dim}
 B  quasiparticle weight: Z = 1 and Z = 0.8 against the derived default
-C  QP levels: rigid scissor against orbital-resolved levels
-D  two-anchor sensitivity: residual power p = 1.5, 3; gw-sphere energies
-   with the bulk-only kernel (shows what the reaction field does)
+C  self-energy (classical vs Delta-COHSEX), Born vs sphere solvent term, rigid levels
 E  spin-orbit coupling for the main models, in the solvent
 F  active-space convergence (50 x 50, 100 x 100, Davidson)
 G  transition charges: Loewdin instead of Mulliken
-H  singlet-triplet (exchange) splitting, spin-free
+H  singlet-triplet splitting; diagonal solvers
 """
 import argparse
 import copy
@@ -69,9 +65,9 @@ HERE = Path.cwd()
 SWEEP_DIR = ["sweep"]  # "sweep_large" for --profile large
 
 QP_MODELS = {
-    # name: (physics overrides)
-    "gw-sphere": {"qp_gap": "gw", "qp_polarization": "sphere", "kernel": "resta-sphere"},
-    "gw-legacy": {"qp_gap": "gw", "qp_polarization": "legacy", "kernel": "resta"},
+    # name: overrides (command-line key names)
+    "sbse-resta": {"qp_gap": "none", "excitation_mode": "sbse", "kernel": "resta"},
+    "sbse-dim": {"qp_gap": "none", "excitation_mode": "sbse", "kernel": "dim"},
     "brus": {"qp_gap": "brus", "kernel": "resta"},
     "sgw-resta": {"qp_gap": "sgw-resta", "kernel": "qp"},
     "evgw-resta": {"qp_gap": "evgw-resta", "kernel": "qp"},
@@ -80,6 +76,7 @@ QP_MODELS = {
     "evgw-dim": {"qp_gap": "evgw-dim", "kernel": "qp"},
     "qsgw-dim": {"qp_gap": "qsgw-dim", "kernel": "qp"},
 }
+MAIN = ("sbse-resta", "sgw-resta", "sgw-dim", "qsgw-dim")
 
 
 def build_cases(eps_solvent):
@@ -89,62 +86,57 @@ def build_cases(eps_solvent):
     def add(group, name, phys, soc=False, solver=None):
         cases.append({"group": group, "name": name, "physics": phys, "soc": soc, "solver": solver or {}})
 
+    envs = [(1.0, "vac"), (eps_solvent, f"eps{es}")]
     # A: core matrix
     for ints in ("mnok", "xs"):
         for m, ph in QP_MODELS.items():
-            for eo in (1.0, eps_solvent):
-                tag = "vac" if eo == 1.0 else f"eps{es}"
+            for eo, tag in envs:
                 add("A", f"{ints}_{m}_{tag}", {**ph, "two_electron_integrals": ints, "eps_out": eo})
     # B: Z
     for m in ("sgw-resta", "sgw-dim", "qsgw-dim"):
         for z in ("1.0", "0.8"):
             add("B", f"mnok_{m}_Z{z}_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
                                             "qp_z": z})
-    add("B", f"mnok_sgw-resta_Z1.0_eps{es}", {**QP_MODELS["sgw-resta"], "two_electron_integrals": "mnok",
-                                              "eps_out": eps_solvent, "qp_z": "1.0"})
-    # C: rigid scissor vs orbital-resolved levels
-    for m in ("gw-sphere", "sgw-resta", "sgw-dim"):
-        for ints in ("mnok", "xs"):
-            add("C", f"{ints}_{m}_rigid_vac", {**QP_MODELS[m], "two_electron_integrals": ints, "eps_out": 1.0,
-                                               "qp_levels": "rigid"})
-    # D: two-anchor sensitivity
-    for p in (1.5, 3.0):
-        add("D", f"mnok_gw-sphere_p{p:g}_vac", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "mnok",
-                                               "eps_out": 1.0, "qp_residual_power": p})
-    for eo in (1.0, eps_solvent):
-        tag = "vac" if eo == 1.0 else f"eps{es}"
-        add("D", f"mnok_gw-sphere+bulkkernel_{tag}", {**QP_MODELS["gw-sphere"], "kernel": "resta",
-                                                      "two_electron_integrals": "mnok", "eps_out": eo})
+    # C: self-energy and environment term
+    for m in ("sgw-resta", "sgw-dim"):
+        for eo, tag in envs:
+            add("C", f"mnok_{m}_classical_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+                                                  "qp_selfenergy": "classical"})
+            add("C", f"mnok_{m}_born_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+                                             "qp_solvent_term": "born"})
+        add("C", f"mnok_{m}_rigid_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
+                                         "qp_levels": "rigid"})
     # E: SOC in the solvent
     for ints in ("mnok", "xs"):
-        for m in ("gw-sphere", "sgw-resta", "sgw-dim", "qsgw-dim"):
+        for m in MAIN:
             add("E", f"{ints}_{m}_soc_eps{es}", {**QP_MODELS[m], "two_electron_integrals": ints,
                                                  "eps_out": eps_solvent}, soc=True)
     # F: active space
     for n in (50, 100):
-        for m in ("gw-sphere", "sgw-resta"):
+        for m in ("sbse-resta", "sgw-resta"):
             add("F", f"mnok_{m}_as{n}_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
                                              "nhomos": n, "nlumos": n, "nroots": 10},
                 solver={"full_diag": False})
     # G: charges
-    for m in ("gw-sphere", "sgw-resta"):
+    for m in ("sbse-resta", "sgw-resta"):
         add("G", f"mnok_{m}_lowdin_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
                                           "charge_type": "lowdin"})
-    # H: triplets
-    for m in ("gw-sphere", "sgw-resta"):
+    # H: triplets and diagonal solvers
+    for m in ("sbse-resta", "sgw-resta"):
         add("H", f"mnok_{m}_triplet_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
                                            "triplet": True})
+    add("H", "mnok_sgw-resta_diagonal_vac", {**QP_MODELS["sgw-resta"], "two_electron_integrals": "mnok",
+                                             "eps_out": 1.0, "excitation_mode": "diagonal_bse"})
+    add("H", "mnok_sbse-resta_diagonal_vac", {**QP_MODELS["sbse-resta"], "two_electron_integrals": "mnok",
+                                              "eps_out": 1.0, "excitation_mode": "diagonal_sbse"})
     return cases
 
 
 def build_cases_large(eps_solvent, nact, nroots, xs=True, qsgw=True, soc=True):
     """Targeted set for large dots: fixed active space, Davidson, no convergence scans.
 
-    S  self-energy: classical 1/2 q^T dW q instead of Delta-COHSEX, no anchor residual,
-       the old softened Born solvent term, and the old (R0/R)^p residual scaling for gw
-    K  kernels for the gap-only gw model: resta-sphere (consistent) vs bulk resta
-    A  mnok core: each consistent QP x kernel pair, vacuum and solvent
-    D  two-anchor residual power p (the main uncertainty of gw at large R)
+    A  mnok core: every QP model with its kernel, vacuum and solvent
+    C  self-energy: classical 1/2 q^T dW q instead of Delta-COHSEX; the old softened Born term
     H  triplet (singlet-triplet splitting)
     E  SOC in the solvent for the main models
     X  xs representation for the main models (memory ~ 4-5 x n_ao^2 x 8 bytes)
@@ -160,43 +152,34 @@ def build_cases_large(eps_solvent, nact, nroots, xs=True, qsgw=True, soc=True):
                       "solver": dict(dav), "cost": cost})
 
     envs = [(1.0, "vac"), (eps_solvent, f"eps{es}")]
-    core = ["gw-sphere", "gw-legacy", "sgw-resta", "evgw-resta", "sgw-dim", "evgw-dim"]
-    for m in core:
+    for m in ("sbse-resta", "sbse-dim", "sgw-resta", "evgw-resta", "sgw-dim", "evgw-dim"):
         for eo, tag in envs:
             add("A", f"mnok_{m}_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo}, cost=0)
     for m in ("sgw-resta", "sgw-dim"):
         for eo, tag in envs:
-            add("S", f"mnok_{m}_classical_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+            add("C", f"mnok_{m}_classical_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
                                                   "qp_selfenergy": "classical"}, cost=0)
-        add("S", f"mnok_{m}_noanchor_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
-                                            "qp_anchor_residual": "off"}, cost=0)
-        for eo, tag in envs:
-            add("S", f"mnok_{m}_born_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
-                                              "qp_solvent_term": "born"}, cost=0)
-    add("S", f"mnok_gw-sphere_powerscaling_eps{es}", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "mnok",
-                                                      "eps_out": eps_solvent, "qp_residual_scaling": "power"}, cost=0)
-    for eo, tag in envs:
-        add("K", f"mnok_gw-sphere+bulkkernel_{tag}", {**QP_MODELS["gw-sphere"], "kernel": "resta",
-                                                      "two_electron_integrals": "mnok", "eps_out": eo}, cost=0)
-    for p in (1.5, 3.0):
-        add("D", f"mnok_gw-sphere_p{p:g}_eps{es}", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "mnok",
-                                                   "eps_out": eps_solvent, "qp_residual_power": p}, cost=0)
-    add("H", "mnok_gw-sphere_triplet_vac", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "mnok",
+            add("C", f"mnok_{m}_born_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+                                             "qp_solvent_term": "born"}, cost=0)
+    add("H", "mnok_sgw-resta_triplet_vac", {**QP_MODELS["sgw-resta"], "two_electron_integrals": "mnok",
                                             "eps_out": 1.0, "triplet": True}, cost=0)
     if qsgw:
-        for eo, tag in envs:
-            add("A", f"mnok_qsgw-dim_{tag}", {**QP_MODELS["qsgw-dim"], "two_electron_integrals": "mnok",
-                                              "eps_out": eo}, cost=1)
+        for m in ("qsgw-resta", "qsgw-dim"):
+            for eo, tag in envs:
+                add("A", f"mnok_{m}_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo},
+                    cost=1)
     if soc:
-        for m in ("gw-sphere", "sgw-resta", "sgw-dim"):
+        for m in MAIN:
+            if m.startswith("qsgw") and not qsgw:
+                continue
             add("E", f"mnok_{m}_soc_eps{es}", {**QP_MODELS[m], "two_electron_integrals": "mnok",
                                                "eps_out": eps_solvent}, soc_on=True, cost=2)
     if xs:
-        for m in ("gw-sphere", "sgw-resta", "sgw-dim"):
+        for m in ("sbse-resta", "sgw-resta", "sgw-dim"):
             for eo, tag in envs:
                 add("X", f"xs_{m}_{tag}", {**QP_MODELS[m], "two_electron_integrals": "xs", "eps_out": eo}, cost=3)
         if soc:
-            add("X", f"xs_gw-sphere_soc_eps{es}", {**QP_MODELS["gw-sphere"], "two_electron_integrals": "xs",
+            add("X", f"xs_sgw-resta_soc_eps{es}", {**QP_MODELS["sgw-resta"], "two_electron_integrals": "xs",
                                                    "eps_out": eps_solvent}, soc_on=True, cost=4)
     cases.sort(key=lambda c: c["cost"])
     return cases
