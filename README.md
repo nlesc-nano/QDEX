@@ -157,6 +157,19 @@ A run of `QDEX` produces rich publication-ready data and interactive dashboards:
 
 ---
 
+## Testing
+
+```bash
+python -m pytest tests -q                                   # unit tests (~20 s)
+QDEX_RUN_REGRESSION=1 python -m pytest tests/test_cdse_regression.py   # CdSe validation numbers, 1.2 nm (~25 s)
+QDEX_RUN_REGRESSION=1 QDEX_RUN_CDSE=1 python -m pytest tests/test_cdse_regression.py tests/test_cdse_integration.py  # + 2.0 nm
+```
+
+The regression test checks the QP gap, S1 and the first bright state of the validation cases
+(`docs/validation/cdse_experiment.rst`) to 5 meV. GitHub Actions (`.github/workflows/ci.yml`) runs
+the unit tests, the 1.2 nm regression and the documentation build (`sphinx -W`) on every push and
+pull request.
+
 ## Documentation
 
 Full documentation with comprehensive mathematical formulations, physical explanations, and step-by-step tutorials is available in the `docs/` folder and can be built using Sphinx:
