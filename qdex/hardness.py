@@ -856,6 +856,64 @@ def set_mnok_options(exponent=2.0, exponent_exchange=None, onsite="ip_ea", verbo
               f"on-site {'IP - EA' if MNOK_ONSITE_SCALE == 2.0 else 'eta'}")
 
 
+_KERNEL_DESCRIPTION = {
+    "qp": "W of the QP model (the same W as in the QP correction)",
+    "resta": "bulk Resta W_AB = S_eps_inf(R_AB) gamma_AB",
+    "dim": "DIM W_AB = S_eps_AB(R_AB) gamma_AB",
+    "rpa": "RPA W = (1 + gamma Pi0)^-1 gamma of the active space",
+    "sbse": "sBSE screening (Cho, Bintrim, Berkelbach)",
+    "bse": "uniform alpha gamma / eps_inf",
+}
+
+
+def format_integrals_block(representation, charges, kernel, symbols, stda_info=None, stda_ax_source=None,
+                           include_direct=True, include_exchange=True, hubbard_beta=0.0,
+                           eta_dict=HARDNESS_DICT):
+    """Printable description of the two-electron integrals actually used in the run."""
+    rep = str(representation).lower()
+    kern = str(kernel).lower() if kernel is not None else "none"
+    elements = sorted({str(s).capitalize() for s in symbols})
+    lines = ["", "--- Two-electron integrals ---"]
+    if kern == "stda":
+        ax = stda_info["ax"]
+        src = f" ({stda_ax_source})" if stda_ax_source else ""
+        lines += [
+            "  Representation : sTDA (Grimme, J. Chem. Phys. 138, 244104 (2013)), Loewdin transition charges",
+            "  Exchange  K^x  : gamma^K_AB = (R^a + eta_AB^-a)^(-1/a),        a = 1.42 + 0.48 a_x"
+            f" = {stda_info['alpha_K']:.3f}",
+            "  Direct    K^d  : gamma^J_AB = (R^b + (a_x eta_AB)^-b)^(-1/b),  b = 0.20 + 1.83 a_x"
+            f" = {stda_info['beta_J']:.3f}",
+            f"  a_x            : {ax:.3f}{src}",
+            "  eta_AB         : (eta_A + eta_B)/2 with eta = IP - EA (R, eta in atomic units)",
+        ]
+        onsite = {e: 2.0 * eta_dict.get(e.lower(), 5.0) for e in elements}
+        lines.append("  eta per element: " + ", ".join(f"{e} {v:.2f} eV" for e, v in onsite.items()))
+        return "\n".join(lines)
+    k_exp = MNOK_EXPONENT_K if MNOK_EXPONENT_K is not None else MNOK_EXPONENT
+    names = {1.0: "Mataga-Nishimoto", 2.0: "Ohno-Klopman"}
+    if rep.startswith("xs"):
+        lines.append("  Representation : xs, exact AO density-pair integrals (mu mu|nu nu) (Libint2, ZDO)")
+    else:
+        s = MNOK_ONSITE_SCALE
+        lines += [
+            f"  Representation : MNOK, atom pairs, {str(charges).capitalize()} transition charges",
+            "  gamma_AB       = (R^beta + a_AB^beta)^(-1/beta),  a_AB = (1/gamma_AA + 1/gamma_BB)/2",
+            f"  beta (direct)  : {MNOK_EXPONENT:g}" + (f" ({names[MNOK_EXPONENT]})" if MNOK_EXPONENT in names else ""),
+            f"  beta (exchange): {k_exp:g}" + (f" ({names[k_exp]})" if k_exp in names else ""),
+            "  On-site        : " + ("gamma_AA = IP - EA = 2 eta_A" if s == 2.0 else "gamma_AA = eta_A = (IP - EA)/2")
+            + "  (integrals.mnok_onsite: " + ("ip_ea" if s == 2.0 else "eta") + ")",
+            "  gamma_AA       : " + ", ".join(f"{e} {s * eta_dict.get(e.lower(), 5.0):.2f} eV" for e in elements),
+        ]
+        if hubbard_beta:
+            lines.append(f"  Hubbard stiffening of the diagonal: beta = {hubbard_beta:g}")
+    lines.append("  Exchange  K^x  : " + ("bare interaction (unscreened)" if include_exchange else "off (triplets or include_exchange: false)"))
+    if include_direct:
+        lines.append(f"  Direct    K^d  : {_KERNEL_DESCRIPTION.get(kern, kern)}  (excitations.kernel: {kern})")
+    else:
+        lines.append("  Direct    K^d  : off")
+    return "\n".join(lines)
+
+
 def _mnok_denom(r_mat_au, damp_mat_au, exponent=None):
     """MNOK denominator (r^beta + damp^beta)^(1/beta). Default beta = MNOK_EXPONENT (2, Ohno-Klopman)."""
     beta = float(MNOK_EXPONENT if exponent is None else exponent)
