@@ -41,8 +41,8 @@ preconditioned by :math:`(\mathrm{diag}\,\mathbf A - \omega)^{-1}` until the res
 :math:`\mathcal O(N_{\mathrm{pairs}}^2)`. ``full_diag: true`` diagonalizes the dense matrix and returns
 all states.
 
-**Active space.** S₁ converges slowly with the number of transitions: 2.499 → 2.443 eV at 2 nm from
-25 × 25 to 100 × 100. Keep ``nhomos``/``nlumos`` fixed within a comparison.
+**Active space.** S₁ converges slowly with the number of transitions: 2.779 → 2.760 → 2.720 eV at 2 nm
+(sBSE, vacuum) from 25 × 25 to 50 × 50 to 100 × 100. Keep ``nhomos``/``nlumos`` fixed within a comparison.
 
 Perturbative transition selection
 ---------------------------------
@@ -77,9 +77,8 @@ replaces Grimme's orbital window. The selection lets a large pool be used at the
 matrix. Defaults are those of std2 (E_thr = 7 eV, t = 10⁻⁴ E\ :sub:`h`); for band-edge excitons of dots
 E_thr should be set just above the lowest states.
 
-**Cd₆₈Se₅₅Cl₂₆** (sBSE, bulk Resta W, vacuum), pool 50 × 50 = 2,500 transitions. These tests used the earlier MNOK
-on-site value η; with the default IP − EA the full 25 × 25 S₁ is 2.779 eV (−0.02 eV). The selection
-errors below are differences within the same integrals and do not depend on that choice:
+**Cd₆₈Se₅₅Cl₂₆** (sBSE, bulk Resta W, vacuum, default MNOK integrals), pool 50 × 50 = 2,500
+transitions:
 
 .. list-table::
    :header-rows: 1
@@ -90,27 +89,27 @@ errors below are differences within the same integrals and do not depend on that
      - f(S₁)
    * - full 25 × 25
      - 625
-     - 2.8001
-     - 0.303
+     - 2.7786
+     - 0.254
    * - full 50 × 50
      - 2,500
-     - 2.7923
-     - 0.241
+     - 2.7599
+     - 0.195
    * - E_thr = 3.3 eV
-     - 37 + 36
-     - 2.7855
-     - 0.390
+     - 43 + 116
+     - 2.7461
+     - 0.296
    * - E_thr = 3.6 eV
-     - 96 + 133
-     - 2.7863
-     - 0.336
+     - 103 + 314
+     - 2.7484
+     - 0.249
    * - E_thr = 3.3 eV, t = 10⁻⁵
-     - 37 + 447
-     - 2.7884
-     - 0.288
+     - 43 + 1,293
+     - 2.7576
+     - 0.200
 
-With a 100 × 100 pool (10,000 transitions; the full dense calculation takes 237 s, the selected ones
-6–7 s):
+With a 100 × 100 pool (10,000 transitions; the full dense calculation takes 245 s, the selected ones
+6–18 s):
 
 .. list-table::
    :header-rows: 1
@@ -121,29 +120,32 @@ With a 100 × 100 pool (10,000 transitions; the full dense calculation takes 237
      - S₁ (eV), ``selection_shift: off``
    * - full 100 × 100
      - 10,000
-     - 2.7809
-     - 2.7809
+     - 2.7195
+     - 2.7195
    * - E_thr = 3.3 eV
-     - 37 + 36
-     - 2.7633
-     - 2.8081
+     - 43 + 122
+     - 2.6928
+     - 2.7889
    * - E_thr = 3.6 eV
-     - 96 + 156
-     - 2.7644
-     - 2.8031
+     - 103 + 393
+     - 2.6959
+     - 2.7769
    * - E_thr = 3.3 eV, t = 10⁻⁵
-     - 37 + 531
-     - 2.7671
-     - 2.7974
+     - 43 + 2,159
+     - 2.7110
+     - 2.7525
 
-The added transitions are the same as with the 50 × 50 pool: the extra ones enter only through the
-second-order lowering, which accumulates and overshoots (−14 to −18 meV). Without it the error is
-+17 to +27 meV. The two bracket the full result; the std2 default (lowering on) is the closer one.
-
-S₁ is within 4–7 meV of the full 50 × 50 result with 3–20 % of the transitions, approaching it from
-below (the second-order lowering of the primaries slightly overshoots). Oscillator strengths converge
-more slowly: they need the larger selections. The diagonal solvers and the SOC calculation do not use
-the selection.
+* **50 × 50 pool.** S₁ is within 11–14 meV of the full result with 6–17 % of the transitions, and
+  within 2 meV with t = 10⁻⁵ (53 %). It is approached from below: the second-order lowering of the
+  primaries slightly overshoots.
+* **100 × 100 pool.** The added transitions are nearly the same as with the 50 × 50 pool; the extra
+  ones enter only through the second-order lowering (mean 40–50 meV, up to 110 meV per primary). With
+  the lowering S₁ is 24–27 meV too low, 9 meV with t = 10⁻⁵ (22 % of the transitions, 18 s instead
+  of 245 s). Without it S₁ is 33–69 meV too high. The two bracket the full result; the std2 default
+  (lowering on) is clearly the closer one.
+* **Oscillator strengths** converge slowly, both with the pool (0.25 → 0.20 → 0.10 from 25 × 25 to
+  100 × 100) and with the selection; they need the larger selections.
+* The diagonal solvers and the SOC calculation do not use the selection.
 
 **Dynamics.** The selection is meant for optical spectra near the band edge. Carrier cooling needs
 every state between the pump energy and the band edge, and the same transitions in every frame, so the
