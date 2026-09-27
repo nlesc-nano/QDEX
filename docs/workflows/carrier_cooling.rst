@@ -46,15 +46,12 @@ Configuration File (``tutorial6_namd.yaml``)
 
      material: "CSPBBR3"
 
-   environment:
-     eps_out: 2.4
-
    quasiparticles:
-     model: gw                   # the NAMD precompute supports gw, brus, pbe or a gap in eV
+     model: bulk                 # default: PBE orbitals + bulk GW correction
 
    excitations:
-     mode: diagonal_bse
-     kernel: resta
+     mode: diagonal_sbse         # default: diagonal K^x and K^d with the bulk W
+     kernel: resta               # default; or dim
      nhomos: 25
      nlumos: 25
 
