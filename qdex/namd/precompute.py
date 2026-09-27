@@ -325,7 +325,7 @@ def compute_frame_diagonal_bse(
             active_indices=act_idx,
             gth_file=gth_file,
             nthreads=nthreads,
-            assume_orthonormal=False,
+            assume_orthonormal=True,
             device=device,
             verbose=verbose_soc
         )
@@ -358,20 +358,40 @@ def compute_frame_diagonal_bse(
         E_diag = E_sp.copy()
         if do_kd or do_kx:
             SC_act = S_ao_intra @ C_act
-            C_sp_a = C_act @ U_alpha
-            C_sp_b = C_act @ U_beta
-            SC_sp_a = SC_act @ U_alpha
-            SC_sp_b = SC_act @ U_beta
+            if do_kx:
+                C_sp_a = C_act @ U_alpha
+                C_sp_b = C_act @ U_beta
+                SC_sp_a = SC_act @ U_alpha
+                SC_sp_b = SC_act @ U_beta
 
-            C_occ_sp_a = C_sp_a[:, :n_occ_sp]
-            C_virt_sp_a = C_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
-            C_occ_sp_b = C_sp_b[:, :n_occ_sp]
-            C_virt_sp_b = C_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
+                C_occ_sp_a = C_sp_a[:, :n_occ_sp]
+                C_virt_sp_a = C_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
+                C_occ_sp_b = C_sp_b[:, :n_occ_sp]
+                C_virt_sp_b = C_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
 
-            SC_occ_sp_a = SC_sp_a[:, :n_occ_sp]
-            SC_virt_sp_a = SC_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
-            SC_occ_sp_b = SC_sp_b[:, :n_occ_sp]
-            SC_virt_sp_b = SC_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
+                SC_occ_sp_a = SC_sp_a[:, :n_occ_sp]
+                SC_virt_sp_a = SC_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
+                SC_occ_sp_b = SC_sp_b[:, :n_occ_sp]
+                SC_virt_sp_b = SC_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
+            else:
+                # Optimized low-memory path when exchange is disabled:
+                # Transform occupied and virtual subspaces separately to compute diagonal densities.
+                C_occ_sp_a = C_act @ U_occ_alpha
+                SC_occ_sp_a = SC_act @ U_occ_alpha
+                C_occ_sp_b = C_act @ U_occ_beta
+                SC_occ_sp_b = SC_act @ U_occ_beta
+
+                dens_occ = np.real(C_occ_sp_a.conj() * SC_occ_sp_a + C_occ_sp_b.conj() * SC_occ_sp_b)
+                del C_occ_sp_a, SC_occ_sp_a, C_occ_sp_b, SC_occ_sp_b
+
+                C_virt_sp_a = C_act @ U_virt_alpha
+                SC_virt_sp_a = SC_act @ U_virt_alpha
+                C_virt_sp_b = C_act @ U_virt_beta
+                SC_virt_sp_b = SC_act @ U_virt_beta
+
+                dens_virt = np.real(C_virt_sp_a.conj() * SC_virt_sp_a + C_virt_sp_b.conj() * SC_virt_sp_b)
+                del C_virt_sp_a, SC_virt_sp_a, C_virt_sp_b, SC_virt_sp_b
+
         if do_kx:
             # Spinor transition densities: exchange enters once (K^x - K^d).
             Kx_mat = _diag_exchange([C_occ_sp_a, C_occ_sp_b], [C_virt_sp_a, C_virt_sp_b],
@@ -379,9 +399,9 @@ def compute_frame_diagonal_bse(
                                     atom_ao_ranges, gamma_bare)
             E_diag = E_diag + Kx_mat[i_indices, a_indices]
         if do_kd:
-
-            dens_occ = np.real(C_occ_sp_a.conj() * SC_occ_sp_a + C_occ_sp_b.conj() * SC_occ_sp_b)
-            dens_virt = np.real(C_virt_sp_a.conj() * SC_virt_sp_a + C_virt_sp_b.conj() * SC_virt_sp_b)
+            if do_kx:
+                dens_occ = np.real(C_occ_sp_a.conj() * SC_occ_sp_a + C_occ_sp_b.conj() * SC_occ_sp_b)
+                dens_virt = np.real(C_virt_sp_a.conj() * SC_virt_sp_a + C_virt_sp_b.conj() * SC_virt_sp_b)
 
             q_occ_diag = np.empty((n_occ_sp, n_atoms), dtype=np.float64)
             q_virt_diag = np.empty((n_virt_sp, n_atoms), dtype=np.float64)
