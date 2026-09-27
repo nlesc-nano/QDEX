@@ -3,6 +3,9 @@ import time
 from collections import defaultdict
 
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def transition_matrix_spatial(solver, vec, soc_U=None):
@@ -207,26 +210,26 @@ def selected_state_indices(args, n_states):
 
 
 def print_nto_analysis(states, label):
-    print(f"\n--- NTO Analysis ({label}) ---")
-    print(f"{'State':>5} {'Energy':>8} {'f_osc':>8} | {'w1':>7} {'NTO_PR':>7} {'S_nto':>7} {'N90':>4} {'N99':>4}")
-    print("-" * 75)
+    logger.info(f"\n--- NTO Analysis ({label}) ---")
+    logger.info(f"{'State':>5} {'Energy':>8} {'f_osc':>8} | {'w1':>7} {'NTO_PR':>7} {'S_nto':>7} {'N90':>4} {'N99':>4}")
+    logger.info("-" * 75)
     for state in states:
-        print(
+        logger.info(
             f"{state['state']:5d} {state['energy_ev']:8.3f} {state['f_osc']:8.4f} | "
             f"{state['lead_weight']:7.3f} {state['pr']:7.2f} {state['entropy']:7.3f} "
             f"{state['n90']:4d} {state['n99']:4d}"
         )
 
-    print("\n  Dominant NTO pairs")
-    print(
+    logger.info("\n  Dominant NTO pairs")
+    logger.info(
         f"{'State':>5} {'Pair':>4} {'Weight':>8} {'Cum':>8} | "
         f"{'d_CT':>7} {'sig_h':>7} {'sig_e':>7} {'PR_h':>6} {'PR_e':>6} | "
         f"{'Hole elem':>22} {'Electron elem':>22}"
     )
-    print("-" * 125)
+    logger.info("-" * 125)
     for state in states:
         for row in state["rows"]:
-            print(
+            logger.info(
                 f"{row['state']:5d} {row['pair']:4d} {row['weight']:8.3f} {row['cum_weight']:8.3f} | "
                 f"{row['d_ct_ang']:7.2f} {row['sigma_h_ang']:7.2f} {row['sigma_e_ang']:7.2f} "
                 f"{row['atom_pr_h']:6.1f} {row['atom_pr_e']:6.1f} | "
@@ -285,11 +288,11 @@ def run_nto_analysis(solver, vectors, energies_ev, f_strengths, coords, symbols,
         )
 
     print_nto_analysis(states, label)
-    print(f"  [NTO] Completed in {time.time() - t0:.2f}s")
+    logger.debug(f"  [NTO] Completed in {time.time() - t0:.2f}s")
 
     if args is not None and getattr(args, "nto_csv", False):
         filename = f"nto_results{suffix}.csv"
         write_nto_csv(states, filename)
-        print(f"  [NTO] Wrote {filename}")
+        logger.info(f"  [NTO] Wrote {filename}")
 
     return states

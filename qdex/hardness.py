@@ -6,6 +6,9 @@ from qdex.constants import (
     HA_TO_EV, ANG_PER_BOHR, BOHR_PER_ANG,
     IMAGE_CHARGE_CONST_EV_ANG, BRUS_KINETIC_EV_ANG2, VDW_SURFACE_ANG
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Atomic Hardness values (eta) in eV. 
 # Used for the Ohno-Klopman damping in the Coulomb kernel.
@@ -337,17 +340,17 @@ def estimate_gw_qp_gap(
     kappa = 11.52 eV A (1 - 1/eps_inf), kept to reproduce old results.
     """
     if material_name is None:
-        print("  [Warning] Material not specified. Cannot compute GW scaling.")
+        logger.warning("  [Warning] Material not specified. Cannot compute GW scaling.")
         return (None, None) if return_details else None
         
     m_name = material_name.upper()
     if m_name not in MATERIAL_DB:
-        print(f"  [Warning] Material {m_name} not found in MATERIAL_DB. GW estimation failed.")
+        logger.warning(f"  [Warning] Material {m_name} not found in MATERIAL_DB. GW estimation failed.")
         return (None, None) if return_details else None
         
     entry = MATERIAL_DB[m_name]
     if len(entry) < 9:
-        print(f"  [Warning] MATERIAL_DB entry for {m_name} is outdated. GW estimation failed.")
+        logger.warning(f"  [Warning] MATERIAL_DB entry for {m_name} is outdated. GW estimation failed.")
         return (None, None) if return_details else None
         
     # Extract Bulk Data
@@ -356,7 +359,7 @@ def estimate_gw_qp_gap(
     gap_gw_bulk = entry[8]
     
     if gap_gw_bulk == 0.0:
-        print(f"  [Warning] Missing GW bulk gap for {m_name}. GW estimation failed.")
+        logger.warning(f"  [Warning] Missing GW bulk gap for {m_name}. GW estimation failed.")
         return (None, None) if return_details else None
         
     # Extract Monomer Data (if available in the tuple)
@@ -378,17 +381,17 @@ def estimate_gw_qp_gap(
     # --- 1. Bulk GW Correction (Infinite Limit) ---
     delta_bulk_qp = gap_gw_bulk - gap_pbe_bulk
     
-    print(f"\n  [Scaled GW Model] Quasiparticle Correction for {m_name}:")
-    print(f"    Cluster Radius (R_QD) : {R_QD_ang:.3f} Å")
+    logger.info(f"\n  [Scaled GW Model] Quasiparticle Correction for {m_name}:")
+    logger.info(f"    Cluster Radius (R_QD) : {R_QD_ang:.3f} Å")
     anisotropy = float(metrics.get("anisotropy", 1.0))
     if anisotropy > 2.0:
-        print(
+        logger.warning(
             f"    [Size Warning] Principal-axis anisotropy is {anisotropy:.2f}; "
             "the scalar equivalent-volume radius may be a coarse approximation."
         )
-    print(f"    Bulk PBE Gap          : {gap_pbe_bulk:.3f} eV")
-    print(f"    Bulk GW Gap           : {gap_gw_bulk:.3f} eV")
-    print(f"    -> Bulk Shift         : {delta_bulk_qp:+.3f} eV")
+    logger.info(f"    Bulk PBE Gap          : {gap_pbe_bulk:.3f} eV")
+    logger.info(f"    Bulk GW Gap           : {gap_gw_bulk:.3f} eV")
+    logger.info(f"    -> Bulk Shift         : {delta_bulk_qp:+.3f} eV")
    
     ell = float(regularization_length_ang)
     p = float(residual_power)
@@ -432,7 +435,7 @@ def estimate_gw_qp_gap(
             )
             if strict:
                 raise ValueError(message)
-            print(f"    [Warning] {message} Using R=R0 for the QP model.")
+            logger.warning(f"    [Warning] {message} Using R=R0 for the QP model.")
             radius_used = R_mono
 
         use_residual = str(anchor_residual).lower() not in ("off", "false", "0", "no")
@@ -449,26 +452,26 @@ def estimate_gw_qp_gap(
         if pol_model == "sphere":
             edges = anchor_edge_curves(m_name, radius_used, eps_out, residual_power=p, decay=res_scale,
                                        residual_enabled=use_residual)
-        print(f"    Finite Vacuum Anchor : R0={R_mono:.3f} Å, gap shift={anchor_gap_shift:+.3f} eV")
+        logger.info(f"    Finite Vacuum Anchor : R0={R_mono:.3f} Å, gap shift={anchor_gap_shift:+.3f} eV")
         if pol_model == "sphere":
-            print(f"    Sphere Polarization  : F = {F_out:.4f} (vacuum {F_vac:.4f}), "
+            logger.info(f"    Sphere Polarization  : F = {F_out:.4f} (vacuum {F_vac:.4f}), "
                   f"P(R) = {pol_term(c_out, radius_used):+.3f} eV")
-            print(f"    Anchor Residual A    : {anchor_residual:+.3f} eV x {res_scale:.3f} "
+            logger.info(f"    Anchor Residual A    : {anchor_residual:+.3f} eV x {res_scale:.3f} "
                   f"({'E_conf(R)/E_conf(R0)' if res_mode == 'econf' else (f'(R0/R)^p, p={p:.2f}' if use_residual else 'off')})")
         else:
-            print(f"    Anchor Residual A    : {anchor_residual:+.3f} eV (ell={ell:.3f} Å, p={p:.3f})")
+            logger.info(f"    Anchor Residual A    : {anchor_residual:+.3f} eV (ell={ell:.3f} Å, p={p:.3f})")
     else:
         # No finite anchor is available; retain the correct bulk and dielectric limits.
         sigma_pol = pol_term(c_out, radius_used)
         sigma_pol_vac = pol_term(c_vac, radius_used)
-        print("    [Warning] No finite-QD GW anchor; using only the classical polarization term.")
+        logger.warning("    [Warning] No finite-QD GW anchor; using only the classical polarization term.")
 
-    print(f"    Solvent Dielectric    : eps_out = {eps_out:.2f}, eps_inf = {eps_inf:.2f}")
-    print(f"    -> Polarization Shift : {sigma_pol:+.3f} eV")
+    logger.info(f"    Solvent Dielectric    : eps_out = {eps_out:.2f}, eps_inf = {eps_inf:.2f}")
+    logger.info(f"    -> Polarization Shift : {sigma_pol:+.3f} eV")
  
     # --- 4. Total Quasiparticle Scissor ---
     total_scissor = delta_bulk_qp + sigma_pol
-    print(f"    ==> Total GW Scissor  : {total_scissor:+.3f} eV\n")
+    logger.info(f"    ==> Total GW Scissor  : {total_scissor:+.3f} eV\n")
 
     details = {
         "qp_model": "anchor_scaled_pbe_to_qp_model",
@@ -539,14 +542,14 @@ def compute_delta_xc(material):
 
     # If PBE gap is not present return zero correction
     if len(entry) < 8:
-        print(f"[Δxc] Warning: no PBE gap for {material}. Using Δxc = 0.")
+        logger.warning(f"[Δxc] Warning: no PBE gap for {material}. Using Δxc = 0.")
         return 0.0
 
     gap_pbe = entry[7]
 
     delta_xc = gap_exp - gap_pbe
 
-    print(f"[Δxc] Bulk correction for {material}: {delta_xc:.3f} eV")
+    logger.info(f"[Δxc] Bulk correction for {material}: {delta_xc:.3f} eV")
 
     return max(delta_xc, 0.0)
 
@@ -852,7 +855,7 @@ def set_mnok_options(exponent=2.0, exponent_exchange=None, onsite="ip_ea", verbo
     MNOK_ONSITE_SCALE = 2.0 if onsite == "ip_ea" else 1.0
     if verbose and (MNOK_EXPONENT, MNOK_EXPONENT_K, MNOK_ONSITE_SCALE) != (2.0, None, 2.0):
         k = MNOK_EXPONENT_K if MNOK_EXPONENT_K is not None else MNOK_EXPONENT
-        print(f"  [MNOK] exponent {MNOK_EXPONENT:g}, exchange exponent {k:g}, "
+        logger.info(f"  [MNOK] exponent {MNOK_EXPONENT:g}, exchange exponent {k:g}, "
               f"on-site {'IP - EA' if MNOK_ONSITE_SCALE == 2.0 else 'eta'}")
 
 
@@ -1063,14 +1066,14 @@ def build_resta_mnok(atom_symbols, coords, alpha, material_name, eps_out=2.0, et
     # --------------------------------------------------
     confinement_ratio = R_QD_ang / lambda_s_ang if lambda_s_ang > 0 else np.inf
 
-    print("\n    [Kernel: Electronic Resta-MNOK]")
-    print(f"    Material            = {m_name}")
-    print(f"    R_QD (hull_eff)     = {R_QD_ang:.3f} Å")
-    print(f"    R / lambda_s        = {confinement_ratio:.3f}")
-    print(f"    epsilon_in           = {eps_inf_bulk:.3f} (electronic/high-frequency)")
-    print(f"    epsilon_out          = {eps_out:.3f} (QP model only; not used in RESTA)")
-    print(f"    Screening length    = {lambda_s_ang/BOHR_TO_ANG:.3f} a.u. ({lambda_s_ang:.3f} Å)")
-    print()
+    logger.info("\n    [Kernel: Electronic Resta-MNOK]")
+    logger.info(f"    Material            = {m_name}")
+    logger.info(f"    R_QD (hull_eff)     = {R_QD_ang:.3f} Å")
+    logger.info(f"    R / lambda_s        = {confinement_ratio:.3f}")
+    logger.info(f"    epsilon_in           = {eps_inf_bulk:.3f} (electronic/high-frequency)")
+    logger.info(f"    epsilon_out          = {eps_out:.3f} (QP model only; not used in RESTA)")
+    logger.info(f"    Screening length    = {lambda_s_ang/BOHR_TO_ANG:.3f} a.u. ({lambda_s_ang:.3f} Å)")
+    logger.info("")
 
     # --------------------------------------------------
     # 5. Build MNOK matrices
@@ -1305,12 +1308,12 @@ def build_dim_mnok(atom_symbols, coords, material_name=None, alpha=1.0, eta_dict
     inter_mask = ~np.eye(n_atoms, dtype=bool)
     eps_eff_median = float(1.0 / np.median(S_atom[inter_mask])) if np.any(inter_mask) else 1.0
 
-    print(f"\n    [Kernel: Atomistic Polarizable Dipole Model (DIM-MNOK)]")
-    print(f"    Material            = {m_name}")
-    print(f"    epsilon_in (bulk)   = {eps_inf_bulk:.3f}")
-    print(f"    Nearest neighbor    = {d_NN_ang:.3f} Å")
-    print(f"    Median interatomic ε= {eps_eff_median:.3f}")
-    print(f"    Dipole Matrix (3N)  = {3*n_atoms} x {3*n_atoms}")
+    logger.info(f"\n    [Kernel: Atomistic Polarizable Dipole Model (DIM-MNOK)]")
+    logger.info(f"    Material            = {m_name}")
+    logger.info(f"    epsilon_in (bulk)   = {eps_inf_bulk:.3f}")
+    logger.info(f"    Nearest neighbor    = {d_NN_ang:.3f} Å")
+    logger.info(f"    Median interatomic ε= {eps_eff_median:.3f}")
+    logger.info(f"    Dipole Matrix (3N)  = {3*n_atoms} x {3*n_atoms}")
 
     eps_info = {
         "eps_eff_exciton": eps_eff_median,
@@ -1525,22 +1528,22 @@ def build_sbse_kernel(atom_symbols, coords, atom_ao_ranges=None, shells=None,
         eps_inter = float(1.0 / np.median(W_ev[mask] / J_bare_ev[mask])) if np.any(mask) else 1.0
         mat_dim_str = f"{n_ao} x {n_ao} (AO-resolved)"
 
-    print(f"\n    ==========================================================================")
-    print(f"    [Kernel: sBSE (Simplified Bethe-Salpeter Equation, mode='{mode_str}')]")
-    print(f"    ==========================================================================")
-    print(f"    Reference Theory        : Cho, Bintrim, Berkelbach [JCTC 18, 3438 (2022)]")
-    print(f"    Material                = {m_name}")
-    print(f"    epsilon_in (bulk)       = {eps_bulk:.3f}")
-    print(f"    epsilon_out (solvent)   = {eps_out_val:.3f}")
-    print(f"    Cluster Radius (R_QD)   = {r_qd_ang:.3f} Å")
-    print(f"    Active Transitions      = {n_trans_tot}")
-    print(f"    Matrix Dimension        = {mat_dim_str}")
-    print(f"    RPA Scaling (alpha)     = {float(alpha):.3f}")
-    print(f"    --------------------------------------------------------------------------")
-    print(f"    Computed Microscopic Dielectric Constants (ε_eff):")
-    print(f"      ε_eff (1S Exciton e-h) : {eps_exciton:8.3f}   [Lowest exciton screening]")
-    print(f"      ε_eff (Inter-atomic)   : {eps_inter:8.3f}   [Median inter-site screening]")
-    print(f"    ==========================================================================\n")
+    logger.info(f"\n    ==========================================================================")
+    logger.info(f"    [Kernel: sBSE (Simplified Bethe-Salpeter Equation, mode='{mode_str}')]")
+    logger.info(f"    ==========================================================================")
+    logger.info(f"    Reference Theory        : Cho, Bintrim, Berkelbach [JCTC 18, 3438 (2022)]")
+    logger.info(f"    Material                = {m_name}")
+    logger.info(f"    epsilon_in (bulk)       = {eps_bulk:.3f}")
+    logger.info(f"    epsilon_out (solvent)   = {eps_out_val:.3f}")
+    logger.info(f"    Cluster Radius (R_QD)   = {r_qd_ang:.3f} Å")
+    logger.info(f"    Active Transitions      = {n_trans_tot}")
+    logger.info(f"    Matrix Dimension        = {mat_dim_str}")
+    logger.info(f"    RPA Scaling (alpha)     = {float(alpha):.3f}")
+    logger.info(f"    --------------------------------------------------------------------------")
+    logger.info(f"    Computed Microscopic Dielectric Constants (ε_eff):")
+    logger.info(f"      ε_eff (1S Exciton e-h) : {eps_exciton:8.3f}   [Lowest exciton screening]")
+    logger.info(f"      ε_eff (Inter-atomic)   : {eps_inter:8.3f}   [Median inter-site screening]")
+    logger.info(f"    ==========================================================================\n")
 
     eps_info = {
         "eps_eff_exciton": eps_exciton,
@@ -1647,14 +1650,14 @@ def estimate_sgw_qp_gap(coords, atom_symbols, material_name=None, eps_out=1.0,
         f_h_micro = 0.5
         f_l_micro = 0.5
 
-    print(f"  [sGW Model] Microscopic Quasiparticle Correction for {m_name}:")
-    print(f"    Bulk PBE -> GW Gap   : {pbe_bulk_gap:.3f} -> {gw_bulk_gap:.3f} eV (Shift: +{bulk_shift:.3f} eV)")
-    print(f"    Microscopic Delta W  : HOMO shift = +{delta_sigma_h:.3f} eV, LUMO shift = +{delta_sigma_l:.3f} eV")
-    print(f"    Microscopic Split    : HOMO takes {f_h_micro*100:.1f}%, LUMO takes {f_l_micro*100:.1f}%")
-    print(f"    Confinement Opening  : +{confinement_shift:.3f} eV (Z_h = {Z_h:.3f}, Z_l = {Z_l:.3f}"
+    logger.info(f"  [sGW Model] Microscopic Quasiparticle Correction for {m_name}:")
+    logger.info(f"    Bulk PBE -> GW Gap   : {pbe_bulk_gap:.3f} -> {gw_bulk_gap:.3f} eV (Shift: +{bulk_shift:.3f} eV)")
+    logger.info(f"    Microscopic Delta W  : HOMO shift = +{delta_sigma_h:.3f} eV, LUMO shift = +{delta_sigma_l:.3f} eV")
+    logger.info(f"    Microscopic Split    : HOMO takes {f_h_micro*100:.1f}%, LUMO takes {f_l_micro*100:.1f}%")
+    logger.info(f"    Confinement Opening  : +{confinement_shift:.3f} eV (Z_h = {Z_h:.3f}, Z_l = {Z_l:.3f}"
           f"{', derived' if dynamic_z else ''})")
-    print(f"    Solvent Dielectric   : eps_out = {float(eps_out):.2f}")
-    print(f"    ==> Total sGW Scissor: +{total_sgw_scissor:.3f} eV\n")
+    logger.info(f"    Solvent Dielectric   : eps_out = {float(eps_out):.2f}")
+    logger.info(f"    ==> Total sGW Scissor: +{total_sgw_scissor:.3f} eV\n")
 
     provenance = {
         "material": m_name,
@@ -1960,7 +1963,7 @@ def _estimate_sgw_delta_w(model, dft_gap=None, C_occ_low=None, C_virt_low=None, 
         converged = True
     else:
         gap_curr = gap_dft + bulk_shift
-        print(f"\n  [{model_name}] Starting Eigenvalue Self-Consistent Loop (Initial Gap = {gap_curr:.4f} eV):")
+        logger.info(f"\n  [{model_name}] Starting Eigenvalue Self-Consistent Loop (Initial Gap = {gap_curr:.4f} eV):")
         n_iters = 0
         converged = False
         scissor_next = bulk_shift
@@ -1981,10 +1984,10 @@ def _estimate_sgw_delta_w(model, dft_gap=None, C_occ_low=None, C_virt_low=None, 
             gap_next = gap_dft + scissor_next
 
             diff = abs(gap_next - gap_curr)
-            print(f"    Iter {it+1:2d}: Gap = {gap_curr:.4f} eV, Scissor = +{scissor_next:.4f} eV, {note}, Z_h = {Z_h:.3f}, Z_l = {Z_l:.3f}, Diff = {diff:.5f} eV")
+            logger.debug(f"    Iter {it+1:2d}: Gap = {gap_curr:.4f} eV, Scissor = +{scissor_next:.4f} eV, {note}, Z_h = {Z_h:.3f}, Z_l = {Z_l:.3f}, Diff = {diff:.5f} eV")
             if diff < tol:
                 converged = True
-                print(f"    -> {model_name} converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
+                logger.info(f"    -> {model_name} converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
                 break
             gap_curr = (1.0 - damping) * gap_curr + damping * gap_next
         total_sgw_scissor = scissor_next
@@ -2005,27 +2008,27 @@ def _estimate_sgw_delta_w(model, dft_gap=None, C_occ_low=None, C_virt_low=None, 
     penn_active = m.kind == "resta" and m.penn_scaling and eps_z < eps_bulk
     z_str = f"Z_h={Z_h:.3f}, Z_l={Z_l:.3f} (dynamic)" if dynamic_z else f"Z={float(Z):.2f} (fixed)"
     if m.kind == "dim":
-        print(f"\n  [{model_name} Model] Quasiparticle Correction for {m_name}:")
+        logger.info(f"\n  [{model_name} Model] Quasiparticle Correction for {m_name}:")
     else:
-        print(f"\n  [{model_name} Model ({'Penn-scaled' if penn_active else 'Pure Boundary'})] "
+        logger.info(f"\n  [{model_name} Model ({'Penn-scaled' if penn_active else 'Pure Boundary'})] "
               f"Quasiparticle Correction for {m_name}:")
-    print(f"    Cluster Radius (R_QD)    : {R_QD_ang:.3f} Å")
-    print(f"    Bulk PBE -> GW Gap      : {pbe_bulk_gap:.3f} -> {gw_bulk_gap:.3f} eV (Shift: +{bulk_shift:.3f} eV)")
+    logger.info(f"    Cluster Radius (R_QD)    : {R_QD_ang:.3f} Å")
+    logger.info(f"    Bulk PBE -> GW Gap      : {pbe_bulk_gap:.3f} -> {gw_bulk_gap:.3f} eV (Shift: +{bulk_shift:.3f} eV)")
     if m.kind == "dim":
-        print(f"    Internal DIM Contrast    : +{confinement_shift_internal:.3f} eV (surface coordination under-screening)")
-        print(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {m.eps_out_val:.2f}, eps_bulk = {eps_bulk:.2f})")
+        logger.info(f"    Internal DIM Contrast    : +{confinement_shift_internal:.3f} eV (surface coordination under-screening)")
+        logger.info(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {m.eps_out_val:.2f}, eps_bulk = {eps_bulk:.2f})")
     else:
         if penn_active:
-            print(f"    Penn Dielectric eps_eff  : {eps_z:.3f} (bulk eps_inf = {eps_bulk:.3f})")
-            print(f"    Internal Resta Contrast  : +{confinement_shift_internal:.3f} eV")
-        print(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {m.eps_out_val:.2f})")
-    print(f"    HOMO Quasiparticle Shift : +{delta_sigma_h:.3f} eV ({z_str})")
-    print(f"    LUMO Quasiparticle Shift : +{delta_sigma_l:.3f} eV ({z_str})")
-    print(f"    Microscopic Split        : HOMO takes {f_h_micro*100:.1f}%, LUMO takes {f_l_micro*100:.1f}%")
-    print(f"    Total Confinement Opening: +{confinement_shift:.3f} eV")
+            logger.info(f"    Penn Dielectric eps_eff  : {eps_z:.3f} (bulk eps_inf = {eps_bulk:.3f})")
+            logger.info(f"    Internal Resta Contrast  : +{confinement_shift_internal:.3f} eV")
+        logger.info(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {m.eps_out_val:.2f})")
+    logger.info(f"    HOMO Quasiparticle Shift : +{delta_sigma_h:.3f} eV ({z_str})")
+    logger.info(f"    LUMO Quasiparticle Shift : +{delta_sigma_l:.3f} eV ({z_str})")
+    logger.info(f"    Microscopic Split        : HOMO takes {f_h_micro*100:.1f}%, LUMO takes {f_l_micro*100:.1f}%")
+    logger.info(f"    Total Confinement Opening: +{confinement_shift:.3f} eV")
     if self_consistent:
-        print(f"    evGW Iterations          : {n_iters} (converged: {converged})")
-    print(f"    ==> Total {model_name} Scissor: +{total_sgw_scissor:.3f} eV\n")
+        logger.info(f"    evGW Iterations          : {n_iters} (converged: {converged})")
+    logger.info(f"    ==> Total {model_name} Scissor: +{total_sgw_scissor:.3f} eV\n")
 
     w_solv_vac = m.vacuum_solvent()
     provenance = {
@@ -2193,7 +2196,7 @@ def _estimate_qsgw_delta_w(model, C, eps, S, atom_ao_ranges, homo_index, dynamic
     n_iters = 0
     converged = False
 
-    print(f"\n  [{tag}] Starting Full AO Quasiparticle Self-Consistent Loop ({n_ao}x{n_ao} AOs, Initial Gap = {gap_curr:.4f} eV):")
+    logger.info(f"\n  [{tag}] Starting Full AO Quasiparticle Self-Consistent Loop ({n_ao}x{n_ao} AOs, Initial Gap = {gap_curr:.4f} eV):")
     for it in range(max_iter):
         n_iters += 1
         P_low = 2.0 * (C_curr[:, :n_occ] @ C_curr[:, :n_occ].conj().T)
@@ -2259,16 +2262,16 @@ def _estimate_qsgw_delta_w(model, C, eps, S, atom_ao_ranges, homo_index, dynamic
         fid_l = float((C_low_init[:, lumo_index] @ C_new[:, lumo_index])**2)
 
         note_str = f", {note}" if m.kind == "resta" else ""
-        print(f"    Iter {it+1:2d}: Gap = {gap_next:.4f} eV, Scissor = +{gap_next - dft_gap:.4f} eV{note_str}, Diff = {diff:.5f} eV, Zh={Z_h:.3f}, Zl={Z_l:.3f}, Fid_H={fid_h:.5f}, Fid_L={fid_l:.5f}")
+        logger.debug(f"    Iter {it+1:2d}: Gap = {gap_next:.4f} eV, Scissor = +{gap_next - dft_gap:.4f} eV{note_str}, Diff = {diff:.5f} eV, Zh={Z_h:.3f}, Zl={Z_l:.3f}, Fid_H={fid_h:.5f}, Fid_L={fid_l:.5f}")
 
         if diff < tol:
             converged = True
-            print(f"    -> {tag} converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
+            logger.info(f"    -> {tag} converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
             break
         C_curr = C_new
         gap_curr = gap_next
     else:
-        print(f"    -> {tag} reached max iterations ({max_iter}). Final QP Gap = {gap_curr:.4f} eV")
+        logger.info(f"    -> {tag} reached max iterations ({max_iter}). Final QP Gap = {gap_curr:.4f} eV")
 
     C_qp = S_inv_half @ C_new
     eps_qp = eigvals_qp.copy()
@@ -2573,28 +2576,28 @@ def build_xs_kernel(shells, atom_symbols, coords, atom_ao_ranges, material_name=
 
         alpha_cluster_ang3 = alpha_cluster_au * (ANG_PER_BOHR ** 3)
 
-        print(f"\n    ==========================================================================")
-        print(f"    [Kernel: Xs-QDEX (Exact 2-Electron AO Integrals + Microscopic ZDO-RPA)]")
-        print(f"    ==========================================================================")
-        print(f"    Screening Mode          : Parameter-free Microscopic ZDO-RPA (W = ε⁻¹ v)")
-        print(f"    Active Polarizability   : {alpha_cluster_au:8.2f} a.u. ({alpha_cluster_ang3:.2f} Å³) across {n_trans_tot} transitions")
-        print(f"    Cluster Radius (R_QD)   : {r_qd_ang:8.3f} Å (R_bohr = {r_qd_bohr:.2f})")
-        print(f"    AO Matrix Dimension     : {n_ao} x {n_ao}")
-        print(f"    RPA Scaling (alpha)     : {alpha:.3f}")
-        print(f"    --------------------------------------------------------------------------")
-        print(f"    Computed Microscopic Dielectric Constants (ε_eff):")
-        print(f"      ε_eff (1S Exciton e-h) : {eps_exciton:8.3f}   [Direct e-h attraction screening]")
-        print(f"      ε_eff (HOMO Hole self) : {eps_hole:8.3f}   [Hole self-energy screening]")
-        print(f"      ε_eff (LUMO Elec self) : {eps_elec:8.3f}   [Electron self-energy screening]")
-        print(f"      ε_eff (Inter-atomic)   : {eps_inter:8.3f}   [Asymptotic inter-atomic screening]")
-        print(f"      ε_eff (On-site core)   : {eps_onsite:8.3f}   [Atomic core screening (~1.0 = unscreened)]")
-        print(f"    --------------------------------------------------------------------------")
+        logger.info(f"\n    ==========================================================================")
+        logger.info(f"    [Kernel: Xs-QDEX (Exact 2-Electron AO Integrals + Microscopic ZDO-RPA)]")
+        logger.info(f"    ==========================================================================")
+        logger.info(f"    Screening Mode          : Parameter-free Microscopic ZDO-RPA (W = ε⁻¹ v)")
+        logger.info(f"    Active Polarizability   : {alpha_cluster_au:8.2f} a.u. ({alpha_cluster_ang3:.2f} Å³) across {n_trans_tot} transitions")
+        logger.info(f"    Cluster Radius (R_QD)   : {r_qd_ang:8.3f} Å (R_bohr = {r_qd_bohr:.2f})")
+        logger.info(f"    AO Matrix Dimension     : {n_ao} x {n_ao}")
+        logger.info(f"    RPA Scaling (alpha)     : {alpha:.3f}")
+        logger.info(f"    --------------------------------------------------------------------------")
+        logger.info(f"    Computed Microscopic Dielectric Constants (ε_eff):")
+        logger.info(f"      ε_eff (1S Exciton e-h) : {eps_exciton:8.3f}   [Direct e-h attraction screening]")
+        logger.info(f"      ε_eff (HOMO Hole self) : {eps_hole:8.3f}   [Hole self-energy screening]")
+        logger.info(f"      ε_eff (LUMO Elec self) : {eps_elec:8.3f}   [Electron self-energy screening]")
+        logger.info(f"      ε_eff (Inter-atomic)   : {eps_inter:8.3f}   [Asymptotic inter-atomic screening]")
+        logger.info(f"      ε_eff (On-site core)   : {eps_onsite:8.3f}   [Atomic core screening (~1.0 = unscreened)]")
+        logger.info(f"    --------------------------------------------------------------------------")
         if eps_bulk > 1.0:
             pct_bulk = (eps_eff_micro / eps_bulk) * 100.0
-            print(f"    Nanoscale Confinement & Size Comparison:")
-            print(f"      Material Bulk ε_∞      : {eps_bulk:8.3f}   [Experimental bulk limit]")
-            print(f"      Dielectric Retention   : {pct_bulk:7.1f}% of bulk (confinement suppression: {100.0 - pct_bulk:.1f}%)")
-        print(f"    ==========================================================================\n")
+            logger.info(f"    Nanoscale Confinement & Size Comparison:")
+            logger.info(f"      Material Bulk ε_∞      : {eps_bulk:8.3f}   [Experimental bulk limit]")
+            logger.info(f"      Dielectric Retention   : {pct_bulk:7.1f}% of bulk (confinement suppression: {100.0 - pct_bulk:.1f}%)")
+        logger.info(f"    ==========================================================================\n")
 
         eps_info = {
             "eps_eff_exciton": eps_exciton,
@@ -2638,17 +2641,17 @@ def build_xs_kernel(shells, atom_symbols, coords, atom_ao_ranges, material_name=
             if abs(w_eh_screened) > 1e-12:
                 eps_exciton = v_eh_bare / w_eh_screened
 
-        print(f"\n    ==========================================================================")
-        print(f"    [Kernel: Xs-QDEX (Exact 2-Electron AO Integrals + Polarizable Dipole DIM)]")
-        print(f"    ==========================================================================")
-        print(f"    Material                = {m_name}")
-        print(f"    epsilon_in (bulk)       = {eps_inf_bulk:.3f}")
-        print(f"    Nearest neighbor d_NN   = {d_NN_ang:.3f} Å")
-        print(f"    Computed ε_eff (1S)     = {eps_exciton:.3f}")
-        print(f"    Median interatomic ε    = {eps_eff_median:.3f}")
-        print(f"    Dipole Matrix (3N)      = {3*n_atoms} x {3*n_atoms}")
-        print(f"    AO matrix dimension     = {n_ao} x {n_ao}")
-        print(f"    ==========================================================================\n")
+        logger.info(f"\n    ==========================================================================")
+        logger.info(f"    [Kernel: Xs-QDEX (Exact 2-Electron AO Integrals + Polarizable Dipole DIM)]")
+        logger.info(f"    ==========================================================================")
+        logger.info(f"    Material                = {m_name}")
+        logger.info(f"    epsilon_in (bulk)       = {eps_inf_bulk:.3f}")
+        logger.info(f"    Nearest neighbor d_NN   = {d_NN_ang:.3f} Å")
+        logger.info(f"    Computed ε_eff (1S)     = {eps_exciton:.3f}")
+        logger.info(f"    Median interatomic ε    = {eps_eff_median:.3f}")
+        logger.info(f"    Dipole Matrix (3N)      = {3*n_atoms} x {3*n_atoms}")
+        logger.info(f"    AO matrix dimension     = {n_ao} x {n_ao}")
+        logger.info(f"    ==========================================================================\n")
 
         eps_info = {
             "eps_eff_exciton": eps_exciton,
@@ -2698,11 +2701,11 @@ def build_xs_kernel(shells, atom_symbols, coords, atom_ao_ranges, material_name=
                 s_ao[a0:a1, b0:b1] = s_atom[A, B]
 
         w_resta_ev = s_ao * gamma_bare_ev
-        print(f"\n    [Kernel: Xs-QDEX (Exact 2-Electron AO Integrals + Resta Screening)]")
-        print(f"    Material            = {m_name}")
-        print(f"    epsilon_in          = {eps_inf_bulk:.3f}")
-        print(f"    Screening length    = {lambda_s_ang/BOHR_TO_ANG:.3f} a.u. ({lambda_s_ang:.3f} Å)")
-        print(f"    AO matrix dimension = {n_ao} x {n_ao}")
+        logger.info(f"\n    [Kernel: Xs-QDEX (Exact 2-Electron AO Integrals + Resta Screening)]")
+        logger.info(f"    Material            = {m_name}")
+        logger.info(f"    epsilon_in          = {eps_inf_bulk:.3f}")
+        logger.info(f"    Screening length    = {lambda_s_ang/BOHR_TO_ANG:.3f} a.u. ({lambda_s_ang:.3f} Å)")
+        logger.info(f"    AO matrix dimension = {n_ao} x {n_ao}")
 
         eps_info = {
             "eps_eff_exciton": eps_inf_bulk,
@@ -2716,9 +2719,9 @@ def build_xs_kernel(shells, atom_symbols, coords, atom_ao_ranges, material_name=
     else:
         # Uniform screening
         w_bse_ev = alpha * gamma_bare_ev
-        print(f"\n    [Kernel: Xs-QDEX (Exact 2-Electron AO Integrals + Uniform Screening)]")
-        print(f"    alpha               = {alpha:.3f}")
-        print(f"    AO matrix dimension = {n_ao} x {n_ao}")
+        logger.info(f"\n    [Kernel: Xs-QDEX (Exact 2-Electron AO Integrals + Uniform Screening)]")
+        logger.info(f"    alpha               = {alpha:.3f}")
+        logger.info(f"    AO matrix dimension = {n_ao} x {n_ao}")
 
         eps_eff_uni = 1.0 / alpha if alpha > 0 else 1.0
         eps_info = {
@@ -2739,7 +2742,7 @@ def estimate_brus_qp_gap(material_name, coords, atom_symbols):
     m_eff = entry[5]
     
     if E_bulk == 0.0 or m_eff == 0.0:
-        print(f"  [Warning] Missing bulk gap or effective mass for {m_name}. Brus estimation failed.")
+        logger.warning(f"  [Warning] Missing bulk gap or effective mass for {m_name}. Brus estimation failed.")
         return None
         
     R_QD_ang = qd_radius(coords, atom_symbols, material_name)
@@ -2756,18 +2759,18 @@ def estimate_brus_qp_gap(material_name, coords, atom_symbols):
         predicted_gap = E_bulk + E_conf_parabolic
         is_non_parabolic = False
         
-    print(f"\n  [Brus Model] Estimating Confinement for {m_name}:")
-    print(f"    Radius (R_QD)    : {R_QD_ang:.2f} Å")
-    print(f"    Bulk Gap         : {E_bulk:.3f} eV")
-    print(f"    Effective Mass   : {m_eff:.3f} m_e")
+    logger.info(f"\n  [Brus Model] Estimating Confinement for {m_name}:")
+    logger.info(f"    Radius (R_QD)    : {R_QD_ang:.2f} Å")
+    logger.info(f"    Bulk Gap         : {E_bulk:.3f} eV")
+    logger.info(f"    Effective Mass   : {m_eff:.3f} m_e")
     
     if is_non_parabolic:
-        print(f"    Model Used       : Hyperbolic (Non-Parabolic)")
-        print(f"    Raw Parabolic dE : +{E_conf_parabolic:.3f} eV (Unphysical, applying correction...)")
+        logger.info(f"    Model Used       : Hyperbolic (Non-Parabolic)")
+        logger.info(f"    Raw Parabolic dE : +{E_conf_parabolic:.3f} eV (Unphysical, applying correction...)")
     else:
-        print(f"    Model Used       : Standard Parabolic")
-        print(f"    Confinement (dE) : +{E_conf_parabolic:.3f} eV")
+        logger.info(f"    Model Used       : Standard Parabolic")
+        logger.info(f"    Confinement (dE) : +{E_conf_parabolic:.3f} eV")
         
-    print(f"    Predicted QP Gap : {predicted_gap:.3f} eV")
+    logger.info(f"    Predicted QP Gap : {predicted_gap:.3f} eV")
     
     return predicted_gap

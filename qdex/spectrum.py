@@ -1,4 +1,7 @@
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 def generate_spectrum(energies, f_strengths, e_min=0.0, e_max=10.0, n_points=1000, sigma=0.1, profile='gaussian'):
     """
@@ -24,7 +27,7 @@ def plot_spectrum(x_grid, y_grid, energies, f_strengths, filename="spectrum.png"
     try:
         import matplotlib.pyplot as plt
     except ImportError:
-        print("  [Warning] matplotlib is not installed. Skipping plot generation.")
+        logger.warning("  [Warning] matplotlib is not installed. Skipping plot generation.")
         return
 
     min_e = np.min(energies)
@@ -107,7 +110,7 @@ def plot_spectrum(x_grid, y_grid, energies, f_strengths, filename="spectrum.png"
     if filename:
         nm_filename = filename.replace(".png", "_nm.png")
         fig_nm.savefig(nm_filename, bbox_inches='tight')
-        print(f"  Plots saved to '{filename}' and '{nm_filename}'")
+        logger.info(f"  Plots saved to '{filename}' and '{nm_filename}'")
 
     if show: plt.show()
     plt.close(fig_eV)

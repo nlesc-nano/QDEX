@@ -6,6 +6,9 @@ import os
 import re
 from scipy.spatial import cKDTree
 from scipy.ndimage import gaussian_filter, median_filter
+import logging
+
+logger = logging.getLogger(__name__)
 
 def load_fuzzy(npz_path):
     d = np.load(npz_path, allow_pickle=True)
@@ -158,7 +161,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         lbl = "UKS"
     else:
         lbl = "Spin-Free"
-    print(f"  [Plotter] Generating elegant {lbl} HTML dashboard ({energy_label})...")
+    logger.info(f"  [Plotter] Generating elegant {lbl} HTML dashboard ({energy_label})...")
     
     # =========================================================================
     # PART 1: 2D DASHBOARD
@@ -350,7 +353,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         )
         
         for idx, cfile in enumerate(cube_files):
-            print(f"    -> Parsing and mapping {cfile} to 3D grid...")
+            logger.info(f"    -> Parsing and mapping {cfile} to 3D grid...")
             X_grid, Y_grid, Z_grid, V_data, atoms = parse_cube(cfile)
             
             v_max = float(np.max(V_data))
@@ -515,4 +518,4 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     with open(out_html, 'w', encoding='utf-8') as f:
         f.write(html_template)
         
-    print(f"  [Plotter] Successfully saved elegant HTML dashboard to {out_html}")
+    logger.info(f"  [Plotter] Successfully saved elegant HTML dashboard to {out_html}")

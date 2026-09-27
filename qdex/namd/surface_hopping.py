@@ -26,6 +26,9 @@ from qdex.namd.ensemble import (
     sample_origin_initial_states,
     aggregate_multi_origin_results,
 )
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -270,7 +273,7 @@ def propagate_single_namd_origin(
 
         if verbose:
             scheme_label = "DISH" if method == "dish" else "FSSH-EDC"
-            print(f"  [NAMD:{scheme_label}] Starting batched propagation across {n_win_steps} steps ({n_trajectories} trajectories)...")
+            logger.info(f"  [NAMD:{scheme_label}] Starting batched propagation across {n_win_steps} steps ({n_trajectories} trajectories)...")
 
         for step_idx in range(n_win_steps):
             k = (k0 + step_idx) % n_steps_base
@@ -316,9 +319,9 @@ def propagate_single_namd_origin(
             curr_a_sub = virt_to_sub[curr_a]
 
             if verbose and ((step_idx < 5) or ((step_idx + 1) % max(1, n_win_steps // 10) == 0) or (step_idx == n_win_steps - 1)):
-                print(f"  [Step {step_idx+1}/{n_win_steps}] Propagating {n_trajectories} trajectories (t = {step_idx*dt_nuc_fs:.1f} -> {(step_idx+1)*dt_nuc_fs:.1f} fs)...", flush=True)
+                logger.info(f"  [Step {step_idx+1}/{n_win_steps}] Propagating {n_trajectories} trajectories (t = {step_idx*dt_nuc_fs:.1f} -> {(step_idx+1)*dt_nuc_fs:.1f} fs)...")
             elif not verbose and (step_idx + 1 == n_win_steps // 2 or step_idx == n_win_steps - 1):
-                print(f"    Origin [{origin_idx+1}/{n_origins}] Progress: {step_idx+1}/{n_win_steps} steps (t = {(step_idx+1)*dt_nuc_fs:.1f} fs)", flush=True)
+                logger.info(f"    Origin [{origin_idx+1}/{n_origins}] Progress: {step_idx+1}/{n_win_steps} steps (t = {(step_idx+1)*dt_nuc_fs:.1f} fs)")
 
             # 1. Batched Electron channel propagation
             ok_e = curr_a_sub >= 0
@@ -631,7 +634,7 @@ def propagate_single_namd_origin(
                 if not is_biexciton:
                     min_e_act = np.min(E_kplus1[active_surfaces])
                     max_e_act = np.max(E_kplus1[active_surfaces])
-                    print(f"    -> [Step {step_idx+1}/{n_win_steps}] <E_exc> = {mean_energy[step_idx+1]:.4f} eV | Active range: [{min_e_act:.3f}, {max_e_act:.3f}] eV", flush=True)
+                    logger.info(f"    -> [Step {step_idx+1}/{n_win_steps}] <E_exc> = {mean_energy[step_idx+1]:.4f} eV | Active range: [{min_e_act:.3f}, {max_e_act:.3f}] eV")
 
     # -------------------------------------------------------------
     # SCHEME B: Pauli Master Equation (Deterministic Kinetics)
@@ -652,7 +655,7 @@ def propagate_single_namd_origin(
             mean_excess_h[0] = 0.5 * (mean_energy[0] - qp_gap_init)
 
         if verbose:
-            print(f"  [NAMD:PME] Starting deterministic Master Equation propagation (n_occ={n_occ}, n_virt={n_virt})...")
+            logger.info(f"  [NAMD:PME] Starting deterministic Master Equation propagation (n_occ={n_occ}, n_virt={n_virt})...")
 
         for step_idx in range(n_win_steps):
             t_step_start = time.time()
@@ -734,9 +737,9 @@ def propagate_single_namd_origin(
 
             t_step = time.time() - t_step_start
             if verbose and ((step_idx < 5) or ((step_idx + 1) % max(1, n_win_steps // 10) == 0) or (step_idx == n_win_steps - 1)):
-                print(f"    Step {step_idx+1}/{n_win_steps} (t = {(step_idx+1)*dt_nuc_fs:.1f} fs) in {t_step:.3f} s | <E_exc> = {mean_energy[step_idx+1]:.4f} eV")
+                logger.debug(f"    Step {step_idx+1}/{n_win_steps} (t = {(step_idx+1)*dt_nuc_fs:.1f} fs) in {t_step:.3f} s | <E_exc> = {mean_energy[step_idx+1]:.4f} eV")
             elif not verbose and (step_idx + 1 == n_win_steps // 2 or step_idx == n_win_steps - 1):
-                print(f"    Origin [{origin_idx+1}/{n_origins}] Progress: {step_idx+1}/{n_win_steps} steps (t = {(step_idx+1)*dt_nuc_fs:.1f} fs) | <E_exc> = {mean_energy[step_idx+1]:.4f} eV", flush=True)
+                logger.info(f"    Origin [{origin_idx+1}/{n_origins}] Progress: {step_idx+1}/{n_win_steps} steps (t = {(step_idx+1)*dt_nuc_fs:.1f} fs) | <E_exc> = {mean_energy[step_idx+1]:.4f} eV")
 
     return {
         "mean_energy": mean_energy,
@@ -844,7 +847,7 @@ def run_namd_dynamics(config):
         if res_cumulant is not None and not np.isnan(res_cumulant.get("tau_dec_fs", np.nan)):
             tau_dec_fs = float(res_cumulant["tau_dec_fs"])
             std_g = np.sqrt(res_cumulant["var_g"])
-            print(
+            logger.info(
                 f"  [NAMD] Cumulant dephasing time of the lowest exciton: "
                 f"tau_dec = {tau_dec_fs:.2f} fs (gap fluctuation std: {std_g:.4f} eV). "
                 "Diagnostic only: each nuclear step starts from the active orbital, "
@@ -852,7 +855,7 @@ def run_namd_dynamics(config):
             )
             decoherence = f"cumulant diagnostic ({tau_dec_fs:.1f} fs)"
         else:
-            print("  [NAMD:Warn] Cumulant expansion from lowest excited state failed; falling back to tau_dec = 14.0 fs")
+            logger.warning("  [NAMD:Warn] Cumulant expansion from lowest excited state failed; falling back to tau_dec = 14.0 fs")
             tau_dec_fs = 14.0
             decoherence = f"cumulant (fallback 14.0 fs)"
     else:
@@ -942,11 +945,11 @@ def run_namd_dynamics(config):
             d_dec = np.load(dec_file)
             tau_occ_mat = d_dec["tau_occ"]
             tau_virt_mat = d_dec["tau_virt"]
-            print(f"  [NAMD] Loaded state-pair decoherence matrices from '{dec_file}':")
-            print(f"         tau_occ : {tau_occ_mat.shape} (median = {np.median(tau_occ_mat):.2f} fs)")
-            print(f"         tau_virt: {tau_virt_mat.shape} (median = {np.median(tau_virt_mat):.2f} fs)")
+            logger.info(f"  [NAMD] Loaded state-pair decoherence matrices from '{dec_file}':")
+            logger.info(f"         tau_occ : {tau_occ_mat.shape} (median = {np.median(tau_occ_mat):.2f} fs)")
+            logger.info(f"         tau_virt: {tau_virt_mat.shape} (median = {np.median(tau_virt_mat):.2f} fs)")
         except Exception as e:
-            print(f"  [NAMD:Warn] Failed loading {dec_file}: {e}")
+            logger.warning(f"  [NAMD:Warn] Failed loading {dec_file}: {e}")
 
     if tau_occ_mat is not None and tau_occ_mat.shape[0] >= n_occ:
         tau_occ_dyn = tau_occ_mat[np.ix_(dyn_occ_active, dyn_occ_active)]
@@ -1029,17 +1032,17 @@ def run_namd_dynamics(config):
         "plqy_percent": plqy
     }
 
-    print("=" * 65)
-    print(f" QDEX - NAMD Carrier Cooling Simulation ({method.upper()})")
-    print("=" * 65)
-    print(f"  Precomputed Data     : {precompute_dir} ({n_frames} frames, dt = {dt_nuc_fs} fs)")
-    print(f"  Band Gap (Eg)        : DFT = {dft_gap:.3f} eV, QP = {qp_gap:.3f} eV")
-    print(f"  Photoexcitation Pump : {pump_energy_ev:.3f} eV ({pump_energy_ev/qp_gap:.2f} * Eg)")
-    print(f"  Laser Pulse FWHM     : {pulse_fwhm_ev:.3f} eV (filter dark states: {filter_dark})")
-    print(f"  Temperature          : {temp_k} K (detailed balance: {detailed_balance})")
-    print(f"  Precomputed Pairs    : {len(E0_pairs)} (n_occ={n_occ}, n_virt={n_virt})")
-    print(f"  Dynamics Window      : [{dyn_e_min:.2f}, {dyn_e_max:.2f}] eV ({np.sum(dyn_mask)} active pairs)")
-    print(f"  Active Dynamics Space: {n_occ_dyn} occ (HOMO-{n_occ - 1 - dyn_occ_active[0]} .. HOMO-{n_occ - 1 - dyn_occ_active[-1]}), {n_virt_dyn} virt (LUMO+{dyn_virt_active[0]} .. LUMO+{dyn_virt_active[-1]})")
+    logger.info("=" * 65)
+    logger.info(f" QDEX - NAMD Carrier Cooling Simulation ({method.upper()})")
+    logger.info("=" * 65)
+    logger.info(f"  Precomputed Data     : {precompute_dir} ({n_frames} frames, dt = {dt_nuc_fs} fs)")
+    logger.info(f"  Band Gap (Eg)        : DFT = {dft_gap:.3f} eV, QP = {qp_gap:.3f} eV")
+    logger.info(f"  Photoexcitation Pump : {pump_energy_ev:.3f} eV ({pump_energy_ev/qp_gap:.2f} * Eg)")
+    logger.info(f"  Laser Pulse FWHM     : {pulse_fwhm_ev:.3f} eV (filter dark states: {filter_dark})")
+    logger.info(f"  Temperature          : {temp_k} K (detailed balance: {detailed_balance})")
+    logger.info(f"  Precomputed Pairs    : {len(E0_pairs)} (n_occ={n_occ}, n_virt={n_virt})")
+    logger.info(f"  Dynamics Window      : [{dyn_e_min:.2f}, {dyn_e_max:.2f}] eV ({np.sum(dyn_mask)} active pairs)")
+    logger.info(f"  Active Dynamics Space: {n_occ_dyn} occ (HOMO-{n_occ - 1 - dyn_occ_active[0]} .. HOMO-{n_occ - 1 - dyn_occ_active[-1]}), {n_virt_dyn} virt (LUMO+{dyn_virt_active[0]} .. LUMO+{dyn_virt_active[-1]})")
     if method in ("cpa_fssh", "fssh", "dish", "cpa_fssh_gdc", "cpa_fssh_edc", "fssh_gdc", "fssh_edc"):
         if method == "dish":
             method_name = "DISH (Decoherence-Induced Surface Hopping)"
@@ -1047,12 +1050,12 @@ def run_namd_dynamics(config):
             method_name = "CPA-FSSH-GDC (Gaussian Decoherence Correction)"
         else:
             method_name = "CPA-FSSH-EDC (Energy-based Decoherence Correction)"
-        print(f"  Trajectories         : {n_trajectories}")
-        print(f"  Hopping Scheme       : {method_name}")
-        print(f"  Decoherence Model    : {decoherence} (tau_dec = {tau_dec_fs} fs, decay = {decoherence_decay_type})")
-        print(f"  Electronic Sub-steps : {n_substeps} (dt_elec = {dt_nuc_fs/n_substeps:.5f} fs)")
-        print(f"  Integrator           : {integrator_type} (device: {device_cfg})")
-    print("=" * 65 + "\n")
+        logger.info(f"  Trajectories         : {n_trajectories}")
+        logger.info(f"  Hopping Scheme       : {method_name}")
+        logger.info(f"  Decoherence Model    : {decoherence} (tau_dec = {tau_dec_fs} fs, decay = {decoherence_decay_type})")
+        logger.info(f"  Electronic Sub-steps : {n_substeps} (dt_elec = {dt_nuc_fs/n_substeps:.5f} fs)")
+        logger.info(f"  Integrator           : {integrator_type} (device: {device_cfg})")
+    logger.info("=" * 65 + "\n")
 
     trajectory_loops = int(dyn_cfg.get("trajectory_loops", 1))
     ecsh_auger = bool(dyn_cfg.get("ecsh_auger", False))
@@ -1069,13 +1072,13 @@ def run_namd_dynamics(config):
     k_auger_fs = None
     if ecsh_auger or is_biexciton:
         k_auger_fs, auger_note = resolve_optin_auger_rate_fs(config, dyn_cfg)
-        print("  Auger Dynamics Mode  : opt-in ECSH / biexciton (off for a plain cooling run)")
-        print(f"  ECSH Resonance Window: {ecsh_window_ev*1e3:.2f} meV")
-        print(f"  Auger rate           : {k_auger_fs:.4e} fs^-1 ({auger_note})")
+        logger.info("  Auger Dynamics Mode  : opt-in ECSH / biexciton (off for a plain cooling run)")
+        logger.info(f"  ECSH Resonance Window: {ecsh_window_ev*1e3:.2f} meV")
+        logger.info(f"  Auger rate           : {k_auger_fs:.4e} fs^-1 ({auger_note})")
         if is_biexciton:
-            print("  Initial State        : Biexciton (XX) -> Auger annihilation")
+            logger.info("  Initial State        : Biexciton (XX) -> Auger annihilation")
     if trajectory_loops > 1:
-        print(f"  Trajectory Looping   : {trajectory_loops} loops (simulating {(n_frames - 1) * trajectory_loops * dt_nuc_fs:.1f} fs / {(n_frames - 1) * trajectory_loops * dt_nuc_fs * 1e-3:.2f} ps)")
+        logger.info(f"  Trajectory Looping   : {trajectory_loops} loops (simulating {(n_frames - 1) * trajectory_loops * dt_nuc_fs:.1f} fs / {(n_frames - 1) * trajectory_loops * dt_nuc_fs * 1e-3:.2f} ps)")
 
     n_steps_base = max(1, n_frames - 1)
     n_steps_total = n_steps_base * max(1, trajectory_loops)
@@ -1115,26 +1118,26 @@ def run_namd_dynamics(config):
         else:
             n_traj_per_origin = n_trajectories
 
-        print("=" * 68)
-        print("  [NAMD] Automated Multi-Origin Ensemble Setup")
-        print("=" * 68)
-        print(f"  Trajectory Length Available : {calib['t_md_total_fs']:.1f} fs ({n_frames} frames)")
-        print(f"  Phonon Dephasing (tau_corr) : {calib['tau_corr_fs']:.1f} fs -> Safe spacing dt0 = {calib['dt0_fs']:.1f} fs")
-        print(f"  Pilot Cooling (tau_cool)    : {calib['tau_cool_fs']:.1f} fs -> Simulation window = {calib['window_fs']:.1f} fs ({n_win_steps} steps)")
+        logger.info("=" * 68)
+        logger.info("  [NAMD] Automated Multi-Origin Ensemble Setup")
+        logger.info("=" * 68)
+        logger.info(f"  Trajectory Length Available : {calib['t_md_total_fs']:.1f} fs ({n_frames} frames)")
+        logger.info(f"  Phonon Dephasing (tau_corr) : {calib['tau_corr_fs']:.1f} fs -> Safe spacing dt0 = {calib['dt0_fs']:.1f} fs")
+        logger.info(f"  Pilot Cooling (tau_cool)    : {calib['tau_cool_fs']:.1f} fs -> Simulation window = {calib['window_fs']:.1f} fs ({n_win_steps} steps)")
         if calib["is_fallback"]:
-            print("  Notice                      : MD trajectory length is comparable to cooling window.")
-            print("                                Executing single origin from t0 = 0 fs.")
+            logger.info("  Notice                      : MD trajectory length is comparable to cooling window.")
+            logger.info("                                Executing single origin from t0 = 0 fs.")
         else:
-            print(f"  Ensemble Origins Generated  : {n_origins} independent AIMD origins (t0 = {calib['origin_times_fs'][0]:.1f} .. {calib['origin_times_fs'][-1]:.1f} fs)")
+            logger.info(f"  Ensemble Origins Generated  : {n_origins} independent AIMD origins (t0 = {calib['origin_times_fs'][0]:.1f} .. {calib['origin_times_fs'][-1]:.1f} fs)")
             if is_surface_hopping:
-                print(f"  Trajectory Allocation       : {n_traj_per_origin} traj/origin ({n_origins * n_traj_per_origin} total across ensemble)")
-        print("=" * 68 + "\n")
+                logger.info(f"  Trajectory Allocation       : {n_traj_per_origin} traj/origin ({n_origins * n_traj_per_origin} total across ensemble)")
+        logger.info("=" * 68 + "\n")
 
 
     origin_results = []
     for m, k0 in enumerate(origin_frames):
         if is_multi_origin and not (calib and calib["is_fallback"]):
-            print(f"\n  >>> Propagating Ensemble Origin [{m+1}/{n_origins}]: frame {k0:05d} (t0 = {k0 * dt_nuc_fs:.1f} fs) ...")
+            logger.info(f"\n  >>> Propagating Ensemble Origin [{m+1}/{n_origins}]: frame {k0:05d} (t0 = {k0 * dt_nuc_fs:.1f} fs) ...")
         res_m = propagate_single_namd_origin(
             k0=k0,
             n_win_steps=n_win_steps,
@@ -1203,7 +1206,7 @@ def run_namd_dynamics(config):
     biexciton_pop = origin_results[0]["biexciton_pop"]
 
     total_sim_time = time.time() - t0_start
-    print(f"\n[NAMD Dynamics] Completed in {total_sim_time:.2f} s")
+    logger.info(f"\n[NAMD Dynamics] Completed in {total_sim_time:.2f} s")
 
     if is_biexciton and biexciton_pop is not None:
         biex_file = os.path.join(precompute_dir if os.path.isdir(precompute_dir) else ".", "biexciton_decay.csv")
@@ -1214,7 +1217,7 @@ def run_namd_dynamics(config):
             delimiter=",",
             comments=""
         )
-        print(f"  [NAMD:ECSH] Exported biexciton decay trace to: {biex_file}")
+        logger.info(f"  [NAMD:ECSH] Exported biexciton decay trace to: {biex_file}")
 
     # Flux averaging for PME in multi-origin mode
     if run_tr_sd and method in ("master_equation", "pme") and pme_flux_records and n_origins > 1:
@@ -1265,9 +1268,9 @@ def run_namd_dynamics(config):
             plot_transient_absorption,
             export_transient_absorption_data,
         )
-        print("\n" + "=" * 68)
-        print("  [NAMD] Computing Ultrafast Pump-Probe Transient Absorption...")
-        print("=" * 68)
+        logger.info("\n" + "=" * 68)
+        logger.info("  [NAMD] Computing Ultrafast Pump-Probe Transient Absorption...")
+        logger.info("=" * 68)
         ta_sigma = float(ta_cfg.get("sigma", 0.03))
         ta_erange = ta_cfg.get("e_range", None)
         ta_n_e = int(ta_cfg.get("n_e_points", 300))
@@ -1290,11 +1293,11 @@ def run_namd_dynamics(config):
         )
 
         fit = ta_res["fit_results"]
-        print(f"  1S Band-Edge Energy          : {ta_res['e_1s_ev']:.3f} eV")
+        logger.info(f"  1S Band-Edge Energy          : {ta_res['e_1s_ev']:.3f} eV")
         if fit.get("success", False):
-            print(f"  1S Bleach Rise Time (tau_C)  : {fit['tau_rise_fs']:.1f} fs ({fit['tau_rise_ps']:.3f} ps)")
-            print(f"  Carrier Cooling Rate (k_C)   : {fit['k_cool_ps']:.2f} ps^-1")
-        print("=" * 68 + "\n")
+            logger.info(f"  1S Bleach Rise Time (tau_C)  : {fit['tau_rise_fs']:.1f} fs ({fit['tau_rise_ps']:.3f} ps)")
+            logger.info(f"  Carrier Cooling Rate (k_C)   : {fit['k_cool_ps']:.2f} ps^-1")
+        logger.info("=" * 68 + "\n")
 
         # Plotting
         plot_ta = bool(ta_cfg.get("plot", True))
@@ -1312,9 +1315,9 @@ def run_namd_dynamics(config):
     # Time-Resolved Vibrational Action Spectrum J(omega, t)
     # -------------------------------------------------------------
     if run_tr_sd:
-        print("\n" + "=" * 68)
-        print("  [NAMD] Computing Time-Resolved Vibrational Action Spectrum J(omega, t)...")
-        print("=" * 68)
+        logger.info("\n" + "=" * 68)
+        logger.info("  [NAMD] Computing Time-Resolved Vibrational Action Spectrum J(omega, t)...")
+        logger.info("=" * 68)
         from qdex.namd.analysis import (
             load_trajectory_orbital_energies,
             compute_time_resolved_spectral_density,
@@ -1343,8 +1346,8 @@ def run_namd_dynamics(config):
             bg_data=bg_for_tr,
             method_name=method.upper(),
         )
-        print(f"  Visited unique hopping/flux pairs: {tr_sd_res['n_unique_pairs']}")
-        print(f"  Max action density amplitude    : {np.max(tr_sd_res['J_total_raw']):.4e}")
+        logger.info(f"  Visited unique hopping/flux pairs: {tr_sd_res['n_unique_pairs']}")
+        logger.info(f"  Max action density amplitude    : {np.max(tr_sd_res['J_total_raw']):.4e}")
 
         plot_tr_sd = bool(tr_sd_cfg.get("plot", True))
         mat_name = config.get("system", {}).get("material", "CSPBBR3")
@@ -1387,4 +1390,4 @@ def run_namd_dynamics(config):
             csv_file_2d = tr_sd_cfg.get("csv_file_2d", "2d_vibronic_action_projections.csv")
             export_2d_vibronic_action_map(vib2d, output_npz=npz_file_2d, output_csv=csv_file_2d)
 
-        print("=" * 68 + "\n")
+        logger.info("=" * 68 + "\n")

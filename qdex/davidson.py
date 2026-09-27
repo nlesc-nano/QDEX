@@ -1,5 +1,8 @@
 import numpy as np
 from qdex.device_utils import is_gpu, to_tensor, to_numpy
+import logging
+
+logger = logging.getLogger(__name__)
 
 def _initial_guess(diag, nroots):
     """Unit vectors on the lowest diagonal elements (standard Davidson guess).
@@ -51,10 +54,10 @@ def davidson(matvec, diag, nroots, max_iter=500, tol=1e-6, max_subspace=None, de
 
             residuals = Ritz_AV - evals[:nroots] * Ritz
             norms = torch.linalg.norm(residuals, dim=0)
-            print(f"[DAV] Iter {it:3d} residuals:", np.round(to_numpy(norms), 6))
+            logger.debug(f"[DAV] Iter {it:3d} residuals: {np.round(to_numpy(norms), 6)}")
 
             if bool(torch.all(norms < tol)):
-                print(f"[DAV] Converged in {it} iterations.")
+                logger.info(f"[DAV] Converged in {it} iterations.")
                 return to_numpy(evals[:nroots]), to_numpy(Ritz)
 
             if V.shape[1] >= max_subspace:
@@ -118,11 +121,11 @@ def davidson(matvec, diag, nroots, max_iter=500, tol=1e-6, max_subspace=None, de
             residuals[:, i] = Ritz_AV[:, i] - evals[i] * Ritz[:, i]
 
         norms = np.linalg.norm(residuals, axis=0)
-        print(f"[DAV] Iter {it:3d} residuals:", np.round(norms, 6))
+        logger.debug(f"[DAV] Iter {it:3d} residuals: {np.round(norms, 6)}")
 
         # Check convergence
         if np.all(norms < tol):
-            print(f"[DAV] Converged in {it} iterations.")
+            logger.info(f"[DAV] Converged in {it} iterations.")
             return evals[:nroots], Ritz
 
         # Check if subspace needs to collapse

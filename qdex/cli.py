@@ -40,6 +40,9 @@ from qdex.orbital_analysis import (
 from qdex.fuzzy_bands import run_fuzzy_bands_and_pdos, build_qp_energies, build_qp_energies_vacuum
 from qdex.nto import run_nto_analysis
 from qdex.profiler import ResourceTracker
+import logging
+
+logger = logging.getLogger("qdex.cli")
 
 
 class TeeStream:
@@ -83,21 +86,28 @@ def transform_ao_operator(mu_ao, c_left, c_right, device="numpy"):
     return (left.conj().T @ half).astype(dtype, copy=False)
 
 
-def setup_run_logging(log_file):
+def setup_run_logging(log_file, verbosity="full"):
+    """Console output at ``verbosity``; with a log file, everything is also written to it."""
+    from qdex.logging_setup import attach_run_log, detach_run_log, set_verbosity
+    set_verbosity(verbosity)
     if log_file in (None, "", "none", "None", False):
         return None
 
     log_handle = open(log_file, "w", encoding="utf-8")
+    # Logged messages: console at the chosen verbosity, the log file in full.
+    # Anything written directly to stdout/stderr (C++ extensions, libraries) is copied to both.
+    attach_run_log(log_handle, sys.__stdout__, verbosity)
     sys.stdout = TeeStream(sys.__stdout__, log_handle)
     sys.stderr = TeeStream(sys.__stderr__, log_handle)
 
     def close_log():
+        detach_run_log()
         sys.stdout = sys.__stdout__
         sys.stderr = sys.__stderr__
         log_handle.close()
 
     atexit.register(close_log)
-    print(f"  [Log] Writing full run log to {log_file}")
+    logger.info(f"  [Log] Writing full run log to {log_file}")
     return log_handle
 
 
@@ -112,78 +122,78 @@ def print_qp_provenance(details, dft_gap=None, target_qp_gap=None, output_file=N
             model_name = "qsGW-Resta" if details.get("orbital_update") else ("evGW-Resta" if details.get("self_consistent") else "sGW-Resta")
         else:
             model_name = "Microscopic sGW / Delta-W"
-        print(f"\n  [QP Provenance] {model_name} Model")
-        print(f"    Material                 : {details['material']}")
-        print(f"    Bulk PBE -> GW gap       : {details['bulk_pbe_gap_ev']:.3f} -> {details['bulk_gw_gap_ev']:.3f} eV")
-        print(f"    Bulk GW shift            : {details['bulk_shift_ev']:+.3f} eV")
+        logger.info(f"\n  [QP Provenance] {model_name} Model")
+        logger.info(f"    Material                 : {details['material']}")
+        logger.info(f"    Bulk PBE -> GW gap       : {details['bulk_pbe_gap_ev']:.3f} -> {details['bulk_gw_gap_ev']:.3f} eV")
+        logger.info(f"    Bulk GW shift            : {details['bulk_shift_ev']:+.3f} eV")
         if details.get("dynamic_z"):
             z_info = f"dynamic: Zh={details.get('z_homo', details['z_factor']):.3f}, Zl={details.get('z_lumo', details['z_factor']):.3f}"
         else:
             z_info = f"Z = {details['z_factor']:.2f}"
-        print(f"    Confinement shift        : {details['confinement_shift_ev']:+.3f} eV ({z_info})")
+        logger.info(f"    Confinement shift        : {details['confinement_shift_ev']:+.3f} eV ({z_info})")
         if "confinement_shift_internal_ev" in details and "confinement_shift_solvent_ev" in details:
-            print(f"      - Internal Contrast    : {details['confinement_shift_internal_ev']:+.3f} eV")
-            print(f"      - Solvent Reaction Field: {details['confinement_shift_solvent_ev']:+.3f} eV")
-        print(f"    HOMO shift (Delta Sigma) : {details['delta_sigma_homo_ev']:+.3f} eV")
-        print(f"    LUMO shift (Delta Sigma) : {details['delta_sigma_lumo_ev']:+.3f} eV")
+            logger.info(f"      - Internal Contrast    : {details['confinement_shift_internal_ev']:+.3f} eV")
+            logger.info(f"      - Solvent Reaction Field: {details['confinement_shift_solvent_ev']:+.3f} eV")
+        logger.info(f"    HOMO shift (Delta Sigma) : {details['delta_sigma_homo_ev']:+.3f} eV")
+        logger.info(f"    LUMO shift (Delta Sigma) : {details['delta_sigma_lumo_ev']:+.3f} eV")
         if details.get("orbital_update"):
-            print(f"    qsGW Iterations          : {details.get('qsgw_iterations', 1)} (converged: {details.get('qsgw_converged', False)})")
-            print(f"    HOMO Orbital Fidelity    : {details.get('homo_fidelity', 1.0):.5f}  (|<psi_PBE|psi_QP>|^2)")
-            print(f"    LUMO Orbital Fidelity    : {details.get('lumo_fidelity', 1.0):.5f}  (|<psi_PBE|psi_QP>|^2)")
+            logger.info(f"    qsGW Iterations          : {details.get('qsgw_iterations', 1)} (converged: {details.get('qsgw_converged', False)})")
+            logger.info(f"    HOMO Orbital Fidelity    : {details.get('homo_fidelity', 1.0):.5f}  (|<psi_PBE|psi_QP>|^2)")
+            logger.info(f"    LUMO Orbital Fidelity    : {details.get('lumo_fidelity', 1.0):.5f}  (|<psi_PBE|psi_QP>|^2)")
         elif details.get("self_consistent"):
-            print(f"    evGW Iterations          : {details.get('evgw_iterations', 1)} (converged: {details.get('evgw_converged', False)})")
-        print(f"    Solvent epsilon_out      : {details['eps_out']:.2f}")
-        print(f"    Total scissor            : {details['total_scissor_ev']:+.3f} eV")
+            logger.info(f"    evGW Iterations          : {details.get('evgw_iterations', 1)} (converged: {details.get('evgw_converged', False)})")
+        logger.info(f"    Solvent epsilon_out      : {details['eps_out']:.2f}")
+        logger.info(f"    Total scissor            : {details['total_scissor_ev']:+.3f} eV")
         if dft_gap is not None and target_qp_gap is not None:
-            print(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
+            logger.info(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
         if output_file:
-            print(f"    JSON                     : {output_file}")
+            logger.info(f"    JSON                     : {output_file}")
         return
 
     if details.get("qp_model") == "bulk_gw_scissor":
-        print("\n  [QP Provenance] Bulk GW Scissor Model (Bypassing Finite-Size QP)")
-        print(f"    Material                 : {details.get('material', 'N/A')}")
-        print(f"    Bulk PBE -> GW gap       : {details.get('bulk_pbe_gap_ev', 0.0):.3f} -> {details.get('bulk_gw_gap_ev', 0.0):.3f} eV")
-        print(f"    Bulk GW scissor          : {details.get('bulk_gw_shift_ev', 0.0):+.3f} eV")
-        print("    Finite-size Delta-W      : none (pure bulk limit)")
+        logger.info("\n  [QP Provenance] Bulk GW Scissor Model (Bypassing Finite-Size QP)")
+        logger.info(f"    Material                 : {details.get('material', 'N/A')}")
+        logger.info(f"    Bulk PBE -> GW gap       : {details.get('bulk_pbe_gap_ev', 0.0):.3f} -> {details.get('bulk_gw_gap_ev', 0.0):.3f} eV")
+        logger.info(f"    Bulk GW scissor          : {details.get('bulk_gw_shift_ev', 0.0):+.3f} eV")
+        logger.info("    Finite-size Delta-W      : none (pure bulk limit)")
         if dft_gap is not None and target_qp_gap is not None:
-            print(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
+            logger.info(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
         if output_file:
-            print(f"    JSON                     : {output_file}")
+            logger.info(f"    JSON                     : {output_file}")
         return
 
-    print("\n  [QP Provenance] Anchor-scaled PBE-to-QP model")
-    print(f"    Material                 : {details['material']}")
+    logger.info("\n  [QP Provenance] Anchor-scaled PBE-to-QP model")
+    logger.info(f"    Material                 : {details['material']}")
     if "cluster_radius_ang" in details:
-        print(f"    Cluster radius           : {details['cluster_radius_ang']:.3f} Å")
-    print(f"    Bulk PBE -> GW gap       : {details['bulk_pbe_gap_ev']:.3f} -> {details['bulk_gw_gap_ev']:.3f} eV")
-    print(f"    Bulk GW shift            : {details['bulk_gw_shift_ev']:+.3f} eV")
+        logger.info(f"    Cluster radius           : {details['cluster_radius_ang']:.3f} Å")
+    logger.info(f"    Bulk PBE -> GW gap       : {details['bulk_pbe_gap_ev']:.3f} -> {details['bulk_gw_gap_ev']:.3f} eV")
+    logger.info(f"    Bulk GW shift            : {details['bulk_gw_shift_ev']:+.3f} eV")
     if details.get("periodic_bulk_limit"):
-        print("    Periodic mode            : using tabulated bulk GW-PBE scissor only")
+        logger.info("    Periodic mode            : using tabulated bulk GW-PBE scissor only")
     if details.get("has_monomer_anchor"):
-        print(f"    Monomer anchor radius    : {details['monomer_radius_ang']:.3f} Å")
-        print(f"    Monomer PBE -> GW gap    : {details['monomer_pbe_gap_ev']:.3f} -> {details['monomer_gw_gap_ev']:.3f} eV")
-        print(f"    Anchor residual A        : {details['anchor_residual_ev']:+.3f} eV")
+        logger.info(f"    Monomer anchor radius    : {details['monomer_radius_ang']:.3f} Å")
+        logger.info(f"    Monomer PBE -> GW gap    : {details['monomer_pbe_gap_ev']:.3f} -> {details['monomer_gw_gap_ev']:.3f} eV")
+        logger.info(f"    Anchor residual A        : {details['anchor_residual_ev']:+.3f} eV")
         if details.get("polarization_model", "legacy") == "sphere":
-            print(f"    Polarization             : sphere, F = {details['polarization_factor_solvent']:.4f} "
+            logger.info(f"    Polarization             : sphere, F = {details['polarization_factor_solvent']:.4f} "
                   f"(vacuum {details['polarization_factor_vacuum']:.4f}), p = {details['residual_power']:.3f}")
         else:
-            print(f"    ell, p                   : {details['regularization_length_ang']:.3f} Å, {details['residual_power']:.3f}")
+            logger.info(f"    ell, p                   : {details['regularization_length_ang']:.3f} Å, {details['residual_power']:.3f}")
         if details.get("edge_split_source") == "anchor_edge_curves":
-            print(f"    Edge residuals A_h, A_l  : {details['edge_residual_homo_ev']:+.3f}, "
+            logger.info(f"    Edge residuals A_h, A_l  : {details['edge_residual_homo_ev']:+.3f}, "
                   f"{details['edge_residual_lumo_ev']:+.3f} eV (HOMO share of bulk shift {details['bulk_homo_fraction']:.2f})")
     if details.get("principal_extents_ang"):
         extents = ", ".join(f"{x:.3f}" for x in details["principal_extents_ang"])
-        print(f"    Principal extents        : [{extents}] Å")
-        print(f"    Anisotropy ratio         : {details['anisotropy_ratio']:.3f}")
-    print(f"    Vacuum finite-size shift : {details['finite_size_shift_vacuum_ev']:+.3f} eV")
-    print(f"    Solvent finite-size shift: {details['finite_size_shift_solvent_ev']:+.3f} eV")
-    print(f"    Vacuum scissor           : {details['total_scissor_vacuum_ev']:+.3f} eV")
-    print(f"    Solvent scissor used     : {details['total_scissor_solvent_ev']:+.3f} eV")
+        logger.info(f"    Principal extents        : [{extents}] Å")
+        logger.info(f"    Anisotropy ratio         : {details['anisotropy_ratio']:.3f}")
+    logger.info(f"    Vacuum finite-size shift : {details['finite_size_shift_vacuum_ev']:+.3f} eV")
+    logger.info(f"    Solvent finite-size shift: {details['finite_size_shift_solvent_ev']:+.3f} eV")
+    logger.info(f"    Vacuum scissor           : {details['total_scissor_vacuum_ev']:+.3f} eV")
+    logger.info(f"    Solvent scissor used     : {details['total_scissor_solvent_ev']:+.3f} eV")
     if dft_gap is not None and target_qp_gap is not None:
-        print(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
+        logger.info(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
     if output_file:
-        print(f"    JSON                     : {output_file}")
+        logger.info(f"    JSON                     : {output_file}")
 
 
 def write_qp_provenance(details, dft_gap, target_qp_gap, scissor, args, filename="qp_provenance.json"):
@@ -255,9 +265,9 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         label = "TRIPLET (SPIN-FLIP)"
     else:
         label = "SPIN-FREE"
-    print(f"\n===================================================")
-    print(f" [ {label} ] EXCITON CALCULATION ")
-    print(f"===================================================")
+    logger.info(f"\n===================================================")
+    logger.info(f" [ {label} ] EXCITON CALCULATION ")
+    logger.info(f"===================================================")
 
     start_solve = time.time()
     energies_ev, vectors = solver.solve(
@@ -267,8 +277,8 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     
     if args.soc != 0.0:
         energies_ev = energies_ev - args.soc
-        print(f"  [SOC Shift] Applied empirical energy shift: -{args.soc:.3f} eV")
-    print(f"  {label} Solver converged in {time.time() - start_solve:2.2f} s")
+        logger.info(f"  [SOC Shift] Applied empirical energy shift: -{args.soc:.3f} eV")
+    logger.debug(f"  {label} Solver converged in {time.time() - start_solve:2.2f} s")
 
     mu_ia = solver.ham.get_transition_dipoles(mu_ia_x, mu_ia_y, mu_ia_z)
     f_strengths = compute_oscillator_strengths(
@@ -316,34 +326,34 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             + np.abs(X_ia_b[solver.ham.valid_i, solver.ham.valid_a]) ** 2
         )
 
-    print("\n" + "-"*60)
-    print(f" SYSTEM ENERGY SUMMARY ({label})")
-    print("-" * 60)
-    print(f"  Raw DFT Gap           : {dft_gap:8.4f} eV")
+    logger.info("\n" + "-"*60)
+    logger.info(f" SYSTEM ENERGY SUMMARY ({label})")
+    logger.info("-" * 60)
+    logger.info(f"  Raw DFT Gap           : {dft_gap:8.4f} eV")
     if solver.soc_flag and soc_gap is not None:
-        print(f"  SOC Gap               : {soc_gap:8.4f} eV")
-    print(f"  QP Correction (Shift) : {scissor:8.4f} eV")
-    print(f"  Confinement Energy    : {confinement_energy:8.4f} eV")
-    print(f"  Excitation Mode        : {args.excitation_mode}")
+        logger.info(f"  SOC Gap               : {soc_gap:8.4f} eV")
+    logger.info(f"  QP Correction (Shift) : {scissor:8.4f} eV")
+    logger.info(f"  Confinement Energy    : {confinement_energy:8.4f} eV")
+    logger.info(f"  Excitation Mode        : {args.excitation_mode}")
     if hasattr(solver, 'eps_info') and solver.eps_info:
         eps_info = solver.eps_info
-        print(f"  Microscopic ε_eff (1S) : {eps_info.get('eps_eff_exciton', 1.0):8.3f} (Lowest exciton screening)")
+        logger.info(f"  Microscopic ε_eff (1S) : {eps_info.get('eps_eff_exciton', 1.0):8.3f} (Lowest exciton screening)")
         if eps_info.get('eps_bulk'):
-            print(f"  Bulk Dielectric (ε_∞)  : {eps_info.get('eps_bulk'):8.3f} (Retention: {eps_info.get('dielectric_retention_pct', 100.0):.1f}%)")
+            logger.info(f"  Bulk Dielectric (ε_∞)  : {eps_info.get('eps_bulk'):8.3f} (Retention: {eps_info.get('dielectric_retention_pct', 100.0):.1f}%)")
         dielectric_file = f"dielectric_summary{suffix}.json"
         try:
             with open(dielectric_file, "w", encoding="utf-8") as f:
                 json.dump(eps_info, f, indent=2, sort_keys=True)
-            print(f"  Dielectric Log File    : {dielectric_file}")
+            logger.info(f"  Dielectric Log File    : {dielectric_file}")
         except Exception:
             pass
     elif args.kernel != "resta":
-        print(f"  Legacy Kernel Scaling  : {args.alpha:8.4f}")
-    print("-" * 60)
+        logger.info(f"  Legacy Kernel Scaling  : {args.alpha:8.4f}")
+    logger.info("-" * 60)
 
-    print("\n" + "="*172)
-    print(f"{'State':>5} {'Energy':>10} {'Main Trans':>12} {'Weight':>8} {'f_osc':>10} | {'PR':>5} | {'D(eV)':>8} {'Kx(eV)':>8} {'-Kd(eV)':>8} | {'Spin-Free Character':>62}")
-    print("-" * 172)
+    logger.info("\n" + "="*172)
+    logger.info(f"{'State':>5} {'Energy':>10} {'Main Trans':>12} {'Weight':>8} {'f_osc':>10} | {'PR':>5} | {'D(eV)':>8} {'Kx(eV)':>8} {'-Kd(eV)':>8} | {'Spin-Free Character':>62}")
+    logger.info("-" * 172)
 
     n_print = min(100, len(energies_ev))
 
@@ -408,18 +418,18 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         else:
             spin_str = "100.0% S /   0.0% T"
 
-        print(f"{n+1:5d} {energies_ev[n]:10.4f}  {trans_str:>12}  {weight**2:8.3f}  {f_strengths[n]:10.5f} | {pr:5.1f} | {dE_val:8.4f} {Kx_val:8.4f} {minus_Kd_val:8.4f} | {spin_str:>62}")
+        logger.info(f"{n+1:5d} {energies_ev[n]:10.4f}  {trans_str:>12}  {weight**2:8.3f}  {f_strengths[n]:10.5f} | {pr:5.1f} | {dE_val:8.4f} {Kx_val:8.4f} {minus_Kd_val:8.4f} | {spin_str:>62}")
 
-    if len(energies_ev) > 100: print(f" ... {len(energies_ev) - 100} additional states computed (output truncated) ...")
-    print("="*172)
+    if len(energies_ev) > 100: logger.info(f" ... {len(energies_ev) - 100} additional states computed (output truncated) ...")
+    logger.info("="*172)
 
-    print(f"\n--- Performing Dreuw/Plasser Analysis ({label}) ---")
+    logger.info(f"\n--- Performing Dreuw/Plasser Analysis ({label}) ---")
     analyzer = ExcitonAnalyzer(solver, np.array(coords_ang), syms)
     analysis_results = []
     analysis_t0 = time.perf_counter()
 
-    print(f"{'State':>5} {'Energy':>8} {'f_osc':>8} | {'PR':>5} {'d_eh~(A)':>8} {'d_CT~(A)':>8} {'sig_h~':>7} {'sig_e~':>7} | {'Type':>8}")
-    print("-" * 95)
+    logger.info(f"{'State':>5} {'Energy':>8} {'f_osc':>8} | {'PR':>5} {'d_eh~(A)':>8} {'d_CT~(A)':>8} {'sig_h~':>7} {'sig_e~':>7} | {'Type':>8}")
+    logger.info("-" * 95)
 
     for n in range(n_print):
         vec = vectors[:, n]
@@ -438,9 +448,9 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         elif res['d_eh'] < 3.0 and ct_ratio < 0.2: ex_type = "Frenkel"
         else: ex_type = "Wannier"
 
-        print(f"{n+1:5d} {res['energy']:8.3f} {res['f_osc']:8.4f} | {res['PR']:5.1f} {res['d_eh']:7.2f} {res['d_CT']:7.2f} {res['sigma_h']:6.1f} {res['sigma_e']:6.1f} | {ex_type:>8}")
+        logger.info(f"{n+1:5d} {res['energy']:8.3f} {res['f_osc']:8.4f} | {res['PR']:5.1f} {res['d_eh']:7.2f} {res['d_CT']:7.2f} {res['sigma_h']:6.1f} {res['sigma_e']:6.1f} | {ex_type:>8}")
 
-    print(
+    logger.debug(
         f"  [Analyzer] Completed {len(analysis_results)} coherent-state analyses "
         f"in {time.perf_counter() - analysis_t0:.2f} s"
     )
@@ -483,7 +493,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             
             bse_states[f"exciton_state_{idx + 1}{suffix}"] = cube_vec
             
-        print(f"\n--- Generating Cubes ({n_bse} Excitons) ---")
+        logger.info(f"\n--- Generating Cubes ({n_bse} Excitons) ---")
         use_cpp_writer = not getattr(args, 'disable_cpp_cube', False)
         
         generate_cubes(
@@ -521,7 +531,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             npz_filename, time=args.time, energies=energies_ev[:n_to_write], X_ia=vectors[:, :n_to_write], 
             valid_i=solver.ham.valid_i, valid_a=solver.ham.valid_a, homo_index=solver.homo_index, n_occ=solver.n_occ
         )
-        print(f"  Saved X_ia coefficients to {npz_filename}")
+        logger.info(f"  Saved X_ia coefficients to {npz_filename}")
 
     if args.broadening != "none":
         from qdex.spectrum import generate_spectrum, plot_spectrum
@@ -654,7 +664,7 @@ def _apply_config(args, config_data, explicit_cli_args=None):
 
         if isinstance(parameters, dict):
             if section == "physics":
-                print("  [Config] The 'physics' section is the old layout; it still works. New layout: "
+                logger.info("  [Config] The 'physics' section is the old layout; it still works. New layout: "
                       "quasiparticles, environment, integrals, excitations (see docs, Configuration).")
             for key, value in parameters.items():
                 dest = section_dest(section, key)
@@ -756,10 +766,10 @@ def resolve_bse_kernel(args, qp_w):
         if kernel in (None, "qp") or equivalent:
             if str(args.kernel_type).lower() not in ("mnok", "xs", "xs-qdex"):
                 raise ValueError(f"kernel 'qp' supports two_electron_integrals mnok or xs, not '{args.kernel_type}'.")
-            print(f"  [Consistency] BSE direct kernel = W of the QP model ({label}).")
+            logger.info(f"  [Consistency] BSE direct kernel = W of the QP model ({label}).")
             return "qp"
         if args.allow_inconsistent_kernel:
-            print(f"  [Consistency WARNING] qp_gap '{args.qp_gap}' uses W = {label}, but the BSE uses kernel "
+            logger.warning(f"  [Consistency WARNING] qp_gap '{args.qp_gap}' uses W = {label}, but the BSE uses kernel "
                   f"'{kernel}'. GW and BSE do not share W (allowed by --allow-inconsistent-kernel).")
             return kernel
         raise ValueError(
@@ -774,7 +784,7 @@ def resolve_bse_kernel(args, qp_w):
         )
     if kernel is None:
         kernel = "bse"
-    print(f"  [Consistency] qp_gap '{args.qp_gap}' is gap-only (no W); the BSE uses the independent kernel '{kernel}'.")
+    logger.info(f"  [Consistency] qp_gap '{args.qp_gap}' is gap-only (no W); the BSE uses the independent kernel '{kernel}'.")
     return kernel
 
 
@@ -910,6 +920,9 @@ def _build_parser():
     parser.add_argument("--time", type=float, default=0.0)
     parser.add_argument("--save-xia", action="store_true")
     parser.add_argument("--log_file", type=str, default="minibse.log", help="Write terminal output to this log file as well as stdout; use 'none' to disable.")
+    parser.add_argument("--verbosity", choices=["full", "normal", "quiet"], default="full",
+                        help="Console output: 'full' (default, everything), 'normal' (no iteration traces, timings "
+                             "or diagnostics) or 'quiet' (warnings and errors). The log file always gets everything.")
 
     parser.add_argument("--nto", action="store_true", help="Run Natural Transition Orbital analysis after solving excitons.")
     parser.add_argument("--nto-states", type=int, nargs='+', help="Specific exciton states for NTO analysis, 1-indexed.")
@@ -1113,13 +1126,13 @@ def _load_arguments(parser):
 
     if getattr(args, "namd_precompute", False):
         from qdex.namd import precompute_namd_data
-        setup_run_logging(getattr(args, "log_file", "minibse.log"))
+        setup_run_logging(getattr(args, "log_file", "minibse.log"), getattr(args, "verbosity", "full"))
         precompute_namd_data(config_data)
         return
 
     if getattr(args, "namd_run", False):
         from qdex.namd import run_namd_dynamics
-        setup_run_logging(getattr(args, "log_file", "minibse.log"))
+        setup_run_logging(getattr(args, "log_file", "minibse.log"), getattr(args, "verbosity", "full"))
         run_namd_dynamics(config_data)
         return
 
@@ -1129,7 +1142,7 @@ def _load_arguments(parser):
     if getattr(args, "include_direct_eh", None) is None:
         args.include_direct_eh = True if args.exchange is None else bool(args.exchange)
     if args.exchange is not None:
-        print("  [Deprecated] 'exchange' now maps to include_direct_eh; use include_direct_eh instead.")
+        logger.warning("  [Deprecated] 'exchange' now maps to include_direct_eh; use include_direct_eh instead.")
     if getattr(args, "include_exchange", None) is None:
         args.include_exchange = True
     return {"args": args, "config_path": config_path}
@@ -1137,7 +1150,7 @@ def _load_arguments(parser):
 
 def _prepare_run(args, *, config_path, parser):
     """Logging, argument validation, MNOK/radius settings and the compute device."""
-    setup_run_logging(getattr(args, "log_file", "minibse.log"))
+    setup_run_logging(getattr(args, "log_file", "minibse.log"), getattr(args, "verbosity", "full"))
     validate_args(args, parser)
     import qdex.hardness as _hardness
     _hardness.RADIUS_DEFINITION = str(getattr(args, "qp_radius", "saxs") or "saxs").lower()
@@ -1145,18 +1158,18 @@ def _prepare_run(args, *, config_path, parser):
                                getattr(args, "mnok_onsite", "ip_ea"))
     compute_device, dev_obj = resolve_device(args.device, verbose=True)
     if config_path:
-        print(f"Loading configuration from {config_path}...")
+        logger.info(f"Loading configuration from {config_path}...")
 
     if not getattr(args, "xyz", None) and geometry_source(None, getattr(args, "mo_file", None)):
         args.xyz = args.mo_file   # geometry from the TREXIO 'nucleus' group of the HDF5 MO file
-        print(f"  [Geometry] system.xyz not set; reading the geometry from '{args.mo_file}'.")
+        logger.info(f"  [Geometry] system.xyz not set; reading the geometry from '{args.mo_file}'.")
     required_args = ['mo_file', 'xyz', 'basis_txt', 'basis_name', 'qp_gap']
     missing = [arg for arg in required_args if getattr(args, arg) is None]
     if missing: parser.error(f"Missing required arguments: {', '.join(missing)}")
 
-    print("\n===================================================")
-    print(" QDEX - Post-DFT Exciton Solver")
-    print("===================================================")
+    logger.info("\n===================================================")
+    logger.info(" QDEX - Post-DFT Exciton Solver")
+    logger.info("===================================================")
 
     tracker = ResourceTracker()
     return _export(locals(), (
@@ -1167,7 +1180,7 @@ def _prepare_run(args, *, config_path, parser):
 def _read_geometry_and_basis(args, *, tracker):
     """Geometry, basis set and the size of the dot (always reported)."""
     tracker.start_stage("Geometry & Basis Parsing")
-    print("\n--- Parsing Geometry and Basis Set ---")
+    logger.info("\n--- Parsing Geometry and Basis Set ---")
     t0_parse = time.time()
     if (
         getattr(args, "xyz", None)
@@ -1175,7 +1188,7 @@ def _read_geometry_and_basis(args, *, tracker):
         and os.path.exists(getattr(args, "mo_file", ""))
         and (str(args.mo_file).lower().endswith((".h5", ".hdf5")) or is_h5_file(args.mo_file))
     ):
-        print(f"  [Geometry] '{args.xyz}' not found on disk; extracting nuclear geometry directly from HDF5 '{args.mo_file}'")
+        logger.info(f"  [Geometry] '{args.xyz}' not found on disk; extracting nuclear geometry directly from HDF5 '{args.mo_file}'")
         syms, coords_ang = read_geometry_h5(args.mo_file)
     else:
         syms, coords_ang = read_xyz(args.xyz)
@@ -1184,7 +1197,7 @@ def _read_geometry_and_basis(args, *, tracker):
     shells = [{**sh, 'pure': True} for sh in shells] # Use Sphericals 
     n_ao = count_ao_from_shells(shells)
     atom_ao_ranges = build_atom_ao_ranges(shells)
-    print(f"  -> Parsed in {time.time() - t0_parse:.2f} s | Total AOs: {n_ao}")
+    logger.debug(f"  -> Parsed in {time.time() - t0_parse:.2f} s | Total AOs: {n_ao}")
 
     # Size of the dot, always reported (SAXS definition), whether or not the model uses it.
     cluster_size_info = None
@@ -1203,12 +1216,12 @@ def _read_geometry_and_basis(args, *, tracker):
         else:
             radius_note = (f"SAXS radius {5.0 * cluster_size_info['d_saxs_nm']:.3f} A "
                            f"(sphere reaction field / confinement of '{args.qp_gap}')")
-        print(format_cluster_size(cluster_size_info, radius_note))
+        logger.info(format_cluster_size(cluster_size_info, radius_note))
         with open("cluster_size.json", "w", encoding="utf-8") as fh:
             json.dump(cluster_size_info, fh, indent=2)
         args.cluster_size_info = cluster_size_info
     except Exception as exc:  # the size report must never stop a calculation
-        print(f"  [Size] Could not evaluate the cluster size: {exc}")
+        logger.info(f"  [Size] Could not evaluate the cluster size: {exc}")
     return _export(locals(), (
         "atom_ao_ranges", "coords_ang", "n_ao", "shells", "syms"
     ))
@@ -1217,41 +1230,41 @@ def _read_geometry_and_basis(args, *, tracker):
 def _read_molecular_orbitals(args, *, n_ao, shells, tracker):
     """AO overlap and molecular orbitals (restricted or unrestricted), energy axis."""
     tracker.start_stage("AO Overlap Matrix (S)")
-    print("\n--- Computing AO overlap ---")
+    logger.info("\n--- Computing AO overlap ---")
     t0_s = time.time()
     if getattr(args, "periodic_enabled", False):
         lattice_ang = np.asarray(args.lattice_vectors, dtype=float)
         lattice_bohr = lattice_ang * BOHR_PER_ANG
         cutoff = float(getattr(args, "overlap_cutoff", -1.0))
         if cutoff <= 0.0:
-            print("  [Warning] periodic.overlap_cutoff <= 0 uses minimum-image overlap only.")
-            print("  [Warning] Gamma-periodic MO orthonormality usually requires summing neighboring cell images; try overlap_cutoff: 6.0.")
+            logger.warning("  [Warning] periodic.overlap_cutoff <= 0 uses minimum-image overlap only.")
+            logger.warning("  [Warning] Gamma-periodic MO orthonormality usually requires summing neighboring cell images; try overlap_cutoff: 6.0.")
         S = libint_cpp.overlap_pbc(shells, lattice_bohr, cutoff, args.nthreads)
-        print(f"  ->  PBC overlap computed in {time.time() - t0_s:.2f} s")
-        print(f"  ->  Lattice vectors read from YAML in angstrom; Libint lattice passed in bohr. cutoff={cutoff:.3f} A")
+        logger.debug(f"  ->  PBC overlap computed in {time.time() - t0_s:.2f} s")
+        logger.info(f"  ->  Lattice vectors read from YAML in angstrom; Libint lattice passed in bohr. cutoff={cutoff:.3f} A")
     else:
         S = libint_cpp.overlap(shells, args.nthreads)
-        print(f"  ->  Finite-system overlap computed in {time.time() - t0_s:.2f} s")
+        logger.debug(f"  ->  Finite-system overlap computed in {time.time() - t0_s:.2f} s")
 
     C_beta, eps_beta, occ_beta = None, None, None
     homo_index_beta = None
 
     tracker.start_stage("Molecular Orbitals (MOs)")
     if args.mo_file_beta is not None:
-        print(f"\n--- Reading Alpha Molecular Orbitals from {args.mo_file} ---")
+        logger.info(f"\n--- Reading Alpha Molecular Orbitals from {args.mo_file} ---")
         t0_mos = time.time()
         C, eps, occ = read_mos_auto(args.mo_file, n_ao, verbose=True, cache=args.cache_mos)
-        print(f"  -> Alpha MOs parsed in {time.time() - t0_mos:.2f} s | C shape {C.shape}")
+        logger.debug(f"  -> Alpha MOs parsed in {time.time() - t0_mos:.2f} s | C shape {C.shape}")
         
-        print(f"\n--- Reading Beta Molecular Orbitals from {args.mo_file_beta} ---")
+        logger.info(f"\n--- Reading Beta Molecular Orbitals from {args.mo_file_beta} ---")
         t0_beta = time.time()
         C_beta, eps_beta, occ_beta = read_mos_auto(args.mo_file_beta, n_ao, verbose=True, cache=args.cache_mos)
-        print(f"  -> Beta MOs parsed in {time.time() - t0_beta:.2f} s | C shape {C_beta.shape}")
+        logger.debug(f"  -> Beta MOs parsed in {time.time() - t0_beta:.2f} s | C shape {C_beta.shape}")
     else:
-        print(f"\n--- Reading Molecular Orbitals from {args.mo_file} ---")
+        logger.info(f"\n--- Reading Molecular Orbitals from {args.mo_file} ---")
         t0_mos = time.time()
         C, eps, occ = read_mos_auto(args.mo_file, n_ao, verbose=True, cache=args.cache_mos)
-        print(f"  -> MOs parsed in {time.time() - t0_mos:.2f} s | C shape {C.shape}")
+        logger.debug(f"  -> MOs parsed in {time.time() - t0_mos:.2f} s | C shape {C.shape}")
 
     t0_gap = time.time()
     homo_index = np.where(occ > 0.0)[0].max()
@@ -1269,7 +1282,7 @@ def _read_molecular_orbitals(args, *, n_ao, shells, tracker):
     args.S_ref = infer_reference_spin(args.n_alpha_ref, args.n_beta_ref)
     if C_beta is not None:
         ref_spin_name = spin_multiplicity_name(args.S_ref)
-        print(
+        logger.info(
             f"  [Spin] UKS reference: N_alpha={args.n_alpha_ref:.1f}, "
             f"N_beta={args.n_beta_ref:.1f}, S_ref~{args.S_ref:.1f}, "
             f"multiplicity~{int(round(2 * args.S_ref + 1))} ({ref_spin_name})"
@@ -1320,7 +1333,7 @@ def _quasiparticle_correction(args, *,
             _pop_cache[representation] = orbital_populations(
                 C, S, atom_ao_ranges, qp_pop_mode, representation,
                 SC=_get_SC() if qp_pop_mode == "mulliken" else None)
-            print(f"  [QP] {qp_pop_mode.capitalize()} populations of all {C.shape[1]} orbitals ({representation}) "
+            logger.debug(f"  [QP] {qp_pop_mode.capitalize()} populations of all {C.shape[1]} orbitals ({representation}) "
                   f"in {time.time() - t0p:.1f} s")
         return _pop_cache[representation]
 
@@ -1342,7 +1355,7 @@ def _quasiparticle_correction(args, *,
                 C_front, S, atom_ao_ranges, qp_pop_mode, representation,
                 SC=SC_front
             )
-            print(f"  [QP] Frontier {qp_pop_mode} populations (HOMO/LUMO) in {time.time() - t0p:.3f} s")
+            logger.debug(f"  [QP] Frontier {qp_pop_mode} populations (HOMO/LUMO) in {time.time() - t0p:.3f} s")
         return _pop_cache[key]
 
     def _xs_gamma_ao():
@@ -1351,7 +1364,7 @@ def _quasiparticle_correction(args, *,
             return None
         if "gamma" not in _xs_cache:
             from qdex.integrals import compute_two_electron_ao
-            print("  [xs] Computing exact AO density-pair integrals for the shared W ...")
+            logger.info("  [xs] Computing exact AO density-pair integrals for the shared W ...")
             _xs_cache["gamma"] = compute_two_electron_ao(shells, nthreads=args.nthreads) * HA_TO_EV
         return _xs_cache["gamma"]
     
@@ -1370,7 +1383,7 @@ def _quasiparticle_correction(args, *,
                 
         elif args.qp_gap.lower() in ["gw", "sgw-anchor", "sgw_anchor"]:
             if getattr(args, "periodic_enabled", False):
-                print("\n  [Bulk GW Model] Periodic mode enabled: using tabulated bulk GW-PBE scissor.")
+                logger.info("\n  [Bulk GW Model] Periodic mode enabled: using tabulated bulk GW-PBE scissor.")
                 gw_scissor, qp_provenance = estimate_periodic_bulk_gw_scissor(args.material)
             else:
                 # Compute the Scaled GW Scissor directly
@@ -1396,9 +1409,9 @@ def _quasiparticle_correction(args, *,
                 )
                 
             if args.estimate_qp:
-                print("  [QP Warning] qp_gap is set to 'sgw-anchor', which already uses the recommended scaled-GW hardness model.")
-                print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
-                print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
+                logger.warning("  [QP Warning] qp_gap is set to 'sgw-anchor', which already uses the recommended scaled-GW hardness model.")
+                logger.warning("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
+                logger.warning("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
         elif args.qp_gap.lower() in ["sgw-dim", "sgw_dim", "sgw-dim-dz", "evgw", "evgw-dim", "evgw_dim", "qsgw", "qsgw-dim", "qsgw_dim", "scgw", "scgw-dim", "scgw_dim"]:
             from qdex.hardness import estimate_sgw_dim_qp_gap, estimate_qsgw_dim_qp_gap
             from qdex.lowdin import lowdin_sqrt
@@ -1407,7 +1420,7 @@ def _quasiparticle_correction(args, *,
             is_evgw = "evgw" in args.qp_gap.lower()
             use_dz, z_val = resolve_qp_z(args, True)
             model_tag = "qsGW-DIM" if is_qsgw else ("evGW-DIM" if is_evgw else ("sGW-DIM (Dynamic Z)" if use_dz else "sGW-DIM"))
-            print(f"\n--- Estimating Quasiparticle Gap using {model_tag} (Atomistic Delta-W) ---")
+            logger.info(f"\n--- Estimating Quasiparticle Gap using {model_tag} (Atomistic Delta-W) ---")
             t0_sgw = time.time()
 
             if is_qsgw:
@@ -1460,12 +1473,12 @@ def _quasiparticle_correction(args, *,
                 target_qp_gap = dft_gap + scissor
 
             confinement_energy = qp_provenance.get("confinement_shift_ev", 0.0)
-            print(f"  -> {model_tag} Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
+            logger.debug(f"  -> {model_tag} Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
 
             if args.estimate_qp:
-                print(f"  [QP Warning] qp_gap is set to '{args.qp_gap}', which already applies the microscopic Delta-W quasiparticle correction.")
-                print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
-                print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
+                logger.warning(f"  [QP Warning] qp_gap is set to '{args.qp_gap}', which already applies the microscopic Delta-W quasiparticle correction.")
+                logger.warning("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
+                logger.warning("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
 
         elif args.qp_gap.lower() in ["sgw-resta", "sgw_resta", "sgw-resta-penn", "sgw-resta-pure", "sgw-resta-bulk", "sgw-resta-dz", "evgw-resta", "evgw_resta", "qsgw-resta", "qsgw_resta", "scgw-resta", "scgw_resta"]:
             from qdex.hardness import estimate_sgw_resta_qp_gap, estimate_qsgw_resta_qp_gap
@@ -1477,7 +1490,7 @@ def _quasiparticle_correction(args, *,
             use_penn = not any(k in args.qp_gap.lower() for k in ["pure", "bulk"])
             penn_label = "Penn-scaled" if use_penn else "Pure Boundary"
             model_tag = f"qsGW-Resta ({penn_label})" if is_qsgw else (f"evGW-Resta ({penn_label})" if is_evgw else (f"sGW-Resta ({penn_label}, Dynamic Z)" if use_dz else f"sGW-Resta ({penn_label})"))
-            print(f"\n--- Estimating Quasiparticle Gap using {model_tag} (Delta-W) ---")
+            logger.info(f"\n--- Estimating Quasiparticle Gap using {model_tag} (Delta-W) ---")
             t0_sgw = time.time()
 
             if is_qsgw:
@@ -1533,18 +1546,18 @@ def _quasiparticle_correction(args, *,
                 target_qp_gap = dft_gap + scissor
 
             confinement_energy = qp_provenance.get("confinement_shift_ev", 0.0)
-            print(f"  -> {model_tag} Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
+            logger.debug(f"  -> {model_tag} Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
 
             if args.estimate_qp:
-                print(f"  [QP Warning] qp_gap is set to '{args.qp_gap}', which already applies the microscopic Delta-W quasiparticle correction.")
-                print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
-                print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
+                logger.warning(f"  [QP Warning] qp_gap is set to '{args.qp_gap}', which already applies the microscopic Delta-W quasiparticle correction.")
+                logger.warning("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
+                logger.warning("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
 
         elif args.qp_gap.lower() in ["sgw", "sgw-dw", "sgw_dw", "sgw-atom", "sgw-ao"]:
             from qdex.hardness import estimate_sgw_qp_gap
             from qdex.lowdin import lowdin_sqrt
 
-            print(f"\n--- Estimating Quasiparticle Gap using Microscopic sGW (Delta-W formulation) ---")
+            logger.info(f"\n--- Estimating Quasiparticle Gap using Microscopic sGW (Delta-W formulation) ---")
             t0_sgw = time.time()
             from qdex.lowdin import lowdin_apply
             n_occ_tot = homo_index + 1
@@ -1581,21 +1594,21 @@ def _quasiparticle_correction(args, *,
             scissor = sgw_scissor
             target_qp_gap = dft_gap + scissor
             confinement_energy = qp_provenance.get("confinement_shift_ev", 0.0)
-            print(f"  -> sGW Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
+            logger.debug(f"  -> sGW Quasiparticle shift computed in {time.time() - t0_sgw:.2f} s")
 
             if args.estimate_qp:
-                print("  [QP Warning] qp_gap is set to 'sgw', which already applies the microscopic Delta-W quasiparticle correction.")
-                print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
-                print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
+                logger.warning("  [QP Warning] qp_gap is set to 'sgw', which already applies the microscopic Delta-W quasiparticle correction.")
+                logger.warning("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
+                logger.warning("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
         elif args.qp_gap.lower() in ["none", "pbe", "dft"]:
             scissor = 0.0
             target_qp_gap = dft_gap
-            print("  [QP] No QP correction: DFT orbital energies used as they are (scissor = 0.0000 eV).")
+            logger.info("  [QP] No QP correction: DFT orbital energies used as they are (scissor = 0.0000 eV).")
             if str(getattr(args, "excitation_mode", "")).lower() in ("sbse", "diagonal_sbse"):
-                print("  [QP Notice] The sBSE adds the bulk GW correction to PBE orbitals: use quasiparticles.model: bulk. "
+                logger.info("  [QP Notice] The sBSE adds the bulk GW correction to PBE orbitals: use quasiparticles.model: bulk. "
                       "'none' no longer adds it.")
         elif args.qp_gap.lower() == "bulk":
-            print("  [QP] Bulk GW correction (bulk QSGW - bulk PBE). Valid only for PBE orbitals.")
+            logger.info("  [QP] Bulk GW correction (bulk QSGW - bulk PBE). Valid only for PBE orbitals.")
             if entry is not None and len(entry) >= 9:
                 pbe_bulk_gap = float(entry[7])
                 gw_bulk_gap = float(entry[8])
@@ -1624,9 +1637,9 @@ def _quasiparticle_correction(args, *,
                 "anchor_residual_scale": 0.0,
                 "bulk_homo_fraction": float(f_homo),
             }
-            print(f"  [QP] Pure Bulk GW Scissor mode selected ('{args.qp_gap}'):")
-            print(f"       -> Scissor = {scissor:+.4f} eV (PBE bulk {pbe_bulk_gap:.3f} -> GW bulk {gw_bulk_gap:.3f} eV)")
-            print(f"       -> Zero finite-size Delta-W or boundary polarization applied.")
+            logger.info(f"  [QP] Pure Bulk GW Scissor mode selected ('{args.qp_gap}'):")
+            logger.info(f"       -> Scissor = {scissor:+.4f} eV (PBE bulk {pbe_bulk_gap:.3f} -> GW bulk {gw_bulk_gap:.3f} eV)")
+            logger.info(f"       -> Zero finite-size Delta-W or boundary polarization applied.")
         else:
             raise ValueError(
                 f"Unknown qp_gap mode '{args.qp_gap}'. Use 'none' (uncorrected), 'bulk' (PBE + bulk GW), 'gw', 'sgw-dim', 'evgw-dim', 'qsgw-dim', 'sgw-resta', 'evgw-resta', 'qsgw-resta', 'sgw', 'brus', 'pbe', or a numeric gap."
@@ -1739,7 +1752,7 @@ def _qp_levels_and_kernel(args, *,
                     w_parts.get("eps_z"), args.material, homo_fraction_bulk=fb,
                     occ_idx=occ_w, virt_idx=virt_w)
                 n_eval_str = f"{len(eval_indices)} active" if eval_indices is not None else f"all {len(eps)}"
-                print(f"\n  [QP Levels] One-shot Delta-COHSEX for {n_eval_str} orbitals in {time.time() - t0c:.1f} s: "
+                logger.info(f"\n  [QP Levels] One-shot Delta-COHSEX for {n_eval_str} orbitals in {time.time() - t0c:.1f} s: "
                       f"HOMO COH {coh[homo_index]:+.3f} SEX {sex[homo_index]:+.3f} eV; "
                       f"LUMO COH {coh[homo_index + 1]:+.3f} SEX {sex[homo_index + 1]:+.3f} eV")
             else:
@@ -1777,7 +1790,7 @@ def _qp_levels_and_kernel(args, *,
                         W_new = scale_w_difference(w_parts["w_qd"] + (0.0 if add is None else add),
                                                    w_parts["w_bulk"], z_new)
                     qp_w = (W_new, qp_w[1])
-                    print(f"  [Consistency] BSE kernel Zbar = {z_new:.4f} (Delta-COHSEX levels; estimator gave {z_eh:.4f}).")
+                    logger.info(f"  [Consistency] BSE kernel Zbar = {z_new:.4f} (Delta-COHSEX levels; estimator gave {z_eh:.4f}).")
                 lev_info["w_bse_z"] = float(z_new)
 
             # Non-classical anchor residual of the Delta-W models (calibrated on the evGW anchor)
@@ -1793,7 +1806,7 @@ def _qp_levels_and_kernel(args, *,
                     if len(ent) < 14:
                         raise ValueError("qp_anchor_calibrate needs monomer evGW data in MATERIAL_DB.")
                     if abs(float(args.eps_out) - 1.0) > 1e-9:
-                        print("  [Anchor] Warning: calibrating with eps_out != 1; the evGW anchor is in vacuum.")
+                        logger.warning("  [Anchor] Warning: calibrating with eps_out != 1; the evGW anchor is in vacuum.")
                     d_h = float(eps_qp[homo_index] - eps[homo_index])
                     d_l = float(eps_qp[homo_index + 1] - eps[homo_index + 1])
                     res_h = (float(ent[12]) - float(ent[10])) - d_h
@@ -1802,7 +1815,7 @@ def _qp_levels_and_kernel(args, *,
                                                        "anchor_dft_gap_ev": float(dft_gap),
                                                        "model_homo_shift_ev": d_h, "model_lumo_shift_ev": d_l},
                                                table_path)
-                    print(f"  [Anchor] Calibrated '{a_key}': residual HOMO {res_h:+.3f} eV, LUMO {res_l:+.3f} eV "
+                    logger.info(f"  [Anchor] Calibrated '{a_key}': residual HOMO {res_h:+.3f} eV, LUMO {res_l:+.3f} eV "
                           f"-> {path_w}")
                     lev_info.update({"anchor_residual_homo_ev": res_h, "anchor_residual_lumo_ev": res_l,
                                      "anchor_residual_scale": 1.0, "anchor_key": a_key})
@@ -1820,21 +1833,21 @@ def _qp_levels_and_kernel(args, *,
                         res_l = float(table[a_key]["residual_lumo_ev"]) * scale
                         eps_qp[:homo_index + 1] += res_h
                         eps_qp[homo_index + 1:] += res_l
-                        print(f"  [Anchor] Residual '{a_key}': HOMO {res_h:+.3f}, LUMO {res_l:+.3f} eV "
+                        logger.info(f"  [Anchor] Residual '{a_key}': HOMO {res_h:+.3f}, LUMO {res_l:+.3f} eV "
                               f"(anchor values x {scale:.3f}, scaling {smode})")
                         lev_info.update({"anchor_residual_homo_ev": res_h, "anchor_residual_lumo_ev": res_l,
                                          "anchor_residual_scale": scale, "anchor_key": a_key})
                     else:
-                        print(f"  [Anchor] No calibrated residual for '{a_key}' (run the anchor cluster with "
+                        logger.info(f"  [Anchor] No calibrated residual for '{a_key}' (run the anchor cluster with "
                               f"--qp-anchor-calibrate); none applied.")
                         lev_info["anchor_key"] = a_key
             new_scissor = float(eps_qp[homo_index + 1] - eps_qp[homo_index]) - dft_gap
-            print(f"\n  [QP Levels] Orbital-resolved ({representation}): {len(occ_w)} occ + {len(virt_w)} virt levels; "
+            logger.info(f"\n  [QP Levels] Orbital-resolved ({representation}): {len(occ_w)} occ + {len(virt_w)} virt levels; "
                   f"HOMO {lev_info['qp_homo_shift_ev']:+.3f} eV, LUMO {lev_info['qp_lumo_shift_ev']:+.3f} eV; "
                   f"spread occ {lev_info['qp_shift_spread_occ_ev']:.3f} / virt {lev_info['qp_shift_spread_virt_ev']:.3f} eV; "
                   f"Z in [{lev_info['z_min_window']:.3f}, {lev_info['z_max_window']:.3f}]")
             if abs(new_scissor - scissor) > 1e-4:
-                print(f"  [QP Levels] Gap correction {scissor:+.4f} -> {new_scissor:+.4f} eV "
+                logger.info(f"  [QP Levels] Gap correction {scissor:+.4f} -> {new_scissor:+.4f} eV "
                       f"({'xs integrals' if use_xs else 'same formula, all orbitals'}).")
             lev_info["model_scissor_ev"] = float(scissor)
             qp_provenance.update(lev_info)
@@ -1850,25 +1863,25 @@ def _qp_levels_and_kernel(args, *,
         ax_val, ax_src = stda_ax(getattr(args, "stda_functional", None), getattr(args, "stda_ax", None), args.material)
         stda_gamma_j, stda_gamma_k, stda_info = build_stda_gammas(syms, np.array(coords_ang), ax_val)
         if str(args.charge_type).lower() != "lowdin":
-            print("  [sTDA] Transition charges set to Loewdin, as in sTDA.")
+            logger.info("  [sTDA] Transition charges set to Loewdin, as in sTDA.")
             args.charge_type = "lowdin"
-        print(f"  [sTDA] a_x = {ax_val:.3f} ({ax_src}); beta(J) = {stda_info['beta_J']:.3f}, "
+        logger.info(f"  [sTDA] a_x = {ax_val:.3f} ({ax_src}); beta(J) = {stda_info['beta_J']:.3f}, "
               f"alpha(K) = {stda_info['alpha_K']:.3f}")
         qp_name = str(args.qp_gap).lower()
         functional = str(getattr(args, "stda_functional", "") or "").lower()
         if ax_val == 0.0:
-            print("  [sTDA Notice] a_x = 0: no electron-hole attraction (gamma^J = 0); only K^x acts on the DFT gap.")
+            logger.info("  [sTDA Notice] a_x = 0: no electron-hole attraction (gamma^J = 0); only K^x acts on the DFT gap.")
         if qp_name == "bulk" and functional not in ("", "pbe"):
-            print("  [sTDA Warning] quasiparticles.model: bulk corrects PBE orbitals only; the MO file is "
+            logger.warning("  [sTDA Warning] quasiparticles.model: bulk corrects PBE orbitals only; the MO file is "
                   f"declared as '{functional}'.")
         if qp_name not in ("none", "pbe", "dft", "bulk"):
-            print(f"  [sTDA Warning] qp_gap '{args.qp_gap}' changes the orbital energies; faithful sTDA uses 'none'.")
+            logger.warning(f"  [sTDA Warning] qp_gap '{args.qp_gap}' changes the orbital energies; faithful sTDA uses 'none'.")
         if qp_name == "bulk":
-            print("  [sTDA] PBE orbitals + bulk GW correction: dielectric variant, not standard sTDA.")
+            logger.info("  [sTDA] PBE orbitals + bulk GW correction: dielectric variant, not standard sTDA.")
 
     if str(getattr(args, "excitation_mode", "")).lower() not in ("independent_qp", "independent_dft"):
         from qdex.hardness import format_integrals_block
-        print(format_integrals_block(
+        logger.info(format_integrals_block(
             args.kernel_type, args.charge_type, args.kernel, syms,
             stda_info=stda_info if args.kernel == "stda" else None,
             stda_ax_source=ax_src if args.kernel == "stda" else None,
@@ -1876,9 +1889,9 @@ def _qp_levels_and_kernel(args, *,
             include_exchange=bool(getattr(args, "include_exchange", True)) and not getattr(args, "triplet", False),
             hubbard_beta=float(getattr(args, "beta", 0.0) or 0.0)))
 
-    print(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
-    print(f"  [QP]  Target Gap   : {target_qp_gap:.4f} eV")
-    print(f"  [QP]  Scissor Shift: {scissor:.4f} eV")
+    logger.info(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
+    logger.info(f"  [QP]  Target Gap   : {target_qp_gap:.4f} eV")
+    logger.info(f"  [QP]  Scissor Shift: {scissor:.4f} eV")
     qp_provenance_file = write_qp_provenance(qp_provenance, dft_gap, target_qp_gap, scissor, args)
     print_qp_provenance(qp_provenance, dft_gap=dft_gap, target_qp_gap=target_qp_gap, output_file=qp_provenance_file)
     return _export(locals(), (
@@ -1904,11 +1917,11 @@ def _ip_ea_and_energy_axis(args, *,
         qp_homo = dft_homo_raw
         qp_lumo = dft_lumo_raw + scissor
 
-        print(f"\n  [Periodic Band Edges]")
-        print(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (arbitrary periodic eigenvalue zero)")
-        print(f"    Raw CP2K LUMO    : {dft_lumo_raw:8.4f} eV")
-        print(f"    Bulk GW scissor  : virtual manifold shifted by {scissor:+.4f} eV")
-        print("    Note             : absolute IP/EA levels are not assigned in periodic mode.")
+        logger.info(f"\n  [Periodic Band Edges]")
+        logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (arbitrary periodic eigenvalue zero)")
+        logger.info(f"    Raw CP2K LUMO    : {dft_lumo_raw:8.4f} eV")
+        logger.info(f"    Bulk GW scissor  : virtual manifold shifted by {scissor:+.4f} eV")
+        logger.info("    Note             : absolute IP/EA levels are not assigned in periodic mode.")
 
     elif qp_provenance is not None and "f_homo" in qp_provenance and "f_lumo" in qp_provenance:
         if (getattr(args, "qp_edge_split", "model") == "anchor"
@@ -1931,7 +1944,7 @@ def _ip_ea_and_energy_axis(args, *,
                 qp_provenance["f_homo"] = float(edges["f_homo"])
                 qp_provenance["f_lumo"] = float(edges["f_lumo"])
                 qp_provenance["edge_split_source"] = "anchor_edge_curves"
-                print(f"\n  [QP Edge Split] Anchor-calibrated: HOMO {edges['f_homo']*100:.1f}% / LUMO "
+                logger.info(f"\n  [QP Edge Split] Anchor-calibrated: HOMO {edges['f_homo']*100:.1f}% / LUMO "
                       f"{edges['f_lumo']*100:.1f}% (model's own split: {qp_provenance['f_homo_micro']*100:.1f}% / "
                       f"{qp_provenance['f_lumo_micro']*100:.1f}%)")
         f_homo = float(qp_provenance["f_homo"])
@@ -1946,16 +1959,16 @@ def _ip_ea_and_energy_axis(args, *,
             true_pbe_lumo = pbe_l_mono - (shrinkage_pbe * f_lumo)
             qp_homo = true_pbe_homo - (scissor * f_homo)
             qp_lumo = true_pbe_lumo + (scissor * f_lumo)
-            print(f"\n  [Absolute Band Edges (IP & EA - Microscopic Wavefunction Asymmetry)]")
-            print(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (Floating Vacuum)")
-            print(f"    Modeled PBE HOMO : {true_pbe_homo:8.4f} eV (vacuum-anchored)")
-            print(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}% ({model_name})")
+            logger.info(f"\n  [Absolute Band Edges (IP & EA - Microscopic Wavefunction Asymmetry)]")
+            logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (Floating Vacuum)")
+            logger.info(f"    Modeled PBE HOMO : {true_pbe_homo:8.4f} eV (vacuum-anchored)")
+            logger.info(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}% ({model_name})")
         else:
             qp_homo = dft_homo_raw - (scissor * f_homo)
             qp_lumo = dft_lumo_raw + (scissor * f_lumo)
-            print(f"\n  [Absolute Band Edges (IP & EA - Microscopic Wavefunction Asymmetry)]")
-            print(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV")
-            print(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}% ({model_name})")
+            logger.info(f"\n  [Absolute Band Edges (IP & EA - Microscopic Wavefunction Asymmetry)]")
+            logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV")
+            logger.info(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}% ({model_name})")
 
     elif entry is not None and len(entry) >= 14:
         pbe_h_mono, pbe_l_mono, gw_h_mono, gw_l_mono = entry[10], entry[11], entry[12], entry[13]
@@ -1971,7 +1984,7 @@ def _ip_ea_and_energy_axis(args, *,
             f_lumo = delta_l / anchor_gap_opening
         else:
             f_homo = f_lumo = 0.5
-            print("  [QP Warning] Anchor frontier shifts do not bracket the PBE gap; using a symmetric edge split.")
+            logger.warning("  [QP Warning] Anchor frontier shifts do not bracket the PBE gap; using a symmetric edge split.")
         
         # 2. Project Absolute PBE Levels (Bypassing CP2K floating vacuum)
         # We use the computed intermediate PBE gap (dft_gap) as the physical truth
@@ -1984,10 +1997,10 @@ def _ip_ea_and_energy_axis(args, *,
         qp_homo = true_pbe_homo - (scissor * f_homo)
         qp_lumo = true_pbe_lumo + (scissor * f_lumo)
         
-        print(f"\n  [Absolute Band Edges (IP & EA)]")
-        print(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (Floating Vacuum)")
-        print(f"    Modeled PBE HOMO : {true_pbe_homo:8.4f} eV (anchor-reconstructed)")
-        print(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}%")
+        logger.info(f"\n  [Absolute Band Edges (IP & EA)]")
+        logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (Floating Vacuum)")
+        logger.info(f"    Modeled PBE HOMO : {true_pbe_homo:8.4f} eV (anchor-reconstructed)")
+        logger.info(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}%")
 
     else:
         # Fallback if no 14-item monomer data is available
@@ -1995,16 +2008,16 @@ def _ip_ea_and_energy_axis(args, *,
         qp_homo = dft_homo_raw - (scissor * f_homo)
         qp_lumo = dft_lumo_raw + (scissor * f_lumo)
         
-        print(f"\n  [Absolute Band Edges (IP & EA)]")
-        print(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV")
-        print(f"    -> Shift Split   : HOMO takes 50.0%, LUMO takes 50.0% (Default)")
+        logger.info(f"\n  [Absolute Band Edges (IP & EA)]")
+        logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV")
+        logger.info(f"    -> Shift Split   : HOMO takes 50.0%, LUMO takes 50.0% (Default)")
 
     if getattr(args, "periodic_enabled", False):
-        print(f"    QP HOMO-like     : {qp_homo:8.4f} eV (relative eigenvalue)")
-        print(f"    QP LUMO-like     : {qp_lumo:8.4f} eV (relative eigenvalue)")
+        logger.info(f"    QP HOMO-like     : {qp_homo:8.4f} eV (relative eigenvalue)")
+        logger.info(f"    QP LUMO-like     : {qp_lumo:8.4f} eV (relative eigenvalue)")
     else:
-        print(f"    QP HOMO (IP)     : {qp_homo:8.4f} eV   -> IP = {-qp_homo:8.4f} eV")
-        print(f"    QP LUMO (EA)     : {qp_lumo:8.4f} eV   -> EA = {-qp_lumo:8.4f} eV")
+        logger.info(f"    QP HOMO (IP)     : {qp_homo:8.4f} eV   -> IP = {-qp_homo:8.4f} eV")
+        logger.info(f"    QP LUMO (EA)     : {qp_lumo:8.4f} eV   -> EA = {-qp_lumo:8.4f} eV")
     if qp_provenance is not None:
         qp_provenance.update({
             "target_pbe_gap_ev": float(dft_gap),
@@ -2024,7 +2037,7 @@ def _ip_ea_and_energy_axis(args, *,
         if C_beta is None:
             eps_beta_shifted = eps_shifted
 
-    print(f"  -> Energy axis shifted and target gap resolved in {time.time() - t0_gap:.4f} s")
+    logger.debug(f"  -> Energy axis shifted and target gap resolved in {time.time() - t0_gap:.4f} s")
  
     # -----------------------------------------------------------------
     # Unified S@C Computation
@@ -2037,14 +2050,14 @@ def _ip_ea_and_energy_axis(args, *,
 def _orbital_populations(args, *, C, C_beta, S, _get_SC, tracker):
     """S @ C, orthonormality check and spin-free populations."""
     tracker.start_stage("MO Orthonormality & Populations")
-    print("\n--- Computing Unified S@C Population Analysis ---")
+    logger.info("\n--- Computing Unified S@C Population Analysis ---")
     t0_pop = time.time()
     C_dense = C.toarray() if hasattr(C, 'toarray') else C
     SC_dense = _get_SC()  # reused if the QP step already computed it
     C_dense_beta_pop, SC_dense_beta_pop, pops_beta = None, None, None
     
     if getattr(args, "skip_orthonormality_check", False):
-        print("\n  [Diag] MO orthonormality check skipped (skip_orthonormality_check).")
+        logger.debug("\n  [Diag] MO orthonormality check skipped (skip_orthonormality_check).")
         # SOC keeps its cheap re-orthonormalization of the active window (the safe path).
         soc_assume_orthonormal = False
         if C_beta is not None:
@@ -2053,13 +2066,13 @@ def _orbital_populations(args, *, C, C_beta, S, _get_SC, tracker):
     else:
         # === DIAGNOSTIC: STRICT C^T S C ORTHONORMALITY CHECK ===
         overlap_label = "PBC" if getattr(args, "periodic_enabled", False) else "finite"
-        print(f"\n  [Diag] Testing MO Orthonormality with {overlap_label} overlap (C^T S C = I) ...")
+        logger.debug(f"\n  [Diag] Testing MO Orthonormality with {overlap_label} overlap (C^T S C = I) ...")
         norm_matrix = C_dense.conj().T @ SC_dense
         orth_delta = norm_matrix - np.eye(C_dense.shape[1])
         orth_err = np.linalg.norm(orth_delta)
         orth_max = np.max(np.abs(orth_delta))
-        print(f"[CHECK] alpha ||C†SC - I||_F = {orth_err:.3e}")
-        print(f"[CHECK] alpha max|C†SC - I|  = {orth_max:.3e}")
+        logger.info(f"[CHECK] alpha ||C†SC - I||_F = {orth_err:.3e}")
+        logger.info(f"[CHECK] alpha max|C†SC - I|  = {orth_max:.3e}")
         if orth_max > args.orthonormality_tol:
             raise ValueError(
                 f"MO orthonormality failure: max|C†SC-I|={orth_max:.3e} exceeds "
@@ -2074,8 +2087,8 @@ def _orbital_populations(args, *, C, C_beta, S, _get_SC, tracker):
             orth_delta_beta = norm_matrix_beta - np.eye(C_dense_beta_pop.shape[1])
             orth_err_beta = np.linalg.norm(orth_delta_beta)
             orth_max_beta = np.max(np.abs(orth_delta_beta))
-            print(f"[CHECK] beta  ||C†SC - I||_F = {orth_err_beta:.3e}")
-            print(f"[CHECK] beta  max|C†SC - I|  = {orth_max_beta:.3e}")
+            logger.info(f"[CHECK] beta  ||C†SC - I||_F = {orth_err_beta:.3e}")
+            logger.info(f"[CHECK] beta  max|C†SC - I|  = {orth_max_beta:.3e}")
             if orth_max_beta > args.orthonormality_tol:
                 raise ValueError(
                     f"Beta MO orthonormality failure: max|C†SC-I|={orth_max_beta:.3e} exceeds "
@@ -2083,13 +2096,13 @@ def _orbital_populations(args, *, C, C_beta, S, _get_SC, tracker):
                 )
             soc_assume_orthonormal = soc_assume_orthonormal and orth_max_beta < 1.0e-6
             cross_err = np.linalg.norm(C_dense.conj().T @ SC_dense_beta_pop)
-            print(f"[CHECK] alpha/beta ||Caᵀ S Cb|| = {cross_err:.3e} (diagnostic)")
+            logger.info(f"[CHECK] alpha/beta ||Caᵀ S Cb|| = {cross_err:.3e} (diagnostic)")
     # ===========================================================
 
     pops_sf = np.real(C_dense.conj() * SC_dense)
     if C_dense_beta_pop is not None:
         pops_beta = np.real(C_dense_beta_pop.conj() * SC_dense_beta_pop)
-    print(f"  -> S@C projection and populations computed in {time.time() - t0_pop:.2f} s")
+    logger.debug(f"  -> S@C projection and populations computed in {time.time() - t0_pop:.2f} s")
     return _export(locals(), (
         "C_dense", "SC_dense", "SC_dense_beta_pop", "pops_beta", "pops_sf", "soc_assume_orthonormal"
     ))
@@ -2128,7 +2141,7 @@ def _active_space_and_soc(args, *,
     
     if args.soc_flag:
         tracker.start_stage("SOC Active Space (BSE)")
-        print(f"\n--- Computing SOC Spinor Subspace for BSE (Small Window) ---")
+        logger.info(f"\n--- Computing SOC Spinor Subspace for BSE (Small Window) ---")
         if is_uks_sp:
             from qdex.soc_utils import compute_spinor_subspace_uks
             C_dense_beta = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
@@ -2201,19 +2214,19 @@ def _active_space_and_soc(args, *,
     if C_beta is not None:
         pop_range = max(0, int(getattr(args, "population_print_range", 15)))
         pop_tags = getattr(args, "population_bars", None)
-        print("\n--- Spin-Free Alpha MO Population Analysis ---")
+        logger.info("\n--- Spin-Free Alpha MO Population Analysis ---")
         print_orbital_summary(eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha)
-        print("\n--- Spin-Free Beta MO Population Analysis ---")
+        logger.info("\n--- Spin-Free Beta MO Population Analysis ---")
         print_orbital_summary(eps_beta_shifted, occ_beta, homo_index_beta, pops_beta, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags)
     else:
-        print("\n--- Spin-Free MO Population Analysis ---")
+        logger.info("\n--- Spin-Free MO Population Analysis ---")
         pop_range = max(0, int(getattr(args, "population_print_range", 15)))
         pop_tags = getattr(args, "population_bars", None)
         print_orbital_summary(eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha)
 
     if args.soc_flag:
         if args.gth_file is None: sys.exit("ERROR: --gth_file is required when --soc_flag is enabled.")
-        print("\n--- SOC Spinor Population Analysis (BSE Active Space) ---")
+        logger.info("\n--- SOC Spinor Population Analysis (BSE Active Space) ---")
         t_pop = time.time()
         
         if is_uks_sp:
@@ -2241,7 +2254,7 @@ def _active_space_and_soc(args, *,
         pops_soc_act = np.real(C_spinor_act_alpha.conj() * SC_spinor_act_alpha) + \
                        np.real(C_spinor_act_beta.conj() * SC_spinor_act_beta)
                        
-        print(f"  -> Projected populations in {time.time() - t_pop:.2f}s")
+        logger.debug(f"  -> Projected populations in {time.time() - t_pop:.2f}s")
         
         soc_occ = np.zeros_like(bse_soc_E)
         soc_occ[:bse_spinor_homo_idx + 1] = 1.0
@@ -2258,23 +2271,23 @@ def _active_space_and_soc(args, *,
             calculated_soc_gap -= scissor
 
         # --- RIGID SCISSOR APPLICATION ---
-        print("\n--- Scissor Operator Application ---")
-        print(f"  Rigid Scissor (Computed above)  : {scissor:+8.4f} eV")
-        print(f"  Spin-Free DFT Gap               : {dft_gap:8.4f} eV")
-        print(f"  SOC-Shrunken DFT Gap            : {calculated_soc_gap:8.4f} eV")
+        logger.info("\n--- Scissor Operator Application ---")
+        logger.info(f"  Rigid Scissor (Computed above)  : {scissor:+8.4f} eV")
+        logger.info(f"  Spin-Free DFT Gap               : {dft_gap:8.4f} eV")
+        logger.info(f"  SOC-Shrunken DFT Gap            : {calculated_soc_gap:8.4f} eV")
         
         final_sf_qp_gap = dft_gap + scissor
         final_soc_qp_gap = calculated_soc_gap + scissor
         
-        print(f"  -> Final Spin-Free QP Gap       : {final_sf_qp_gap:8.4f} eV")
-        print(f"  -> Final SOC QP Gap             : {final_soc_qp_gap:8.4f} eV (D_SOC = {dft_gap - calculated_soc_gap:.4f} eV)")
+        logger.info(f"  -> Final Spin-Free QP Gap       : {final_sf_qp_gap:8.4f} eV")
+        logger.info(f"  -> Final SOC QP Gap             : {final_soc_qp_gap:8.4f} eV (D_SOC = {dft_gap - calculated_soc_gap:.4f} eV)")
 
     else:
         # --- RIGID SCISSOR FOR SPIN-FREE ONLY ---
-        print("\n--- Scissor Operator Application (Spin-Free) ---")
-        print(f"  Rigid Scissor (Computed above)  : {scissor:+8.4f} eV")
-        print(f"  Spin-Free DFT Gap               : {dft_gap:8.4f} eV")
-        print(f"  -> Final Spin-Free QP Gap       : {dft_gap + scissor:8.4f} eV")
+        logger.info("\n--- Scissor Operator Application (Spin-Free) ---")
+        logger.info(f"  Rigid Scissor (Computed above)  : {scissor:+8.4f} eV")
+        logger.info(f"  Spin-Free DFT Gap               : {dft_gap:8.4f} eV")
+        logger.info(f"  -> Final Spin-Free QP Gap       : {dft_gap + scissor:8.4f} eV")
 
     # Update Confinement Energy (Always relative to bulk)
     db_gap = MATERIAL_DB.get(args.material.upper(), MATERIAL_DB["DEFAULT"])[3]
@@ -2299,7 +2312,7 @@ def _cubes_and_fuzzy(args, *,
     if getattr(args, 'cube', False):
         tracker.start_stage("Exciton Cube Generation")
         from qdex.exciton_cube import generate_cubes
-        print("\n--- Generating Cubes for MOs / Spinors ---")
+        logger.info("\n--- Generating Cubes for MOs / Spinors ---")
         
         class DummySolver:
             def __init__(self):
@@ -2363,10 +2376,10 @@ def _cubes_and_fuzzy(args, *,
         
         fuzzy_soc_E, fuzzy_soc_E_abs, fuzzy_soc_U, fuzzy_spinor_homo_idx = None, None, None, None
         if args.soc_flag:
-            print(f"\n--- Computing SOC Spinor Subspace for Fuzzy Bands (|E-Ef| <= {args.soc_window:.3f} eV) ---")
-            print(f"  -> Alpha fuzzy SOC active MOs: {len(fuzzy_active_indices)} / {len(eps)}")
+            logger.info(f"\n--- Computing SOC Spinor Subspace for Fuzzy Bands (|E-Ef| <= {args.soc_window:.3f} eV) ---")
+            logger.info(f"  -> Alpha fuzzy SOC active MOs: {len(fuzzy_active_indices)} / {len(eps)}")
             if is_uks_sp:
-                print(f"  -> Beta fuzzy SOC active MOs : {len(fuzzy_active_indices_beta)} / {len(eps_beta)}")
+                logger.info(f"  -> Beta fuzzy SOC active MOs : {len(fuzzy_active_indices_beta)} / {len(eps_beta)}")
             if is_uks_sp:
                 from qdex.soc_utils import compute_spinor_subspace_uks
                 C_dense_beta = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
@@ -2424,13 +2437,13 @@ def _transition_dipoles(args, *,
     # BSE CONTINUATION (Only if run_bse is True)
     # -----------------------------------------------------------------
     tracker.start_stage("Transition Dipoles")
-    print("\n--- Computing Transition Dipoles ---")
+    logger.info("\n--- Computing Transition Dipoles ---")
     if getattr(args, "periodic_enabled", False):
-        print("  [Warning] Periodic mode is enabled, but transition dipoles use the finite-cell AO position operator.")
-        print("  [Warning] Oscillator strengths should be treated as Gamma-only finite-cell approximations.")
+        logger.warning("  [Warning] Periodic mode is enabled, but transition dipoles use the finite-cell AO position operator.")
+        logger.warning("  [Warning] Oscillator strengths should be treated as Gamma-only finite-cell approximations.")
     t0_dip = time.time()
     mu_ao_x, mu_ao_y, mu_ao_z = compute_dipole_ao(shells, nthreads=args.nthreads)
-    print(f"  ->  Dipoles computed in {time.time() - t0_dip:.2f} s")
+    logger.debug(f"  ->  Dipoles computed in {time.time() - t0_dip:.2f} s")
 
     compute_device, dev_obj = resolve_device(args.device, verbose=True)
     if dev_obj is not None:
@@ -2448,7 +2461,7 @@ def _transition_dipoles(args, *,
 
     if is_uks_sp:
         # Manifold B: compute alpha and beta dipoles separately and pass as tuples
-        print("  [UKS Spin-Preserving] Computing alpha-alpha and beta-beta transition dipoles separately...")
+        logger.info("  [UKS Spin-Preserving] Computing alpha-alpha and beta-beta transition dipoles separately...")
         C_dense_alpha = C.toarray() if hasattr(C, 'toarray') else np.asarray(C)
         C_dense_beta  = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
 
@@ -2541,10 +2554,10 @@ def _solve_excitons(args, *,
         calculated_gap_shift = solver_sf.ham.sigma_virt[0] - solver_sf.ham.sigma_occ[-1]
         
         if getattr(args, 'use_cohsex_gap', False):
-            print(f"\n  [QP] OVERRIDE: Using Pure COHSEX Gap Correction ({calculated_gap_shift:.4f} eV) instead of Tabulated GW.")
+            logger.info(f"\n  [QP] OVERRIDE: Using Pure COHSEX Gap Correction ({calculated_gap_shift:.4f} eV) instead of Tabulated GW.")
             scissor = calculated_gap_shift
         else:
-            print(f"\n  [QP] Note: Tabulated GW Scissor ({scissor:.4f} eV) was used as the anchor. COHSEX provided orbital dispersion.")
+            logger.info(f"\n  [QP] Note: Tabulated GW Scissor ({scissor:.4f} eV) was used as the anchor. COHSEX provided orbital dispersion.")
             
         # Update confinement energy based on the final total gap
         confinement_energy = (dft_gap + scissor) - db_gap
@@ -2589,7 +2602,7 @@ def _solve_excitons(args, *,
 
     tracker.end_stage()
     tracker.print_summary(device=args.device, nthreads=args.nthreads)
-    print("\nAll calculations finished successfully.")
+    logger.info("\nAll calculations finished successfully.")
     return {}
 
 
@@ -2624,8 +2637,8 @@ def main():
     if not run_bse:
         tracker.end_stage()
         tracker.print_summary(device=args.device, nthreads=args.nthreads)
-        print("\n--- BSE Calculation Skipped (run_bse: false) ---")
-        print("\nAll requested tasks finished successfully.")
+        logger.info("\n--- BSE Calculation Skipped (run_bse: false) ---")
+        logger.info("\nAll requested tasks finished successfully.")
         return
 
     for stage in (_transition_dipoles, _solve_excitons):

@@ -13,6 +13,9 @@ from qdex.integrals import compute_dipole_ao, compute_cross_overlap_ao
 import libint_cpp
 from qdex.hardness import estimate_gw_qp_gap, estimate_brus_qp_gap, build_resta_mnok, build_gamma
 from qdex.constants import BOHR_PER_ANG, HA_TO_EV
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def natural_sort_key(s):
@@ -498,7 +501,7 @@ def precompute_namd_data(config):
             raise ValueError(f"NAMD precompute: QP model '{qp_model}' is not supported (it needs a QP step "
                              "per frame). Use bulk (default), none, brus, gw or a gap in eV.") from None
     if qp_key == "gw" and excitation_mode in DIAGONAL_MODES and str(kernel).lower() != "resta-sphere":
-        print("  [NAMD Warning] qp_gap 'gw' contains the surface polarization, but the kernel "
+        logger.warning("  [NAMD Warning] qp_gap 'gw' contains the surface polarization, but the kernel "
               f"'{kernel}' has no matching electron-hole image: the excitons are too high. "
               "Use qp_gap: bulk with diagonal_sbse for a consistent treatment.")
     if qp_key == "gw" and str(kernel).lower() == "resta-sphere":
@@ -544,10 +547,10 @@ def precompute_namd_data(config):
     try:
         from qdex.cluster_size import cluster_size, format_cluster_size
         size0 = cluster_size(np.array(coords0), syms0, material, sys_cfg.get("inorganic_elements"))
-        print(format_cluster_size(size0, None if qp_key in ("bulk", "none", "pbe", "dft") else
+        logger.info(format_cluster_size(size0, None if qp_key in ("bulk", "none", "pbe", "dft") else
                                   f"core hull radius {size0['hull_radius_ang']:.3f} A ('{qp_model}')") + "  [frame 0]")
     except Exception as exc:
-        print(f"  [Size] Could not evaluate the cluster size: {exc}")
+        logger.info(f"  [Size] Could not evaluate the cluster size: {exc}")
     basis_dict = parse_basis(basis_txt, basis_name, required_elements=set(syms0))
     shells0 = build_shell_dicts(syms0, coords0, basis_dict)
     n_ao = count_ao_from_shells(shells0)
@@ -613,30 +616,30 @@ def precompute_namd_data(config):
     # The direct kernel W and the bare exchange gamma are rebuilt for every frame (frame_kernels).
     w_resta = None
 
-    print("=" * 65)
-    print(" QDEX - NAMD Precomputation Pipeline")
-    print("=" * 65)
-    print(f"  Trajectory directory : {traj_dir}")
-    print(f"  Frames to process    : {n_frames} (dt = {dt_nuc_fs:.2f} fs)")
-    print(f"  Precompute output    : {precompute_dir}")
-    print(f"  Active Space         : nhomos={nhomos}, nlumos={nlumos}")
-    print(f"  QP Model             : {qp_model}" + ("  (PBE orbitals + bulk GW correction)" if qp_key == "bulk" else ""))
-    print(f"  Excitation Framework : {excitation_mode.upper()} (kernel: {kernel}, per frame; "
+    logger.info("=" * 65)
+    logger.info(" QDEX - NAMD Precomputation Pipeline")
+    logger.info("=" * 65)
+    logger.info(f"  Trajectory directory : {traj_dir}")
+    logger.info(f"  Frames to process    : {n_frames} (dt = {dt_nuc_fs:.2f} fs)")
+    logger.info(f"  Precompute output    : {precompute_dir}")
+    logger.info(f"  Active Space         : nhomos={nhomos}, nlumos={nlumos}")
+    logger.info(f"  QP Model             : {qp_model}" + ("  (PBE orbitals + bulk GW correction)" if qp_key == "bulk" else ""))
+    logger.info(f"  Excitation Framework : {excitation_mode.upper()} (kernel: {kernel}, per frame; "
           f"K^x: {include_exchange}, K^d: {include_direct_eh})")
     if energy_window:
-        print(f"  Active Energy Window : [{energy_window[0]:.2f}, {energy_window[1]:.2f}] eV")
+        logger.info(f"  Active Energy Window : [{energy_window[0]:.2f}, {energy_window[1]:.2f}] eV")
     if cluster_radius:
-        print(f"  Nanocrystal Radius   : {cluster_radius:.3f} Å (constant across trajectory)")
-    print(f"  GW Scissor (Δ_GW)    : {scissor:+.4f} eV (HOMO: {-scissor*f_homo:+.4f} eV, LUMO: {+scissor*f_lumo:+.4f} eV)")
-    print(f"  Spin-Orbit Coupling  : soc={soc}" + (f" (GTH: {os.path.basename(gth_file)})" if soc else ""))
-    print(f"  Tracking             : phase_correction={phase_correction}, hungarian={hungarian_tracking}")
-    print("=" * 65)
+        logger.info(f"  Nanocrystal Radius   : {cluster_radius:.3f} Å (constant across trajectory)")
+    logger.info(f"  GW Scissor (Δ_GW)    : {scissor:+.4f} eV (HOMO: {-scissor*f_homo:+.4f} eV, LUMO: {+scissor*f_lumo:+.4f} eV)")
+    logger.info(f"  Spin-Orbit Coupling  : soc={soc}" + (f" (GTH: {os.path.basename(gth_file)})" if soc else ""))
+    logger.info(f"  Tracking             : phase_correction={phase_correction}, hungarian={hungarian_tracking}")
+    logger.info("=" * 65)
     if excitation_mode in DIAGONAL_MODES:
         from qdex.hardness import format_integrals_block
-        print(format_integrals_block("mnok", "mulliken", kernel, syms0, include_direct=include_direct_eh,
+        logger.info(format_integrals_block("mnok", "mulliken", kernel, syms0, include_direct=include_direct_eh,
                                      include_exchange=include_exchange)
               + "\n  (diagonal elements K_ia,ia only; rebuilt from each frame's geometry)")
-    print()
+    logger.info("")
 
     prev_data = None
     fixed_pair_mask = None
@@ -823,7 +826,7 @@ def precompute_namd_data(config):
             )
 
         dt_f = time.time() - t0_frame
-        print(f" done ({dt_f:.2f} s | {len(curr_data['E_pairs'])} active pairs)")
+        logger.info(f" done ({dt_f:.2f} s | {len(curr_data['E_pairs'])} active pairs)")
         prev_data = curr_data
 
     # Save summary metadata with pair indices
@@ -853,8 +856,8 @@ def precompute_namd_data(config):
     )
 
     total_time = time.time() - t0_all
-    print(f"\n[NAMD Precompute] Successfully processed {n_frames} frames in {total_time:.2f} s")
-    print(f"[NAMD Precompute] Cached data written to: {precompute_dir}\n")
+    logger.info(f"\n[NAMD Precompute] Successfully processed {n_frames} frames in {total_time:.2f} s")
+    logger.info(f"[NAMD Precompute] Cached data written to: {precompute_dir}\n")
 
 
 def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
@@ -883,16 +886,16 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
 
     size_before_mb = get_dir_size_mb(precompute_dir)
     if verbose:
-        print("=" * 65)
-        print(f" QDEX - Compacting Precomputed Data: {precompute_dir}")
-        print("=" * 65)
-        print(f"  Initial Directory Size : {size_before_mb / 1024.0:.2f} GB ({size_before_mb:.1f} MB)")
+        logger.info("=" * 65)
+        logger.info(f" QDEX - Compacting Precomputed Data: {precompute_dir}")
+        logger.info("=" * 65)
+        logger.info(f"  Initial Directory Size : {size_before_mb / 1024.0:.2f} GB ({size_before_mb:.1f} MB)")
 
     # 1. Compact step files
     step_files = sorted(glob.glob(os.path.join(precompute_dir, "step_*.npz")))
     n_steps = len(step_files)
     if verbose:
-        print(f"  Compacting {n_steps} step files (removing duplicate pair indices and compressing)...")
+        logger.info(f"  Compacting {n_steps} step files (removing duplicate pair indices and compressing)...")
 
     for k, sf in enumerate(step_files):
         d = np.load(sf)
@@ -912,7 +915,7 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
         # Overwrite in-place with compressed format
         np.savez_compressed(sf, **clean_dict)
         if verbose and (k + 1) % 50 == 0:
-            print(f"    [{k+1}/{n_steps}] steps compacted...")
+            logger.info(f"    [{k+1}/{n_steps}] steps compacted...")
 
     # 2. Handle frame files
     if not keep_frames:
@@ -924,7 +927,7 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
                 os.remove(ff)
                 removed_count += 1
         if verbose:
-            print(f"  Removed {removed_count} redundant frame archives (frame_00000.npz retained).")
+            logger.info(f"  Removed {removed_count} redundant frame archives (frame_00000.npz retained).")
     else:
         # Compress frame_00000.npz
         f0_path = os.path.join(precompute_dir, "frame_00000.npz")
@@ -953,9 +956,9 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
     pct = (saved_mb / max(size_before_mb, 1e-3)) * 100.0
 
     if verbose:
-        print(f"  Final Directory Size   : {size_after_mb / 1024.0:.2f} GB ({size_after_mb:.1f} MB)")
-        print(f"  Storage Reclaimed      : {saved_gb:.2f} GB ({pct:.1f}% reduction)")
-        print("=" * 65 + "\n")
+        logger.info(f"  Final Directory Size   : {size_after_mb / 1024.0:.2f} GB ({size_after_mb:.1f} MB)")
+        logger.info(f"  Storage Reclaimed      : {saved_gb:.2f} GB ({pct:.1f}% reduction)")
+        logger.info("=" * 65 + "\n")
 
     return size_before_mb, size_after_mb
 
@@ -1032,12 +1035,12 @@ def compute_trajectory_decoherence_times(
     n_frames = occ_arr.shape[0]
 
     if verbose:
-        print("=" * 65)
-        print(f" QDEX - Computing State-Pair Decoherence Times ({n_frames} frames)")
-        print("=" * 65)
-        print(f"  Target Directory : {precompute_dir}")
-        print(f"  Occupied States  : {occ_arr.shape[1]}")
-        print(f"  Virtual States   : {virt_arr.shape[1]}")
+        logger.info("=" * 65)
+        logger.info(f" QDEX - Computing State-Pair Decoherence Times ({n_frames} frames)")
+        logger.info("=" * 65)
+        logger.info(f"  Target Directory : {precompute_dir}")
+        logger.info(f"  Occupied States  : {occ_arr.shape[1]}")
+        logger.info(f"  Virtual States   : {virt_arr.shape[1]}")
 
     # 1. Hole channel: cov(eps_i, eps_j)
     cov_occ = np.cov(occ_arr, rowvar=False)
@@ -1088,10 +1091,10 @@ def compute_trajectory_decoherence_times(
     if verbose:
         offdiag_occ = tau_occ[~np.eye(tau_occ.shape[0], dtype=bool)]
         offdiag_virt = tau_virt[~np.eye(tau_virt.shape[0], dtype=bool)]
-        print(f"  Hole Dephasing   (tau_occ)  : min={np.min(offdiag_occ):.2f} fs, median={np.median(offdiag_occ):.2f} fs, max={np.max(offdiag_occ):.2f} fs")
-        print(f"  Electron Dephasing (tau_virt): min={np.min(offdiag_virt):.2f} fs, median={np.median(offdiag_virt):.2f} fs, max={np.max(offdiag_virt):.2f} fs")
-        print(f"  Cached to: {out_path}")
-        print("=" * 65 + "\n")
+        logger.info(f"  Hole Dephasing   (tau_occ)  : min={np.min(offdiag_occ):.2f} fs, median={np.median(offdiag_occ):.2f} fs, max={np.max(offdiag_occ):.2f} fs")
+        logger.info(f"  Electron Dephasing (tau_virt): min={np.min(offdiag_virt):.2f} fs, median={np.median(offdiag_virt):.2f} fs, max={np.max(offdiag_virt):.2f} fs")
+        logger.info(f"  Cached to: {out_path}")
+        logger.info("=" * 65 + "\n")
 
     return tau_occ, tau_virt
 

@@ -4,6 +4,13 @@ import matplotlib.pyplot as plt
 import glob
 import argparse
 from scipy.integrate import simps
+import logging
+
+logger = logging.getLogger("qdex.analysis.md_exciton_tools")
+try:
+    import qdex  # noqa: F401  (installs the console handler)
+except ImportError:  # run as a plain script outside the package
+    logging.basicConfig(format="%(message)s", level=logging.DEBUG, stream=__import__("sys").stdout)
 
 # Constants
 KB_EV = 8.617333262145e-5  # Boltzmann constant in eV/K
@@ -19,7 +26,7 @@ def main():
     # 1. Gather all data
     files = sorted(glob.glob(args.pattern), key=lambda x: "".join(filter(str.isdigit, x)) or 0)
     if not files:
-        print(f"No CSV files found matching: {args.pattern}")
+        logger.info(f"No CSV files found matching: {args.pattern}")
         return
 
     frames = [pd.read_csv(f) for f in files]
@@ -85,35 +92,35 @@ def main():
     # ---------------------------------------------------------
     # 4. COMPREHENSIVE CONSOLE OUTPUT
     # ---------------------------------------------------------
-    print("==========================================================")
-    print(f" QDEX MD Trajectory Analysis (@ {args.temp} K)")
-    print("==========================================================")
-    print(f"[Trajectory Data]")
-    print(f"  Frames processed : {n_frames}")
-    print(f"  Time span        : {times[0]:.2f} to {times[-1]:.2f} fs (dt = {args.dt} fs)")
-    print("")
-    print(f"[Energetics (S1)]")
-    print(f"  Mean Energy      : {np.mean(energies):.4f} ± {np.std(energies):.4f} eV")
-    print(f"  Min / Max Energy : {np.min(energies):.4f} / {np.max(energies):.4f} eV")
-    print("")
-    print(f"[Exciton Spatial Analysis & Traps]")
-    print(f"  Mean Hole Size (sigma_h)     : {np.mean(sigma_h):.2f} A")
-    print(f"  Mean Electron Size (sigma_e) : {np.mean(sigma_e):.2f} A")
-    print(f"  Hole Trapped (<3.0 A)        : {(np.sum(sigma_h < 3.0) / n_frames) * 100:.1f} % of frames")
-    print(f"  Electron Trapped (<3.0 A)    : {(np.sum(sigma_e < 3.0) / n_frames) * 100:.1f} % of frames")
-    print(f"  Mean e-h Separation (d_eh)   : {np.mean(d_eh):.2f} A")
-    print("")
-    print(f"[Photophysics & Lifetimes]")
-    print(f"  Mean f_osc                   : {np.mean(f_osc):.4f}")
-    print(f"  Dark Frames (f_osc < 0.05)   : {(np.sum(f_osc < 0.05) / n_frames) * 100:.1f} %")
-    print(f"  Naive Mean Tau               : {np.mean(1.0/k_inst):.2f} ns")
-    print(f"  Boltzmann-Weighted Tau       : {tau_boltz:.2f} ns")
-    print(f"  Strickler-Berg Tau           : {tau_sb:.2f} ns")
-    print("")
-    print(f"[Dynamical Decoherence (1/e decay)]")
-    print(f"  Energy Gap Memory, C_E(t)    : {tau_c_e:.1f} fs")
-    print(f"  Dipole Coherence, C_mu(t)    : {tau_c_mu:.1f} fs")
-    print("==========================================================\n")
+    logger.info("==========================================================")
+    logger.info(f" QDEX MD Trajectory Analysis (@ {args.temp} K)")
+    logger.info("==========================================================")
+    logger.info(f"[Trajectory Data]")
+    logger.info(f"  Frames processed : {n_frames}")
+    logger.info(f"  Time span        : {times[0]:.2f} to {times[-1]:.2f} fs (dt = {args.dt} fs)")
+    logger.info("")
+    logger.info(f"[Energetics (S1)]")
+    logger.info(f"  Mean Energy      : {np.mean(energies):.4f} ± {np.std(energies):.4f} eV")
+    logger.info(f"  Min / Max Energy : {np.min(energies):.4f} / {np.max(energies):.4f} eV")
+    logger.info("")
+    logger.info(f"[Exciton Spatial Analysis & Traps]")
+    logger.info(f"  Mean Hole Size (sigma_h)     : {np.mean(sigma_h):.2f} A")
+    logger.info(f"  Mean Electron Size (sigma_e) : {np.mean(sigma_e):.2f} A")
+    logger.info(f"  Hole Trapped (<3.0 A)        : {(np.sum(sigma_h < 3.0) / n_frames) * 100:.1f} % of frames")
+    logger.info(f"  Electron Trapped (<3.0 A)    : {(np.sum(sigma_e < 3.0) / n_frames) * 100:.1f} % of frames")
+    logger.info(f"  Mean e-h Separation (d_eh)   : {np.mean(d_eh):.2f} A")
+    logger.info("")
+    logger.info(f"[Photophysics & Lifetimes]")
+    logger.info(f"  Mean f_osc                   : {np.mean(f_osc):.4f}")
+    logger.info(f"  Dark Frames (f_osc < 0.05)   : {(np.sum(f_osc < 0.05) / n_frames) * 100:.1f} %")
+    logger.info(f"  Naive Mean Tau               : {np.mean(1.0/k_inst):.2f} ns")
+    logger.info(f"  Boltzmann-Weighted Tau       : {tau_boltz:.2f} ns")
+    logger.info(f"  Strickler-Berg Tau           : {tau_sb:.2f} ns")
+    logger.info("")
+    logger.info(f"[Dynamical Decoherence (1/e decay)]")
+    logger.info(f"  Energy Gap Memory, C_E(t)    : {tau_c_e:.1f} fs")
+    logger.info(f"  Dipole Coherence, C_mu(t)    : {tau_c_mu:.1f} fs")
+    logger.info("==========================================================\n")
 
     # ---------------------------------------------------------
     # 5. Multi-Panel Visualizations
@@ -173,7 +180,7 @@ def main():
     plt.tight_layout()
     out_name = f"md_analysis_{int(args.temp)}K.png"
     plt.savefig(out_name, dpi=300)
-    print(f"Full analysis plot saved to: {out_name}")
+    logger.info(f"Full analysis plot saved to: {out_name}")
     # plt.show() # Uncomment if running interactively
 
 if __name__ == "__main__":
