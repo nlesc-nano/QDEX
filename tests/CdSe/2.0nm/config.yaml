@@ -11,20 +11,28 @@ environment:
   eps_out: 1.0                  # vacuum; toluene 2.24
 
 quasiparticles:
-  model: "sgw-resta"            # Delta-COHSEX on the Resta Delta-W; sgw-dim, evgw-*, qsgw-*, none, brus, pbe
+  model: "sgw-resta"            # none (uncorrected DFT), bulk (PBE + bulk GW; PBE only), brus,
+                                # sgw-resta, sgw-dim, evgw-resta, evgw-dim, qsgw-resta, qsgw-dim, gw
   # z: derived                  # plasmon-pole Z of the same dielectric model (default)
-  # anchor_residual: on         # calibrated evGW@PBE0 residual (default)
+  # radius: saxs                # sphere radius for the reaction field: saxs (default) or hull
 
 integrals:
-  representation: "mnok"        # mnok (atom pairs) or xs (ZDO AO density pairs)
+  representation: "mnok"        # mnok (atom pairs) or xs (exact AO density pairs)
   charges: "mulliken"           # mulliken or lowdin
+  # mnok_onsite: ip_ea          # on-site gamma_AA = IP - EA (default) or eta = (IP - EA)/2
+  # mnok_exponent: 2            # 2 = Ohno-Klopman (default), 1 = Mataga-Nishimoto
+  # mnok_exponent_exchange: 2   # separate exponent for K^x (default: mnok_exponent)
 
 excitations:
-  mode: "bse"                   # bse, sbse, diagonal_bse, diagonal_sbse, independent_qp, independent_dft
-  # kernel: set by the QP model (qp for Resta/DIM)
+  mode: "bse"                   # independent_dft, independent_qp, diagonal_bse, bse,
+                                # diagonal_sbse, sbse (use model: bulk), diagonal_stda, stda
+  # kernel: set by the QP model (its own W); resta or dim for sbse
   nhomos: 25
   nlumos: 25
   full_diag: true
+  # selection: perturbative     # Grimme's transition selection (coupled solvers)
+  # selection_energy: 3.3       # E_thr in eV
+  # selection_pt: 1.0e-5        # t in hartree
 
 soc:
   enabled: true

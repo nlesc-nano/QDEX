@@ -60,6 +60,23 @@ historically ``alpha``, is a scale factor of the uniform ``bse`` kernel, not an 
 uses the same form with its own fitted exponents and 2η (:doc:`/excitons/stda`); those apply only in
 ``mode: stda``.
 
+**In the output.** Every excited-state run prints the integrals it used, after the QP section:
+
+.. code-block:: text
+
+   --- Two-electron integrals ---
+     Representation : MNOK, atom pairs, Mulliken transition charges
+     gamma_AB       = (R^beta + a_AB^beta)^(-1/beta),  a_AB = (1/gamma_AA + 1/gamma_BB)/2
+     beta (direct)  : 2 (Ohno-Klopman)
+     beta (exchange): 2 (Ohno-Klopman)
+     On-site        : gamma_AA = IP - EA = 2 eta_A  (integrals.mnok_onsite: ip_ea)
+     gamma_AA       : Cd 7.00 eV, Cl 11.73 eV, Se 10.96 eV
+     Exchange  K^x  : bare interaction (unscreened)
+     Direct    K^d  : W of the QP model (the same W as in the QP correction)  (excitations.kernel: qp)
+
+With ``mode: stda`` the block gives Grimme's γ\ :sup:`J` and γ\ :sup:`K` with the values of a_x, α and
+β instead; with ``xs`` it names the exact integrals.
+
 **Benchmark against exact integrals.** The ``xs`` representation evaluates K\ :sup:`x` from exact
 (μμ|νν) integrals, with no hardness or exponent, and uses the same distance-dependent screening. It is
 the reference for the short range, where MNOK is semi-empirical. The triplet (no K\ :sup:`x`) tests the

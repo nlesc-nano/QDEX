@@ -1813,6 +1813,16 @@ def main():
         if qp_name == "bulk":
             print("  [sTDA] PBE orbitals + bulk GW correction: dielectric variant, not standard sTDA.")
 
+    if str(getattr(args, "excitation_mode", "")).lower() not in ("independent_qp", "independent_dft"):
+        from qdex.hardness import format_integrals_block
+        print(format_integrals_block(
+            args.kernel_type, args.charge_type, args.kernel, syms,
+            stda_info=stda_info if args.kernel == "stda" else None,
+            stda_ax_source=ax_src if args.kernel == "stda" else None,
+            include_direct=getattr(args, "include_direct_eh", True) is not False,
+            include_exchange=bool(getattr(args, "include_exchange", True)) and not getattr(args, "triplet", False),
+            hubbard_beta=float(getattr(args, "beta", 0.0) or 0.0)))
+
     print(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
     print(f"  [QP]  Target Gap   : {target_qp_gap:.4f} eV")
     print(f"  [QP]  Scissor Shift: {scissor:.4f} eV")
