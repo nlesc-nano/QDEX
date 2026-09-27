@@ -813,6 +813,18 @@ def get_cluster_size_metrics(coords_ang, atom_symbols=None, material_name=None):
         'anisotropy_ratio': anisotropy,
     }
 
+MNOK_EXPONENT = 2.0  # 2.0 = Ohno-Klopman (default), 1.0 = Mataga-Nishimoto
+
+
+def _mnok_denom(r_mat_au, damp_mat_au):
+    """MNOK denominator (r^beta + damp^beta)^(1/beta). Default beta=2 (Ohno-Klopman)."""
+    if MNOK_EXPONENT == 2.0:
+        return np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    elif MNOK_EXPONENT == 1.0:
+        return r_mat_au + damp_mat_au
+    return np.power(r_mat_au**MNOK_EXPONENT + damp_mat_au**MNOK_EXPONENT, 1.0 / MNOK_EXPONENT)
+
+
 # =====================================================================
 # Model 1: Classic MNOK Kernel (sTDA style)
 # =====================================================================
@@ -832,7 +844,7 @@ def build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT):
     a_au = 1.0 / etas_au
     damp_mat_au = 0.5 * (a_au[:, np.newaxis] + a_au[np.newaxis, :])
     
-    gamma_au = 1.0 / np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    gamma_au = 1.0 / _mnok_denom(r_mat_au, damp_mat_au)
     gamma_ev = gamma_au * HA_TO_EV
     
     # Apply macroscopic screening
@@ -915,7 +927,7 @@ def build_resta_mnok(atom_symbols, coords, alpha, material_name, eps_out=2.0, et
     a_au = 1.0 / etas_au
 
     damp_mat_au = 0.5 * (a_au[:, np.newaxis] + a_au[np.newaxis, :])
-    mnok_denom_au = np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
 
     # --------------------------------------------------
     # 6. Electronic screened direct kernel.  The environment is intentionally
@@ -1128,7 +1140,7 @@ def build_dim_mnok(atom_symbols, coords, material_name=None, alpha=1.0, eta_dict
     a_au = 1.0 / etas_au
 
     damp_mat_au = 0.5 * (a_au[:, np.newaxis] + a_au[np.newaxis, :])
-    mnok_denom_au = np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_mnok_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
 
     w_dim_ev = S_atom * gamma_mnok_bare_ev
@@ -1202,7 +1214,7 @@ def build_sbse_kernel(atom_symbols, coords, atom_ao_ranges=None, shells=None,
     etas_au = np.array([eta_dict.get(s.lower(), 7.0) for s in atom_symbols]) / HA_TO_EV
     a_au = 1.0 / etas_au
     damp_mat_au = 0.5 * (a_au[:, np.newaxis] + a_au[np.newaxis, :])
-    J_bare_atom_au = 1.0 / np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    J_bare_atom_au = 1.0 / _mnok_denom(r_mat_au, damp_mat_au)
 
     # Solvent screening correction on J
     eps_out_val = float(eps_out) if eps_out is not None else 1.0
@@ -1658,7 +1670,7 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
     etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
     a_au = 1.0 / etas_au
     damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
-    mnok_denom_au = np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
 
     # 2. Bulk Reference Screening Kernel W^{bulk}
@@ -1918,7 +1930,7 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
     etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
     a_au = 1.0 / etas_au
     damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
-    mnok_denom_au = np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
 
     # 2. Bulk Reference Screening Kernel W^{bulk}
@@ -2217,7 +2229,7 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
     etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
     a_au = 1.0 / etas_au
     damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
-    mnok_denom_au = np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
 
     # 2. Bulk Reference Screening Kernel W^{bulk}
@@ -2453,7 +2465,7 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
     etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
     a_au = 1.0 / etas_au
     damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
-    mnok_denom_au = np.sqrt(r_mat_au**2 + damp_mat_au**2)
+    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
 
     # 2. Bulk Reference Screening Kernel W^{bulk}
