@@ -9,7 +9,7 @@ screened interaction W built here is also the screened interaction of the excite
 
 1. :doc:`gw`: the full GW self-energy, how it is computed, and how the quantum-dot problem reduces
    to the finite-size correction ΔW on top of bulk GW (ΔCOHSEX).
-2. :doc:`models`: the approximations for ΔW, from no finite-size term (``none``, ``brus``) to the
+2. :doc:`models`: the approximations for ΔW, from no correction (``none``) and the bulk correction (``bulk``, ``brus``) to the
    classical sphere and the atomistic Resta and DIM models, and why each is needed.
 3. :doc:`dynamic_z`: the quasiparticle weight Z.
 4. :doc:`configuration` and :doc:`cost`: keys and scaling.

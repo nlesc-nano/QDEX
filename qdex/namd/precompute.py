@@ -470,8 +470,12 @@ def precompute_namd_data(config):
             scissor = float(res) - dft_gap0
         else:
             raise ValueError(f"Brus QP estimation failed for material '{material}'.")
-    elif str(qp_model).lower() == "pbe":
+    elif str(qp_model).lower() in ("pbe", "none", "dft"):
         scissor = 0.0
+    elif str(qp_model).lower() == "bulk":
+        from qdex.hardness import MATERIAL_DB
+        entry = MATERIAL_DB.get(str(material).upper())
+        scissor = float(entry[8]) - float(entry[7]) if entry is not None and len(entry) >= 9 else 0.0
     else:
         try:
             target_gap = float(qp_model)

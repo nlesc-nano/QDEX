@@ -24,7 +24,7 @@ The sBSE (bulk W, no finite-size QP correction; :doc:`sbse`):
 .. code-block:: yaml
 
    quasiparticles:
-     model: none               # KS energies + bulk GW correction
+     model: bulk               # PBE energies + bulk GW correction (PBE orbitals only)
 
    excitations:
      mode: sbse

@@ -121,7 +121,8 @@ quasiparticles
    * - ``model`` [``--qp_gap``]
      - ``brus``
      - ``sgw-resta``, ``sgw-dim``, ``evgw-resta``, ``evgw-dim``, ``qsgw-resta``, ``qsgw-dim``; ``none``
-       (KS + bulk GW correction, no ΔW; with a bulk kernel this is the sBSE), ``brus``, ``pbe``, or a gap
+       (DFT energies as they are; also ``pbe``, ``dft``), ``bulk`` (PBE energies + bulk GW correction,
+       PBE orbitals only; with a bulk kernel this is the sBSE), ``brus``, or a gap
        in eV (:doc:`/quasiparticles/models`)
    * - ``z`` [``--qp-z``]
      - ``derived``
@@ -176,11 +177,11 @@ excitations
    * - ``mode`` [``--excitation-mode``]
      - ``bse``
      - ``independent_dft``, ``independent_qp``, ``diagonal_bse``, ``bse``; ``sbse`` and ``diagonal_sbse``
-       are the same solvers, named for use with ``quasiparticles.model: none`` and a bulk kernel
+       are the same solvers, named for use with ``quasiparticles.model: bulk`` and a bulk kernel
        (:doc:`/excitons/index`)
    * - ``kernel`` [``--kernel``]
      - model default
-     - W of K\ :sup:`d`. Set by the QP model (``qp`` for Resta and DIM). Models without W (``none``,
+     - W of K\ :sup:`d`. Set by the QP model (``qp`` for Resta and DIM). Models without W (``none``, ``bulk``,
        ``brus``, ``pbe``, a gap) take ``resta``, ``dim``, ``rpa``, ``sbse``, ``xs-*`` or ``bse``
        (:doc:`/excitons/kernel`)
    * - ``nhomos``, ``nlumos``

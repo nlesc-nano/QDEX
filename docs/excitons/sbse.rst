@@ -6,7 +6,7 @@ Part of :doc:`/excitons/index`.
 .. code-block:: yaml
 
    quasiparticles:
-     model: none               # KS energies + bulk GW correction, no ΔW
+     model: bulk               # PBE energies + bulk GW correction, no ΔW (PBE orbitals only)
 
    excitations:
      mode: sbse                # or diagonal_sbse

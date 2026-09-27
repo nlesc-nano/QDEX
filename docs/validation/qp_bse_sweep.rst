@@ -35,7 +35,7 @@ Models
      - ``quasiparticles.model``
      - ``excitations``
    * - ``sbse-resta``, ``sbse-dim``
-     - ``none``
+     - ``bulk``
      - ``mode: sbse``, ``kernel: resta`` / ``dim``
    * - ``brus``
      - ``brus``

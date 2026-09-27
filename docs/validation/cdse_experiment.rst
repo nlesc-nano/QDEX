@@ -82,11 +82,11 @@ Results at 2.0 nm
      - QP gap vac / tol
      - S₁ vac / tol (spin-free)
      - bright S₁, tol, SOC
-   * - ``none`` + ``sbse`` (Resta)
+   * - ``bulk`` + ``sbse`` (Resta)
      - 3.027 / 3.027
      - 2.800 / 2.800
      - 2.680
-   * - ``none`` + ``sbse`` (DIM)
+   * - ``bulk`` + ``sbse`` (DIM)
      - 3.027 / 3.027
      - 2.706 / 2.706
      -
@@ -147,11 +147,11 @@ Results at 1.2 nm
      - QP gap vac / tol
      - S₁ vac / tol (spin-free)
      - bright S₁, tol, SOC
-   * - ``none`` + ``sbse`` (Resta)
+   * - ``bulk`` + ``sbse`` (Resta)
      - 4.209 / 4.209
      - 3.756 / 3.756
      - 3.645
-   * - ``none`` + ``sbse`` (DIM)
+   * - ``bulk`` + ``sbse`` (DIM)
      - 4.209 / 4.209
      - 3.620 / 3.620
      -
