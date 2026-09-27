@@ -1784,78 +1784,131 @@ def scale_w_difference(W_qd_ev, W_bulk_ev, Z_eh):
     )
 
 
-def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4,
-                            C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None,
-                            atom_ao_ranges=None, alpha=1.0, Z=0.8, dynamic_z=False,
-                            self_consistent=False, max_iter=25, tol=1e-4, damping=0.5,
-                            return_details=False, frontier_pops=None, solvent_term="sphere"):
-    """
-    Computes the Quasiparticle (GW) gap shift for a quantum dot via the microscopic
-    screening difference (Delta W) approach using the Atomistic Polarizable Dipole Interaction
-    Model (DIM / Thole Model)::
+# ---------------------------------------------------------------------
+# Delta-W quasiparticle estimators (sGW / evGW / qsGW) on the Resta or DIM
+# screened interaction.  The two dielectric models differ only in how
+# W^QD is built at a given gap (_ScreeningModel); everything else is shared.
+# ---------------------------------------------------------------------
+class _ScreeningModel:
+    """W^QD of the Resta (Penn-scaled) or DIM (atomistic polarizable dipole) model on a cluster."""
 
-        Delta Sigma_p = (Z_p / 2) * <psi_p | W^{QD, DIM} - W^{bulk} + W^{solv} | psi_p>
-        Scissor_{sGW-DIM} = (E_g^{bulk, GW} - E_g^{bulk, PBE}) + Delta Sigma_{HOMO} + Delta Sigma_{LUMO}
+    def __init__(self, kind, coords, atom_symbols, material_name=None, eps_out=2.4, solvent_term="sphere",
+                 alpha=1.0, penn_scaling=True):
+        from qdex.constants import HA_TO_EV, ANG_PER_BOHR
+        from scipy.spatial.distance import pdist, squareform
 
-    Options:
-      - dynamic_z=True: Dynamically computes Z_p from the microscopic plasmon-pole f-sum rule.
-      - self_consistent=True (evGW): Solves the eigenvalue self-consistent Dyson equation
-        E_g^{(k+1)} = E_g^DFT + Scissor(E_g^{(k)}) until convergence.
-    """
-    from qdex.constants import HA_TO_EV, ANG_PER_BOHR
-    from scipy.spatial.distance import pdist, squareform
+        self.kind = kind
+        self.label = {"dim": "DIM", "resta": "Resta"}[kind]
+        self.coords = coords
+        self.atom_symbols = atom_symbols
+        self.alpha = alpha
+        self.penn_scaling = penn_scaling
+        self.solvent_term = solvent_term
+        self.eps_out = eps_out
+        self.m_name = m_name = material_name.upper() if material_name else "DEFAULT"
+        entry = MATERIAL_DB.get(m_name, None)
+        if entry is None or len(entry) < 9:
+            raise ValueError(f"Material '{m_name}' not found in database or lacks bulk GW data.")
 
-    m_name = material_name.upper() if material_name else "DEFAULT"
-    entry = MATERIAL_DB.get(m_name, None)
-    if entry is None or len(entry) < 9:
-        raise ValueError(f"Material '{m_name}' not found in database or lacks bulk GW data.")
+        self.eps_bulk = eps_bulk = float(entry[0])
+        self.pbe_bulk_gap = float(entry[7])
+        self.gw_bulk_gap = float(entry[8])
+        self.bulk_shift = self.gw_bulk_gap - self.pbe_bulk_gap
+        self.n_atoms = len(atom_symbols)
+        self.R_QD_ang = qd_radius(coords, atom_symbols, m_name)
 
-    eps_bulk = float(entry[0])
-    pbe_bulk_gap = float(entry[7])
-    gw_bulk_gap = float(entry[8])
-    bulk_shift = gw_bulk_gap - pbe_bulk_gap
+        # 1. Bare Ohno-Klopman interaction matrix (eV)
+        r_mat_au = squareform(pdist(coords / ANG_PER_BOHR))
+        etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
+        a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
+        damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
+        self.gamma_bare_ev = (1.0 / _mnok_denom(r_mat_au, damp_mat_au)) * HA_TO_EV
 
-    n_atoms = len(atom_symbols)
-    metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R_QD_ang = qd_radius(coords, atom_symbols, m_name)
+        # 2. Bulk reference W^bulk (Resta, eps_inf) on the core nearest-neighbour distance
+        core_coords = coords
+        if m_name in MATERIAL_ELEMENTS:
+            core_elements = [el.lower() for el in MATERIAL_ELEMENTS[m_name]]
+            core_coords = np.array([coords[i] for i, sym in enumerate(atom_symbols) if sym.lower() in core_elements])
+        if len(core_coords) > 1:
+            r_core_ang = squareform(pdist(core_coords))
+            np.fill_diagonal(r_core_ang, np.inf)
+            d_NN_ang = float(np.median(np.min(r_core_ang, axis=1)))
+        else:
+            d_NN_ang = 2.5
+        self.d_NN_au = d_NN_ang / ANG_PER_BOHR
+        self.R_mat_ang = squareform(pdist(coords))
+        self.W_bulk_ev = self._resta_w(eps_bulk)
 
-    # 1. Bare Ohno-Klopman interaction matrix (eV)
-    coords_au = coords / ANG_PER_BOHR
-    r_mat_au = squareform(pdist(coords_au))
-    etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
-    damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
-    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
-    gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
+        # 3. Solvent reaction field Delta W^solv
+        self.eps_out_val = max(1.0, float(eps_out))
+        self.delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, self.eps_out_val, eps_bulk,
+                                                  self.R_mat_ang, self.R_QD_ang, solvent_term)
 
-    # 2. Bulk Reference Screening Kernel W^{bulk}
-    core_coords = coords
-    if m_name in MATERIAL_ELEMENTS:
-        core_elements = [el.lower() for el in MATERIAL_ELEMENTS[m_name]]
-        core_coords = np.array(
-            [coords[i] for i, sym in enumerate(atom_symbols) if sym.lower() in core_elements]
-        )
-    if len(core_coords) > 1:
-        r_core_ang = squareform(pdist(core_coords))
-        np.fill_diagonal(r_core_ang, np.inf)
-        d_NN_ang = float(np.median(np.min(r_core_ang, axis=1)))
-    else:
-        d_NN_ang = 2.5
-    d_NN_au = d_NN_ang / ANG_PER_BOHR
+    def _resta_w(self, eps):
+        from qdex.constants import ANG_PER_BOHR
+        k_s_ang = (np.sqrt(max(0.0, eps - 1.0)) / self.d_NN_au) / ANG_PER_BOHR
+        c_inf = 1.0 / max(1.0, eps)
+        return (c_inf + (1.0 - c_inf) * np.exp(-k_s_ang * self.R_mat_ang)) * self.gamma_bare_ev
 
-    R_mat_ang = squareform(pdist(coords))
-    k_s_bulk_au = np.sqrt(max(0.0, eps_bulk - 1.0)) / d_NN_au
-    k_s_bulk_ang = k_s_bulk_au / ANG_PER_BOHR
-    c_inf_bulk = 1.0 / max(1.0, eps_bulk)
-    S_bulk = c_inf_bulk + (1.0 - c_inf_bulk) * np.exp(-k_s_bulk_ang * R_mat_ang)
-    W_bulk_ev = S_bulk * gamma_bare_ev
+    def _penn(self, d_e_conf):
+        return penn_eps_eff(self.eps_bulk, d_e_conf, penn_gap_ev(self.m_name, self.eps_bulk))
 
-    # 3. Solvent Reaction Field: Delta W^{solv}
-    eps_out_val = max(1.0, float(eps_out))
-    delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, eps_out_val, eps_bulk, R_mat_ang, R_QD_ang,
-                                         solvent_term)
+    def _dim(self, alpha):
+        S_dim, _, _, _ = build_dim_screening_factors(coords=self.coords, atom_symbols=self.atom_symbols,
+                                                     material_name=self.m_name, eps_out=self.eps_out,
+                                                     alpha=alpha)
+        inter_mask = ~np.eye(self.n_atoms, dtype=bool)
+        eps_z = float(1.0 / np.median(S_dim[inter_mask])) if np.any(inter_mask) else self.eps_bulk
+        return S_dim * self.gamma_bare_ev, eps_z
 
-    # 4. Project onto frontier HOMO and LUMO states
+    def _dim_scaled_alpha(self, gap):
+        return float(np.clip(self.alpha * (self.gw_bulk_gap / max(0.5, gap)), 0.20, 1.0))
+
+    def one_shot(self, gap_dft):
+        """W^QD and the eps entering Z for a one-shot correction at the DFT gap."""
+        if self.kind == "dim":
+            return self._dim(self.alpha)
+        if self.penn_scaling and gap_dft > self.pbe_bulk_gap:
+            eps = self._penn(float(gap_dft - self.pbe_bulk_gap))
+            return self._resta_w(eps), eps
+        return self.W_bulk_ev, self.eps_bulk
+
+    def at_gap(self, gap, strict_penn=False):
+        """W^QD, eps for Z and an iteration note at the current QP gap (evGW, qsGW).
+
+        strict_penn: Penn scaling only above the bulk GW gap (qsGW) instead of max(0, gap - E_g^GW) (evGW).
+        """
+        if self.kind == "dim":
+            a = self._dim_scaled_alpha(gap)
+            w, eps_z = self._dim(a)
+            return w, eps_z, f"alpha_scale = {a:.3f}"
+        if self.penn_scaling and (gap > self.gw_bulk_gap or not strict_penn):
+            eps = self._penn(max(0.0, gap - self.gw_bulk_gap))
+            return self._resta_w(eps), eps, f"eps_eff = {eps:.3f}"
+        return self.W_bulk_ev, self.eps_bulk, f"eps_eff = {self.eps_bulk:.3f}"
+
+    def vacuum_solvent(self):
+        return solvent_reaction_term(self.coords, self.atom_symbols, self.m_name, 1.0, self.eps_bulk,
+                                     self.R_mat_ang, self.R_QD_ang, self.solvent_term)
+
+    def w_parts(self, w_qd, eps_z):
+        return {"w_qd": np.array(w_qd, dtype=float), "w_bulk": np.array(self.W_bulk_ev, dtype=float),
+                "w_add": np.array(self.delta_W_solv, dtype=float), "gamma": np.array(self.gamma_bare_ev, dtype=float),
+                "eps_z": float(eps_z), "bulk_shift": float(self.bulk_shift),
+                "bulk_homo_fraction": anchor_bulk_homo_fraction(self.m_name)}
+
+
+def _estimate_sgw_delta_w(model, dft_gap=None, C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None,
+                          atom_ao_ranges=None, Z=0.8, dynamic_z=False, self_consistent=False, max_iter=25,
+                          tol=1e-4, damping=0.5, return_details=False, frontier_pops=None):
+    """One-shot sGW or eigenvalue self-consistent evGW scissor on the Delta W of ``model``."""
+    m = model
+    m_name, eps_bulk, bulk_shift = m.m_name, m.eps_bulk, m.bulk_shift
+    pbe_bulk_gap, gw_bulk_gap, R_QD_ang = m.pbe_bulk_gap, m.gw_bulk_gap, m.R_QD_ang
+    W_bulk_ev, delta_W_solv = m.W_bulk_ev, m.delta_W_solv
+    coords, n_atoms = m.coords, m.n_atoms
+
+    # Frontier densities
     if frontier_pops is not None:
         # atomic populations of HOMO and LUMO supplied by the caller (Mulliken or Löwdin)
         q_h, q_l = (np.asarray(x, dtype=float) for x in frontier_pops)
@@ -1872,33 +1925,31 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
         q_h = (psi_env**2) / np.sum(psi_env**2)
         q_l = q_h.copy()
 
-    gap_dft = float(eps_virt[0] - eps_occ[-1]) if (eps_occ is not None and eps_virt is not None) else pbe_bulk_gap
+    if dft_gap is not None:
+        gap_dft = float(dft_gap)
+    elif eps_occ is not None and eps_virt is not None:
+        gap_dft = float(eps_virt[0] - eps_occ[-1])
+    else:
+        gap_dft = pbe_bulk_gap
 
+    def sigmas(w_qd):
+        delta_W_conf = np.maximum(0.0, w_qd - W_bulk_ev)
+        return (0.5 * float(q_h @ delta_W_conf @ q_h), 0.5 * float(q_l @ delta_W_conf @ q_l),
+                0.5 * float(q_h @ delta_W_solv @ q_h), 0.5 * float(q_l @ delta_W_solv @ q_l))
+
+    def z_factors(sig_h_stat, sig_l_stat, gap, eps_z):
+        if dynamic_z:
+            return (compute_dynamic_z(sig_h_stat, gap, eps_z, m_name),
+                    compute_dynamic_z(sig_l_stat, gap, eps_z, m_name))
+        return float(Z), float(Z)
+
+    model_name = f"{'evGW' if self_consistent else 'sGW'}-{m.label}"
     if not self_consistent:
-        # One-shot G0W0 evaluation
-        S_dim, eta_atom, _, _ = build_dim_screening_factors(
-            coords=coords, atom_symbols=atom_symbols, material_name=m_name, eps_out=eps_out, alpha=alpha
-        )
-        W_qd_ev = S_dim * gamma_bare_ev
-        delta_W_conf = np.maximum(0.0, W_qd_ev - W_bulk_ev)
-
-        sig_h_conf = 0.5 * float(q_h @ delta_W_conf @ q_h)
-        sig_l_conf = 0.5 * float(q_l @ delta_W_conf @ q_l)
-        sig_h_solv = 0.5 * float(q_h @ delta_W_solv @ q_h)
-        sig_l_solv = 0.5 * float(q_l @ delta_W_solv @ q_l)
+        W_qd_ev, eps_z = m.one_shot(gap_dft)
+        sig_h_conf, sig_l_conf, sig_h_solv, sig_l_solv = sigmas(W_qd_ev)
         sig_h_stat = sig_h_conf + sig_h_solv
         sig_l_stat = sig_l_conf + sig_l_solv
-
-        inter_mask = ~np.eye(n_atoms, dtype=bool)
-        eps_eff_med = float(1.0 / np.median(S_dim[inter_mask])) if np.any(inter_mask) else eps_bulk
-
-        if dynamic_z:
-            Z_h = compute_dynamic_z(sig_h_stat, gap_dft + bulk_shift, eps_eff_med, m_name)
-            Z_l = compute_dynamic_z(sig_l_stat, gap_dft + bulk_shift, eps_eff_med, m_name)
-        else:
-            Z_h = float(Z)
-            Z_l = float(Z)
-
+        Z_h, Z_l = z_factors(sig_h_stat, sig_l_stat, gap_dft + bulk_shift, eps_z)
         delta_sigma_h = Z_h * sig_h_stat
         delta_sigma_l = Z_l * sig_l_stat
         confinement_shift = delta_sigma_h + delta_sigma_l
@@ -1907,47 +1958,22 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
         total_sgw_scissor = bulk_shift + confinement_shift
         n_iters = 1
         converged = True
-        model_name = "sGW-DIM"
     else:
-        # Eigenvalue Self-Consistent evGW loop
         gap_curr = gap_dft + bulk_shift
-        print(f"\n  [evGW-DIM] Starting Eigenvalue Self-Consistent Loop (Initial Gap = {gap_curr:.4f} eV):")
+        print(f"\n  [{model_name}] Starting Eigenvalue Self-Consistent Loop (Initial Gap = {gap_curr:.4f} eV):")
         n_iters = 0
         converged = False
         scissor_next = bulk_shift
-        confinement_shift_internal = 0.0
-        confinement_shift_solv = 0.0
-        delta_sigma_h = 0.0
-        delta_sigma_l = 0.0
-        Z_h = float(Z)
-        Z_l = float(Z)
-
+        delta_sigma_h = delta_sigma_l = 0.0
+        Z_h = Z_l = float(Z)
+        eps_z = eps_bulk
         for it in range(max_iter):
             n_iters += 1
-            scale_alpha = float(np.clip(alpha * (gw_bulk_gap / max(0.5, gap_curr)), 0.20, 1.0))
-            S_dim, eta_atom, _, _ = build_dim_screening_factors(
-                coords=coords, atom_symbols=atom_symbols, material_name=m_name, eps_out=eps_out, alpha=scale_alpha
-            )
-            W_qd_ev = S_dim * gamma_bare_ev
-            delta_W_conf = np.maximum(0.0, W_qd_ev - W_bulk_ev)
-
-            sig_h_conf = 0.5 * float(q_h @ delta_W_conf @ q_h)
-            sig_l_conf = 0.5 * float(q_l @ delta_W_conf @ q_l)
-            sig_h_solv = 0.5 * float(q_h @ delta_W_solv @ q_h)
-            sig_l_solv = 0.5 * float(q_l @ delta_W_solv @ q_l)
+            W_qd_ev, eps_z, note = m.at_gap(gap_curr)
+            sig_h_conf, sig_l_conf, sig_h_solv, sig_l_solv = sigmas(W_qd_ev)
             sig_h_stat = sig_h_conf + sig_h_solv
             sig_l_stat = sig_l_conf + sig_l_solv
-
-            inter_mask = ~np.eye(n_atoms, dtype=bool)
-            eps_eff_med = float(1.0 / np.median(S_dim[inter_mask])) if np.any(inter_mask) else eps_bulk
-
-            if dynamic_z:
-                Z_h = compute_dynamic_z(sig_h_stat, gap_curr, eps_eff_med, m_name)
-                Z_l = compute_dynamic_z(sig_l_stat, gap_curr, eps_eff_med, m_name)
-            else:
-                Z_h = float(Z)
-                Z_l = float(Z)
-
+            Z_h, Z_l = z_factors(sig_h_stat, sig_l_stat, gap_curr, eps_z)
             delta_sigma_h = Z_h * sig_h_stat
             delta_sigma_l = Z_l * sig_l_stat
             confinement_shift = delta_sigma_h + delta_sigma_l
@@ -1955,21 +1981,15 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
             gap_next = gap_dft + scissor_next
 
             diff = abs(gap_next - gap_curr)
-            print(f"    Iter {it+1:2d}: Gap = {gap_curr:.4f} eV, Scissor = +{scissor_next:.4f} eV, alpha_scale = {scale_alpha:.3f}, Z_h = {Z_h:.3f}, Z_l = {Z_l:.3f}, Diff = {diff:.5f} eV")
+            print(f"    Iter {it+1:2d}: Gap = {gap_curr:.4f} eV, Scissor = +{scissor_next:.4f} eV, {note}, Z_h = {Z_h:.3f}, Z_l = {Z_l:.3f}, Diff = {diff:.5f} eV")
             if diff < tol:
                 converged = True
-                print(f"    -> evGW-DIM converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
-                total_sgw_scissor = scissor_next
-                confinement_shift_internal = Z_h * sig_h_conf + Z_l * sig_l_conf
-                confinement_shift_solv = Z_h * sig_h_solv + Z_l * sig_l_solv
+                print(f"    -> {model_name} converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
                 break
             gap_curr = (1.0 - damping) * gap_curr + damping * gap_next
-        else:
-            total_sgw_scissor = scissor_next
-            confinement_shift_internal = Z_h * sig_h_conf + Z_l * sig_l_conf
-            confinement_shift_solv = Z_h * sig_h_solv + Z_l * sig_l_solv
-
-        model_name = "evGW-DIM"
+        total_sgw_scissor = scissor_next
+        confinement_shift_internal = Z_h * sig_h_conf + Z_l * sig_l_conf
+        confinement_shift_solv = Z_h * sig_h_solv + Z_l * sig_l_solv
 
     int_shift = confinement_shift_internal
     if int_shift > 1e-8:
@@ -1982,12 +2002,23 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
         f_h_micro = 0.5
         f_l_micro = 0.5
 
+    penn_active = m.kind == "resta" and m.penn_scaling and eps_z < eps_bulk
     z_str = f"Z_h={Z_h:.3f}, Z_l={Z_l:.3f} (dynamic)" if dynamic_z else f"Z={float(Z):.2f} (fixed)"
-    print(f"\n  [{model_name} Model] Quasiparticle Correction for {m_name}:")
+    if m.kind == "dim":
+        print(f"\n  [{model_name} Model] Quasiparticle Correction for {m_name}:")
+    else:
+        print(f"\n  [{model_name} Model ({'Penn-scaled' if penn_active else 'Pure Boundary'})] "
+              f"Quasiparticle Correction for {m_name}:")
     print(f"    Cluster Radius (R_QD)    : {R_QD_ang:.3f} Å")
     print(f"    Bulk PBE -> GW Gap      : {pbe_bulk_gap:.3f} -> {gw_bulk_gap:.3f} eV (Shift: +{bulk_shift:.3f} eV)")
-    print(f"    Internal DIM Contrast    : +{confinement_shift_internal:.3f} eV (surface coordination under-screening)")
-    print(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {eps_out_val:.2f}, eps_bulk = {eps_bulk:.2f})")
+    if m.kind == "dim":
+        print(f"    Internal DIM Contrast    : +{confinement_shift_internal:.3f} eV (surface coordination under-screening)")
+        print(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {m.eps_out_val:.2f}, eps_bulk = {eps_bulk:.2f})")
+    else:
+        if penn_active:
+            print(f"    Penn Dielectric eps_eff  : {eps_z:.3f} (bulk eps_inf = {eps_bulk:.3f})")
+            print(f"    Internal Resta Contrast  : +{confinement_shift_internal:.3f} eV")
+        print(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {m.eps_out_val:.2f})")
     print(f"    HOMO Quasiparticle Shift : +{delta_sigma_h:.3f} eV ({z_str})")
     print(f"    LUMO Quasiparticle Shift : +{delta_sigma_l:.3f} eV ({z_str})")
     print(f"    Microscopic Split        : HOMO takes {f_h_micro*100:.1f}%, LUMO takes {f_l_micro*100:.1f}%")
@@ -1996,9 +2027,10 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
         print(f"    evGW Iterations          : {n_iters} (converged: {converged})")
     print(f"    ==> Total {model_name} Scissor: +{total_sgw_scissor:.3f} eV\n")
 
+    w_solv_vac = m.vacuum_solvent()
     provenance = {
         "material": m_name,
-        "qp_model": "evgw_dim" if self_consistent else "sgw_dim",
+        "qp_model": f"{'evgw' if self_consistent else 'sgw'}_{m.kind}",
         "cluster_radius_ang": R_QD_ang,
         "bulk_pbe_gap_ev": pbe_bulk_gap,
         "bulk_gw_gap_ev": gw_bulk_gap,
@@ -2020,27 +2052,55 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
         "self_consistent": bool(self_consistent),
         "evgw_converged": bool(converged),
         "evgw_iterations": int(n_iters),
-        "eps_out": float(eps_out_val),
+        "eps_out": float(m.eps_out_val),
         "eps_bulk": float(eps_bulk),
+    }
+    if m.kind == "resta":
+        provenance["eps_eff_qd"] = float(eps_z)
+        provenance["penn_scaling"] = bool(penn_active)
+    provenance.update({
         "total_scissor_ev": total_sgw_scissor,
         "total_scissor_solvent_ev": total_sgw_scissor,
-        "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal + (0.5 * float(Z_h * (q_h @ solvent_reaction_term(coords, atom_symbols, m_name, 1.0, eps_bulk, R_mat_ang, R_QD_ang, solvent_term) @ q_h) + Z_l * (q_l @ solvent_reaction_term(coords, atom_symbols, m_name, 1.0, eps_bulk, R_mat_ang, R_QD_ang, solvent_term) @ q_l))),
-    }
+        "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal
+        + (0.5 * float(Z_h * (q_h @ w_solv_vac @ q_h) + Z_l * (q_l @ w_solv_vac @ q_l))),
+    })
     # The screened interaction this QP model is built on.  The CLI passes it
     # to the BSE (kernel "qp") so that GW and BSE share the same W.
     # Delta W enters the kernel with the same Z as the QP shift (scale_w_difference).
     provenance["w_bse_ev"] = scale_w_difference(W_qd_ev + delta_W_solv, W_bulk_ev, 0.5 * (Z_h + Z_l))
     provenance["w_bse_z"] = float(0.5 * (Z_h + Z_l))
     # Components for the xs representation and for orbital-resolved QP levels.
-    provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
-                             "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
-                             "eps_z": float(eps_eff_med), "bulk_shift": float(bulk_shift),
-                             "bulk_homo_fraction": anchor_bulk_homo_fraction(m_name)}
-    provenance["w_bse_label"] = f"DIM W_QD + {solvent_term} solvent term"
+    provenance["w_parts"] = m.w_parts(W_qd_ev, eps_z)
+    provenance["w_bse_label"] = (f"DIM W_QD + {m.solvent_term} solvent term" if m.kind == "dim"
+                                 else f"Resta W_QD(eps_eff) + {m.solvent_term} solvent term")
 
     if return_details:
         return total_sgw_scissor, provenance
     return total_sgw_scissor
+
+
+def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4,
+                            C_occ_low=None, C_virt_low=None, eps_occ=None, eps_virt=None,
+                            atom_ao_ranges=None, alpha=1.0, Z=0.8, dynamic_z=False,
+                            self_consistent=False, max_iter=25, tol=1e-4, damping=0.5,
+                            return_details=False, frontier_pops=None, solvent_term="sphere"):
+    """
+    Computes the Quasiparticle (GW) gap shift for a quantum dot via the microscopic
+    screening difference (Delta W) approach using the Atomistic Polarizable Dipole Interaction
+    Model (DIM / Thole Model)::
+
+        Delta Sigma_p = (Z_p / 2) * <psi_p | W^{QD, DIM} - W^{bulk} + W^{solv} | psi_p>
+        Scissor_{sGW-DIM} = (E_g^{bulk, GW} - E_g^{bulk, PBE}) + Delta Sigma_{HOMO} + Delta Sigma_{LUMO}
+
+    Options:
+      - dynamic_z=True: Dynamically computes Z_p from the microscopic plasmon-pole f-sum rule.
+      - self_consistent=True (evGW): Solves the eigenvalue self-consistent Dyson equation
+        E_g^{(k+1)} = E_g^DFT + Scissor(E_g^{(k)}) until convergence; the DIM polarizabilities
+        are scaled by alpha * E_g^{bulk,GW} / E_g (clipped to [0.2, 1]).
+    """
+    model = _ScreeningModel("dim", coords, atom_symbols, material_name, eps_out, solvent_term, alpha=alpha)
+    return _estimate_sgw_delta_w(model, None, C_occ_low, C_virt_low, eps_occ, eps_virt, atom_ao_ranges, Z,
+                                 dynamic_z, self_consistent, max_iter, tol, damping, return_details, frontier_pops)
 
 
 def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4,
@@ -2062,259 +2122,10 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
       - dynamic_z=True: Dynamically computes Z_p from the microscopic plasmon-pole f-sum rule.
       - self_consistent=True (evGW): Solves the eigenvalue self-consistent Dyson equation.
     """
-    from qdex.constants import HA_TO_EV, ANG_PER_BOHR
-    from scipy.spatial.distance import pdist, squareform
-
-    m_name = material_name.upper() if material_name else "DEFAULT"
-    entry = MATERIAL_DB.get(m_name, None)
-    if entry is None or len(entry) < 9:
-        raise ValueError(f"Material '{m_name}' not found in database or lacks bulk GW data.")
-
-    eps_bulk = float(entry[0])
-    pbe_bulk_gap = float(entry[7])
-    gw_bulk_gap = float(entry[8])
-    bulk_shift = gw_bulk_gap - pbe_bulk_gap
-
-    n_atoms = len(atom_symbols)
-    metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R_QD_ang = qd_radius(coords, atom_symbols, m_name)
-
-    # 1. Bare Ohno-Klopman interaction matrix (eV)
-    coords_au = coords / ANG_PER_BOHR
-    r_mat_au = squareform(pdist(coords_au))
-    etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
-    damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
-    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
-    gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
-
-    # 2. Bulk Reference Screening Kernel W^{bulk}
-    core_coords = coords
-    if m_name in MATERIAL_ELEMENTS:
-        core_elements = [el.lower() for el in MATERIAL_ELEMENTS[m_name]]
-        core_coords = np.array(
-            [coords[i] for i, sym in enumerate(atom_symbols) if sym.lower() in core_elements]
-        )
-    if len(core_coords) > 1:
-        r_core_ang = squareform(pdist(core_coords))
-        np.fill_diagonal(r_core_ang, np.inf)
-        d_NN_ang = float(np.median(np.min(r_core_ang, axis=1)))
-    else:
-        d_NN_ang = 2.5
-    d_NN_au = d_NN_ang / ANG_PER_BOHR
-
-    R_mat_ang = squareform(pdist(coords))
-    k_s_bulk_au = np.sqrt(max(0.0, eps_bulk - 1.0)) / d_NN_au
-    k_s_bulk_ang = k_s_bulk_au / ANG_PER_BOHR
-    c_inf_bulk = 1.0 / max(1.0, eps_bulk)
-    S_bulk = c_inf_bulk + (1.0 - c_inf_bulk) * np.exp(-k_s_bulk_ang * R_mat_ang)
-    W_bulk_ev = S_bulk * gamma_bare_ev
-
-    # 3. Solvent Reaction Field: Delta W^{solv}
-    eps_out_val = max(1.0, float(eps_out))
-    delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, eps_out_val, eps_bulk, R_mat_ang, R_QD_ang,
-                                         solvent_term)
-
-    # 4. Project onto frontier orbitals
-    if frontier_pops is not None:
-        # atomic populations of HOMO and LUMO supplied by the caller (Mulliken or Löwdin)
-        q_h, q_l = (np.asarray(x, dtype=float) for x in frontier_pops)
-    elif C_occ_low is not None and C_virt_low is not None and atom_ao_ranges is not None:
-        q_h = np.zeros(n_atoms)
-        q_l = np.zeros(n_atoms)
-        for A, (a0, a1) in enumerate(atom_ao_ranges):
-            q_h[A] = np.sum(np.abs(C_occ_low[a0:a1, -1])**2)
-            q_l[A] = np.sum(np.abs(C_virt_low[a0:a1, 0])**2)
-    else:
-        center = np.mean(coords, axis=0)
-        dist = np.linalg.norm(coords - center, axis=1)
-        psi_env = np.maximum(0.0, np.cos(np.pi * dist / (2.0 * max(1.0, R_QD_ang))))
-        q_h = (psi_env**2) / np.sum(psi_env**2)
-        q_l = q_h.copy()
-
-    gap_dft = float(dft_gap) if dft_gap is not None else (float(eps_virt[0] - eps_occ[-1]) if (eps_occ is not None and eps_virt is not None) else pbe_bulk_gap)
-
-    if not self_consistent:
-        # One-shot Resta
-        eps_eff_qd = eps_bulk
-        if penn_scaling and gap_dft > pbe_bulk_gap:
-            dE_conf = float(gap_dft - pbe_bulk_gap)
-            eps_eff_qd = penn_eps_eff(eps_bulk, dE_conf, penn_gap_ev(m_name, eps_bulk))
-            k_s_qd_au = np.sqrt(max(0.0, eps_eff_qd - 1.0)) / d_NN_au
-            k_s_qd_ang = k_s_qd_au / ANG_PER_BOHR
-            c_inf_qd = 1.0 / max(1.0, eps_eff_qd)
-            S_qd = c_inf_qd + (1.0 - c_inf_qd) * np.exp(-k_s_qd_ang * R_mat_ang)
-            W_qd_ev = S_qd * gamma_bare_ev
-            delta_W_conf = np.maximum(0.0, W_qd_ev - W_bulk_ev)
-        else:
-            W_qd_ev = W_bulk_ev
-            delta_W_conf = np.zeros_like(W_bulk_ev)
-
-        sig_h_conf = 0.5 * float(q_h @ delta_W_conf @ q_h)
-        sig_l_conf = 0.5 * float(q_l @ delta_W_conf @ q_l)
-        sig_h_solv = 0.5 * float(q_h @ delta_W_solv @ q_h)
-        sig_l_solv = 0.5 * float(q_l @ delta_W_solv @ q_l)
-        sig_h_stat = sig_h_conf + sig_h_solv
-        sig_l_stat = sig_l_conf + sig_l_solv
-
-        if dynamic_z:
-            Z_h = compute_dynamic_z(sig_h_stat, gap_dft + bulk_shift, eps_eff_qd, m_name)
-            Z_l = compute_dynamic_z(sig_l_stat, gap_dft + bulk_shift, eps_eff_qd, m_name)
-        else:
-            Z_h = float(Z)
-            Z_l = float(Z)
-
-        delta_sigma_h = Z_h * sig_h_stat
-        delta_sigma_l = Z_l * sig_l_stat
-        confinement_shift = delta_sigma_h + delta_sigma_l
-        confinement_shift_internal = Z_h * sig_h_conf + Z_l * sig_l_conf
-        confinement_shift_solv = Z_h * sig_h_solv + Z_l * sig_l_solv
-        total_sgw_scissor = bulk_shift + confinement_shift
-        n_iters = 1
-        converged = True
-        model_name = "sGW-Resta"
-    else:
-        # evGW-Resta loop
-        gap_curr = gap_dft + bulk_shift
-        print(f"\n  [evGW-Resta] Starting Eigenvalue Self-Consistent Loop (Initial Gap = {gap_curr:.4f} eV):")
-        n_iters = 0
-        converged = False
-        scissor_next = bulk_shift
-        confinement_shift_internal = 0.0
-        confinement_shift_solv = 0.0
-        delta_sigma_h = 0.0
-        delta_sigma_l = 0.0
-        Z_h = float(Z)
-        Z_l = float(Z)
-        eps_eff_qd = eps_bulk
-
-        for it in range(max_iter):
-            n_iters += 1
-            if penn_scaling:
-                dE_conf = max(0.0, gap_curr - gw_bulk_gap)
-                eps_eff_qd = penn_eps_eff(eps_bulk, dE_conf, penn_gap_ev(m_name, eps_bulk))
-                k_s_qd_au = np.sqrt(max(0.0, eps_eff_qd - 1.0)) / d_NN_au
-                k_s_qd_ang = k_s_qd_au / ANG_PER_BOHR
-                c_inf_qd = 1.0 / max(1.0, eps_eff_qd)
-                S_qd = c_inf_qd + (1.0 - c_inf_qd) * np.exp(-k_s_qd_ang * R_mat_ang)
-                W_qd_ev = S_qd * gamma_bare_ev
-                delta_W_conf = np.maximum(0.0, W_qd_ev - W_bulk_ev)
-            else:
-                W_qd_ev = W_bulk_ev
-                delta_W_conf = np.zeros_like(W_bulk_ev)
-                eps_eff_qd = eps_bulk
-
-            sig_h_conf = 0.5 * float(q_h @ delta_W_conf @ q_h)
-            sig_l_conf = 0.5 * float(q_l @ delta_W_conf @ q_l)
-            sig_h_solv = 0.5 * float(q_h @ delta_W_solv @ q_h)
-            sig_l_solv = 0.5 * float(q_l @ delta_W_solv @ q_l)
-            sig_h_stat = sig_h_conf + sig_h_solv
-            sig_l_stat = sig_l_conf + sig_l_solv
-
-            if dynamic_z:
-                Z_h = compute_dynamic_z(sig_h_stat, gap_curr, eps_eff_qd, m_name)
-                Z_l = compute_dynamic_z(sig_l_stat, gap_curr, eps_eff_qd, m_name)
-            else:
-                Z_h = float(Z)
-                Z_l = float(Z)
-
-            delta_sigma_h = Z_h * sig_h_stat
-            delta_sigma_l = Z_l * sig_l_stat
-            confinement_shift = delta_sigma_h + delta_sigma_l
-            scissor_next = bulk_shift + confinement_shift
-            gap_next = gap_dft + scissor_next
-
-            diff = abs(gap_next - gap_curr)
-            print(f"    Iter {it+1:2d}: Gap = {gap_curr:.4f} eV, Scissor = +{scissor_next:.4f} eV, eps_eff = {eps_eff_qd:.3f}, Z_h = {Z_h:.3f}, Z_l = {Z_l:.3f}, Diff = {diff:.5f} eV")
-            if diff < tol:
-                converged = True
-                print(f"    -> evGW-Resta converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
-                total_sgw_scissor = scissor_next
-                confinement_shift_internal = Z_h * sig_h_conf + Z_l * sig_l_conf
-                confinement_shift_solv = Z_h * sig_h_solv + Z_l * sig_l_solv
-                break
-            gap_curr = (1.0 - damping) * gap_curr + damping * gap_next
-        else:
-            total_sgw_scissor = scissor_next
-            confinement_shift_internal = Z_h * sig_h_conf + Z_l * sig_l_conf
-            confinement_shift_solv = Z_h * sig_h_solv + Z_l * sig_l_solv
-
-    int_shift = confinement_shift_internal
-    if int_shift > 1e-8:
-        f_h_micro = float(np.clip(Z_h * sig_h_conf / int_shift, 0.0, 1.0))
-        f_l_micro = 1.0 - f_h_micro
-    elif delta_sigma_h + delta_sigma_l > 1e-8:
-        f_h_micro = float(np.clip(delta_sigma_h / (delta_sigma_h + delta_sigma_l), 0.0, 1.0))
-        f_l_micro = 1.0 - f_h_micro
-    else:
-        f_h_micro = 0.5
-        f_l_micro = 0.5
-
-    model_name = "evGW-Resta" if self_consistent else "sGW-Resta"
-    z_str = f"Z_h={Z_h:.3f}, Z_l={Z_l:.3f} (dynamic)" if dynamic_z else f"Z={float(Z):.2f} (fixed)"
-    model_label = "Penn-scaled" if (penn_scaling and eps_eff_qd < eps_bulk) else "Pure Boundary"
-    print(f"\n  [{model_name} Model ({model_label})] Quasiparticle Correction for {m_name}:")
-    print(f"    Cluster Radius (R_QD)    : {R_QD_ang:.3f} Å")
-    print(f"    Bulk PBE -> GW Gap      : {pbe_bulk_gap:.3f} -> {gw_bulk_gap:.3f} eV (Shift: +{bulk_shift:.3f} eV)")
-    if penn_scaling and eps_eff_qd < eps_bulk:
-        print(f"    Penn Dielectric eps_eff  : {eps_eff_qd:.3f} (bulk eps_inf = {eps_bulk:.3f})")
-        print(f"    Internal Resta Contrast  : +{confinement_shift_internal:.3f} eV")
-    print(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {eps_out_val:.2f})")
-    print(f"    HOMO Quasiparticle Shift : +{delta_sigma_h:.3f} eV ({z_str})")
-    print(f"    LUMO Quasiparticle Shift : +{delta_sigma_l:.3f} eV ({z_str})")
-    print(f"    Microscopic Split        : HOMO takes {f_h_micro*100:.1f}%, LUMO takes {f_l_micro*100:.1f}%")
-    print(f"    Total Confinement Opening: +{confinement_shift:.3f} eV")
-    if self_consistent:
-        print(f"    evGW Iterations          : {n_iters} (converged: {converged})")
-    print(f"    ==> Total {model_name} Scissor: +{total_sgw_scissor:.3f} eV\n")
-
-    provenance = {
-        "material": m_name,
-        "qp_model": "evgw_resta" if self_consistent else "sgw_resta",
-        "cluster_radius_ang": R_QD_ang,
-        "bulk_pbe_gap_ev": pbe_bulk_gap,
-        "bulk_gw_gap_ev": gw_bulk_gap,
-        "bulk_shift_ev": bulk_shift,
-        "bulk_gw_shift_ev": bulk_shift,
-        "confinement_shift_ev": confinement_shift,
-        "confinement_shift_internal_ev": confinement_shift_internal,
-        "confinement_shift_solvent_ev": confinement_shift_solv,
-        "delta_sigma_homo_ev": delta_sigma_h,
-        "delta_sigma_lumo_ev": delta_sigma_l,
-        "f_homo": f_h_micro,
-        "f_lumo": f_l_micro,
-        "f_homo_micro": f_h_micro,
-        "f_lumo_micro": f_l_micro,
-        "z_factor": float(0.5 * (Z_h + Z_l)),
-        "z_homo": float(Z_h),
-        "z_lumo": float(Z_l),
-        "dynamic_z": bool(dynamic_z),
-        "self_consistent": bool(self_consistent),
-        "evgw_converged": bool(converged),
-        "evgw_iterations": int(n_iters),
-        "eps_out": float(eps_out_val),
-        "eps_bulk": float(eps_bulk),
-        "eps_eff_qd": float(eps_eff_qd),
-        "penn_scaling": bool(penn_scaling and eps_eff_qd < eps_bulk),
-        "total_scissor_ev": total_sgw_scissor,
-        "total_scissor_solvent_ev": total_sgw_scissor,
-        "total_scissor_vacuum_ev": bulk_shift + confinement_shift_internal + (0.5 * float(Z_h * (q_h @ solvent_reaction_term(coords, atom_symbols, m_name, 1.0, eps_bulk, R_mat_ang, R_QD_ang, solvent_term) @ q_h) + Z_l * (q_l @ solvent_reaction_term(coords, atom_symbols, m_name, 1.0, eps_bulk, R_mat_ang, R_QD_ang, solvent_term) @ q_l))),
-    }
-    # The screened interaction this QP model is built on.  The CLI passes it
-    # to the BSE (kernel "qp") so that GW and BSE share the same W.
-    # Delta W enters the kernel with the same Z as the QP shift (scale_w_difference).
-    provenance["w_bse_ev"] = scale_w_difference(W_qd_ev + delta_W_solv, W_bulk_ev, 0.5 * (Z_h + Z_l))
-    provenance["w_bse_z"] = float(0.5 * (Z_h + Z_l))
-    # Components for the xs representation and for orbital-resolved QP levels.
-    provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
-                             "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
-                             "eps_z": float(eps_eff_qd), "bulk_shift": float(bulk_shift),
-                             "bulk_homo_fraction": anchor_bulk_homo_fraction(m_name)}
-    provenance["w_bse_label"] = f"Resta W_QD(eps_eff) + {solvent_term} solvent term"
-
-    if return_details:
-        return total_sgw_scissor, provenance
-    return total_sgw_scissor
+    model = _ScreeningModel("resta", coords, atom_symbols, material_name, eps_out, solvent_term, alpha=alpha,
+                            penn_scaling=penn_scaling)
+    return _estimate_sgw_delta_w(model, dft_gap, C_occ_low, C_virt_low, eps_occ, eps_virt, atom_ao_ranges, Z,
+                                 dynamic_z, self_consistent, max_iter, tol, damping, return_details, frontier_pops)
 
 
 def estimate_evgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.4,
@@ -2345,76 +2156,16 @@ def estimate_evgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out
     )
 
 
-def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
-                             material_name=None, eps_out=2.4, alpha=1.0, dynamic_z=True,
-                             max_iter=25, tol=1e-4, damping=0.5, return_details=False, Z=0.8,
-                             gamma_ao=None, solvent_term="sphere"):
-    """
-    Computes Quasiparticle Self-Consistent GW (qsGW) by updating BOTH eigenvalues
-    and molecular orbitals across the full AO basis using the Atomistic Polarizable
-    Dipole Interaction Model (DIM / Thole Model)::
-
-        H_eff = H_DFT + Delta H_bulk + Z (Sigma^SEX + Sigma^COH)
-        H_eff C_new = S C_new E_new
-
-    Returns:
-        total_scissor, provenance, C_qp, eps_qp
-    """
-    from qdex.constants import HA_TO_EV, ANG_PER_BOHR
-    from scipy.spatial.distance import pdist, squareform
-
-    m_name = material_name.upper() if material_name else "DEFAULT"
-    entry = MATERIAL_DB.get(m_name, None)
-    if entry is None or len(entry) < 9:
-        raise ValueError(f"Material '{m_name}' not found in database or lacks bulk GW data.")
-
-    eps_bulk = float(entry[0])
-    pbe_bulk_gap = float(entry[7])
-    gw_bulk_gap = float(entry[8])
-    bulk_shift = gw_bulk_gap - pbe_bulk_gap
-
-    n_atoms = len(atom_symbols)
+def _estimate_qsgw_delta_w(model, C, eps, S, atom_ao_ranges, homo_index, dynamic_z=True, max_iter=25, tol=1e-4,
+                           damping=0.5, return_details=False, Z=0.8, gamma_ao=None):
+    """Full-AO qsGW (eigenvalues and orbitals) on the Delta W of ``model``."""
+    m = model
+    m_name, eps_bulk, bulk_shift = m.m_name, m.eps_bulk, m.bulk_shift
+    W_bulk_ev, delta_W_solv, gamma_bare_ev = m.W_bulk_ev, m.delta_W_solv, m.gamma_bare_ev
+    tag = f"qsGW-{m.label}"
     n_ao = C.shape[0]
-    metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R_QD_ang = qd_radius(coords, atom_symbols, m_name)
 
-    # 1. Bare Ohno-Klopman interaction matrix (eV)
-    coords_au = coords / ANG_PER_BOHR
-    r_mat_au = squareform(pdist(coords_au))
-    etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
-    damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
-    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
-    gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
-
-    # 2. Bulk Reference Screening Kernel W^{bulk}
-    core_coords = coords
-    if m_name in MATERIAL_ELEMENTS:
-        core_elements = [el.lower() for el in MATERIAL_ELEMENTS[m_name]]
-        core_coords = np.array(
-            [coords[i] for i, sym in enumerate(atom_symbols) if sym.lower() in core_elements]
-        )
-    if len(core_coords) > 1:
-        r_core_ang = squareform(pdist(core_coords))
-        np.fill_diagonal(r_core_ang, np.inf)
-        d_NN_ang = float(np.median(np.min(r_core_ang, axis=1)))
-    else:
-        d_NN_ang = 2.5
-    d_NN_au = d_NN_ang / ANG_PER_BOHR
-
-    R_mat_ang = squareform(pdist(coords))
-    k_s_bulk_au = np.sqrt(max(0.0, eps_bulk - 1.0)) / d_NN_au
-    k_s_bulk_ang = k_s_bulk_au / ANG_PER_BOHR
-    c_inf_bulk = 1.0 / max(1.0, eps_bulk)
-    S_bulk = c_inf_bulk + (1.0 - c_inf_bulk) * np.exp(-k_s_bulk_ang * R_mat_ang)
-    W_bulk_ev = S_bulk * gamma_bare_ev
-
-    # 3. Solvent Reaction Field: Delta W^{solv}
-    eps_out_val = max(1.0, float(eps_out))
-    delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, eps_out_val, eps_bulk, R_mat_ang, R_QD_ang,
-                                         solvent_term)
-
-    # 4. Löwdin Orthogonalization Operators
+    # Löwdin orthogonalization operators
     S_dense = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
     from qdex.lowdin import lowdin_factor
     eigvals_S, U_S = lowdin_factor(S_dense)
@@ -2426,7 +2177,7 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
     if C_dense.shape[1] != n_ao:
         raise ValueError(
             f"Full-AO qsGW requires complete square MO coefficients (got shape {C_dense.shape} for {n_ao} AOs). "
-            f"Please provide full MOs or use non-orbital QP methods (e.g. sgw-dim, evgw-dim)."
+            f"Please provide full MOs or use non-orbital QP methods (e.g. sgw-{m.kind}, evgw-{m.kind})."
         )
     C_low_init = S_half @ C_dense
     eps_dft = np.asarray(eps, dtype=np.float64)
@@ -2442,17 +2193,13 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
     n_iters = 0
     converged = False
 
-    print(f"\n  [qsGW-DIM] Starting Full AO Quasiparticle Self-Consistent Loop ({n_ao}x{n_ao} AOs, Initial Gap = {gap_curr:.4f} eV):")
+    print(f"\n  [{tag}] Starting Full AO Quasiparticle Self-Consistent Loop ({n_ao}x{n_ao} AOs, Initial Gap = {gap_curr:.4f} eV):")
     for it in range(max_iter):
         n_iters += 1
         P_low = 2.0 * (C_curr[:, :n_occ] @ C_curr[:, :n_occ].conj().T)
         Q_low = np.eye(n_ao) - 0.5 * P_low
 
-        scale_alpha = float(np.clip(alpha * (gw_bulk_gap / max(0.5, gap_curr)), 0.20, 1.0))
-        S_dim, _, _, _ = build_dim_screening_factors(
-            coords=coords, atom_symbols=atom_symbols, material_name=m_name, eps_out=eps_out, alpha=scale_alpha
-        )
-        W_qd_ev = S_dim * gamma_bare_ev
+        W_qd_ev, eps_z, note = m.at_gap(gap_curr, strict_penn=True)
         delta_W_atom = np.maximum(0.0, W_qd_ev - W_bulk_ev) + delta_W_solv
 
         if gamma_ao is None:
@@ -2479,12 +2226,9 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
             f_l_iter = 0.5
         H_bulk_low = - (f_h_iter * bulk_shift) * (0.5 * P_low) + (f_l_iter * bulk_shift) * Q_low
 
-        inter_mask = ~np.eye(n_atoms, dtype=bool)
-        eps_eff_med = float(1.0 / np.median(S_dim[inter_mask])) if np.any(inter_mask) else eps_bulk
-
         if dynamic_z:
-            Z_h = compute_dynamic_z(sig_h_stat, gap_curr, eps_eff_med, m_name)
-            Z_l = compute_dynamic_z(sig_l_stat, gap_curr, eps_eff_med, m_name)
+            Z_h = compute_dynamic_z(sig_h_stat, gap_curr, eps_z, m_name)
+            Z_l = compute_dynamic_z(sig_l_stat, gap_curr, eps_z, m_name)
             Z_avg = 0.5 * (Z_h + Z_l)
         else:
             Z_h = float(Z)
@@ -2514,16 +2258,17 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
         fid_h = float((C_low_init[:, homo_index] @ C_new[:, homo_index])**2)
         fid_l = float((C_low_init[:, lumo_index] @ C_new[:, lumo_index])**2)
 
-        print(f"    Iter {it+1:2d}: Gap = {gap_next:.4f} eV, Scissor = +{gap_next - dft_gap:.4f} eV, Diff = {diff:.5f} eV, Zh={Z_h:.3f}, Zl={Z_l:.3f}, Fid_H={fid_h:.5f}, Fid_L={fid_l:.5f}")
+        note_str = f", {note}" if m.kind == "resta" else ""
+        print(f"    Iter {it+1:2d}: Gap = {gap_next:.4f} eV, Scissor = +{gap_next - dft_gap:.4f} eV{note_str}, Diff = {diff:.5f} eV, Zh={Z_h:.3f}, Zl={Z_l:.3f}, Fid_H={fid_h:.5f}, Fid_L={fid_l:.5f}")
 
         if diff < tol:
             converged = True
-            print(f"    -> qsGW-DIM converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
+            print(f"    -> {tag} converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
             break
         C_curr = C_new
         gap_curr = gap_next
     else:
-        print(f"    -> qsGW-DIM reached max iterations ({max_iter}). Final QP Gap = {gap_curr:.4f} eV")
+        print(f"    -> {tag} reached max iterations ({max_iter}). Final QP Gap = {gap_curr:.4f} eV")
 
     C_qp = S_inv_half @ C_new
     eps_qp = eigvals_qp.copy()
@@ -2539,10 +2284,10 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
 
     provenance = {
         "material": m_name,
-        "qp_model": "qsgw_dim",
-        "cluster_radius_ang": R_QD_ang,
-        "bulk_pbe_gap_ev": pbe_bulk_gap,
-        "bulk_gw_gap_ev": gw_bulk_gap,
+        "qp_model": f"qsgw_{m.kind}",
+        "cluster_radius_ang": m.R_QD_ang,
+        "bulk_pbe_gap_ev": m.pbe_bulk_gap,
+        "bulk_gw_gap_ev": m.gw_bulk_gap,
         "bulk_shift_ev": bulk_shift,
         "confinement_shift_ev": final_scissor - bulk_shift,
         "delta_sigma_homo_ev": delta_sigma_h,
@@ -2561,25 +2306,45 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
         "qsgw_iterations": int(n_iters),
         "homo_fidelity": float(fid_h),
         "lumo_fidelity": float(fid_l),
-        "eps_out": float(eps_out_val),
+        "eps_out": float(m.eps_out_val),
         "eps_bulk": float(eps_bulk),
-        "total_scissor_ev": final_scissor,
     }
+    if m.kind == "resta":
+        provenance["eps_eff_qd"] = float(eps_z)
+    provenance["total_scissor_ev"] = final_scissor
     # The screened interaction this QP model is built on.  The CLI passes it
     # to the BSE (kernel "qp") so that GW and BSE share the same W.
     # Delta W enters the kernel with the same Z as the QP shift (scale_w_difference).
     provenance["w_bse_ev"] = scale_w_difference(W_qd_ev + delta_W_solv, W_bulk_ev, Z_avg)
     provenance["w_bse_z"] = float(Z_avg)
     # Components for the xs representation and for orbital-resolved QP levels.
-    provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
-                             "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
-                             "eps_z": float(eps_eff_med), "bulk_shift": float(bulk_shift),
-                             "bulk_homo_fraction": anchor_bulk_homo_fraction(m_name)}
-    provenance["w_bse_label"] = "DIM W_QD (final iteration) + solvent term"
+    provenance["w_parts"] = m.w_parts(W_qd_ev, eps_z)
+    provenance["w_bse_label"] = ("DIM W_QD (final iteration) + solvent term" if m.kind == "dim"
+                                 else "Resta W_QD(eps_eff, final iteration) + solvent term")
 
     if return_details:
         return final_scissor, provenance, C_qp, eps_qp
     return final_scissor
+
+
+def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
+                             material_name=None, eps_out=2.4, alpha=1.0, dynamic_z=True,
+                             max_iter=25, tol=1e-4, damping=0.5, return_details=False, Z=0.8,
+                             gamma_ao=None, solvent_term="sphere"):
+    """
+    Computes Quasiparticle Self-Consistent GW (qsGW) by updating BOTH eigenvalues
+    and molecular orbitals across the full AO basis using the Atomistic Polarizable
+    Dipole Interaction Model (DIM / Thole Model)::
+
+        H_eff = H_DFT + Delta H_bulk + Z (Sigma^SEX + Sigma^COH)
+        H_eff C_new = S C_new E_new
+
+    Returns:
+        total_scissor, provenance, C_qp, eps_qp
+    """
+    model = _ScreeningModel("dim", coords, atom_symbols, material_name, eps_out, solvent_term, alpha=alpha)
+    return _estimate_qsgw_delta_w(model, C, eps, S, atom_ao_ranges, homo_index, dynamic_z, max_iter, tol, damping,
+                                  return_details, Z, gamma_ao)
 
 
 def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, homo_index,
@@ -2596,229 +2361,10 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
     Returns:
         total_scissor, provenance, C_qp, eps_qp
     """
-    from qdex.constants import HA_TO_EV, ANG_PER_BOHR
-    from scipy.spatial.distance import pdist, squareform
-
-    m_name = material_name.upper() if material_name else "DEFAULT"
-    entry = MATERIAL_DB.get(m_name, None)
-    if entry is None or len(entry) < 9:
-        raise ValueError(f"Material '{m_name}' not found in database or lacks bulk GW data.")
-
-    eps_bulk = float(entry[0])
-    pbe_bulk_gap = float(entry[7])
-    gw_bulk_gap = float(entry[8])
-    bulk_shift = gw_bulk_gap - pbe_bulk_gap
-
-    n_atoms = len(atom_symbols)
-    n_ao = C.shape[0]
-    metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R_QD_ang = qd_radius(coords, atom_symbols, m_name)
-
-    # 1. Bare Ohno-Klopman interaction matrix (eV)
-    coords_au = coords / ANG_PER_BOHR
-    r_mat_au = squareform(pdist(coords_au))
-    etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
-    damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
-    mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
-    gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
-
-    # 2. Bulk Reference Screening Kernel W^{bulk}
-    core_coords = coords
-    if m_name in MATERIAL_ELEMENTS:
-        core_elements = [el.lower() for el in MATERIAL_ELEMENTS[m_name]]
-        core_coords = np.array(
-            [coords[i] for i, sym in enumerate(atom_symbols) if sym.lower() in core_elements]
-        )
-    if len(core_coords) > 1:
-        r_core_ang = squareform(pdist(core_coords))
-        np.fill_diagonal(r_core_ang, np.inf)
-        d_NN_ang = float(np.median(np.min(r_core_ang, axis=1)))
-    else:
-        d_NN_ang = 2.5
-    d_NN_au = d_NN_ang / ANG_PER_BOHR
-
-    R_mat_ang = squareform(pdist(coords))
-    k_s_bulk_au = np.sqrt(max(0.0, eps_bulk - 1.0)) / d_NN_au
-    k_s_bulk_ang = k_s_bulk_au / ANG_PER_BOHR
-    c_inf_bulk = 1.0 / max(1.0, eps_bulk)
-    S_bulk = c_inf_bulk + (1.0 - c_inf_bulk) * np.exp(-k_s_bulk_ang * R_mat_ang)
-    W_bulk_ev = S_bulk * gamma_bare_ev
-
-    # 3. Solvent Reaction Field: Delta W^{solv}
-    eps_out_val = max(1.0, float(eps_out))
-    delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, eps_out_val, eps_bulk, R_mat_ang, R_QD_ang,
-                                         solvent_term)
-
-    # 4. Löwdin Orthogonalization Operators
-    S_dense = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
-    from qdex.lowdin import lowdin_factor
-    eigvals_S, U_S = lowdin_factor(S_dense)
-    eigvals_S = np.maximum(eigvals_S, 1e-12)
-    S_half = (U_S * np.sqrt(eigvals_S)[None, :]) @ U_S.T
-    S_inv_half = (U_S * (1.0 / np.sqrt(eigvals_S))[None, :]) @ U_S.T
-
-    C_dense = C.toarray() if hasattr(C, "toarray") else np.asarray(C, dtype=np.float64)
-    if C_dense.shape[1] != n_ao:
-        raise ValueError(
-            f"Full-AO qsGW requires complete square MO coefficients (got shape {C_dense.shape} for {n_ao} AOs). "
-            f"Please provide full MOs or use non-orbital QP methods (e.g. sgw-resta, evgw-resta)."
-        )
-    C_low_init = S_half @ C_dense
-    eps_dft = np.asarray(eps, dtype=np.float64)
-    H_dft_low = (C_low_init * eps_dft[None, :]) @ C_low_init.T
-
-    n_occ = homo_index + 1
-    lumo_index = homo_index + 1
-    dft_gap = float(eps_dft[lumo_index] - eps_dft[homo_index])
-    gap_curr = dft_gap + bulk_shift
-
-    C_curr = C_low_init.copy()
-    H_eff_prev = None
-    n_iters = 0
-    converged = False
-
-    print(f"\n  [qsGW-Resta] Starting Full AO Quasiparticle Self-Consistent Loop ({n_ao}x{n_ao} AOs, Initial Gap = {gap_curr:.4f} eV):")
-    for it in range(max_iter):
-        n_iters += 1
-        P_low = 2.0 * (C_curr[:, :n_occ] @ C_curr[:, :n_occ].conj().T)
-        Q_low = np.eye(n_ao) - 0.5 * P_low
-
-        if penn_scaling and gap_curr > gw_bulk_gap:
-            conf_diff = max(0.0, gap_curr - gw_bulk_gap)
-            eps_eff_qd = penn_eps_eff(eps_bulk, conf_diff, penn_gap_ev(m_name, eps_bulk))
-        else:
-            eps_eff_qd = eps_bulk
-
-        k_s_qd_au = np.sqrt(max(0.0, eps_eff_qd - 1.0)) / d_NN_au
-        k_s_qd_ang = k_s_qd_au / ANG_PER_BOHR
-        c_inf_qd = 1.0 / max(1.0, eps_eff_qd)
-        S_resta = c_inf_qd + (1.0 - c_inf_qd) * np.exp(-k_s_qd_ang * R_mat_ang)
-        W_qd_ev = S_resta * gamma_bare_ev
-        delta_W_atom = np.maximum(0.0, W_qd_ev - W_bulk_ev) + delta_W_solv
-
-        if gamma_ao is None:
-            delta_W_ao = expand_atom_to_ao(delta_W_atom, atom_ao_ranges, n_ao)
-            q_h = np.array([np.sum(np.abs(C_curr[a0:a1, homo_index])**2) for a0, a1 in atom_ao_ranges])
-            q_l = np.array([np.sum(np.abs(C_curr[a0:a1, lumo_index])**2) for a0, a1 in atom_ao_ranges])
-            sig_h_stat = 0.5 * float(q_h @ delta_W_atom @ q_h)
-            sig_l_stat = 0.5 * float(q_l @ delta_W_atom @ q_l)
-        else:
-            # xs: the same screening ratio applied to exact AO density-pair integrals
-            delta_W_ao = ao_delta_w(np.maximum(0.0, W_qd_ev - W_bulk_ev), gamma_bare_ev, delta_W_solv,
-                                    gamma_ao, atom_ao_ranges)
-            q_h = np.abs(C_curr[:, homo_index])**2
-            q_l = np.abs(C_curr[:, lumo_index])**2
-            sig_h_stat = 0.5 * float(q_h @ delta_W_ao @ q_h)
-            sig_l_stat = 0.5 * float(q_l @ delta_W_ao @ q_l)
-
-        tot_sig = sig_h_stat + sig_l_stat
-        if tot_sig > 1e-8:
-            f_h_iter = float(np.clip(sig_h_stat / tot_sig, 0.0, 1.0))
-            f_l_iter = 1.0 - f_h_iter
-        else:
-            f_h_iter = 0.5
-            f_l_iter = 0.5
-        H_bulk_low = - (f_h_iter * bulk_shift) * (0.5 * P_low) + (f_l_iter * bulk_shift) * Q_low
-
-        if dynamic_z:
-            Z_h = compute_dynamic_z(sig_h_stat, gap_curr, eps_eff_qd, m_name)
-            Z_l = compute_dynamic_z(sig_l_stat, gap_curr, eps_eff_qd, m_name)
-            Z_avg = 0.5 * (Z_h + Z_l)
-        else:
-            Z_h = float(Z)
-            Z_l = float(Z)
-            Z_avg = float(Z)
-
-        Sigma_sex = -0.5 * P_low * delta_W_ao
-        Sigma_coh = 0.5 * np.diag(np.diag(delta_W_ao))
-
-        H_eff_target = H_dft_low + H_bulk_low + Z_avg * (Sigma_sex + Sigma_coh)
-        if H_eff_prev is None:
-            H_eff = H_eff_target
-        else:
-            H_eff = (1.0 - damping) * H_eff_prev + damping * H_eff_target
-        H_eff_prev = H_eff.copy()
-
-        eigvals_qp, C_new = np.linalg.eigh(H_eff)
-
-        signs = np.sign(np.sum(C_curr * C_new, axis=0))
-        signs[signs == 0] = 1.0
-        C_new = C_new * signs[None, :]
-
-        gap_next = float(eigvals_qp[lumo_index] - eigvals_qp[homo_index])
-        diff = abs(gap_next - gap_curr)
-
-        fid_h = float((C_low_init[:, homo_index] @ C_new[:, homo_index])**2)
-        fid_l = float((C_low_init[:, lumo_index] @ C_new[:, lumo_index])**2)
-
-        print(f"    Iter {it+1:2d}: Gap = {gap_next:.4f} eV, Scissor = +{gap_next - dft_gap:.4f} eV, eps_eff = {eps_eff_qd:.3f}, Diff = {diff:.5f} eV, Zh={Z_h:.3f}, Zl={Z_l:.3f}, Fid_H={fid_h:.5f}, Fid_L={fid_l:.5f}")
-
-        if diff < tol:
-            converged = True
-            print(f"    -> qsGW-Resta converged in {it+1} iterations! Final QP Gap = {gap_next:.4f} eV")
-            break
-        C_curr = C_new
-        gap_curr = gap_next
-    else:
-        print(f"    -> qsGW-Resta reached max iterations ({max_iter}). Final QP Gap = {gap_curr:.4f} eV")
-
-    C_qp = S_inv_half @ C_new
-    eps_qp = eigvals_qp.copy()
-    final_scissor = float(eps_qp[lumo_index] - eps_qp[homo_index] - dft_gap)
-    delta_sigma_h = float(eps_qp[homo_index] - eps_dft[homo_index])
-    delta_sigma_l = float(eps_qp[lumo_index] - eps_dft[lumo_index] - bulk_shift)
-
-    h_shift_tot = abs(float(eps_qp[homo_index] - eps_dft[homo_index]))
-    l_shift_tot = abs(float(eps_qp[lumo_index] - eps_dft[lumo_index]))
-    tot_shift = max(1e-12, h_shift_tot + l_shift_tot)
-    f_h_final = float(h_shift_tot / tot_shift)
-    f_l_final = float(l_shift_tot / tot_shift)
-
-    provenance = {
-        "material": m_name,
-        "qp_model": "qsgw_resta",
-        "cluster_radius_ang": R_QD_ang,
-        "bulk_pbe_gap_ev": pbe_bulk_gap,
-        "bulk_gw_gap_ev": gw_bulk_gap,
-        "bulk_shift_ev": bulk_shift,
-        "confinement_shift_ev": final_scissor - bulk_shift,
-        "delta_sigma_homo_ev": delta_sigma_h,
-        "delta_sigma_lumo_ev": delta_sigma_l,
-        "f_homo": f_h_final,
-        "f_lumo": f_l_final,
-        "f_homo_micro": f_h_final,
-        "f_lumo_micro": f_l_final,
-        "z_factor": float(Z_avg),
-        "z_homo": float(Z_h),
-        "z_lumo": float(Z_l),
-        "dynamic_z": bool(dynamic_z),
-        "self_consistent": True,
-        "orbital_update": True,
-        "qsgw_converged": bool(converged),
-        "qsgw_iterations": int(n_iters),
-        "homo_fidelity": float(fid_h),
-        "lumo_fidelity": float(fid_l),
-        "eps_out": float(eps_out_val),
-        "eps_bulk": float(eps_bulk),
-        "eps_eff_qd": float(eps_eff_qd),
-        "total_scissor_ev": final_scissor,
-    }
-    # The screened interaction this QP model is built on.  The CLI passes it
-    # to the BSE (kernel "qp") so that GW and BSE share the same W.
-    # Delta W enters the kernel with the same Z as the QP shift (scale_w_difference).
-    provenance["w_bse_ev"] = scale_w_difference(W_qd_ev + delta_W_solv, W_bulk_ev, Z_avg)
-    provenance["w_bse_z"] = float(Z_avg)
-    # Components for the xs representation and for orbital-resolved QP levels.
-    provenance["w_parts"] = {"w_qd": np.array(W_qd_ev, dtype=float), "w_bulk": np.array(W_bulk_ev, dtype=float),
-                             "w_add": np.array(delta_W_solv, dtype=float), "gamma": np.array(gamma_bare_ev, dtype=float),
-                             "eps_z": float(eps_eff_qd), "bulk_shift": float(bulk_shift),
-                             "bulk_homo_fraction": anchor_bulk_homo_fraction(m_name)}
-    provenance["w_bse_label"] = "Resta W_QD(eps_eff, final iteration) + solvent term"
-
-    if return_details:
-        return final_scissor, provenance, C_qp, eps_qp
-    return final_scissor
+    model = _ScreeningModel("resta", coords, atom_symbols, material_name, eps_out, solvent_term, alpha=alpha,
+                            penn_scaling=penn_scaling)
+    return _estimate_qsgw_delta_w(model, C, eps, S, atom_ao_ranges, homo_index, dynamic_z, max_iter, tol, damping,
+                                  return_details, Z, gamma_ao)
 
 
 def build_xs_kernel(shells, atom_symbols, coords, atom_ao_ranges, material_name=None, kernel_mode="bse", alpha=1.0, nthreads=1,
