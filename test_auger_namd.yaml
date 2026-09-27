@@ -17,10 +17,10 @@ environment:
   eps_out: 2.4
 
 quasiparticles:
-  model: "gw"
+  model: "bulk"
 
 excitations:
-  mode: "diagonal_bse"
+  mode: "diagonal_sbse"
   kernel: "resta"
   include_direct_eh: true
   nhomos: 100                  # Optical BSE active space; Auger continuum accesses all 2500 MOs

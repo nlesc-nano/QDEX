@@ -107,6 +107,52 @@ def align_spinor_phases_and_crossings(S_mat, U_list, track_crossings=True, lock_
     return S_mat, U_list, perm
 
 
+DIAGONAL_MODES = ("diagonal_bse", "diagonal_sbse")
+INDEPENDENT_MODES = ("independent_qp", "independent_dft")
+
+
+def frame_kernels(syms, coords, kernel="resta", material=None, alpha=1.0, eps_out=2.0):
+    """Direct kernel W and bare exchange interaction gamma for one frame (atom resolution, eV)."""
+    from qdex.hardness import build_gamma
+    k = str(kernel).lower()
+    coords = np.asarray(coords, dtype=float)
+    gamma = build_gamma(atom_symbols=syms, coords=coords, alpha=1.0, beta=0.0)
+    if k == "resta":
+        from qdex.hardness import build_resta_mnok
+        _, w = build_resta_mnok(atom_symbols=syms, coords=coords, alpha=alpha, material_name=material, eps_out=eps_out)
+    elif k in ("dim", "dipole"):
+        from qdex.hardness import build_dim_mnok
+        w = build_dim_mnok(syms, coords, material_name=material, alpha=alpha)[0]
+    elif k in ("bse", "mnok"):
+        w = build_gamma(atom_symbols=syms, coords=coords, alpha=alpha, beta=0.0)
+    else:
+        raise ValueError(f"NAMD precompute: kernel '{kernel}' is not supported (use resta, dim or bse).")
+    return w, gamma
+
+
+def _diag_exchange(C_occ_list, C_virt_list, SC_occ_list, SC_virt_list, atom_ao_ranges, gamma, chunk_elems=4e7):
+    """K^x_{ia,ia} = q^{ia} . gamma . q^{ia} with Mulliken transition charges, summed over spin components.
+
+    C_*_list hold one coefficient block per spin component (one for spin-free orbitals, alpha and beta
+    for spinors); the charge of each component is added before contraction.
+    """
+    n_o = C_occ_list[0].shape[1]
+    n_v = C_virt_list[0].shape[1]
+    n_at = len(atom_ao_ranges)
+    kx = np.zeros((n_o, n_v))
+    step = max(1, int(chunk_elems // max(1, n_v * n_at)))
+    for i0 in range(0, n_o, step):
+        i1 = min(n_o, i0 + step)
+        q = np.zeros((i1 - i0, n_v, n_at), dtype=np.result_type(*C_occ_list, *C_virt_list))
+        for Co, Cv, SCo, SCv in zip(C_occ_list, C_virt_list, SC_occ_list, SC_virt_list):
+            for A, (a0, a1) in enumerate(atom_ao_ranges):
+                q[:, :, A] += 0.5 * (Co[a0:a1, i0:i1].conj().T @ SCv[a0:a1, :]
+                                     + SCo[a0:a1, i0:i1].conj().T @ Cv[a0:a1, :])
+        qg = q @ gamma
+        kx[i0:i1] = np.real(np.einsum("iam,iam->ia", qg, q.conj()))
+    return kx
+
+
 def compute_frame_diagonal_bse(
     xyz_path,
     mo_path,
@@ -119,8 +165,13 @@ def compute_frame_diagonal_bse(
     w_resta=None,
     nhomos=None,
     nlumos=None,
-    excitation_mode="diagonal_bse",
+    excitation_mode="diagonal_sbse",
     include_exchange=True,
+    include_direct_eh=True,
+    kernel=None,
+    material=None,
+    alpha=1.0,
+    eps_out=2.0,
     energy_window=None,
     fixed_pair_mask=None,
     compute_dipoles=True,
@@ -134,10 +185,21 @@ def compute_frame_diagonal_bse(
     Computes single-particle QP energies, diagonal BSE exciton energies,
     and transition dipoles / oscillator strengths for a single frame.
     Supports both spin-free (RKS) and 2-component spinor (SOC) representations.
+
+    Diagonal modes: E_ia = e_a^QP - e_i^QP + k_x K^x_ia,ia - K^d_ia,ia with k_x = 2 (spin-free
+    singlet) or 1 (spinors). With ``kernel`` given, W and the bare gamma are rebuilt from this
+    frame's geometry; otherwise ``w_resta`` (fixed) is used for K^d and K^x is skipped.
     """
     syms, coords = read_xyz(xyz_path)
     shells = build_shell_dicts(syms, coords, basis_dict)
     n_atoms = len(atom_ao_ranges)
+    mode = str(excitation_mode).lower()
+    use_kernel = mode in DIAGONAL_MODES
+    gamma_bare = None
+    if use_kernel and kernel is not None:
+        w_resta, gamma_bare = frame_kernels(syms, coords, kernel, material, alpha, eps_out)
+    do_kd = use_kernel and include_direct_eh and w_resta is not None
+    do_kx = use_kernel and include_exchange and gamma_bare is not None
 
     C_all, eps_all, occ_all = read_mos_mbse(mo_path, n_ao)
     eps_all = eps_all * HA_TO_EV
@@ -168,12 +230,18 @@ def compute_frame_diagonal_bse(
         a_indices = np.tile(np.arange(n_virt_act), n_occ_act)
         E_sp = qp_eps_virt[a_indices] - qp_eps_occ[i_indices]
 
-        # Electron-hole direct interaction (Kd) for diagonal BSE
+        # Electron-hole interaction for diagonal BSE: direct K^d and exchange K^x
         Kd_mat = None
-        if excitation_mode == "diagonal_bse" and include_exchange and w_resta is not None:
+        Kx_mat = None
+        E_diag = E_sp.copy()
+        if do_kd or do_kx:
             S_ao_intra = compute_cross_overlap_ao(shells, shells, nthreads=nthreads)
             SC_occ = S_ao_intra @ C_occ
             SC_virt = S_ao_intra @ C_virt
+        if do_kx:
+            Kx_mat = _diag_exchange([C_occ], [C_virt], [SC_occ], [SC_virt], atom_ao_ranges, gamma_bare)
+            E_diag = E_diag + 2.0 * Kx_mat[i_indices, a_indices]
+        if do_kd:
 
             q_occ_diag = np.zeros((n_occ_act, n_atoms), dtype=np.float64)
             q_virt_diag = np.zeros((n_virt_act, n_atoms), dtype=np.float64)
@@ -184,9 +252,7 @@ def compute_frame_diagonal_bse(
             W_virt_diag = q_virt_diag @ w_resta.T
             Kd_mat = q_occ_diag @ W_virt_diag.T
             Kd_pairs = Kd_mat[i_indices, a_indices]
-            E_diag = E_sp - Kd_pairs
-        else:
-            E_diag = E_sp
+            E_diag = E_diag - Kd_pairs
 
         if compute_dipoles:
             mu_ao_x, mu_ao_y, mu_ao_z = compute_dipole_ao(shells, nthreads=nthreads)
@@ -284,7 +350,9 @@ def compute_frame_diagonal_bse(
         U_virt_beta  = U_beta[:, n_occ_sp:n_occ_sp + n_virt_sp]
 
         Kd_mat = None
-        if excitation_mode == "diagonal_bse" and include_exchange and w_resta is not None:
+        Kx_mat = None
+        E_diag = E_sp.copy()
+        if do_kd or do_kx:
             SC_act = S_ao_intra @ C_act
             C_sp_a = C_act @ U_alpha
             C_sp_b = C_act @ U_beta
@@ -300,6 +368,13 @@ def compute_frame_diagonal_bse(
             SC_virt_sp_a = SC_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
             SC_occ_sp_b = SC_sp_b[:, :n_occ_sp]
             SC_virt_sp_b = SC_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
+        if do_kx:
+            # Spinor transition densities: exchange enters once (K^x - K^d).
+            Kx_mat = _diag_exchange([C_occ_sp_a, C_occ_sp_b], [C_virt_sp_a, C_virt_sp_b],
+                                    [SC_occ_sp_a, SC_occ_sp_b], [SC_virt_sp_a, SC_virt_sp_b],
+                                    atom_ao_ranges, gamma_bare)
+            E_diag = E_diag + Kx_mat[i_indices, a_indices]
+        if do_kd:
 
             dens_occ = np.real(C_occ_sp_a.conj() * SC_occ_sp_a + C_occ_sp_b.conj() * SC_occ_sp_b)
             dens_virt = np.real(C_virt_sp_a.conj() * SC_virt_sp_a + C_virt_sp_b.conj() * SC_virt_sp_b)
@@ -313,9 +388,7 @@ def compute_frame_diagonal_bse(
             W_virt_diag = q_virt_diag @ w_resta.T
             Kd_mat = q_occ_diag @ W_virt_diag.T
             Kd_pairs = Kd_mat[i_indices, a_indices]
-            E_diag = E_sp - Kd_pairs
-        else:
-            E_diag = E_sp
+            E_diag = E_diag - Kd_pairs
 
         if compute_dipoles:
             mu_ao_x, mu_ao_y, mu_ao_z = compute_dipole_ao(shells, nthreads=nthreads)
@@ -399,12 +472,33 @@ def precompute_namd_data(config):
 
     nhomos = phys_cfg.get("nhomos", None)
     nlumos = phys_cfg.get("nlumos", None)
-    qp_model = phys_cfg.get("qp_gap", "gw")
-    eps_out = float(phys_cfg.get("eps_out", 2.4))
-    excitation_mode = phys_cfg.get("excitation_mode", "diagonal_bse").lower()
-    include_exchange = phys_cfg.get("include_exchange", phys_cfg.get("exchange", True))
-    kernel = phys_cfg.get("kernel", "resta")
+    # Defaults: sBSE on the diagonal (PBE + bulk GW correction, bulk Resta W, K^x and K^d).
+    qp_model = str(phys_cfg.get("qp_gap", "bulk"))
+    eps_out = float(phys_cfg.get("eps_out", 2.0))
+    excitation_mode = str(phys_cfg.get("excitation_mode", "diagonal_sbse")).lower()
+    include_exchange = bool(phys_cfg.get("include_exchange", True))                     # K^x
+    include_direct_eh = bool(phys_cfg.get("include_direct_eh", phys_cfg.get("exchange", True)))  # K^d
+    kernel = phys_cfg.get("kernel", None) or "resta"
     alpha = float(phys_cfg.get("alpha", 1.0))
+
+    qp_key = qp_model.lower()
+    if excitation_mode not in DIAGONAL_MODES + INDEPENDENT_MODES:
+        raise ValueError(f"NAMD precompute supports diagonal_sbse, diagonal_bse, independent_qp and "
+                         f"independent_dft, not '{excitation_mode}'.")
+    if qp_key not in ("bulk", "none", "pbe", "dft", "brus", "gw"):
+        try:
+            float(qp_model)
+        except ValueError:
+            raise ValueError(f"NAMD precompute: QP model '{qp_model}' is not supported (it needs a QP step "
+                             "per frame). Use bulk (default), none, brus, gw or a gap in eV.") from None
+    if qp_key == "gw" and excitation_mode in DIAGONAL_MODES and str(kernel).lower() != "resta-sphere":
+        print("  [NAMD Warning] qp_gap 'gw' contains the surface polarization, but the kernel "
+              f"'{kernel}' has no matching electron-hole image: the excitons are too high. "
+              "Use qp_gap: bulk with diagonal_sbse for a consistent treatment.")
+    if qp_key == "gw" and str(kernel).lower() == "resta-sphere":
+        raise ValueError("NAMD precompute: the resta-sphere kernel is not available; use qp_gap: bulk.")
+    if excitation_mode == "independent_dft":
+        qp_model, qp_key = "none", "none"
 
     precompute_dir = storage_cfg.get("precompute_dir", "namd_precomputed")
     energy_window = storage_cfg.get("active_energy_window_ev", None)
@@ -503,17 +597,8 @@ def precompute_namd_data(config):
     else:
         f_homo, f_lumo = 0.5, 0.5
 
-    # Screened direct kernel W (computed once on frame 0)
+    # The direct kernel W and the bare exchange gamma are rebuilt for every frame (frame_kernels).
     w_resta = None
-    if excitation_mode == "diagonal_bse" and include_exchange:
-        if str(kernel).lower() == "resta":
-            from qdex.hardness import build_resta_mnok
-            _, w_resta = build_resta_mnok(
-                atom_symbols=syms0, coords=coords0, alpha=alpha, material_name=material, eps_out=eps_out
-            )
-        else:
-            from qdex.hardness import build_gamma
-            w_resta = build_gamma(atom_symbols=syms0, coords=coords0, alpha=alpha, beta=0.0)
 
     print("=" * 65)
     print(" QDEX - NAMD Precomputation Pipeline")
@@ -522,7 +607,9 @@ def precompute_namd_data(config):
     print(f"  Frames to process    : {n_frames} (dt = {dt_nuc_fs:.2f} fs)")
     print(f"  Precompute output    : {precompute_dir}")
     print(f"  Active Space         : nhomos={nhomos}, nlumos={nlumos}")
-    print(f"  Excitation Framework : {excitation_mode.upper()} (kernel: {kernel}, exchange: {include_exchange})")
+    print(f"  QP Model             : {qp_model}" + ("  (PBE orbitals + bulk GW correction)" if qp_key == "bulk" else ""))
+    print(f"  Excitation Framework : {excitation_mode.upper()} (kernel: {kernel}, per frame; "
+          f"K^x: {include_exchange}, K^d: {include_direct_eh})")
     if energy_window:
         print(f"  Active Energy Window : [{energy_window[0]:.2f}, {energy_window[1]:.2f}] eV")
     if cluster_radius:
@@ -562,6 +649,11 @@ def precompute_namd_data(config):
             nlumos=nlumos,
             excitation_mode=excitation_mode,
             include_exchange=include_exchange,
+            include_direct_eh=include_direct_eh,
+            kernel=kernel,
+            material=material,
+            alpha=alpha,
+            eps_out=eps_out,
             energy_window=energy_window if k == 0 else None,
             fixed_pair_mask=fixed_pair_mask,
             compute_dipoles=(k == 0),

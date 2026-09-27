@@ -17,6 +17,51 @@ Implementation entry point:
    precompute_namd_data(config)
 
 
+Excited states of each frame
+----------------------------
+
+The precompute evaluates the excited states of every frame with a diagonal framework (one energy per
+transition, no mixing), so that the same transitions can be followed along the trajectory.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 50
+
+   * - Key
+     - Default
+     - Meaning
+   * - ``quasiparticles.model``
+     - ``bulk``
+     - ``bulk`` (PBE orbitals + bulk GW correction, one constant for all frames), ``none``, ``brus``,
+       ``gw`` or a gap in eV. Models that need a QP step per frame (``sgw-*``, ``evgw-*``, ``qsgw-*``)
+       are rejected.
+   * - ``excitations.mode``
+     - ``diagonal_sbse``
+     - ``diagonal_sbse`` / ``diagonal_bse`` (same solver), ``independent_qp``, ``independent_dft``
+   * - ``excitations.kernel``
+     - ``resta``
+     - ``resta`` (bulk Resta W), ``dim`` or ``bse``; rebuilt from every frame's geometry
+   * - ``excitations.include_exchange``, ``include_direct_eh``
+     - true
+     - K\ :sup:`x` and K\ :sup:`d`
+
+Each transition energy is
+
+.. math::
+
+   E_{ia}(t) = \varepsilon_a(t) - \varepsilon_i(t) + \Delta_{\mathrm{bulk}}
+   + k_x K^x_{ia,ia}(t) - K^d_{ia,ia}(t),
+
+with k\ :sub:`x` = 2 (spin-free singlet) or 1 (spinors with SOC), Mulliken charges and the MNOK
+representation (:doc:`/excitons/sbse`). The sBSE is the consistent choice for dynamics: the surface
+polarization is dropped from both the orbital energies and the kernel, the correction is one constant
+for all frames, and the energy fluctuations along the trajectory come only from the KS levels and the
+interaction terms.
+
+``gw`` with the bulk kernel is accepted for old runs with a warning: its QP gap contains the surface
+polarization but the kernel lacks the matching electron–hole image, which places the excitons too high
+(0.4 eV for the 2 nm CdSe cluster at ε_out = 2).
+
 11. CLI Flags & YAML Configuration Reference
 --------------------------------------------
 

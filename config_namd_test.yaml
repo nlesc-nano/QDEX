@@ -8,10 +8,10 @@ environment:
   eps_out: 2.4
 
 quasiparticles:
-  model: gw
+  model: bulk
 
 excitations:
-  mode: diagonal_bse
+  mode: diagonal_sbse
   include_direct_eh: true
   kernel: resta
   nhomos: 100
