@@ -72,7 +72,7 @@ class CdSeIntegrationTest(unittest.TestCase):
         work, log = self._run("--qp_gap", "gw", "--kernel", "resta-sphere", "--eps-out", "1.0")
         self.assertAlmostEqual(_qp_gap(log), 4.193, places=2)
         e1, f1 = _first_state(work)
-        self.assertAlmostEqual(e1, 2.615, places=2)
+        self.assertAlmostEqual(e1, 2.589, places=2)
         self.assertGreater(f1, 0.1)
 
     def test_gw_legacy_reference(self):
@@ -81,7 +81,7 @@ class CdSeIntegrationTest(unittest.TestCase):
                               "--qp-residual-scaling", "power")
         self.assertAlmostEqual(_qp_gap(log), 4.070, places=2)
         e1, _ = _first_state(work)
-        self.assertAlmostEqual(e1, 3.843, places=2)
+        self.assertAlmostEqual(e1, 3.822, places=2)
 
     def test_default_config_runs(self):
         # The example config in the current YAML layout (quasiparticles/integrals/excitations): sgw-resta.

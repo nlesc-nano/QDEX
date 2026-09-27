@@ -834,16 +834,36 @@ def qd_radius(coords, atom_symbols, material_name=None, definition=None):
     return _RADIUS_CACHE[key]
 
 
-MNOK_EXPONENT = 2.0  # 2.0 = Ohno-Klopman (default), 1.0 = Mataga-Nishimoto
+# MNOK interaction gamma_AB = (r^beta + a_AB^beta)^(-1/beta), a_AB = (1/(s eta_A) + 1/(s eta_B)) / 2.
+# Set from integrals.mnok_exponent, mnok_exponent_exchange and mnok_onsite.
+MNOK_EXPONENT = 2.0        # beta for all MNOK interactions: 2 = Ohno-Klopman (default), 1 = Mataga-Nishimoto
+MNOK_EXPONENT_K = None     # beta of the exchange gamma (K^x); None = MNOK_EXPONENT
+MNOK_ONSITE_SCALE = 2.0    # s: 2 -> gamma_AA = IP - EA (default, benchmarked against xs); 1 -> eta = (IP-EA)/2
 
 
-def _mnok_denom(r_mat_au, damp_mat_au):
-    """MNOK denominator (r^beta + damp^beta)^(1/beta). Default beta=2 (Ohno-Klopman)."""
-    if MNOK_EXPONENT == 2.0:
+def set_mnok_options(exponent=2.0, exponent_exchange=None, onsite="ip_ea", verbose=True):
+    """Set the MNOK exponent(s) and on-site convention used by every MNOK builder."""
+    global MNOK_EXPONENT, MNOK_EXPONENT_K, MNOK_ONSITE_SCALE
+    MNOK_EXPONENT = float(exponent if exponent not in (None, "") else 2.0)
+    MNOK_EXPONENT_K = None if exponent_exchange in (None, "", "none") else float(exponent_exchange)
+    onsite = str(onsite or "ip_ea").lower()
+    if onsite not in ("eta", "ip_ea"):
+        raise ValueError(f"mnok_onsite must be 'eta' or 'ip_ea', not '{onsite}'")
+    MNOK_ONSITE_SCALE = 2.0 if onsite == "ip_ea" else 1.0
+    if verbose and (MNOK_EXPONENT, MNOK_EXPONENT_K, MNOK_ONSITE_SCALE) != (2.0, None, 2.0):
+        k = MNOK_EXPONENT_K if MNOK_EXPONENT_K is not None else MNOK_EXPONENT
+        print(f"  [MNOK] exponent {MNOK_EXPONENT:g}, exchange exponent {k:g}, "
+              f"on-site {'IP - EA' if MNOK_ONSITE_SCALE == 2.0 else 'eta'}")
+
+
+def _mnok_denom(r_mat_au, damp_mat_au, exponent=None):
+    """MNOK denominator (r^beta + damp^beta)^(1/beta). Default beta = MNOK_EXPONENT (2, Ohno-Klopman)."""
+    beta = float(MNOK_EXPONENT if exponent is None else exponent)
+    if beta == 2.0:
         return np.sqrt(r_mat_au**2 + damp_mat_au**2)
-    elif MNOK_EXPONENT == 1.0:
+    elif beta == 1.0:
         return r_mat_au + damp_mat_au
-    return np.power(r_mat_au**MNOK_EXPONENT + damp_mat_au**MNOK_EXPONENT, 1.0 / MNOK_EXPONENT)
+    return np.power(r_mat_au**beta + damp_mat_au**beta, 1.0 / beta)
 
 
 # =====================================================================
@@ -904,7 +924,7 @@ def build_stda_gammas(atom_symbols, coords, ax, eta_dict=HARDNESS_DICT):
 # =====================================================================
 # Model 1: Classic MNOK Kernel (sTDA style)
 # =====================================================================
-def build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT):
+def build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT, exponent=None):
     """
     Standard Ohno-Klopman kernel. 
     `alpha` scales the entire matrix (macroscopic screening, e.g., 1/eps_inf).
@@ -917,10 +937,10 @@ def build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT):
     
     etas_ev = np.array([eta_dict.get(s.lower(), 5.0) for s in atom_symbols])
     etas_au = etas_ev / HA_TO_EV_val
-    a_au = 1.0 / etas_au
+    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
     damp_mat_au = 0.5 * (a_au[:, np.newaxis] + a_au[np.newaxis, :])
     
-    gamma_au = 1.0 / _mnok_denom(r_mat_au, damp_mat_au)
+    gamma_au = 1.0 / _mnok_denom(r_mat_au, damp_mat_au, exponent)
     gamma_ev = gamma_au * HA_TO_EV
     
     # Apply macroscopic screening
@@ -1000,7 +1020,7 @@ def build_resta_mnok(atom_symbols, coords, alpha, material_name, eps_out=2.0, et
     r_mat_au = squareform(pdist(coords_au))
 
     etas_au = np.array([eta_dict[s.lower()] for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / etas_au
+    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
 
     damp_mat_au = 0.5 * (a_au[:, np.newaxis] + a_au[np.newaxis, :])
     mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
@@ -1213,7 +1233,7 @@ def build_dim_mnok(atom_symbols, coords, material_name=None, alpha=1.0, eta_dict
     r_mat_au = squareform(pdist(coords_au))
 
     etas_au = np.array([eta_dict[s.lower()] for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / etas_au
+    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
 
     damp_mat_au = 0.5 * (a_au[:, np.newaxis] + a_au[np.newaxis, :])
     mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
@@ -1288,7 +1308,7 @@ def build_sbse_kernel(atom_symbols, coords, atom_ao_ranges=None, shells=None,
     coords_bohr = coords / ANG_PER_BOHR
     r_mat_au = squareform(pdist(coords_bohr))
     etas_au = np.array([eta_dict.get(s.lower(), 7.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / etas_au
+    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
     damp_mat_au = 0.5 * (a_au[:, np.newaxis] + a_au[np.newaxis, :])
     J_bare_atom_au = 1.0 / _mnok_denom(r_mat_au, damp_mat_au)
 
@@ -1744,7 +1764,7 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
     coords_au = coords / ANG_PER_BOHR
     r_mat_au = squareform(pdist(coords_au))
     etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / etas_au
+    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
     damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
     mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
@@ -2004,7 +2024,7 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
     coords_au = coords / ANG_PER_BOHR
     r_mat_au = squareform(pdist(coords_au))
     etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / etas_au
+    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
     damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
     mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
@@ -2303,7 +2323,7 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
     coords_au = coords / ANG_PER_BOHR
     r_mat_au = squareform(pdist(coords_au))
     etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / etas_au
+    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
     damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
     mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV
@@ -2539,7 +2559,7 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
     coords_au = coords / ANG_PER_BOHR
     r_mat_au = squareform(pdist(coords_au))
     etas_au = np.array([HARDNESS_DICT.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
-    a_au = 1.0 / etas_au
+    a_au = 1.0 / (MNOK_ONSITE_SCALE * etas_au)
     damp_mat_au = 0.5 * (a_au[:, None] + a_au[None, :])
     mnok_denom_au = _mnok_denom(r_mat_au, damp_mat_au)
     gamma_bare_ev = (1.0 / mnok_denom_au) * HA_TO_EV

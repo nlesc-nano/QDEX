@@ -934,6 +934,15 @@ def main():
     parser.add_argument("--selection-shift", dest="selection_shift", choices=["on", "off"], default="on",
                         help="Lower the primary diagonal by the second-order contributions of the rejected "
                              "transitions (std2 behaviour, default on).")
+    parser.add_argument("--mnok-exponent", dest="mnok_exponent", type=float, default=2.0,
+                        help="Exponent beta of the MNOK interaction (r^beta + a^beta)^(-1/beta) for all interactions "
+                             "(2 = Ohno-Klopman, default; 1 = Mataga-Nishimoto).")
+    parser.add_argument("--mnok-exponent-exchange", dest="mnok_exponent_exchange", type=float, default=None,
+                        help="Exponent of the exchange interaction K^x only (default: mnok_exponent).")
+    parser.add_argument("--mnok-onsite", dest="mnok_onsite", choices=["eta", "ip_ea"], default="ip_ea",
+                        help="On-site value of the MNOK interaction: 'ip_ea' (IP - EA = 2 eta, the monopole (ii|ii); "
+                             "default, reproduces the exact xs exchange) or 'eta' (Ghosh-Islam hardness, (IP-EA)/2; "
+                             "the earlier convention).")
     parser.add_argument("--qp-radius", dest="qp_radius", choices=["saxs", "hull"], default="saxs",
                         help="Radius of the dielectric sphere and of the Brus confinement: 'saxs' (default, SAXS-"
                              "equivalent sphere of the inorganic electron density) or 'hull' (core hull + 1.25 A). "
@@ -1121,6 +1130,8 @@ def main():
     validate_args(args, parser)
     import qdex.hardness as _hardness
     _hardness.RADIUS_DEFINITION = str(getattr(args, "qp_radius", "saxs") or "saxs").lower()
+    _hardness.set_mnok_options(getattr(args, "mnok_exponent", 2.0), getattr(args, "mnok_exponent_exchange", None),
+                               getattr(args, "mnok_onsite", "ip_ea"))
     compute_device, dev_obj = resolve_device(args.device, verbose=True)
     if config_path:
         print(f"Loading configuration from {config_path}...")

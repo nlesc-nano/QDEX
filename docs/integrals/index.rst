@@ -13,6 +13,8 @@ represented on the atomic basis.
    integrals:
      representation: mnok      # mnok (atom-condensed) or xs (ZDO AO density pairs)
      charges: mulliken         # MNOK population partition: mulliken or lowdin (xs uses Löwdin)
+     # mnok_exponent: 2        # MNOK exponent beta
+     # mnok_onsite: ip_ea      # on-site value IP - EA = 2 eta (benchmarked against xs)
 
 .. toctree::
    :maxdepth: 1

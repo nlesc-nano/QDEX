@@ -167,6 +167,16 @@ integrals
    * - ``charges`` [``--charge_type``]
      - ``mulliken``
      - population partition of the MNOK densities: ``mulliken`` or ``lowdin`` (xs always uses Löwdin)
+   * - ``mnok_exponent`` [``--mnok-exponent``]
+     - 2
+     - exponent β of the MNOK interaction (r^β + a^β)^(−1/β), all interactions
+   * - ``mnok_exponent_exchange`` [``--mnok-exponent-exchange``]
+     - = mnok_exponent
+     - β of the exchange interaction only
+   * - ``mnok_onsite`` [``--mnok-onsite``]
+     - ``ip_ea``
+     - on-site value IP − EA = 2η (``ip_ea``) or η (``eta``, earlier convention);
+       :doc:`/integrals/representation`
    * - ``beta`` [``--beta``]
      - 0
      - MNOK parameter of the bare γ

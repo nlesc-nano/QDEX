@@ -100,26 +100,26 @@ appropriate for molecules, but not for a dielectric: in a large dot the attracti
      - 2.699
      - 2.576
    * - sBSE: ``bulk``, bulk Resta W
-     - 3.756
-     - 2.800
-     - 2.680
+     - 3.323
+     - 2.779
+     - 2.652
    * - ΔW models (``sgw-*``, ``qsgw-dim``), toluene
-     - 3.90–3.91
-     - 2.97–2.99
-     - 2.84–2.87
+     - 3.41–3.43
+     - 2.96–3.00
+     - 2.83–2.85
 
 * **a_x = 0 on PBE orbitals** gives the KS gap plus a small exchange term (+0.11 eV at 1.2 nm,
   +0.04 eV at 2 nm): no binding.
 * **a_x = 0.25 on PBE orbitals** gives S₁ below the KS gap. It is the inconsistent combination: a
   hybrid-strength attraction on a gap that exact exchange has not opened.
 * **Dielectric variant vs sBSE.** The binding relative to the bulk-corrected gap is 0.40 eV (sTDA) vs
-  0.45 eV (sBSE) at 1.2 nm, but 0.33 vs 0.23 eV at 2 nm. sTDA screens the short range more (on-site
+  0.89 eV (sBSE) at 1.2 nm, but 0.33 vs 0.25 eV at 2 nm. sTDA screens the short range more (on-site
   a_x η instead of the unscreened Resta value) and the long range not at all. The long range grows in
   weight with size, so sTDA binds increasingly more than the sBSE in larger dots and does not reach the
   bulk exciton limit.
 * **Solvent.** sTDA contains no environment term; S₁ is independent of ε_out.
-* **Against experiment** (2 nm, window 2.77–3.31 eV): the dielectric sTDA gives 2.58 eV, 0.1 eV below
-  the sBSE and 0.3 eV below the ΔW models.
+* **Against experiment** (2 nm, window 2.77–3.31 eV): the dielectric sTDA gives 2.58 eV, 0.08 eV below
+  the sBSE and 0.25 eV below the ΔW models.
 * **diagonal_stda** recovers most of the coupled result here (2.72 vs 2.70 eV, dielectric, 2 nm).
 
 For dots, sTDA with PBE orbitals is therefore a reference, not a replacement for the sBSE or the ΔW

@@ -49,8 +49,12 @@ class SpherePolarizationTests(unittest.TestCase):
                            [0.0, -2.6, 0.0], [0.0, 0.0, 2.6], [0.0, 0.0, -2.6]])
         syms = ["Cd"] + ["Se"] * 6
         G = build_sphere_reaction_field(coords, syms, "CDSE", eps_out=1.0)
-        R = get_cluster_size_metrics(coords, syms, "CDSE")["R_eff_hull"]
+        from qdex.hardness import qd_radius
+        R = qd_radius(coords, syms, "CDSE")                     # SAXS radius (default)
         eps = MATERIAL_DB["CDSE"][0]
+        G_hull = build_sphere_reaction_field(coords, syms, "CDSE", eps_out=1.0, radius_definition="hull")
+        R_hull = get_cluster_size_metrics(coords, syms, "CDSE")["R_eff_hull"]
+        self.assertAlmostEqual(G_hull[0, 0], COULOMB_EV_ANG / R_hull * (1.0 - 1.0 / eps), places=10)
         self.assertAlmostEqual(G[0, 0], COULOMB_EV_ANG / R * (1.0 - 1.0 / eps), places=10)
         np.testing.assert_allclose(G, G.T, atol=1e-12)
         self.assertTrue(np.all(np.diag(G) > 0.0))
