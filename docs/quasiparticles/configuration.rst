@@ -1,9 +1,7 @@
 Configuration
 =============
 
-Part of :doc:`/quasiparticles/index`. The QP correction is set in the ``quasiparticles`` section, the
-dielectric environment in ``environment`` and the integral representation in ``integrals``. All keys
-are listed in :doc:`/getting_started/configuration`.
+Part of :doc:`/quasiparticles/index`. All keys are listed in :doc:`/getting_started/configuration`.
 
 Example for a size series in toluene:
 
@@ -13,18 +11,8 @@ Example for a size series in toluene:
      eps_out: 2.24
 
    quasiparticles:
-     model: sgw-resta          # or sgw-dim, evgw-*, qsgw-*
-     # z: derived              # defaults: plasmon-pole Z, one-shot ΔCOHSEX,
-     # selfenergy: cohsex      # all orbitals, sphere solvent term,
-     # levels: orbital         # anchor residual scaled by E_conf
+     model: sgw-resta          # none, brus, sgw-resta, sgw-dim, evgw-*, qsgw-*
+     # z: derived              # defaults: plasmon-pole Z of the same dielectric model,
+     # selfenergy: cohsex      # one-shot ΔCOHSEX for all orbitals,
+     # levels: orbital         # sphere reaction field for the environment
      # solvent_term: sphere
-     # anchor_residual: on
-
-   integrals:
-     representation: mnok      # or xs
-
-Calibrating a model on the anchor cluster (vacuum) stores its residual:
-
-.. code-block:: bash
-
-   qdex --config config.yaml --eps-out 1.0 --qp-anchor-calibrate

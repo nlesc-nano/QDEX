@@ -17,7 +17,6 @@ For one dominant transition h → e, the lowest exciton is
 
    S_1 \approx \underbrace{(\varepsilon_e - \varepsilon_h) + \Delta_{\mathrm{bulk}}}_{\text{KS + bulk}}
    + \underbrace{Z_e\Delta\Sigma_e - Z_h\Delta\Sigma_h}_{\text{QP: }\Delta W}
-   + \underbrace{r_L s - r_H s}_{\text{residual}}
    - \underbrace{(hh|W^{\mathrm{bulk}}|ee)}_{\text{bulk binding}}
    - \underbrace{\bar Z\,(hh|\Delta W|ee)}_{\text{K}^d\text{: }\Delta W}
    + 2(he|v|he).
@@ -99,19 +98,14 @@ they are not. The difference
   hole, not the other occupied states.
 
 It therefore goes straight into S₁. At 1.2 nm (``sgw-resta``), ΔSEX is −3.01 eV for the HOMO and
-−0.22 eV for the LUMO. It raises the QP gap by 0.33 eV over the classical value, and S₁ by 0.43 eV
-before calibration. It is the physical reason why a microscopic ΔW (Resta, DIM) changes S₁ and a
+−0.22 eV for the LUMO. It raises the QP gap by 0.33 eV over the classical value, and S₁ by 0.43 eV. It is the physical reason why a microscopic ΔW (Resta, DIM) changes S₁ and a
 purely classical one does not.
 
-4. Terms that are only in the QP gap
-------------------------------------
+4. The bulk correction
+----------------------
 
-* **Δ_bulk.** The bulk GW correction is not ΔW. Its binding counterpart is the bulk W in K\ :sup:`d`,
-  which is small (0.2–0.3 eV at 2 nm).
-* **The anchor residual** :math:`(r_L - r_H)\,s(R)`. By construction it holds what the static
-  ΔCOHSEX misses: band stretching, dynamical effects beyond Z, and the PBE → PBE0 starting point of
-  the reference. None of it is represented in the kernel. For CdSe it lowers S₁ by 0.54 eV at 1.2 nm
-  and 0.22 eV at 2 nm (``sgw-resta``).
+Δ_bulk is not ΔW and is only in the orbital energies. Its binding counterpart is the bulk W in
+K\ :sup:`d`, which is small (0.2–0.3 eV at 2 nm).
 
 5. The exciton is not one transition
 ------------------------------------
@@ -134,7 +128,7 @@ difference is second order, because :math:`|\Delta\Sigma_H| \approx |\Delta\Sigm
 7. What is left
 ---------------
 
-At 2 nm (CdSe, calibrated models), going from vacuum to toluene:
+At 2 nm (CdSe), going from vacuum to toluene:
 
 .. list-table::
    :header-rows: 1
@@ -166,4 +160,4 @@ If the QP correction contains ΔW but the kernel is the bulk W, the whole self-i
 For CdSe at 2 nm in vacuum that adds 1.3 eV, and S₁ then follows the solvent almost as strongly as
 the QP gap. Improving only the classical W does not help either: a size-dependent ε(R), atomistic
 dipoles or a smoother boundary change the self- and the mutual image almost equally. What changes S₁
-beyond "KS gap + bulk correction" is sections 2–4, not the details of the classical screening.
+beyond "KS gap + bulk correction" is sections 2 and 3, not the details of the classical screening.

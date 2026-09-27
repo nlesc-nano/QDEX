@@ -8,7 +8,7 @@ coupling in ``soc``. All keys are listed in :doc:`/getting_started/configuration
 
    excitations:
      mode: bse                 # independent_dft, independent_qp, diagonal_bse, bse (sbse, diagonal_sbse)
-     # kernel: set by the QP model (qp for Resta/DIM); choose only for models without W
+     # kernel: set by the QP model (qp for Resta/DIM); choose only for models without ΔW
      nhomos: 25
      nlumos: 25
      nroots: 40
@@ -19,7 +19,7 @@ coupling in ``soc``. All keys are listed in :doc:`/getting_started/configuration
      enabled: true
      window: 10.0
 
-The sBSE (bulk W, no finite-size QP correction; :doc:`screened_kernel`):
+The sBSE (bulk W, no finite-size QP correction; :doc:`sbse`):
 
 .. code-block:: yaml
 

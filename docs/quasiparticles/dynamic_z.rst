@@ -67,7 +67,7 @@ Z in the BSE kernel
 -------------------
 
 The same Z̄ = ½(Z_H + Z_L) scales ΔW in the BSE kernel, so the QP correction and the direct term
-see the same dynamical reduction (:doc:`/excitons/screened_kernel`).
+see the same dynamical reduction (:doc:`/excitons/kernel`).
 
 Limits
 ------

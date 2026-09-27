@@ -8,37 +8,19 @@ Every QP model in QDEX has the form derived in :doc:`gw`:
 .. math::
 
    \varepsilon_n^{\mathrm{QP}} = \begin{cases}
-   \varepsilon_n - f_b\,\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n[\Delta W] + r_H\,s(R), & n \in \mathrm{occ}, \\
-   \varepsilon_n + (1 - f_b)\,\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n[\Delta W] + r_L\,s(R), & n \in \mathrm{virt},
+   \varepsilon_n - f_b\,\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n[\Delta W], & n \in \mathrm{occ}, \\
+   \varepsilon_n + (1 - f_b)\,\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n[\Delta W], & n \in \mathrm{virt},
    \end{cases}
 
-where:
+where
 
-* :math:`\varepsilon_n` is the KS (DFT) energy;
-* :math:`\Delta_{\mathrm{bulk}}` is the tabulated bulk GW gap opening, split asymmetrically by :math:`f_b` (the anchor-derived bulk valence fraction: :math:`f_b = d_{h0} / (d_{h0} + d_{l0}) \approx 41.2\%` for CdSe, matching first-principles bulk GW literature);
-* :math:`Z_n\,\Delta\Sigma_n[\Delta W]` is the finite-size self-energy correction of :math:`\Delta W`, weighted by the plasmon-pole renormalization factor :math:`Z_n`;
-* :math:`r_{H/L}` (:math:`r_H` for occupied / valence states, :math:`r_L` for empty / conduction states) is the **anchor residual**, scaled by the confinement decay function :math:`s(R)` (:doc:`anchor`).
+* :math:`\varepsilon_n` is the KS (PBE) energy;
+* :math:`\Delta_{\mathrm{bulk}}` is the bulk GW gap opening from ``MATERIAL_DB`` (bulk QSGW), and
+  :math:`f_b` its valence share (41.2 % for CdSe);
+* :math:`Z_n\,\Delta\Sigma_n[\Delta W]` is the finite-size self-energy of ΔW, weighted by the
+  quasiparticle weight :math:`Z_n`.
 
-What is the anchor residual :math:`r_{H/L}`?
---------------------------------------------
-
-At the anchor monomer :math:`R_0`, high-level benchmark calculations (evGW@PBE0 with complete basis sets) provide reference quasiparticle levels for the HOMO (:math:`\varepsilon_H^{\mathrm{ref}}`) and LUMO (:math:`\varepsilon_L^{\mathrm{ref}}`). This defines the benchmark band-edge shifts from PBE to QP:
-:math:`d_{h0} = -(\varepsilon_H^{\mathrm{ref}} - \varepsilon_H^{\mathrm{PBE}})` (positive downward shift) and :math:`d_{l0} = \varepsilon_L^{\mathrm{ref}} - \varepsilon_L^{\mathrm{PBE}}` (positive upward shift).
-
-The anchor residual :math:`r_{H/L}` is the signed difference between this benchmark shift and the shift predicted by the microscopic model at the anchor geometry :math:`R_0`:
-
-.. math::
-
-   r_H = d_{h0} - \left( f_b\,\Delta_{\mathrm{bulk}} + Z_H\,\Delta\Sigma_H[\Delta W](R_0) \right), \qquad
-   r_L = d_{l0} - \left( (1 - f_b)\,\Delta_{\mathrm{bulk}} + Z_L\,\Delta\Sigma_L[\Delta W](R_0) \right).
-
-The total gap residual is :math:`r_{\mathrm{gap}} = r_H + r_L`. Physically, :math:`r_{H/L}` captures all physical effects absent from a static dielectric model:
-
-1. **Dynamic screening beyond the single-plasmon pole:** Dynamical vertex corrections and multiexcitonic/plasmon satellite screening not captured by static ΔCOHSEX.
-2. **Starting-point and hybrid DFT effects:** The benchmark uses an evGW@PBE0 reference, while the nanocrystal KS orbitals are computed at PBE. The starting-point difference (band stretching from exact exchange) is naturally absorbed into :math:`r_{H/L}`.
-3. **Microscopic chemical asymmetry & passivation:** Atomistic coordination, surface chlorine/ligand passivations, and localized atomic multipoles at the molecular boundary that continuous dielectric models smoothen out.
-
-As dot radius :math:`R` increases toward the bulk crystal, the decay factor :math:`s(R) \in [0, 1]` smoothly turns off this molecular correction (:math:`s(R_0) = 1` and :math:`s(R \to \infty) = 0`), ensuring seamless convergence to the bulk GW limit.
+No term is fitted to a cluster calculation: each approximation is used as it is.
 
 The models differ in how much of ΔW they build, in order of increasing detail:
 
@@ -63,7 +45,7 @@ The models differ in how much of ΔW they build, in order of increasing detail:
      - ΔCOHSEX for every orbital
 
 ``evgw-*`` and ``qsgw-*`` iterate the Resta and DIM models (section 7). The same W, including ΔW, is
-the BSE kernel (:doc:`/excitons/screened_kernel`).
+the BSE kernel (:doc:`/excitons/kernel`).
 
 1. No finite-size correction: ``none`` and ``brus``
 ---------------------------------------------------
@@ -149,7 +131,7 @@ Both have :math:`W_{\mathrm{QD}}\to W_{\mathrm{bulk}}` for large dots, so ΔW �
 exact. Both add the sphere reaction field of section 2 for the environment and evaluate ΔΣ with the
 actual orbitals (section 4).
 
-What follows is written on atom pairs A, B with the bare interaction :math:`\gamma_{AB}` (:doc:`representation`).
+What follows is written on atom pairs A, B with the bare interaction :math:`\gamma_{AB}` (:doc:`/integrals/representation`).
 
 Resta: ``sgw-resta``
 ~~~~~~~~~~~~~~~~~~~~
@@ -233,8 +215,7 @@ structures and ligand-rich surfaces.
   (``evgw-dim`` rescales them with the gap, section 7).
 * The mixing of η into ε is a model choice.
 
-For spherical CdSe dots, Resta and DIM agree within 0.1 eV in the QP gap and S₁ at 2 nm after
-calibration.
+For spherical CdSe dots, Resta and DIM agree within about 0.1 eV in the QP gap and S₁ at 2 nm.
 
 4. ΔΣ for all orbitals: one-shot ΔCOHSEX
 ----------------------------------------
@@ -249,7 +230,7 @@ the Löwdin basis :math:`c = S^{1/2}C`, with ΔW expanded to AO blocks
    \qquad
    \Delta\mathrm{SEX}_n = -\tfrac12\sum_{\mu\nu} c_{\mu n}c_{\nu n}\,P_{\mu\nu}\,\Delta W_{\mu\nu}.
 
-These are the continuous formulas with the integrals represented on the basis (:doc:`representation`).
+These are the continuous formulas with the integrals represented on the basis (:doc:`/integrals/representation`).
 
 * **Classical limit.** For a constant ΔW = c: ΔCOH = c/2 for every orbital, ΔSEX = −c (occupied)
   and 0 (empty), so the gap opens by c.
@@ -314,32 +295,8 @@ position dependence of the self-image.
 
 Both are self-consistent in ΔW only; the bulk part stays the tabulated Δ_bulk.
 
-8. Anchor residual
-------------------
-
-Each Resta and DIM model is run once on the anchor cluster, Cd₁₆Se₁₃Cl₆ in vacuum, and compared with
-evGW\@PBE0. The HOMO and LUMO errors r_H and r_L are stored and added to all occupied and all empty
-orbitals, scaled by
-
-.. math::
-
-   s(R) = \frac{E_g^{\mathrm{PBE}}(\mathrm{QD}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})}
-               {E_g^{\mathrm{PBE}}(\mathrm{anchor}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})} \in [0,1]
-
-(1 at the anchor, 0.41 at 2 nm, 0.26 at 3.2 nm for CdSe). The gap residuals are −0.54 eV
-(``sgw-resta``), −0.44 eV (``sgw-dim``) and −0.83 eV (``evgw-resta``), the same sign and size as the
-classical-sphere residual (−0.42 eV). They contain what ΔCOHSEX misses and the PBE → PBE0 starting point of the reference
-(:doc:`anchor`). ``anchor_residual: off`` removes them.
-
-9. Absolute levels (IP/EA)
---------------------------
-
-The gap correction is split between HOMO and LUMO with the per-edge anchor curves, which are exact at
-the anchor (41 %/59 % for CdSe) and tend to the bulk split for large dots. ``edge_split: model``
-uses the model's own split.
-
-10. Summary of the approximations
----------------------------------
+8. Summary of the approximations
+--------------------------------
 
 .. list-table::
    :header-rows: 1
@@ -350,7 +307,7 @@ uses the model's own split.
      - What it keeps / loses
    * - Bulk + ΔW split, Δ_bulk from a table
      - The bulk self-energy is transferable; only ΔW depends on the dot.
-     - Exact bulk gap; the energy dependence of the bulk correction only through the residual.
+     - Exact bulk gap; no energy dependence of the bulk correction (band stretching).
    * - Static ΔCOHSEX
      - ΔW is long-range polarization with plasmon frequencies far above the level spacings.
      - Exact classical limit plus non-classical screened exchange; dynamics to first order via Z.
@@ -367,12 +324,9 @@ uses the model's own split.
    * - Plasmon-pole Z
      - Dynamics of ΔW to first order, without a frequency grid.
      - Z ≈ 0.94–0.99.
-   * - Anchor residual
-     - Catches what the model misses at one size.
-     - Exact at the anchor; the E_conf scaling to other sizes is an assumption.
 
-11. Which model
----------------
+9. Which model
+--------------
 
 .. list-table::
    :header-rows: 1
@@ -386,12 +340,11 @@ uses the model's own split.
    * - S₁ without any finite-size QP term
      - ``none`` with ``excitations.mode: sbse`` and a bulk kernel.
    * - QP gap, IP/EA
-     - Any calibrated Resta/DIM model; all reproduce evGW at the anchor.
+     - Any Resta/DIM model; ``qsgw-*`` for the most complete static treatment.
    * - Orbital relaxation
      - ``qsgw-*``; S₁ within about 0.1 eV of ΔCOHSEX, at much higher cost for large dots.
    * - Reproduce old results
-     - ``selfenergy: classical``, ``anchor_residual: off``, ``residual_scaling: power``,
-       ``solvent_term: born``.
+     - ``selfenergy: classical``, ``solvent_term: born``.
 
 **Other options,** kept for reference:
 

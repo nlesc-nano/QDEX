@@ -1,9 +1,9 @@
 Representation of the integrals: MNOK or ZDO xs
 ===============================================
 
-Part of :doc:`/quasiparticles/index`.
+Part of :doc:`/integrals/index`.
 
-The formulas of :doc:`gw` and :doc:`models` contain integrals of the form
+The formulas of :doc:`/quasiparticles/gw` and :doc:`/quasiparticles/models` contain integrals of the form
 
 .. math::
 
@@ -41,7 +41,7 @@ the atomic hardness η_A:
    (pq|X|rs) \approx \sum_{AB} q^{pq}_A\,X_{AB}\,q^{rs}_B,\qquad X_{AB} = S_{AB}\,\gamma_{AB}\ \text{or}\ \Delta W_{AB},
 
 with :math:`S_{AB}` the screening factor of the model. For ΔCOHSEX, ΔW_AB is expanded to AO blocks
-and contracted with Löwdin coefficients (:doc:`models`, section 4).
+and contracted with Löwdin coefficients (:doc:`/quasiparticles/models`, section 4).
 
 **Limits.**
 
@@ -107,5 +107,3 @@ Which to use
 * **Large dots (≥ 2 nm):** ``mnok``. The two agree within 0.05 eV and MNOK is much cheaper.
 * **Small clusters and molecules,** where the short range dominates: ``xs``. It removes the hardness
   parameters and keeps the AO shape of the densities.
-* **Anchor residuals** are calibrated per representation. Changing it needs no action, but the
-  calibration exists only for the combinations in ``qdex/data/dw_anchor_residuals.json``.

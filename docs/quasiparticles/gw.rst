@@ -76,8 +76,7 @@ system screens an added charge. It is convenient to write :math:`W = v + W^{\mat
 3. How Σ is computed in a GW code
 ---------------------------------
 
-A standard molecular or periodic GW calculation (for example the CP2K evGW that gives the QDEX
-anchor) does the following:
+A standard molecular or periodic GW calculation (for example evGW in CP2K) does the following:
 
 1. **Response.** χ₀ is built from all occupied and many empty states, usually in an auxiliary
    (resolution-of-identity) basis of size :math:`N_{\mathrm{aux}}`.
@@ -93,8 +92,8 @@ anchor) does the following:
 The cost is :math:`\mathcal O(N^4)` in common implementations, with a large prefactor from the empty
 states and the frequency grid. One calculation on a 3 nm CdSe dot (about 10³ atoms, 10⁴ basis
 functions) is possible on a large machine. Size series, ligand shells, solvents and molecular
-dynamics are not. The result also depends on the starting point: the QDEX anchor is evGW on PBE0
-orbitals (PBE → PBE0 → evGW), not on PBE.
+dynamics are not. The result also depends on the starting point (PBE, PBE0) and on the level of
+self-consistency.
 
 4. The static COHSEX limit
 --------------------------
@@ -157,7 +156,7 @@ calculation as the gap opening
    \Delta_{\mathrm{bulk}} = E_g^{\mathrm{GW}}(\mathrm{bulk}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})
    \qquad (1.57\ \mathrm{eV\ for\ CdSe,\ bulk\ QSGW}),
 
-split between the valence and conduction band: :math:`-f_b\,\Delta_{\mathrm{bulk}}` for occupied, :math:`+(1 - f_b)\,\Delta_{\mathrm{bulk}}` for empty states, where :math:`f_b` is the valence share of the bulk opening. In the literature for II-VI semiconductors (Hinuma et al., *PRB* 90, 155405 (2014); Schleife et al., *PRB* 73, 245212 (2006)), the bulk GW opening is asymmetric: the valence-band maximum shifts down by ~42–43% while the conduction-band minimum shifts up by ~57–58%. In QDEX, :math:`f_b` is taken from the anchor monomer ratio :math:`f_b = d_{h0} / (d_{h0} + d_{l0})` (~41.2% for CdSe), matching first-principles bulk GW benchmarks within 1–2%. All dynamical effects of the bulk are inside this number.
+split between the valence and conduction band: :math:`-f_b\,\Delta_{\mathrm{bulk}}` for occupied, :math:`+(1 - f_b)\,\Delta_{\mathrm{bulk}}` for empty states, where :math:`f_b` is the valence share of the bulk opening. In the literature for II-VI semiconductors (Hinuma et al., *PRB* 90, 155405 (2014); Schleife et al., *PRB* 73, 245212 (2006)), the bulk GW opening is asymmetric: the valence-band maximum shifts down by ~42–43% while the conduction-band minimum shifts up by ~57–58%. In QDEX, :math:`f_b` is 41.2 % for CdSe. All dynamical effects of the bulk are inside this number.
 
 **Finite-size part.** ΔW is computed for each dot and inserted in the static COHSEX form:
 
@@ -183,7 +182,7 @@ The QP energies of all orbitals are then
    \varepsilon_n + (1 - f_b)\,\Delta_{\mathrm{bulk}} + Z_n\,\Delta\Sigma_n, & n \in \mathrm{virt},
    \end{cases}
 
-where :math:`f_b` is the anchor-derived bulk valence fraction.
+where :math:`f_b` is the valence share of the bulk opening.
 
 **Why the static limit is good for ΔW.** ΔW is dominated by the long-range polarization of the
 dot surface and of the environment. Its characteristic frequency is the valence plasmon of the
@@ -238,9 +237,7 @@ With the bulk correction tabulated, a QP model for a quantum dot needs:
 1. **ΔW(r, r′)**, or at least its classical self-image. This is where the models differ
    (:doc:`models`).
 2. **Z**, from the same dielectric model (:doc:`dynamic_z`).
-3. **A calibration** of what the model misses, on one evGW calculation of a small cluster
-   (:doc:`anchor`).
-4. **A representation** of the integrals (nm|ΔW|mn) on the atomic basis: MNOK or ZDO xs
-   (:doc:`representation`).
+3. **A representation** of the integrals (nm|ΔW|mn) on the atomic basis: MNOK or ZDO xs
+   (:doc:`/integrals/index`).
 
-The same W, including ΔW, is the screened interaction of the BSE (:doc:`/excitons/screened_kernel`).
+The same W, including ΔW, is the screened interaction of the BSE (:doc:`/excitons/kernel`).

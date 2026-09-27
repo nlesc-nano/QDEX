@@ -30,9 +30,10 @@ Quick entry points: :doc:`getting_started/installation`, :doc:`getting_started/q
 
 .. toctree::
    :maxdepth: 2
-   :caption: Quasiparticles and excited states
+   :caption: Quasiparticles, integrals and excitations
 
    quasiparticles/index
+   integrals/index
    excitons/index
    validation/index
 
