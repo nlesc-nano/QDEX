@@ -813,6 +813,27 @@ def get_cluster_size_metrics(coords_ang, atom_symbols=None, material_name=None):
         'anisotropy_ratio': anisotropy,
     }
 
+# Radius of the dielectric sphere and of the confinement models: 'saxs' (default; SAXS-equivalent
+# sphere of the inorganic electron density, qdex.cluster_size) or 'hull' (core convex hull + 1.25 A).
+RADIUS_DEFINITION = "saxs"
+_RADIUS_CACHE = {}
+
+
+def qd_radius(coords, atom_symbols, material_name=None, definition=None):
+    """Radius (A) of the dot used by the sphere reaction field and the confinement models."""
+    how = str(definition or RADIUS_DEFINITION).lower()
+    coords = np.asarray(coords, dtype=float)
+    if how == "hull":
+        return float(get_cluster_size_metrics(coords, atom_symbols, material_name)["R_eff_hull"])
+    key = (coords.tobytes(), tuple(atom_symbols), str(material_name))
+    if key not in _RADIUS_CACHE:
+        from qdex.cluster_size import cluster_size
+        size = cluster_size(coords, atom_symbols, material_name)
+        _RADIUS_CACHE.clear()
+        _RADIUS_CACHE[key] = 5.0 * float(size.get("d_saxs_nm", size["d_hull_nm"]))
+    return _RADIUS_CACHE[key]
+
+
 MNOK_EXPONENT = 2.0  # 2.0 = Ohno-Klopman (default), 1.0 = Mataga-Nishimoto
 
 
@@ -997,7 +1018,7 @@ def build_resta_mnok(atom_symbols, coords, alpha, material_name, eps_out=2.0, et
 
 
 def build_sphere_reaction_field(coords, atom_symbols, material_name, eps_out, eps_in=None,
-                                n_terms=300, x_max=0.9):
+                                n_terms=300, x_max=0.9, radius_definition=None):
     """Atom-pair reaction field of a dielectric sphere (eV).
 
     G(r, r') = (e^2/R) sum_n (eps_in - eps_out)(n + 1) / [eps_in (n eps_in + (n + 1) eps_out)]
@@ -1009,7 +1030,7 @@ def build_sphere_reaction_field(coords, atom_symbols, material_name, eps_out, ep
     the static BSE kernel gives the electron-hole image interaction of the same
     sphere, so the surface polarization cancels in the neutral excitation as
     it does in the QP gap.  The sphere is centred on the core atoms with
-    R = R_eff_hull and eps_in = eps_inf by default.  Radial fractions r/R are
+    R = qd_radius (SAXS by default) and eps_in = eps_inf by default.  Radial fractions r/R are
     capped at ``x_max`` because the image series diverges at the boundary for
     atoms (ligands) at or beyond R; the cap is a regularization choice.
     """
@@ -1022,7 +1043,7 @@ def build_sphere_reaction_field(coords, atom_symbols, material_name, eps_out, ep
     if abs(ei - eo) < 1.0e-12:
         return np.zeros((n_at, n_at))
     metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R = float(metrics["R_eff_hull"])
+    R = qd_radius(coords, atom_symbols, m_name, radius_definition)
     sel = metrics.get("selected_atom_indices") or list(range(n_at))
     center = np.mean(coords[np.asarray(sel, dtype=int)], axis=0)
     rel = coords - center
@@ -1717,7 +1738,7 @@ def estimate_sgw_dim_qp_gap(coords, atom_symbols, material_name=None, eps_out=2.
 
     n_atoms = len(atom_symbols)
     metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R_QD_ang = float(metrics.get("R_eff_hull", 10.0))
+    R_QD_ang = qd_radius(coords, atom_symbols, m_name)
 
     # 1. Bare Ohno-Klopman interaction matrix (eV)
     coords_au = coords / ANG_PER_BOHR
@@ -1977,7 +1998,7 @@ def estimate_sgw_resta_qp_gap(coords, atom_symbols, material_name=None, eps_out=
 
     n_atoms = len(atom_symbols)
     metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R_QD_ang = float(metrics.get("R_eff_hull", 10.0))
+    R_QD_ang = qd_radius(coords, atom_symbols, m_name)
 
     # 1. Bare Ohno-Klopman interaction matrix (eV)
     coords_au = coords / ANG_PER_BOHR
@@ -2276,7 +2297,7 @@ def estimate_qsgw_dim_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, ho
     n_atoms = len(atom_symbols)
     n_ao = C.shape[0]
     metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R_QD_ang = float(metrics.get("R_eff_hull", 10.0))
+    R_QD_ang = qd_radius(coords, atom_symbols, m_name)
 
     # 1. Bare Ohno-Klopman interaction matrix (eV)
     coords_au = coords / ANG_PER_BOHR
@@ -2512,7 +2533,7 @@ def estimate_qsgw_resta_qp_gap(coords, atom_symbols, C, eps, S, atom_ao_ranges, 
     n_atoms = len(atom_symbols)
     n_ao = C.shape[0]
     metrics = get_cluster_size_metrics(coords, atom_symbols, m_name)
-    R_QD_ang = float(metrics.get("R_eff_hull", 10.0))
+    R_QD_ang = qd_radius(coords, atom_symbols, m_name)
 
     # 1. Bare Ohno-Klopman interaction matrix (eV)
     coords_au = coords / ANG_PER_BOHR
@@ -3096,8 +3117,7 @@ def estimate_brus_qp_gap(material_name, coords, atom_symbols):
         print(f"  [Warning] Missing bulk gap or effective mass for {m_name}. Brus estimation failed.")
         return None
         
-    metrics = get_cluster_size_metrics(coords, atom_symbols, material_name)
-    R_QD_ang = metrics['R_eff_hull']
+    R_QD_ang = qd_radius(coords, atom_symbols, material_name)
     
     # 1. Standard Parabolic Kinetic Confinement Energy
     E_conf_parabolic = (BRUS_KINETIC_EV_ANG2 * np.pi**2) / (m_eff * (R_QD_ang ** 2))

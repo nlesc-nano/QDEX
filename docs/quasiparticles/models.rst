@@ -95,8 +95,10 @@ The KS levels are shifted rigidly to this gap.
 2. The classical ΔW: reaction field of a dielectric sphere
 ----------------------------------------------------------
 
-The dot is a sphere of radius R with the bulk ε∞ inside and ε_out outside. The potential at r of the
-polarization induced by a unit charge at r′ is
+The dot is a sphere of radius R with the bulk ε∞ inside and ε_out outside. R is the SAXS radius of
+the dot, the homogeneous sphere with the same inorganic electron density (``quasiparticles.radius``;
+:doc:`/reference/cluster_size`). The potential at r of the polarization induced by a unit charge at r′
+is
 
 .. math::
 
@@ -245,10 +247,10 @@ These are the continuous formulas with the integrals represented on the basis (:
   and 0 (empty), so the gap opens by c.
 * **Beyond it.** The actual ΔW varies over the dot. At 1.2 nm (``sgw-resta``):
 
-  - ΔSEX = −3.01 eV for the HOMO and −0.22 eV for the LUMO;
-  - ΔCOH = +1.55 and +1.67 eV.
+  - ΔSEX = −2.74 eV for the HOMO and −0.13 eV for the LUMO;
+  - ΔCOH = +1.37 and +1.46 eV.
 
-  The screened exchange raises the QP gap from 6.54 eV (classical) to 6.88 eV (evGW\@PBE0: 6.03 eV).
+  The screened exchange raises the QP gap from 6.44 eV (classical) to 6.70 eV (evGW\@PBE0: 6.03 eV).
 * **Classical option.** ``quasiparticles.selfenergy: classical`` replaces ΔΣ_n by ±½ q_nᵀΔW q_n, with q_n the
   atomic populations.
 * **Cost.** One cached eigendecomposition of S and three matrix products for all orbitals.

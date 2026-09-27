@@ -29,7 +29,7 @@ themselves.
 
 **What it misses.** The parts of ΔW that do not cancel (:doc:`cancellation`, sections 2, 3 and 5):
 
-* the image multipoles, about +0.17 eV in S₁ at 2 nm for CdSe in vacuum;
+* the image multipoles, about +0.16 eV in S₁ at 2 nm for CdSe in vacuum;
 * the non-classical screened exchange of a small dot;
 * the (weak) solvent dependence of S₁, which is zero by construction.
 

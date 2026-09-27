@@ -135,20 +135,20 @@ Binding energy E_b = E_g^QP − S₁ at 2 nm (CdSe, 25 × 25, spin-free, coupled
      - E_b vacuum (eV)
      - E_b toluene (eV)
    * - ``sgw-resta``
-     - 1.55
-     - 0.73
+     - 1.49
+     - 0.71
    * - ``sgw-dim``
-     - 1.58
-     - 0.76
+     - 1.52
+     - 0.74
    * - ``evgw-resta``
-     - 1.67
-     - 0.78
-   * - ``qsgw-dim``
-     - 1.58
+     - 1.60
      - 0.76
+   * - ``qsgw-dim``
+     - 1.52
+     - 0.74
 
 * **Most of the binding is the mutual image.** Bulk W alone binds by 0.2–0.3 eV at 2 nm.
 * **All shared-W models bind alike.** The sphere term dominates; the interior part of ΔW adds a
   little.
-* **The QP gap and E_b move together** with the solvent (about 0.9 eV), so S₁ moves by only
-  0.09–0.12 eV (:doc:`cancellation`).
+* **The QP gap and E_b move together** with the solvent (about 0.85–0.95 eV), so S₁ moves by only
+  0.07–0.10 eV (:doc:`cancellation`).

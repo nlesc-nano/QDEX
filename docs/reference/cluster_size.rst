@@ -40,9 +40,18 @@ beside it; for compact dots the two agree.
 * **Other definitions.** The formula-unit diameter, :math:`(6 N_{\mathrm{fu}} V_{\mathrm{fu}}/\pi)^{1/3}`,
   counts only the core; the hull diameter is the volume-equivalent convex hull of the core atom centres
   plus 1.25 Å.
-* **Which size the model uses.** The QP models that need a radius (``brus``, ``gw``, the sphere
-  reaction field of the Resta and DIM models) use the hull radius; the block says so. ``bulk``,
-  ``none`` and the sTDA use no radius.
+* **Which size the model uses.** The sphere reaction field of the Resta and DIM models and the Brus
+  confinement use the SAXS radius (``quasiparticles.radius: saxs``, default; ``hull`` restores the
+  old radius). The two-anchor ``gw`` keeps the hull radius, with which its anchor R₀ is defined.
+  ``bulk``, ``none`` and the sTDA use no radius. The block states which radius was used.
+
+**Why the SAXS radius for the dielectric sphere.** The continuum boundary sits where the polarizable
+electron density ends, about half a bond beyond the outermost atom centres; a sphere through the atom
+centres is too small, and the hull value needs a fixed allowance (1.25 Å) to compensate. The SAXS
+sphere is the homogeneous sphere with the same electron-density distribution, with no free parameter.
+The atoms it counts are also the right ones for the dielectric: inorganic surface atoms (halides) are
+polarizable and inside; organic ligands have ε ≈ 2.1–2.3, close to the solvent, and outside. At 2 nm the
+SAXS radius is 9.67 Å against 9.22 Å for the hull.
 * **Cost.** One pass over the pair distances: 0.1 s for 150 atoms, 4 s for 10⁴ atoms.
 
 ``benchmarks/compare_models.py --exp-ref`` evaluates the sizing curves at the SAXS diameter.

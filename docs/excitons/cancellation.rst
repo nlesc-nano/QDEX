@@ -59,7 +59,7 @@ P_l(\cos\theta)`.
   averages toward zero.
 
 The self-image is therefore larger than the mutual image, and S₁ keeps a positive classical size
-effect of about 0.1 e²/R. For CdSe with 1S envelopes in vacuum:
+effect of about 0.1 e²/R. For CdSe with 1S envelopes in vacuum (SAXS radius 5.6 and 9.7 Å):
 
 .. list-table::
    :header-rows: 1
@@ -68,14 +68,14 @@ effect of about 0.1 e²/R. For CdSe with 1S envelopes in vacuum:
      - 1.2 nm
      - 2.0 nm
    * - self-images added to the QP gap
-     - 2.54 eV
-     - 1.46 eV
+     - 2.41 eV
+     - 1.39 eV
    * - mutual image added to the binding
-     - 2.28 eV
-     - 1.29 eV
+     - 2.16 eV
+     - 1.23 eV
    * - net effect on S₁
-     - +0.26 eV
-     - +0.17 eV
+     - +0.25 eV
+     - +0.16 eV
 
 This part is classical, and the Resta and DIM models contain it through W_add. The older softened Born form (``quasiparticles.solvent_term: born``) has no
 multipoles, so it cancels completely.
@@ -97,8 +97,8 @@ they are not. The difference
 * has **no counterpart in K**\ :sup:`d`, which contains only the densities of the electron and the
   hole, not the other occupied states.
 
-It therefore goes straight into S₁. At 1.2 nm (``sgw-resta``), ΔSEX is −3.01 eV for the HOMO and
-−0.22 eV for the LUMO. It raises the QP gap by 0.33 eV over the classical value, and S₁ by 0.43 eV. It is the physical reason why a microscopic ΔW (Resta, DIM) changes S₁ and a
+It therefore goes straight into S₁. At 1.2 nm (``sgw-resta``), ΔSEX is −2.74 eV for the HOMO and
+−0.13 eV for the LUMO. It raises the QP gap by 0.26 eV over the classical value, and S₁ by 0.36 eV. It is the physical reason why a microscopic ΔW (Resta, DIM) changes S₁ and a
 purely classical one does not.
 
 4. The bulk correction
@@ -122,7 +122,7 @@ the correlated exciton :math:`\sum X_{ia}|ia\rangle`.
 ----
 
 The QP shift of each orbital is scaled by its own Z_n, the kernel by the frontier average Z̄. The
-difference is second order, because :math:`|\Delta\Sigma_H| \approx |\Delta\Sigma_L|` (1.46 and 1.45 eV at
+difference is second order, because :math:`|\Delta\Sigma_H| \approx |\Delta\Sigma_L|` (1.37 and 1.33 eV at
 1.2 nm) and hence Z_H ≈ Z_L.
 
 7. What is left
@@ -137,17 +137,17 @@ At 2 nm (CdSe), going from vacuum to toluene:
      - QP gap (eV)
      - S₁ (eV)
    * - ``sgw-resta``
-     - −0.91
-     - −0.09
+     - −0.86
+     - −0.08
    * - ``sgw-dim``
-     - −0.91
-     - −0.09
+     - −0.85
+     - −0.07
    * - ``evgw-resta``
-     - −1.00
-     - −0.12
+     - −0.95
+     - −0.10
    * - ``qsgw-dim``
-     - −0.91
-     - −0.09
+     - −0.85
+     - −0.07
 
 * **About 90 % of the solvent shift of the QP gap cancels in S₁.**
 * **The rest is physics of the model.** The multipoles (section 2) are in all models. The screened

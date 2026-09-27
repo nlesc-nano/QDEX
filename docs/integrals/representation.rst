@@ -26,13 +26,53 @@ MNOK: atom-condensed densities (``mnok``)
    q_A^{pq} = \sum_{\mu\in A}\sum_\nu C_{\mu p}S_{\mu\nu}C_{\nu q}\ \ (\text{Mulliken}),
    \qquad q_A^{pq} = \sum_{\mu\in A} c_{\mu p}c_{\mu q}\ \ (\text{Löwdin}, c = S^{1/2}C).
 
-**Bare interaction.** The Mataga–Nishimoto–Ohno–Klopman form, damped so that the on-site value is
-the atomic hardness η_A:
+**Bare interaction.** The Mataga–Nishimoto–Ohno–Klopman (MNOK) family,
 
 .. math::
 
-   \gamma_{AB} = \frac{1}{\sqrt{r_{AB}^2 + a_{AB}^2}},\qquad a_{AB} = \tfrac12\big(\eta_A^{-1} + \eta_B^{-1}\big),
-   \qquad \gamma_{AA} = \eta_A .
+   \gamma_{AB} = \big(r_{AB}^{\beta} + a_{AB}^{\beta}\big)^{-1/\beta},\qquad
+   a_{AB} = \tfrac12\big(\eta_A^{-1} + \eta_B^{-1}\big),\qquad \gamma_{AA} = \eta_A ,
+
+in atomic units. What QDEX uses:
+
+* **Exponent β = 2** (Ohno–Klopman) for every MNOK interaction: the exchange K\ :sup:`x`, the bare γ
+  inside the screened W and ΔW, and the direct term. β = 1 is the Mataga–Nishimoto form. There is no
+  separate exponent for exchange. (The key ``excitations.kernel_scaling``, historically called
+  ``alpha``, is a scale factor of the uniform ``bse`` kernel, not an exponent.)
+* **Damping** by the mean of the inverse hardnesses, so that the on-site value is η_A.
+* **Hardness** η_A of Ghosh and Islam (``HARDNESS_DICT``), defined as ½ ∂²E/∂N², i.e. half of IP − EA
+  (Cd 3.50 eV, Se 5.48 eV). The on-site Coulomb integral of a monopole, (ii|ii) = IP − EA, would be
+  2η_A.
+
+Grimme's sTDA uses the same functional form with other choices (:doc:`/excitons/stda`): separate
+fitted exponents for exchange (α = 1.42 + 0.48 a_x) and direct term (β = 0.20 + 1.83 a_x), damping by
+the mean hardness, and the on-site value 2η_A. These apply only in ``mode: stda``.
+
+**Sensitivity** (Cd₆₈Se₅₅Cl₂₆, vacuum, 25 × 25; changes applied to all MNOK interactions):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Choice
+     - S₁ sBSE (eV)
+     - S₁ ``sgw-resta`` (eV)
+     - singlet–triplet, sBSE (meV)
+   * - β = 2, γ_AA = η (current)
+     - 2.800
+     - 3.043
+     - 57
+   * - β = 1 (Mataga–Nishimoto)
+     - 2.854
+     - 3.093
+     -
+   * - β = 2, γ_AA = 2η
+     - 2.779
+     - 3.038
+     - 99
+
+The exponent shifts S₁ by about 0.05 eV; the on-site convention hardly moves S₁ but nearly doubles
+the exchange (singlet–triplet) splitting, which is short-range. Neither choice has been validated
+against a reference for dots yet.
 
 **Integrals.**
 
@@ -48,8 +88,9 @@ and contracted with Löwdin coefficients (:doc:`/quasiparticles/models`, section
 * **Monopoles only.** Each atom carries a point charge. Atomic dipoles and higher moments of the
   density are lost, and with them the shape of p and d orbitals and intra-atomic transitions
   (for example s → p on one atom, whose transition charge on that atom is zero).
-* **Parameters.** The short range is set by the hardness η_A, not by the basis. It is the
-  semi-empirical part of the interaction.
+* **Parameters.** The short range is set by the hardness η_A and the exponent β, not by the basis.
+  It is the semi-empirical part of the interaction, and it matters most for exchange (see the
+  sensitivity table).
 * **Population dependence.** Mulliken and Löwdin charges differ, most for diffuse basis sets.
   Mulliken populations can be negative.
 * **Exact at long range.** For r_AB ≫ a_AB, γ_AB → 1/r_AB. The surface polarization, the solvent term
