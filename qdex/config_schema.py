@@ -85,6 +85,8 @@ SECTIONS = {
         "include_exchange": "include_exchange",
         "include_direct_eh": "include_direct_eh",
         "energy_shift": "soc",
+        "functional": "stda_functional",
+        "ax": "stda_ax",
     },
     "soc": {
         "enabled": "soc_flag",

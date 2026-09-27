@@ -736,6 +736,16 @@ def resolve_bse_kernel(args, qp_w):
     """
     qp_name = str(args.qp_gap).lower()
     kernel = args.kernel
+    if str(getattr(args, "excitation_mode", "")).lower() in ("stda", "diagonal_stda"):
+        if qp_w is not None:
+            raise ValueError(f"excitation_mode '{args.excitation_mode}' uses the sTDA interactions; qp_gap "
+                             f"'{args.qp_gap}' defines its own W. Use quasiparticles.model: none (faithful sTDA) "
+                             "or bulk (dielectric variant).")
+        if kernel not in (None, "stda"):
+            raise ValueError(f"excitation_mode '{args.excitation_mode}' sets the kernel itself; remove kernel '{kernel}'.")
+        if str(args.kernel_type).lower() != "mnok":
+            raise ValueError("sTDA is a monopole (MNOK-type) method: use integrals.representation: mnok.")
+        return "stda"
     if qp_w is not None:
         label = qp_w[1]
         equivalent = kernel in ("sbse", "sbse-atom") and qp_name in ("sgw", "sgw-dw", "sgw_dw", "sgw-atom")
@@ -799,7 +809,7 @@ def main():
     parser.add_argument("--soc_flag", action="store_true")
     parser.add_argument("--gth_file", type=str, default=None)
 
-    parser.add_argument("--kernel", choices=["qp", "resta-sphere", "bse", "resta", "mnok", "xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "dim", "xs-dim", "dipole", "xs-dipole", "sbse", "sbse-atom", "sbse-ao", "xs-sbse"], default=None,
+    parser.add_argument("--kernel", choices=["qp", "stda", "resta-sphere", "bse", "resta", "mnok", "xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "dim", "xs-dim", "dipole", "xs-dipole", "sbse", "sbse-atom", "sbse-ao", "xs-sbse"], default=None,
                         help="Exciton interaction kernel. 'qp': the screened W built by the QP model (default and only allowed choice for "
                              "sgw-*, evgw-*, qsgw-* and sgw, so that GW and BSE share one W). For gap-only QP models (pbe, brus, gw, "
                              "numeric) choose: 'bse' (MNOK uniform, legacy default), 'resta' (MNOK Resta-screened), 'dim' / 'dipole' (MNOK atomistic polarizable dipole model), 'sbse' / 'sbse-atom' (Simplified BSE atom-resolved kernel, Cho et al. 2022), 'sbse-ao' / 'xs-sbse' (Simplified BSE AO-resolved kernel), 'xs' (Xs-QDEX uniform), 'xs-resta' (Xs-QDEX Resta-screened), 'xs-rpa' (Xs-QDEX microscopic RPA screening), 'xs-dim' (Xs-QDEX atomistic polarizable dipole model).")
@@ -905,11 +915,17 @@ def main():
     parser.add_argument("--full-diag", action="store_true")
     parser.add_argument(
         "--excitation-mode",
-        choices=["bse", "independent_dft", "independent_qp", "diagonal_bse", "sbse", "diagonal_sbse"],
+        choices=["bse", "independent_dft", "independent_qp", "diagonal_bse", "sbse", "diagonal_sbse",
+                 "stda", "diagonal_stda"],
         default="bse",
-        help=("Excitation model: diagonalize BSE/TDA ('bse' or 'sbse'), or use uncoupled transitions with "
-              "DFT gaps ('independent_dft'), QP gaps ('independent_qp'), or diagonal Kx/Kd corrections ('diagonal_bse' or 'diagonal_sbse')."),
+        help=("Excitation model: diagonalize BSE/TDA ('bse', 'sbse' or Grimme's 'stda'), or use uncoupled transitions "
+              "with DFT gaps ('independent_dft'), QP gaps ('independent_qp'), or diagonal Kx/Kd corrections "
+              "('diagonal_bse', 'diagonal_sbse', 'diagonal_stda')."),
     )
+    parser.add_argument("--stda-functional", dest="stda_functional", type=str, default=None,
+                        help="sTDA: functional of the MO file, sets a_x (pbe 0, b3lyp 0.20, pbe0 0.25, ...).")
+    parser.add_argument("--stda-ax", dest="stda_ax", type=str, default=None,
+                        help="sTDA: explicit Fock-exchange fraction a_x, or 'dielectric' for 1/eps_inf of the material.")
     parser.add_argument("--tol", type=float, default=1e-5)
     parser.add_argument("--skip-orthonormality-check", dest="skip_orthonormality_check", action="store_true",
                         help="Skip the C^T S C = I check (a full n_ao^3 product); use only for MO files already "
@@ -1718,6 +1734,27 @@ def main():
         else:
             qp_provenance["qp_levels"] = "orbital (qsGW)" if eps_qp_active is not None else "rigid"
     args.kernel = resolve_bse_kernel(args, qp_w)
+    stda_gamma_j = stda_gamma_k = None
+    if args.kernel == "stda":
+        from qdex.hardness import build_stda_gammas, stda_ax
+        ax_val, ax_src = stda_ax(getattr(args, "stda_functional", None), getattr(args, "stda_ax", None), args.material)
+        stda_gamma_j, stda_gamma_k, stda_info = build_stda_gammas(syms, np.array(coords_ang), ax_val)
+        if str(args.charge_type).lower() != "lowdin":
+            print("  [sTDA] Transition charges set to Loewdin, as in sTDA.")
+            args.charge_type = "lowdin"
+        print(f"  [sTDA] a_x = {ax_val:.3f} ({ax_src}); beta(J) = {stda_info['beta_J']:.3f}, "
+              f"alpha(K) = {stda_info['alpha_K']:.3f}")
+        qp_name = str(args.qp_gap).lower()
+        functional = str(getattr(args, "stda_functional", "") or "").lower()
+        if ax_val == 0.0:
+            print("  [sTDA Notice] a_x = 0: no electron-hole attraction (gamma^J = 0); only K^x acts on the DFT gap.")
+        if qp_name == "bulk" and functional not in ("", "pbe"):
+            print("  [sTDA Warning] quasiparticles.model: bulk corrects PBE orbitals only; the MO file is "
+                  f"declared as '{functional}'.")
+        if qp_name not in ("none", "pbe", "dft", "bulk"):
+            print(f"  [sTDA Warning] qp_gap '{args.qp_gap}' changes the orbital energies; faithful sTDA uses 'none'.")
+        if qp_name == "bulk":
+            print("  [sTDA] PBE orbitals + bulk GW correction: dielectric variant, not standard sTDA.")
 
     print(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
     print(f"  [QP]  Target Gap   : {target_qp_gap:.4f} eV")
@@ -2325,8 +2362,8 @@ def main():
         n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta,
         excitation_mode=args.excitation_mode,
         kernel_type=args.kernel_type,
-        shared_W=(qp_w[0] if qp_w is not None else None),
-        shared_gamma_bare=shared_gamma_ao,
+        shared_W=(stda_gamma_j if stda_gamma_j is not None else (qp_w[0] if qp_w is not None else None)),
+        shared_gamma_bare=(stda_gamma_k if stda_gamma_k is not None else shared_gamma_ao),
         shells=shells,
         eps_dft=eps_dft_solver
     )
@@ -2373,8 +2410,8 @@ def main():
             n_occ_beta=bse_n_occ_beta, n_virt_beta=bse_n_virt_beta,
             excitation_mode=args.excitation_mode,
             kernel_type=args.kernel_type,
-            shared_W=(qp_w[0] if qp_w is not None else None),
-            shared_gamma_bare=shared_gamma_ao,
+            shared_W=(stda_gamma_j if stda_gamma_j is not None else (qp_w[0] if qp_w is not None else None)),
+            shared_gamma_bare=(stda_gamma_k if stda_gamma_k is not None else shared_gamma_ao),
             shells=shells,
             eps_dft=eps_dft_solver
         )
