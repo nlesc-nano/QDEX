@@ -63,6 +63,8 @@ from pathlib import Path
 
 import yaml
 
+from qdex.config_schema import flatten_config, section_dest, to_sections
+
 HERE = Path.cwd()
 SWEEP_DIR = ["sweep"]  # "sweep_large" for --profile large
 
@@ -204,11 +206,11 @@ def build_cases_large(eps_solvent, nact, nroots, xs=True, qsgw=True, soc=True):
 def input_files(cfg):
     files = []
     for key in ("mo_file", "xyz", "basis_txt", "mo_file_beta", "vxc_ao"):
-        val = cfg.get("system", {}).get(key) or cfg.get("physics", {}).get(key)
+        val = flatten_config(cfg).get(key)
         if val:
             files.append(val)
-    if cfg.get("soc", {}).get("gth_file"):
-        files.append(cfg["soc"]["gth_file"])
+    if flatten_config(cfg).get("gth_file"):
+        files.append(flatten_config(cfg)["gth_file"])
     for f in files:
         p = HERE / f
         if not p.exists() and (HERE / (f + ".gz")).exists():
@@ -221,22 +223,17 @@ def input_files(cfg):
 
 
 def case_config(base, case, nthreads):
-    c = copy.deepcopy(base)
-    c.setdefault("system", {})["nthreads"] = nthreads
-    phys = c.setdefault("physics", {})
-    if "exchange" in phys:  # deprecated alias of include_direct_eh
-        phys.setdefault("include_direct_eh", phys.pop("exchange"))
+    """Config of one case in the current YAML layout (system, environment, quasiparticles,
+    integrals, excitations, soc, analysis, output)."""
+    flat = flatten_config(to_sections(copy.deepcopy(base)))
     for k in ("qp_z", "qp_levels", "qp_residual_power", "charge_type", "triplet", "nroots", "qp_polarization",
               "dynamic_z", "qp_selfenergy", "qp_residual_scaling", "qp_anchor_residual", "qp_solvent_term"):
-        phys.pop(k, None)
-    phys.update(case["physics"])
-    c.setdefault("soc", {})["soc_flag"] = bool(case["soc"])
-    c.setdefault("solver", {}).update({"full_diag": True, **case["solver"]})
-    out = c.setdefault("output", {})
-    out["plot"] = False
-    out["cube"] = False
-    c.setdefault("fuzzy", {})["run_fuzzy"] = False
-    return c
+        flat.pop(k, None)
+    flat.update({section_dest("physics", k): v for k, v in case["physics"].items()})
+    flat.update({"nthreads": nthreads, "soc_flag": bool(case["soc"]), "full_diag": True, **case["solver"],
+                 "plot": False, "cube": False, "run_fuzzy": False})
+    extra = {k: v for k, v in base.items() if k in ("namd", "auger", "periodic")}
+    return to_sections({"physics": flat, **extra})
 
 
 def is_done(d):

@@ -50,6 +50,8 @@ from pathlib import Path
 
 import yaml
 
+from qdex.config_schema import flatten_config, to_sections
+
 # ---------------------------------------------------------------------------
 # Case definitions: (group, name, extra CLI args, profiles)
 # ---------------------------------------------------------------------------
@@ -196,12 +198,11 @@ def prepare_inputs(system, cfg):
     """Return the list of input files to link, decompressing a .gz MO file if needed."""
     files = []
     for key in ("mo_file", "xyz", "basis_txt", "mo_file_beta", "vxc_ao"):
-        val = cfg.get("system", {}).get(key) or cfg.get("physics", {}).get(key)
+        val = flatten_config(cfg).get(key)
         if val:
             files.append(val)
-    soc = cfg.get("soc", {})
-    if soc.get("gth_file"):
-        files.append(soc["gth_file"])
+    if flatten_config(cfg).get("gth_file"):
+        files.append(flatten_config(cfg)["gth_file"])
     for f in files:
         p = system / f
         if not p.exists() and (system / (f + ".gz")).exists():
@@ -214,18 +215,13 @@ def prepare_inputs(system, cfg):
 
 
 def write_config(cfg, dest, nthreads, davidson, soc):
-    c = json.loads(json.dumps(cfg))  # deep copy
-    c.setdefault("system", {})["nthreads"] = nthreads
-    c.setdefault("soc", {})["soc_flag"] = bool(soc)
-    c.setdefault("output", {})["plot"] = False
-    c["output"]["cube"] = False
-    phys = c.setdefault("physics", {})
-    if "exchange" in phys:  # deprecated alias of include_direct_eh
-        phys.setdefault("include_direct_eh", phys.pop("exchange"))
-    phys.setdefault("kernel", "resta")
-    c.setdefault("solver", {})["full_diag"] = not davidson
+    """Per-case config in the current YAML layout; the case itself is passed as CLI flags."""
+    flat = flatten_config(to_sections(cfg))
+    flat.update({"nthreads": nthreads, "soc_flag": bool(soc), "plot": False, "cube": False,
+                 "full_diag": not davidson})
+    extra = {k: v for k, v in cfg.items() if k in ("namd", "auger", "periodic")}
     with open(dest, "w") as fh:
-        yaml.safe_dump(c, fh, sort_keys=False)
+        yaml.safe_dump(to_sections({"physics": flat, **extra}), fh, sort_keys=False)
 
 
 def parse_run(workdir):

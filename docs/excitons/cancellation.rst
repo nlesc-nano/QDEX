@@ -78,8 +78,7 @@ effect of about 0.1 e²/R. For CdSe with 1S envelopes in vacuum:
      - +0.26 eV
      - +0.17 eV
 
-This part is classical, and every shared-W model contains it: ``gw`` through ``resta-sphere``, and
-Resta and DIM through W_add. The older softened Born form (``qp_solvent_term: born``) has no
+This part is classical, and the Resta and DIM models contain it through W_add. The older softened Born form (``quasiparticles.solvent_term: born``) has no
 multipoles, so it cancels completely.
 
 3. Non-classical screened exchange
@@ -102,8 +101,7 @@ they are not. The difference
 It therefore goes straight into S₁. At 1.2 nm (``sgw-resta``), ΔSEX is −3.01 eV for the HOMO and
 −0.22 eV for the LUMO. It raises the QP gap by 0.33 eV over the classical value, and S₁ by 0.43 eV
 before calibration. It is the physical reason why a microscopic ΔW (Resta, DIM) changes S₁ and a
-purely classical one does not. The ``gw`` model has no such term; its non-classical part is only in
-the residual A.
+purely classical one does not.
 
 4. Terms that are only in the QP gap
 ------------------------------------
@@ -144,9 +142,6 @@ At 2 nm (CdSe, calibrated models), going from vacuum to toluene:
    * -
      - QP gap (eV)
      - S₁ (eV)
-   * - ``gw`` + ``resta-sphere``
-     - −0.93
-     - −0.04
    * - ``sgw-resta``
      - −0.91
      - −0.09
@@ -162,8 +157,7 @@ At 2 nm (CdSe, calibrated models), going from vacuum to toluene:
 
 * **About 90 % of the solvent shift of the QP gap cancels in S₁.**
 * **The rest is physics of the model.** The multipoles (section 2) are in all models. The screened
-  exchange of the image term (section 3) is only in the Resta and DIM models, which is why their
-  solvent shift is larger than that of ``gw``.
+  exchange of the image term (section 3) adds to it; a classical sphere alone gives about −0.04 eV.
 
 8. When W is not shared
 -----------------------

@@ -155,7 +155,7 @@ calculation as the gap opening
 .. math::
 
    \Delta_{\mathrm{bulk}} = E_g^{\mathrm{GW}}(\mathrm{bulk}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})
-   \qquad (1.27\ \mathrm{eV\ for\ CdSe}),
+   \qquad (1.57\ \mathrm{eV\ for\ CdSe,\ bulk\ QSGW}),
 
 split between the valence and conduction band: :math:`-f_b\,\Delta_{\mathrm{bulk}}` for occupied, :math:`+(1 - f_b)\,\Delta_{\mathrm{bulk}}` for empty states, where :math:`f_b` is the valence share of the bulk opening. In the literature for II-VI semiconductors (Hinuma et al., *PRB* 90, 155405 (2014); Schleife et al., *PRB* 73, 245212 (2006)), the bulk GW opening is asymmetric: the valence-band maximum shifts down by ~42–43% while the conduction-band minimum shifts up by ~57–58%. In QDEX, :math:`f_b` is taken from the anchor monomer ratio :math:`f_b = d_{h0} / (d_{h0} + d_{l0})` (~41.2% for CdSe), matching first-principles bulk GW benchmarks within 1–2%. All dynamical effects of the bulk are inside this number.
 

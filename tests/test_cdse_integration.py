@@ -49,7 +49,7 @@ class CdSeIntegrationTest(unittest.TestCase):
         for name in ("geom.xyz", "BASIS_MOLOPT_UZH", "GTH_SOC_POTENTIALS.txt"):
             os.symlink(HERE / name, Path(cls.tmp) / name)
         text = (HERE / "config.yaml").read_text()
-        text = text.replace("soc_flag: true", "soc_flag: false").replace("nthreads: 12", "nthreads: 4")
+        text = text.replace("enabled: true", "enabled: false").replace("nthreads: 12", "nthreads: 4")
         (Path(cls.tmp) / "config.yaml").write_text(text)
 
     @classmethod
@@ -67,21 +67,29 @@ class CdSeIntegrationTest(unittest.TestCase):
         return work, res.stdout
 
     def test_gw_vacuum_reference(self):
-        # Sphere polarization + resta-sphere kernel (config default), residual scaled by E_conf.
-        work, log = self._run("--eps-out", "1.0")
-        self.assertAlmostEqual(_qp_gap(log), 4.020, places=2)
+        # Two-anchor gw: sphere polarization + resta-sphere kernel, residual scaled by E_conf
+        # (bulk QSGW gap 2.19 eV in MATERIAL_DB).
+        work, log = self._run("--qp_gap", "gw", "--kernel", "resta-sphere", "--eps-out", "1.0")
+        self.assertAlmostEqual(_qp_gap(log), 4.193, places=2)
         e1, f1 = _first_state(work)
-        self.assertAlmostEqual(e1, 2.443, places=2)
+        self.assertAlmostEqual(e1, 2.615, places=2)
         self.assertGreater(f1, 0.1)
 
     def test_gw_legacy_reference(self):
-        # kappa/(R + ell) curve with the bulk Resta kernel.  3.869 eV with the
-        # corrected anchor radius R0 = 5.3133 A (3.861 eV with the old 5.258 A).
-        work, log = self._run("--eps-out", "1.0", "--qp-polarization", "legacy", "--kernel", "resta",
+        # kappa/(R + ell) curve with the bulk Resta kernel (bulk QSGW gap 2.19 eV in MATERIAL_DB).
+        work, log = self._run("--qp_gap", "gw", "--eps-out", "1.0", "--qp-polarization", "legacy", "--kernel", "resta",
                               "--qp-residual-scaling", "power")
-        self.assertAlmostEqual(_qp_gap(log), 3.869, places=2)
+        self.assertAlmostEqual(_qp_gap(log), 4.070, places=2)
         e1, _ = _first_state(work)
-        self.assertAlmostEqual(e1, 3.642, places=2)
+        self.assertAlmostEqual(e1, 3.843, places=2)
+
+    def test_default_config_runs(self):
+        # The example config in the current YAML layout (quasiparticles/integrals/excitations): sgw-resta.
+        work, log = self._run()
+        self.assertIn("sGW", log)
+        self.assertTrue(3.5 < _qp_gap(log) < 5.0)
+        e1, _ = _first_state(work)
+        self.assertTrue(2.0 < e1 < 3.2)
 
     def test_brus_model_runs(self):
         # Regression: the CLI passed (coords, symbols, material) to a

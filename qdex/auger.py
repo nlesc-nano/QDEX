@@ -644,7 +644,8 @@ def auger_rates_from_config(config: Dict[str, Any]) -> AugerResult:
     from qdex.integrals import compute_cross_overlap_ao
 
     sys_cfg = config.get("system", {})
-    phys = config.get("physics", {})
+    from qdex.config_schema import flatten_config
+    phys = flatten_config(config)
     aug = config.get("auger", {})
     namd = config.get("namd", {})
     xyz_path = sys_cfg.get("xyz")

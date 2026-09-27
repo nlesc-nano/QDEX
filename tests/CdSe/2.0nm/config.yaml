@@ -4,33 +4,40 @@ system:
   basis_txt: "BASIS_MOLOPT_UZH"
   basis_name: "DZVP-MOLOPT-PBE-GTH"
   material: "CDSE"
-  nthreads: 12  
+  gth_file: "GTH_SOC_POTENTIALS.txt"
+  nthreads: 12
 
-physics:
-  qp_gap: "gw"
-  estimate_qp: false
-  exchange: true
-  kernel: "resta-sphere"   # gw default: bulk Resta W + sphere reaction field
-  eps_out: 1.0   
+environment:
+  eps_out: 1.0                  # vacuum; toluene 2.24
+
+quasiparticles:
+  model: "sgw-resta"            # Delta-COHSEX on the Resta Delta-W; sgw-dim, evgw-*, qsgw-*, none, brus, pbe
+  # z: derived                  # plasmon-pole Z of the same dielectric model (default)
+  # anchor_residual: on         # calibrated evGW@PBE0 residual (default)
+
+integrals:
+  representation: "mnok"        # mnok (atom pairs) or xs (ZDO AO density pairs)
+  charges: "mulliken"           # mulliken or lowdin
+
+excitations:
+  mode: "bse"                   # bse, sbse, diagonal_bse, diagonal_sbse, independent_qp, independent_dft
+  # kernel: set by the QP model (qp for Resta/DIM)
   nhomos: 25
   nlumos: 25
-
-fuzzy:
-  run_fuzzy: false  
-  cif: "CdSe_zb.cif"             # Used for automated K-path generation
-  soc_window: 10.0                 # eV window around Fermi level for full SOC mixing
-  pdos_atoms: ["Cd", "Se", "Cl"]         # Which atoms to project
-  coop_pairs: ["Cd-Se", "Cd-Cd", "Se-Se"]   # Which bonds to analyze
-  fuzzy_sigma: 0.01     # Broadening for the fuzzy band heatmap
-  pdos_sigma: 0.08 
-  ewin: [-5.0, 5.0]                # Energy plotting window relative to Fermi
+  full_diag: true
 
 soc:
-  soc_flag: true
-  gth_file: "GTH_SOC_POTENTIALS.txt"
+  enabled: true
+  window: 10.0                  # eV window around the Fermi level for full SOC mixing
 
-solver:
-  full_diag: true
+analysis:
+  run_fuzzy: false
+  cif: "CdSe_zb.cif"            # used for automated K-path generation
+  pdos_atoms: ["Cd", "Se", "Cl"]
+  coop_pairs: ["Cd-Se", "Cd-Cd", "Se-Se"]
+  fuzzy_sigma: 0.01
+  pdos_sigma: 0.08
+  ewin: [-5.0, 5.0]
 
 output:
   cube: false
@@ -41,4 +48,3 @@ output:
   csv_roots: 200
   time: 10.0
   save_xia: true
-

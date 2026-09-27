@@ -111,13 +111,24 @@ system:
   material: "CSPBBR3"
   nthreads: 8
 
-physics:
-  excitation_mode: "diagonal_bse"
-  qp_gap: "gw"
-  kernel: "resta"
-  eps_out: 2.4
-  soc: true
   gth_file: "GTH_SOC_POTENTIALS.txt"
+
+environment:
+  eps_out: 2.4
+
+quasiparticles:
+  model: "sgw-resta"
+
+integrals:
+  representation: "mnok"
+
+excitations:
+  mode: "bse"
+  nhomos: 25
+  nlumos: 25
+
+soc:
+  enabled: true
 ```
 
 Run static calculation:

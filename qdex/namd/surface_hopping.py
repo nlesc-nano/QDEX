@@ -896,7 +896,8 @@ def run_namd_dynamics(config):
 
     dyn_mask = (E0_pairs >= dyn_e_min) & (E0_pairs <= dyn_e_max)
 
-    phys_cfg = config.get("physics", {})
+    from qdex.config_schema import flatten_config
+    phys_cfg = flatten_config(config)
     req_nhomos = phys_cfg.get("nhomos", None)
     req_nlumos = phys_cfg.get("nlumos", None)
     if req_nhomos is not None:

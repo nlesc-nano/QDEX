@@ -17,7 +17,7 @@ Implementation entry point:
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
 * CLI: ``--config``
-* YAML: ``system.*, physics.*, namd.*``
+* YAML: ``system``, ``environment``, ``quasiparticles``, ``integrals``, ``excitations``, ``namd``
 
 .. code-block:: python
 

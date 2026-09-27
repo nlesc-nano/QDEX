@@ -7,13 +7,13 @@ Part of :doc:`/excitons/index`.
    :width: 100%
    :alt: excitation frameworks
 
-   The four ``excitation_mode`` choices, shown as the structure of the transition-space matrix.
+   The four ``excitations.mode`` choices, shown as the structure of the transition-space matrix.
 
 .. rubric:: QDEX implementation
 
 * Module: ``qdex.exciton_hamiltonian``, ``qdex.solver``
 * CLI: ``--excitation-mode``, ``--include-direct-eh``, ``--include-exchange``
-* YAML: ``physics.excitation_mode``, ``physics.include_direct_eh``, ``physics.include_exchange``
+* YAML: ``excitations.mode``, ``excitations.include_direct_eh``, ``excitations.include_exchange``
 
 The four frameworks differ in which energies they use and which parts of K\ :sup:`x` and K\ :sup:`d`
 they keep. In all of them K\ :sup:`x` is built with the bare v and K\ :sup:`d` with the W of the QP
@@ -23,7 +23,7 @@ model (:doc:`screened_kernel`).
    :header-rows: 1
    :widths: 18 26 18 38
 
-   * - ``excitation_mode``
+   * - ``excitations.mode``
      - Energy
      - K\ :sup:`x`, K\ :sup:`d`
      - What it describes
@@ -40,13 +40,13 @@ model (:doc:`screened_kernel`).
      - :math:`\varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}} + 2K^x_{ia,ia} - K^d_{ia,ia}`
      - diagonal only
      - Each transition with its own exchange and its own electron–hole attraction, no mixing. When used
-       with ``qp_gap: none`` (or ``bulk``) and a bulk kernel (``resta`` or ``dim``), this yields a
+       with ``quasiparticles.model: none`` (or ``bulk``) and a bulk kernel (``resta`` or ``dim``), this yields a
        boundary-independent **diagonal sBSE** using purely DFT eigenvalues and bulk GW scissor.
    * - ``bse`` / ``sbse``
      - eigenvalues of :math:`A_{ia,jb}`
      - full
      - Coupled TDA BSE / sBSE: transitions mix, the electron and hole correlate, and oscillator
-       strength redistributes. When paired with ``qp_gap: none`` and ``kernel: resta`` / ``dim``,
+       strength redistributes. When paired with ``quasiparticles.model: none`` and ``kernel: resta`` / ``dim``,
        the full Hamiltonian is solved with bulk W, bypassing finite-size QP corrections.
 
 **K**\ :sup:`x` **in each framework.** The diagonal element :math:`K^x_{ia,ia}` is the self-interaction

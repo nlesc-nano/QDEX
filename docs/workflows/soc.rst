@@ -10,7 +10,7 @@ Implementation entry point:
 * Module: ``qdex.cli``
 * Callable: ``qdex.cli.main``
 * CLI: ``--config``
-* YAML: ``system.*, physics.*, namd.*``
+* YAML: ``system``, ``environment``, ``quasiparticles``, ``integrals``, ``excitations``, ``namd``
 
 .. code-block:: python
 
@@ -35,19 +35,21 @@ Configuration File (``tutorial2_soc.yaml``)
      basis_name: "DZVP-MOLOPT-SR-GTH"
      cif: "CsPbBr3_bulk.cif"
 
-   physics:
-     soc: true
-     soc_window_ev: 8.0
+     gth_file: "GTH_SOC_POTENTIALS.txt"
 
-   fuzzy:
-     run: true
+   soc:
+     enabled: true
+     window: 8.0
+
+   analysis:
+     run_fuzzy: true
      pdos_atoms: ["Pb", "Br"]
      ewin: [-4.0, 4.0]
 
-   cube:
-     export: true
-     nhomos: 2
-     nlumos: 2
+   output:
+     cube: true
+     cube_nhomos: 2
+     cube_nlumos: 2
 
 
 Execution
