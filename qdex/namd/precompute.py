@@ -7,7 +7,7 @@ from scipy.optimize import linear_sum_assignment
 
 from qdex.io_utils import (
     read_xyz, parse_basis, build_shell_dicts,
-    build_atom_ao_ranges, count_ao_from_shells, read_mos_mbse
+    build_atom_ao_ranges, count_ao_from_shells, read_mos_dense, geometry_source
 )
 from qdex.integrals import compute_dipole_ao, compute_cross_overlap_ao
 import libint_cpp
@@ -202,7 +202,7 @@ def compute_frame_diagonal_bse(
     do_kd = use_kernel and include_direct_eh and w_resta is not None
     do_kx = use_kernel and include_exchange and gamma_bare is not None
 
-    C_all, eps_all, occ_all = read_mos_mbse(mo_path, n_ao)
+    C_all, eps_all, occ_all = read_mos_dense(mo_path, n_ao)
     eps_all = eps_all * HA_TO_EV
     n_occ_total = int(np.sum(occ_all > 0.5))
     n_mo_total = C_all.shape[1]
@@ -462,8 +462,9 @@ def precompute_namd_data(config):
 
     traj_dir = traj_cfg.get("dir", ".")
     frame_pattern = traj_cfg.get("frame_pattern", "frame_*")
-    xyz_name = traj_cfg.get("xyz_file", "frame.xyz")
     mo_name = traj_cfg.get("mo_file", "MOs.mbse")
+    # Geometry per frame: xyz_file, or the MO file itself when it is TREXIO HDF5
+    xyz_name = geometry_source(traj_cfg.get("xyz_file"), mo_name) or "frame.xyz"
     dt_nuc_fs = float(traj_cfg.get("dt_nuc_fs", 2.0))
 
     basis_txt = sys_cfg.get("basis_txt", "BASIS_MOLOPT_UZH")
@@ -567,7 +568,7 @@ def precompute_namd_data(config):
             raise ValueError(f"GW QP estimation failed for material '{material}'.")
     elif str(qp_model).lower() == "brus":
         from qdex.hardness import estimate_brus_qp_gap
-        C0, eps0, occ0 = read_mos_mbse(os.path.join(frame_dirs[0], mo_name), n_ao)
+        C0, eps0, occ0 = read_mos_dense(os.path.join(frame_dirs[0], mo_name), n_ao)
         eps0 = eps0 * HA_TO_EV
         n_occ_tot = int(np.sum(occ0 > 0.5))
         dft_gap0 = float(eps0[n_occ_tot] - eps0[n_occ_tot - 1])
@@ -585,7 +586,7 @@ def precompute_namd_data(config):
     else:
         try:
             target_gap = float(qp_model)
-            C0, eps0, occ0 = read_mos_mbse(os.path.join(frame_dirs[0], mo_name), n_ao)
+            C0, eps0, occ0 = read_mos_dense(os.path.join(frame_dirs[0], mo_name), n_ao)
             eps0 = eps0 * HA_TO_EV
             n_occ_tot = int(np.sum(occ0 > 0.5))
             dft_gap0 = float(eps0[n_occ_tot] - eps0[n_occ_tot - 1])

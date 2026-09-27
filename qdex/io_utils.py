@@ -29,6 +29,23 @@ def is_h5_file(path):
         return False
 
 
+def geometry_source(xyz, mo_file):
+    """Geometry file to read: ``xyz`` if given, else ``mo_file`` when it is HDF5 (TREXIO 'nucleus' group)."""
+    if xyz:
+        return xyz
+    if mo_file and (str(mo_file).lower().endswith((".h5", ".hdf5")) or is_h5_file(str(mo_file))):
+        return mo_file
+    return None
+
+
+def read_mos_dense(path, n_ao_total, verbose=False):
+    """read_mos_auto with a dense coefficient matrix (any supported format: mbse, h5, text, npz)."""
+    C, eps, occ = read_mos_auto(path, n_ao_total, verbose=verbose)
+    if hasattr(C, "toarray"):
+        C = C.toarray()
+    return np.asarray(C, dtype=np.float64), np.asarray(eps, dtype=np.float64), np.asarray(occ, dtype=np.float64)
+
+
 def read_geometry_h5(path):
     """
     Reads atomic symbols and Cartesian coordinates (in Angstroms)
@@ -459,6 +476,11 @@ def read_mos_h5(path, n_ao_total=None, spin=None, shell_ang_mom=None, verbose=Fa
             )
 
             # Filter spin channel if requested
+            if spin is None and len(np.unique(mo_spin)) > 1:
+                raise ValueError(
+                    f"'{path}' holds unrestricted orbitals (alpha and beta); read one channel with spin='alpha' "
+                    "or 'beta' (in QDEX: set system.mo_file_beta to the same file)."
+                )
             if spin is not None:
                 target_spin = 0 if str(spin).lower() in ("0", "alpha", "a") else 1
                 mask = mo_spin == target_spin

@@ -639,7 +639,7 @@ def auger_rates_from_config(config: Dict[str, Any]) -> AugerResult:
     from qdex.constants import HA_TO_EV
     from qdex.io_utils import (
         read_xyz, parse_basis, build_shell_dicts, build_atom_ao_ranges,
-        count_ao_from_shells, read_mos_mbse,
+        count_ao_from_shells, read_mos_dense, geometry_source,
     )
     from qdex.integrals import compute_cross_overlap_ao
 
@@ -648,8 +648,8 @@ def auger_rates_from_config(config: Dict[str, Any]) -> AugerResult:
     phys = flatten_config(config)
     aug = config.get("auger", {})
     namd = config.get("namd", {})
-    xyz_path = sys_cfg.get("xyz")
     mo_path = sys_cfg.get("mo_file")
+    xyz_path = geometry_source(sys_cfg.get("xyz"), mo_path)
     basis_txt = sys_cfg.get("basis_txt")
     basis_name = sys_cfg.get("basis_name")
     if not xyz_path or not mo_path or not os.path.exists(str(mo_path)):
@@ -670,7 +670,7 @@ def auger_rates_from_config(config: Dict[str, Any]) -> AugerResult:
     n_ao = count_ao_from_shells(shells)
     atom_ao_ranges = build_atom_ao_ranges(shells)
     nthreads = int(sys_cfg.get("nthreads", 1))
-    C, eps, occ = read_mos_mbse(mo_path, n_ao)
+    C, eps, occ = read_mos_dense(mo_path, n_ao)
     eps = np.asarray(eps, dtype=np.float64) * HA_TO_EV
     homo_idx = int(np.sum(np.asarray(occ) > 0.5)) - 1
     if homo_idx < 0 or homo_idx >= len(eps) - 1:
