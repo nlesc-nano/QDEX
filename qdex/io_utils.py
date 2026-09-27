@@ -384,7 +384,8 @@ def build_trexio_to_cp2k_ao_map(shell_ang_mom):
     Constructs the 0-based mapping array `mapping` such that
     `mapping[i_trexio] = j_cp2k` for spherical Gaussian orbitals.
 
-    In CP2K's TREXIO export (src/trexio_utils.F):
+    In CP2K's TREXIO export (src/trexio_utils.F)::
+
       DO ishell = 1, shell_num
          l = shell_ang_mom(ishell)
          DO k = 1, 2*l + 1
