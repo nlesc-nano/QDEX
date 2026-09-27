@@ -77,7 +77,7 @@ of one polarization, so the QP energies and K\ :sup:`d` must come from one W.
    * - ``sgw-dim``, ``evgw-dim``, ``qsgw-dim``
      - ``qp``
      - the same with the DIM :math:`W^{\mathrm{QD}}`
-   * - ``none``, ``brus``
+   * - ``bulk``, ``brus``
      - ``resta`` or ``dim``
      - :math:`W^{\mathrm{bulk}}`: no ΔW, like the QP energies (:doc:`sbse`)
 
@@ -90,7 +90,7 @@ makes the electron–hole interaction dynamical; to first order the two reductio
 excitation (Bechstedt et al., PRL 78, 1528 (1997)). With Z̄ in the kernel the static BSE keeps that
 cancellation.
 
-**Kernels for models without ΔW** (``none``, ``brus``, ``pbe``, a numeric gap):
+**Kernels for models without ΔW** (``none``, ``bulk``, ``brus``, a numeric gap):
 
 * ``resta`` / ``xs-resta``: bulk Resta W, :math:`S_{\epsilon_\infty}(r)\,\gamma`.
 * ``dim`` / ``xs-dim``: DIM screening :math:`S_{\epsilon_{AB}}(r)\,\gamma`, without the environment term.

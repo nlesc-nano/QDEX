@@ -29,7 +29,7 @@ Consistency rule: one W for QP and BSE
   correction and the BSE kernel use the same representation.
 * Delta-W QP models (sgw-*, evgw-*, qsgw-*; Resta or DIM) define W; the BSE uses
   that W (``kernel: qp``). Resta and DIM are never mixed.
-* sBSE: ``qp_gap: none`` (KS + bulk GW) with a bulk kernel (resta or dim) and
+* sBSE: ``qp_gap: bulk`` (PBE KS + bulk GW) with a bulk kernel (resta or dim) and
   ``excitation_mode: sbse``: Delta-W is dropped from both sides.
 * ``brus`` defines no W and uses the bulk Resta kernel.
 
@@ -66,8 +66,8 @@ SWEEP_DIR = ["sweep"]  # "sweep_large" for --profile large
 
 QP_MODELS = {
     # name: overrides (command-line key names)
-    "sbse-resta": {"qp_gap": "none", "excitation_mode": "sbse", "kernel": "resta"},
-    "sbse-dim": {"qp_gap": "none", "excitation_mode": "sbse", "kernel": "dim"},
+    "sbse-resta": {"qp_gap": "bulk", "excitation_mode": "sbse", "kernel": "resta"},
+    "sbse-dim": {"qp_gap": "bulk", "excitation_mode": "sbse", "kernel": "dim"},
     "brus": {"qp_gap": "brus", "kernel": "resta"},
     "sgw-resta": {"qp_gap": "sgw-resta", "kernel": "qp"},
     "evgw-resta": {"qp_gap": "evgw-resta", "kernel": "qp"},

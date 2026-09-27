@@ -783,7 +783,7 @@ def main():
     parser.add_argument("--f_thresh", type=float, default=0.0)
 
     parser.add_argument("--qp_gap", type=str, default="brus",
-                        help="Quasiparticle gap model: 'none' / 'bulk' (bulk GW scissor without finite-size Delta-W), 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'pbe' (uncorrected), or explicit gap in eV.")
+                        help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'bulk' (PBE orbitals + bulk GW correction, PBE only), 'none' / 'pbe' / 'dft' (uncorrected DFT energies), or explicit gap in eV.")
     parser.add_argument("--qp-z", dest="qp_z", type=str, default=None,
                         help="Quasiparticle renormalization Z for Delta-W models: 'derived' (default; one plasmon pole whose "
                              "frequency follows from the same eps as the model's W, see compute_dynamic_z) or a fixed "
@@ -1473,11 +1473,15 @@ def main():
                 print("  [QP Warning] qp_gap is set to 'sgw', which already applies the microscopic Delta-W quasiparticle correction.")
                 print("  [QP Warning] estimate_qp enables the experimental COHSEX/TB Mulliken correction and can double-count QP shifts.")
                 print("  [QP Warning] Production runs should use estimate_qp: false unless you explicitly want this experimental path.")
-        elif args.qp_gap.lower() == "pbe":
+        elif args.qp_gap.lower() in ["none", "pbe", "dft"]:
             scissor = 0.0
             target_qp_gap = dft_gap
-            print("  [QP] Explicit uncorrected PBE mode selected (scissor = 0.0000 eV).")
-        elif args.qp_gap.lower() in ["none", "bulk"]:
+            print("  [QP] No QP correction: DFT orbital energies used as they are (scissor = 0.0000 eV).")
+            if str(getattr(args, "excitation_mode", "")).lower() in ("sbse", "diagonal_sbse"):
+                print("  [QP Notice] The sBSE adds the bulk GW correction to PBE orbitals: use quasiparticles.model: bulk. "
+                      "'none' no longer adds it.")
+        elif args.qp_gap.lower() == "bulk":
+            print("  [QP] Bulk GW correction (bulk QSGW - bulk PBE). Valid only for PBE orbitals.")
             if entry is not None and len(entry) >= 9:
                 pbe_bulk_gap = float(entry[7])
                 gw_bulk_gap = float(entry[8])
@@ -1511,7 +1515,7 @@ def main():
             print(f"       -> Zero finite-size Delta-W or boundary polarization applied.")
         else:
             raise ValueError(
-                f"Unknown qp_gap mode '{args.qp_gap}'. Use 'none', 'bulk', 'gw', 'sgw-dim', 'evgw-dim', 'qsgw-dim', 'sgw-resta', 'evgw-resta', 'qsgw-resta', 'sgw', 'brus', 'pbe', or a numeric gap."
+                f"Unknown qp_gap mode '{args.qp_gap}'. Use 'none' (uncorrected), 'bulk' (PBE + bulk GW), 'gw', 'sgw-dim', 'evgw-dim', 'qsgw-dim', 'sgw-resta', 'evgw-resta', 'qsgw-resta', 'sgw', 'brus', 'pbe', or a numeric gap."
             )
     else:
         # Numeric explicit gap provided
@@ -1969,7 +1973,7 @@ def main():
         bse_soc_E -= (bse_soc_E[bse_spinor_homo_idx] + bse_soc_E[bse_spinor_homo_idx + 1]) / 2.0
 
     qp_breakdown_alpha = None
-    if qp_provenance is not None and getattr(args, "qp_gap", "").lower() != "pbe":
+    if qp_provenance is not None and getattr(args, "qp_gap", "").lower() not in ("pbe", "none", "dft"):
         fb = qp_provenance.get("bulk_homo_fraction", anchor_bulk_homo_fraction(args.material))
         d_bulk = float(qp_provenance.get("bulk_gw_shift_ev", qp_provenance.get("bulk_shift_ev", 0.0)))
         bulk_arr = np.where(np.arange(len(eps)) <= homo_index, -fb * d_bulk, (1.0 - fb) * d_bulk)

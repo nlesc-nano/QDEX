@@ -39,7 +39,7 @@ Models (vacuum, spin-free, 25 × 25; Δ = model − evGW):
      - HOMO shift
      - LUMO shift
      - S₁
-   * - ``none``
+   * - ``bulk``
      - 4.209
      - −1.82
      - −0.646

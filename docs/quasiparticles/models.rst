@@ -32,8 +32,11 @@ The models differ in how much of ΔW they build, in order of increasing detail:
      - ΔW
      - ΔΣ
    * - ``none``
+     - no correction
+     - none; DFT energies as they are (any functional)
+   * - ``bulk``
      - none (ΔW = 0)
-     - none; KS energies + bulk GW correction
+     - none; PBE energies + bulk GW correction (PBE orbitals only)
    * - ``brus``
      - none (ΔW = 0)
      - none; effective-mass confinement on the experimental bulk gap
@@ -47,21 +50,27 @@ The models differ in how much of ΔW they build, in order of increasing detail:
 ``evgw-*`` and ``qsgw-*`` iterate the Resta and DIM models (section 7). The same W, including ΔW, is
 the BSE kernel (:doc:`/excitons/kernel`).
 
-1. No finite-size correction: ``none`` and ``brus``
----------------------------------------------------
+1. No correction and bulk correction: ``none``, ``bulk``, ``brus``
+------------------------------------------------------------------
 
-**ΔW = 0.** The dot is treated as bulk material. Both models are consistent with the bulk W in the
-BSE (``kernel: resta`` or ``dim``). The missing surface polarization then largely cancels in S₁
-(:doc:`/excitons/cancellation`), so S₁ is more reliable than the QP gap.
+**``none``** (also ``pbe``, ``dft``) uses the orbital energies of the MO file as they are, whatever
+functional produced them. It is the input of frameworks that carry their own correction in the kernel,
+such as sTDA with a hybrid functional, and the reference against which every correction is measured.
 
-**``none``** keeps the KS energies and adds only the bulk correction:
+The next two models have **ΔW = 0**: the dot is treated as bulk material. Both are consistent with
+the bulk W in the BSE (``kernel: resta`` or ``dim``). The missing surface polarization then largely
+cancels in S₁ (:doc:`/excitons/cancellation`), so S₁ is more reliable than the QP gap.
+
+**``bulk``** keeps the PBE energies and adds only the bulk GW correction:
 
 .. math::
 
    \varepsilon_n^{\mathrm{QP}} = \varepsilon_n - f_b\,\Delta_{\mathrm{bulk}}\ (\mathrm{occ}),\qquad
    \varepsilon_n^{\mathrm{QP}} = \varepsilon_n + (1-f_b)\,\Delta_{\mathrm{bulk}}\ (\mathrm{virt}).
 
-The confinement is the KS confinement of the actual orbitals. With ``excitations.mode: sbse`` and a
+Δ_bulk is bulk QSGW minus bulk **PBE**, so this correction is defined only for PBE orbitals; on
+hybrid orbitals it would count the exchange opening twice. The confinement is the KS confinement of
+the actual orbitals. With ``excitations.mode: sbse`` and a
 bulk kernel this is the sBSE: by the Delerue–Lannoo–Allan cancellation the surface polarization drops
 out of the neutral excitation, and neither the QP gap nor the BSE needs it.
 
@@ -338,7 +347,7 @@ Both are self-consistent in ΔW only; the bulk part stays the tabulated Δ_bulk.
      - ``sgw-resta`` (spherical dots) or ``sgw-dim`` (shape, ligands, core/shell), mnok, in the
        solvent. Add SOC for the band edge.
    * - S₁ without any finite-size QP term
-     - ``none`` with ``excitations.mode: sbse`` and a bulk kernel.
+     - ``bulk`` with ``excitations.mode: sbse`` and a bulk kernel.
    * - QP gap, IP/EA
      - Any Resta/DIM model; ``qsgw-*`` for the most complete static treatment.
    * - Orbital relaxation
@@ -348,7 +357,6 @@ Both are self-consistent in ΔW only; the bulk part stays the tabulated Δ_bulk.
 
 **Other options,** kept for reference:
 
-* ``pbe``: no correction.
 * ``gw``: the earlier two-anchor interpolation (classical sphere + one fitted residual). Still used by
   the NAMD precompute; not recommended for new work.
 * ``sgw``: site-diagonal ΔW on the sBSE monopole RPA. It underscreens CdSe (ε_eff ≈ 1).

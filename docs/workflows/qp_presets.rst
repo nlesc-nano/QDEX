@@ -45,12 +45,12 @@ Orbital relaxation
 No finite-size correction (sBSE)
 --------------------------------
 
-KS energies plus the bulk GW correction, with the bulk W in the BSE:
+PBE energies plus the bulk GW correction, with the bulk W in the BSE:
 
 .. code-block:: yaml
 
    quasiparticles:
-     model: none
+     model: bulk                 # PBE orbitals only
 
    excitations:
      mode: sbse
