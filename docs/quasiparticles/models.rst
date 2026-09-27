@@ -239,7 +239,7 @@ These are the continuous formulas with the integrals represented on the basis (:
   - ΔSEX = −3.01 eV for the HOMO and −0.22 eV for the LUMO;
   - ΔCOH = +1.55 and +1.67 eV.
 
-  The screened exchange raises the QP gap from 6.24 eV (classical) to 6.57 eV (evGW: 6.03 eV).
+  The screened exchange raises the QP gap from 6.54 eV (classical) to 6.88 eV (evGW\@PBE0: 6.03 eV).
 * **Classical option.** ``quasiparticles.selfenergy: classical`` replaces ΔΣ_n by ±½ q_nᵀΔW q_n, with q_n the
   atomic populations.
 * **Cost.** One cached eigendecomposition of S and three matrix products for all orbitals.
