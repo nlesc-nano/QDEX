@@ -35,6 +35,9 @@ master_doc = "index"
 autodoc_mock_imports = [
     "libint_cpp",
     "torch",
+    "matplotlib",
+    "pymatgen",
+    "plotly",
 ]
 
 # Autodoc settings
