@@ -11,7 +11,11 @@ class ExcitonHamiltonian:
                  charge_type='mulliken', soc_U=None, soc_E=None, device="numpy", precomputed_sigma=None,
                  vxc_ao_path=None, nthreads=1, spin='singlet', C_beta=None, eps_beta=None, homo_index_beta=None,
                  n_occ_beta=None, n_virt_beta=None, excitation_mode="bse", kernel_type="mnok",
-                 include_direct_eh=True, eps_dft=None):
+                 include_direct_eh=True, eps_dft=None, selection=None, selection_energy=7.0,
+                 selection_pt=1e-4):
+        self.selection = (str(selection).lower() if selection not in (None, False) else "none")
+        self.selection_energy = float(selection_energy if selection_energy is not None else 7.0)
+        self.selection_pt = float(selection_pt if selection_pt is not None else 1e-4)
         
         self.excitation_mode = str(excitation_mode).lower()
         if self.excitation_mode in ("diagonal_sbse", "diagonal_stda"):
@@ -395,6 +399,23 @@ class ExcitonHamiltonian:
             mask_f = np.ones_like(dft_gap_matrix, dtype=bool)
 
         self.valid_mask = mask_e & mask_f
+        pt_shift = None
+        if self.selection == "perturbative":
+            if self.diagonal_mode or self.soc_flag or not hasattr(self, "q_ov"):
+                print("  [Selection] Perturbative selection applies to the coupled spin-free solvers only; skipped.")
+            else:
+                from qdex.selection import perturbative_selection
+                kx_factor = (2.0 if self.spin == 'singlet' else 0.0) if self.include_exchange else 0.0
+                w_virt = getattr(self, "W_virt", None) if self.include_direct_eh else None
+                n_before = int(self.valid_mask.sum())
+                self.valid_mask, pt_shift, sel = perturbative_selection(
+                    qp_gap_matrix + scissor_ev, self.q_ov, self.q_occ, w_virt, self.gamma, kx_factor,
+                    w_virt is not None, self.selection_energy, self.selection_pt, base_mask=self.valid_mask)
+                print(f"\n  [Selection] Perturbative (Grimme): E_thr = {self.selection_energy:.2f} eV, "
+                      f"t = {self.selection_pt:.1e} Eh")
+                print(f"    {sel['n_primary']} primary + {sel['n_added']} added of {sel['n_candidates']} candidates "
+                      f"({n_before} in the active space); PT2 lowering of primaries: mean "
+                      f"{sel['pt2_mean_ev']*1000:.1f} meV, max {sel['pt2_max_ev']*1000:.1f} meV")
         self.valid_i, self.valid_a = np.where(self.valid_mask)
         self.dim = len(self.valid_i)
         
@@ -403,6 +424,8 @@ class ExcitonHamiltonian:
             sys.exit(1)
             
         # 3. Feed the corrected QP energies into the diagonal
+        if pt_shift is not None:
+            qp_gap_matrix = qp_gap_matrix + pt_shift
         self.D_spatial = qp_gap_matrix[self.valid_mask] + scissor_ev
         self.D = self.D_spatial
         self.D_dft_spatial = dft_gap_matrix[self.valid_mask]

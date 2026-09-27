@@ -197,6 +197,10 @@ excitations
    * - ``nroots``, ``full_diag``, ``tol``
      - 10, false, 10⁻⁵
      - roots, dense instead of Davidson, Davidson tolerance
+   * - ``selection`` [``--selection``], ``selection_energy``, ``selection_pt``
+     - ``none``, 7.0, 10⁻⁴
+     - ``perturbative``: Grimme's selection of transitions from the active space for the coupled
+       solvers; E_thr in eV, t in hartree (:doc:`/excitons/bse`)
    * - ``triplet``
      - false
      - triplet BSE (no K\ :sup:`x`)
