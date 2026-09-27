@@ -130,6 +130,9 @@ YAML Configuration Example
    namd:
      trajectory:
        dir: "./trajectory"               # Directory containing frame_* subdirectories
+       frame_pattern: "frame_*"
+       mo_file: "MOs.mbse"               # per frame: .mbse, text, or TREXIO HDF5 (orbitals.h5)
+       xyz_file: "frame.xyz"             # per frame; not needed when mo_file is .h5 (geometry read from it)
        dt_nuc_fs: 2.0                    # Nuclear MD time step in femtoseconds
        start_frame: 1
        end_frame: 500

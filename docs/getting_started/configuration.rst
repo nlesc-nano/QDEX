@@ -79,9 +79,11 @@ system
    * - Key [flag]
      - Meaning
    * - ``mo_file``, ``mo_file_beta``
-     - CP2K MO file (text, ``.gz`` or ``.mbse``); beta MOs for unrestricted runs
+     - CP2K MO file (text, ``.gz``, ``.mbse`` or TREXIO HDF5 ``.h5``); beta MOs for unrestricted runs.
+       For an unrestricted ``.h5`` give the same file for both; the α and β channels are read
+       separately
    * - ``xyz``
-     - geometry
+     - geometry; optional with an ``.h5`` MO file, whose ``nucleus`` group is read instead
    * - ``basis_txt``, ``basis_name``
      - basis-set file and basis name
    * - ``material`` [``--material``]

@@ -18,7 +18,7 @@ if __package__ is None or __package__ == "":
 from qdex.io_utils import (
     read_xyz, parse_basis, build_shell_dicts,
     count_ao_from_shells, build_atom_ao_ranges, read_mos_auto, read_mos_uks,
-    read_geometry_h5, is_h5_file
+    read_geometry_h5, is_h5_file, geometry_source
 )
 from qdex.solver import ExcitonSolver
 from qdex.constants import HA_TO_EV, BOHR_PER_ANG
@@ -1137,6 +1137,9 @@ def main():
     if config_path:
         print(f"Loading configuration from {config_path}...")
 
+    if not getattr(args, "xyz", None) and geometry_source(None, getattr(args, "mo_file", None)):
+        args.xyz = args.mo_file   # geometry from the TREXIO 'nucleus' group of the HDF5 MO file
+        print(f"  [Geometry] system.xyz not set; reading the geometry from '{args.mo_file}'.")
     required_args = ['mo_file', 'xyz', 'basis_txt', 'basis_name', 'qp_gap']
     missing = [arg for arg in required_args if getattr(args, arg) is None]
     if missing: parser.error(f"Missing required arguments: {', '.join(missing)}")
