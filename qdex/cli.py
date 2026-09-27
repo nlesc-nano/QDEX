@@ -934,6 +934,10 @@ def main():
     parser.add_argument("--selection-shift", dest="selection_shift", choices=["on", "off"], default="on",
                         help="Lower the primary diagonal by the second-order contributions of the rejected "
                              "transitions (std2 behaviour, default on).")
+    parser.add_argument("--qp-radius", dest="qp_radius", choices=["saxs", "hull"], default="saxs",
+                        help="Radius of the dielectric sphere and of the Brus confinement: 'saxs' (default, SAXS-"
+                             "equivalent sphere of the inorganic electron density) or 'hull' (core hull + 1.25 A). "
+                             "The two-anchor gw model always uses the hull radius.")
     parser.add_argument("--inorganic-elements", dest="inorganic_elements", nargs="+", default=None,
                         help="Elements seen by SAXS for the reported size (default: all but H, C, N, O, P, B, Si, F).")
     parser.add_argument("--stda-functional", dest="stda_functional", type=str, default=None,
@@ -1115,6 +1119,8 @@ def main():
 
     setup_run_logging(getattr(args, "log_file", "minibse.log"))
     validate_args(args, parser)
+    import qdex.hardness as _hardness
+    _hardness.RADIUS_DEFINITION = str(getattr(args, "qp_radius", "saxs") or "saxs").lower()
     compute_device, dev_obj = resolve_device(args.device, verbose=True)
     if config_path:
         print(f"Loading configuration from {config_path}...")
@@ -1149,8 +1155,14 @@ def main():
         qp_name_sz = str(args.qp_gap).lower()
         uses_radius = not (qp_name_sz in ("none", "pbe", "dft", "bulk")
                            or qp_name_sz.replace(".", "", 1).isdigit())
-        radius_note = (f"core hull radius {cluster_size_info['hull_radius_ang']:.3f} A "
-                       f"(sphere reaction field / confinement of '{args.qp_gap}')") if uses_radius else None
+        if not uses_radius:
+            radius_note = None
+        elif qp_name_sz in ("gw", "sgw-anchor") or str(getattr(args, "qp_radius", "saxs")).lower() == "hull":
+            radius_note = (f"hull radius {cluster_size_info['hull_radius_ang']:.3f} A "
+                           f"(sphere reaction field / confinement of '{args.qp_gap}')")
+        else:
+            radius_note = (f"SAXS radius {5.0 * cluster_size_info['d_saxs_nm']:.3f} A "
+                           f"(sphere reaction field / confinement of '{args.qp_gap}')")
         print(format_cluster_size(cluster_size_info, radius_note))
         with open("cluster_size.json", "w", encoding="utf-8") as fh:
             json.dump(cluster_size_info, fh, indent=2)
@@ -1585,7 +1597,9 @@ def main():
         # QP polarization term, W = Resta(eps_inf) + sphere reaction field.
         from qdex.hardness import build_resta_mnok, build_sphere_reaction_field
         w_resta, _ = build_resta_mnok(syms, np.array(coords_ang), args.alpha, args.material, eps_out=args.eps_out)
-        w_sphere = build_sphere_reaction_field(np.array(coords_ang), syms, args.material, args.eps_out)
+        # The two-anchor gw model is defined with the hull radius (its anchor R0 uses it).
+        w_sphere = build_sphere_reaction_field(np.array(coords_ang), syms, args.material, args.eps_out,
+                                               radius_definition="hull")
         qp_w = (w_resta + w_sphere, f"Resta(eps_inf) + sphere reaction field (eps_out = {args.eps_out:.2f})")
         qp_provenance["bse_kernel_model"] = "resta_plus_sphere_reaction_field"
         qp_provenance["w_parts"] = {"w_qd": w_resta, "w_bulk": w_resta, "w_add": w_sphere,

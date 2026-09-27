@@ -104,9 +104,9 @@ appropriate for molecules, but not for a dielectric: in a large dot the attracti
      - 2.800
      - 2.680
    * - ΔW models (``sgw-*``, ``qsgw-dim``), toluene
-     - 3.94
-     - 3.00–3.03
-     - 2.87–2.91
+     - 3.90–3.91
+     - 2.97–2.99
+     - 2.84–2.87
 
 * **a_x = 0 on PBE orbitals** gives the KS gap plus a small exchange term (+0.11 eV at 1.2 nm,
   +0.04 eV at 2 nm): no binding.

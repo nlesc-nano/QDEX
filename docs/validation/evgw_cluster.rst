@@ -46,52 +46,52 @@ Models (vacuum, spin-free, 25 × 25; Δ = model − evGW):
      - +0.924
      - 3.756 (sBSE)
    * - ``sgw-resta``
-     - 6.875
-     - +0.85
-     - −1.988
-     - +2.248
-     - 4.025
+     - 6.703
+     - +0.67
+     - −1.910
+     - +2.154
+     - 3.977
    * - ``sgw-dim``
-     - 6.776
-     - +0.75
-     - −1.913
-     - +2.224
-     - 4.032
+     - 6.603
+     - +0.57
+     - −1.835
+     - +2.129
+     - 3.983
    * - ``evgw-resta``
-     - 7.165
-     - +1.14
-     - −2.173
-     - +2.353
-     - 4.011
+     - 6.982
+     - +0.95
+     - −2.089
+     - +2.254
+     - 3.966
    * - ``evgw-dim``
-     - 6.763
-     - +0.73
-     - −1.902
-     - +2.221
-     - 4.030
+     - 6.591
+     - +0.56
+     - −1.824
+     - +2.127
+     - 3.982
    * - ``qsgw-resta``
-     - 7.227
-     - +1.20
+     - 7.031
+     - +1.00
      - —
      - —
-     - 4.018
+     - 3.957
    * - ``qsgw-dim``
-     - 6.770
-     - +0.74
+     - 6.596
+     - +0.57
      - —
      - —
-     - 4.012
+     - 3.967
 
 **What it shows.**
 
-* **The ΔW models open the gap 0.7–1.2 eV more than evGW\@PBE0.** Most of the excess is on the HOMO
-  (0.5–0.8 eV too deep); the LUMO is 0.2–0.35 eV too high.
+* **The ΔW models open the gap 0.56–1.00 eV more than evGW\@PBE0.** Most of the excess is on the HOMO
+  (0.43–0.69 eV too deep); the LUMO is 0.13–0.26 eV too high.
 * **Where it comes from.**
 
   - Static COHSEX overestimates gaps (no dynamical screening beyond one plasmon pole).
   - The bulk QSGW Δ_bulk is 0.30 eV larger than the G₀W₀-type value used before.
   - The reference itself starts from PBE0 and is not converged with respect to self-consistency.
-* **S₁ does not inherit the QP spread.** All ΔW models give 4.01–4.03 eV, because the extra opening
+* **S₁ does not inherit the QP spread.** All ΔW models give 3.96–3.98 eV, because the extra opening
   is matched by a stronger K\ :sup:`d` (:doc:`/excitons/cancellation`).
 
 The ΔW models are therefore not a substitute for GW when the absolute QP gap or IP/EA of a small

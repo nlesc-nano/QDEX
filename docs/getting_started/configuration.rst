@@ -142,6 +142,10 @@ quasiparticles
    * - ``solvent_term`` [``--qp-solvent-term``]
      - ``sphere``
      - environment part of ΔW: dielectric-sphere reaction field, or the older ``born`` form
+   * - ``radius`` [``--qp-radius``]
+     - ``saxs``
+     - radius of the dielectric sphere and of the Brus confinement: SAXS-equivalent (``saxs``) or core
+       hull + 1.25 Å (``hull``); the two-anchor ``gw`` always uses the hull
    * - ``energy_reference``
      - ``vacuum``
      - QP energies relative to the vacuum or to the Fermi level (``fermi``)

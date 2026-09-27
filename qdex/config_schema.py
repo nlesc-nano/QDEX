@@ -54,6 +54,7 @@ SECTIONS = {
         "residual_power": "qp_residual_power",
         "edge_split": "qp_edge_split",
         "energy_reference": "qp_energy_reference",
+        "radius": "qp_radius",
         "polarization": "qp_polarization",
         "regularization_length": "qp_regularization_length",
         "strict": "qp_strict",
