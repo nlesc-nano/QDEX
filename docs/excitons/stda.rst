@@ -125,5 +125,5 @@ appropriate for molecules, but not for a dielectric: in a large dot the attracti
 For dots, sTDA with PBE orbitals is therefore a reference, not a replacement for the sBSE or the ΔW
 models. With hybrid (PBE0) MO files it is Grimme's method as published.
 
-**Not implemented yet:** Grimme's perturbative selection of high-energy transitions. The active space
-is set by ``nhomos``, ``nlumos`` and ``e_thresh`` as for the other solvers.
+**Transition selection.** Grimme's perturbative selection is available for all coupled solvers
+(``excitations.selection: perturbative``; :doc:`bse`).

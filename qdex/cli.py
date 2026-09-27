@@ -922,6 +922,13 @@ def main():
               "with DFT gaps ('independent_dft'), QP gaps ('independent_qp'), or diagonal Kx/Kd corrections "
               "('diagonal_bse', 'diagonal_sbse', 'diagonal_stda')."),
     )
+    parser.add_argument("--selection", dest="selection", choices=["none", "perturbative"], default="none",
+                        help="Transition selection for the coupled solvers: 'perturbative' keeps the transitions "
+                             "below selection_energy and adds the higher ones strongly coupled to them (Grimme).")
+    parser.add_argument("--selection-energy", dest="selection_energy", type=float, default=7.0,
+                        help="Primary-space threshold E_thr in eV on the diagonal A_ia,ia (default 7.0, as std2).")
+    parser.add_argument("--selection-pt", dest="selection_pt", type=float, default=1e-4,
+                        help="Second-order selection threshold t in hartree (default 1e-4, as std2).")
     parser.add_argument("--stda-functional", dest="stda_functional", type=str, default=None,
                         help="sTDA: functional of the MO file, sets a_x (pbe 0, b3lyp 0.20, pbe0 0.25, ...).")
     parser.add_argument("--stda-ax", dest="stda_ax", type=str, default=None,
@@ -2364,6 +2371,7 @@ def main():
         kernel_type=args.kernel_type,
         shared_W=(stda_gamma_j if stda_gamma_j is not None else (qp_w[0] if qp_w is not None else None)),
         shared_gamma_bare=(stda_gamma_k if stda_gamma_k is not None else shared_gamma_ao),
+        selection=args.selection, selection_energy=args.selection_energy, selection_pt=args.selection_pt,
         shells=shells,
         eps_dft=eps_dft_solver
     )
