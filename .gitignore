@@ -25,6 +25,7 @@ CMakeScripts/
 # Simulation outputs and data caches
 *.npz
 *.csv
+!benchmarks/results/*.csv
 *.png
 *.log
 namd_precomputed*/
