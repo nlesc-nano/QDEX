@@ -6,6 +6,7 @@ import sys
 import os
 import time 
 import gc
+import inspect
 import platform
 import yaml 
 from qdex.config_schema import SECTIONS, section_dest
@@ -777,7 +778,8 @@ def resolve_bse_kernel(args, qp_w):
     return kernel
 
 
-def main():
+def _build_parser():
+    """Command-line interface of QDEX."""
     parser = argparse.ArgumentParser(description="QDEX - Quantum Dot Excitations & Dynamics exciton solver")
 
     parser.add_argument("--config", type=str, help="Path to a YAML configuration file.")
@@ -1016,7 +1018,11 @@ def main():
     parser.add_argument("--namd-multi-init", action="store_true", help="Enable automated multi-origin ensemble sampling across the MD trajectory.")
     parser.add_argument("--namd-origins", type=int, default=None, help="Number of independent initial condition origins for multi-origin NAMD (default: auto-calibrated).")
     parser.add_argument("--namd-window-fs", type=float, default=None, help="Simulation window duration in fs for each multi-origin sub-trajectory (default: auto-calibrated).")
+    return parser
 
+
+def _load_arguments(parser):
+    """Parse the command line and the YAML config; run NAMD/utility modes (returns None then)."""
     args = parser.parse_args()
 
     config_path = args.config
@@ -1126,7 +1132,11 @@ def main():
         print("  [Deprecated] 'exchange' now maps to include_direct_eh; use include_direct_eh instead.")
     if getattr(args, "include_exchange", None) is None:
         args.include_exchange = True
+    return {"args": args, "config_path": config_path}
 
+
+def _prepare_run(args, *, config_path, parser):
+    """Logging, argument validation, MNOK/radius settings and the compute device."""
     setup_run_logging(getattr(args, "log_file", "minibse.log"))
     validate_args(args, parser)
     import qdex.hardness as _hardness
@@ -1149,7 +1159,13 @@ def main():
     print("===================================================")
 
     tracker = ResourceTracker()
+    return _export(locals(), (
+        "compute_device", "dev_obj", "tracker"
+    ))
 
+
+def _read_geometry_and_basis(args, *, tracker):
+    """Geometry, basis set and the size of the dot (always reported)."""
     tracker.start_stage("Geometry & Basis Parsing")
     print("\n--- Parsing Geometry and Basis Set ---")
     t0_parse = time.time()
@@ -1193,7 +1209,13 @@ def main():
         args.cluster_size_info = cluster_size_info
     except Exception as exc:  # the size report must never stop a calculation
         print(f"  [Size] Could not evaluate the cluster size: {exc}")
+    return _export(locals(), (
+        "atom_ao_ranges", "coords_ang", "n_ao", "shells", "syms"
+    ))
 
+
+def _read_molecular_orbitals(args, *, n_ao, shells, tracker):
+    """AO overlap and molecular orbitals (restricted or unrestricted), energy axis."""
     tracker.start_stage("AO Overlap Matrix (S)")
     print("\n--- Computing AO overlap ---")
     t0_s = time.time()
@@ -1259,7 +1281,15 @@ def main():
     eps_beta_shifted = eps_beta - e_fermi_raw
     e_homo = eps_shifted[homo_index]
     e_lumo = eps_beta_shifted[homo_index_beta + 1]
+    return _export(locals(), (
+        "C", "C_beta", "S", "e_fermi_raw", "e_homo", "e_lumo", "eps", "eps_beta", "eps_beta_shifted",
+        "eps_shifted", "homo_index", "homo_index_beta", "occ", "occ_beta", "t0_gap"
+    ))
 
+
+def _quasiparticle_correction(args, *,
+        C, S, atom_ao_ranges, coords_ang, eps, eps_beta, homo_index, homo_index_beta, shells, syms, tracker):
+    """QP model: gap correction and the screened interaction W it is built on."""
     tracker.start_stage("Quasiparticle (GW) Model")
     dft_gap = eps_beta[homo_index_beta + 1] - eps[homo_index]
     target_qp_gap = dft_gap
@@ -1634,7 +1664,17 @@ def main():
         args.kernel = None
     elif args.kernel == "resta-sphere":
         raise ValueError("kernel 'resta-sphere' requires qp_gap: gw with qp_polarization: sphere.")
+    return _export(locals(), (
+        "C", "_all_populations", "_get_SC", "_xs_gamma_ao", "confinement_energy", "dft_gap", "entry",
+        "eps_qp", "eps_qp_active", "f_homo", "f_lumo", "qp_pop_mode", "qp_provenance", "qp_w", "scissor",
+        "target_qp_gap"
+    ))
 
+
+def _qp_levels_and_kernel(args, *,
+        C, S, _all_populations, _xs_gamma_ao, atom_ao_ranges, coords_ang, dft_gap, eps, eps_qp,
+        eps_qp_active, homo_index, qp_pop_mode, qp_provenance, qp_w, scissor, syms, target_qp_gap):
+    """Orbital-resolved QP levels, the BSE kernel and the sTDA interactions; QP provenance."""
     w_parts = qp_provenance.pop("w_parts", None) if qp_provenance is not None else None
     use_xs = str(args.kernel_type).lower() in ("xs", "xs-qdex")
     if qp_w is not None and use_xs and w_parts is None:
@@ -1841,7 +1881,16 @@ def main():
     print(f"  [QP]  Scissor Shift: {scissor:.4f} eV")
     qp_provenance_file = write_qp_provenance(qp_provenance, dft_gap, target_qp_gap, scissor, args)
     print_qp_provenance(qp_provenance, dft_gap=dft_gap, target_qp_gap=target_qp_gap, output_file=qp_provenance_file)
-   
+    return _export(locals(), (
+        "C_act", "anchor_residual_scale", "edges", "eps_qp_active", "f_h", "fb", "qp_w", "scissor",
+        "shared_gamma_ao", "stda_gamma_j", "stda_gamma_k", "target_qp_gap"
+    ))
+
+
+def _ip_ea_and_energy_axis(args, *,
+        C_beta, anchor_residual_scale, coords_ang, dft_gap, e_fermi_raw, edges, entry, eps, eps_qp_active,
+        eps_shifted, f_homo, f_lumo, homo_index, qp_provenance, scissor, syms, t0_gap, target_qp_gap):
+    """IP/EA prediction and the shifted energy axis."""
     # =========================================================================
     # DYNAMIC IP & EA PREDICTION (Vacuum-Anchored Projection Method)
     # =========================================================================
@@ -1980,6 +2029,13 @@ def main():
     # -----------------------------------------------------------------
     # Unified S@C Computation
     # -----------------------------------------------------------------
+    return _export(locals(), (
+        "eps_beta_shifted", "eps_dft_shifted", "eps_shifted", "qp_homo", "qp_lumo"
+    ))
+
+
+def _orbital_populations(args, *, C, C_beta, S, _get_SC, tracker):
+    """S @ C, orthonormality check and spin-free populations."""
     tracker.start_stage("MO Orthonormality & Populations")
     print("\n--- Computing Unified S@C Population Analysis ---")
     t0_pop = time.time()
@@ -2034,7 +2090,17 @@ def main():
     if C_dense_beta_pop is not None:
         pops_beta = np.real(C_dense_beta_pop.conj() * SC_dense_beta_pop)
     print(f"  -> S@C projection and populations computed in {time.time() - t0_pop:.2f} s")
+    return _export(locals(), (
+        "C_dense", "SC_dense", "SC_dense_beta_pop", "pops_beta", "pops_sf", "soc_assume_orthonormal"
+    ))
 
+
+def _active_space_and_soc(args, *,
+        C_act, C_beta, C_dense, S, SC_dense, SC_dense_beta_pop, coords_ang, dft_gap, e_fermi_raw, eps,
+        eps_beta, eps_beta_shifted, eps_dft_shifted, eps_qp_active, eps_shifted, f_h, fb, homo_index,
+        homo_index_beta, occ, occ_beta, pops_beta, pops_sf, qp_provenance, scissor, shells,
+        soc_assume_orthonormal, syms, target_qp_gap, tracker):
+    """BSE active space, SOC spinor subspace, population printouts and the scissor operator."""
     # -----------------------------------------------------------------
     # BSE Active Space Setup
     # -----------------------------------------------------------------
@@ -2213,7 +2279,20 @@ def main():
     # Update Confinement Energy (Always relative to bulk)
     db_gap = MATERIAL_DB.get(args.material.upper(), MATERIAL_DB["DEFAULT"])[3]
     confinement_energy = target_qp_gap - db_gap
+    return _export(locals(), (
+        "C_dense_beta", "bse_n_occ", "bse_n_occ_beta", "bse_n_virt", "bse_n_virt_beta", "bse_soc_E",
+        "bse_soc_U", "bse_spinor_homo_idx", "calculated_soc_gap", "compute_spinor_subspace",
+        "compute_spinor_subspace_uks", "confinement_energy", "db_gap", "is_uks_sp", "soc_overlap_cache"
+    ))
 
+
+def _cubes_and_fuzzy(args, *,
+        C_beta, C_dense, C_dense_beta, S, SC_dense, SC_dense_beta_pop, bse_n_occ, bse_soc_U,
+        bse_spinor_homo_idx, compute_spinor_subspace, compute_spinor_subspace_uks, coords_ang, e_fermi_raw,
+        e_homo, e_lumo, eps, eps_beta, eps_beta_shifted, eps_dft_shifted, eps_qp_active, eps_shifted,
+        homo_index, homo_index_beta, is_uks_sp, occ, pops_sf, qp_homo, qp_lumo, scissor, shells,
+        soc_assume_orthonormal, soc_overlap_cache, syms, tracker):
+    """Optional cube files, fuzzy bands and PDOS/COOP."""
     # -----------------------------------------------------------------
     # EXCITON CUBE GENERATION: EXECUTED BEFORE FUZZY PLOTTING 
     # -----------------------------------------------------------------
@@ -2332,19 +2411,15 @@ def main():
             qp_energies_beta_abs=qp_energies_beta_abs if is_uks_sp else None,
             soc_active_indices_beta=fuzzy_active_indices_beta if is_uks_sp else None
         )
+    return _export(locals(), (
+        "C_dense_beta",
+    ))
 
 
-    # -----------------------------------------------------------------
-    # EARLY EXIT LOGIC (If run_bse is False)
-    # -----------------------------------------------------------------
-    run_bse = getattr(args, 'run_bse', True)
-    if not run_bse:
-        tracker.end_stage()
-        tracker.print_summary(device=args.device, nthreads=args.nthreads)
-        print("\n--- BSE Calculation Skipped (run_bse: false) ---")
-        print("\nAll requested tasks finished successfully.")
-        return
-
+def _transition_dipoles(args, *,
+        C, C_beta, C_dense_beta, bse_n_occ, bse_n_virt, compute_device, dev_obj, eps_beta, homo_index,
+        homo_index_beta, is_uks_sp, shells, tracker):
+    """Transition dipoles of the active space."""
     # -----------------------------------------------------------------
     # BSE CONTINUATION (Only if run_bse is True)
     # -----------------------------------------------------------------
@@ -2416,7 +2491,18 @@ def main():
         bse_n_virt_beta = bse_n_virt
 
     del mu_ao_x, mu_ao_y, mu_ao_z; gc.collect()
+    return _export(locals(), (
+        "bse_n_occ_beta", "bse_n_virt_beta", "compute_device", "mu_ia_x", "mu_ia_y", "mu_ia_z", "spin_mode"
+    ))
 
+
+def _solve_excitons(args, *,
+        C, C_beta, S, atom_ao_ranges, bse_n_occ, bse_n_occ_beta, bse_n_virt, bse_n_virt_beta, bse_soc_E,
+        bse_soc_U, calculated_soc_gap, compute_device, confinement_energy, coords_ang, db_gap, dft_gap,
+        eps_beta_shifted, eps_dft_shifted, eps_qp_active, eps_shifted, homo_index, homo_index_beta, mu_ia_x,
+        mu_ia_y, mu_ia_z, occ, qp_w, scissor, shared_gamma_ao, shells, spin_mode, stda_gamma_j, stda_gamma_k,
+        syms, target_qp_gap, tracker):
+    """Spin-free (and SOC) exciton solvers and their analysis."""
     # Store this for the analysis printouts later
     args.qp_gap_num = target_qp_gap
 
@@ -2504,6 +2590,47 @@ def main():
     tracker.end_stage()
     tracker.print_summary(device=args.device, nthreads=args.nthreads)
     print("\nAll calculations finished successfully.")
+    return {}
+
+
+def _export(namespace, names):
+    """The named variables of a stage that exist (some are set only on certain paths)."""
+    return {k: namespace[k] for k in names if k in namespace}
+
+
+def _run_stage(stage, args, state):
+    """Call a stage with the variables it declares (keyword-only parameters) and store what it returns."""
+    params = [p.name for p in inspect.signature(stage).parameters.values() if p.kind is p.KEYWORD_ONLY]
+    state.update(stage(args, **{p: state.get(p) for p in params}))
+
+
+def main():
+    parser = _build_parser()
+    loaded = _load_arguments(parser)
+    if loaded is None:
+        return
+    args = loaded["args"]
+    state = {"parser": parser, "config_path": loaded["config_path"]}
+    for stage in (_prepare_run, _read_geometry_and_basis, _read_molecular_orbitals, _quasiparticle_correction,
+                  _qp_levels_and_kernel, _ip_ea_and_energy_axis, _orbital_populations, _active_space_and_soc,
+                  _cubes_and_fuzzy):
+        _run_stage(stage, args, state)
+
+    tracker = state["tracker"]
+    # -----------------------------------------------------------------
+    # EARLY EXIT LOGIC (If run_bse is False)
+    # -----------------------------------------------------------------
+    run_bse = getattr(args, 'run_bse', True)
+    if not run_bse:
+        tracker.end_stage()
+        tracker.print_summary(device=args.device, nthreads=args.nthreads)
+        print("\n--- BSE Calculation Skipped (run_bse: false) ---")
+        print("\nAll requested tasks finished successfully.")
+        return
+
+    for stage in (_transition_dipoles, _solve_excitons):
+        _run_stage(stage, args, state)
+
 
 if __name__ == "__main__":
     main()
