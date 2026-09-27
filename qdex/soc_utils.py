@@ -7,6 +7,9 @@ import libint_cpp
 from qdex.constants import BOHR_PER_ANG, HA_TO_EV, valence_electrons
 from qdex.io_utils import parse_gth_soc_potentials
 from qdex.device_utils import is_gpu
+import logging
+
+logger = logging.getLogger(__name__)
 
 _L_CACHE = {}
 
@@ -301,36 +304,36 @@ def compute_spinor_subspace(
     verbose=True,
 ):
     if verbose:
-        print("\n" + "=" * 60)
-        print(" [SOC] Spin-Orbit Coupling Module Initialized")
-        print("=" * 60)
+        logger.info("\n" + "=" * 60)
+        logger.info(" [SOC] Spin-Orbit Coupling Module Initialized")
+        logger.info("=" * 60)
 
     if soc_cache is None:
         if verbose:
-            print(f"  -> Reading GTH Potentials from: {gth_file}")
+            logger.info(f"  -> Reading GTH Potentials from: {gth_file}")
         t0 = time.time()
         soc_cache = prepare_soc_overlap_cache(
             atom_symbols, coords_ang, shells, gth_file, nthreads=nthreads
         )
         if verbose:
-            print(f"  -> Parsed potentials and overlaps in {time.time() - t0:.2f}s")
+            logger.debug(f"  -> Parsed potentials and overlaps in {time.time() - t0:.2f}s")
     else:
         if verbose:
-            print("  -> Reusing cached AO-projector overlaps")
+            logger.info("  -> Reusing cached AO-projector overlaps")
 
     proj_groups = soc_cache['proj_groups']
     B_raw = soc_cache['B_raw']
     if verbose:
-        print(
+        logger.info(
             f"  -> Using {len(soc_cache['projectors'])} HGH projectors "
             f"across {len(proj_groups)} angular blocks."
         )
-        print(f"  -> Cached overlap matrix shape: {B_raw.shape}")
-        print("  -> Projecting overlaps to Active Subspace to accelerate assembly...")
+        logger.info(f"  -> Cached overlap matrix shape: {B_raw.shape}")
+        logger.info("  -> Projecting overlaps to Active Subspace to accelerate assembly...")
     t0 = time.time()
 
     if assume_orthonormal and verbose:
-        print("  -> Active MOs already S-orthonormal; skipping Cholesky reorthogonalization")
+        logger.info("  -> Active MOs already S-orthonormal; skipping Cholesky reorthogonalization")
     B_mo_raw = _project_active_overlaps(
         C_AO, active_indices, B_raw, S_AO,
         assume_orthonormal=assume_orthonormal, SC_AO=SC_AO,
@@ -340,13 +343,13 @@ def compute_spinor_subspace(
     t_asm = time.time()
 
     if verbose:
-        print(f"  -> MO projection completed in {t_proj - t0:.2f}s")
-        print(f"  -> SOC block accumulation completed in {t_asm - t_proj:.2f}s")
-        print(f"  -> Hamiltonian assembly completed in {t_asm - t0:.2f}s")
+        logger.debug(f"  -> MO projection completed in {t_proj - t0:.2f}s")
+        logger.debug(f"  -> SOC block accumulation completed in {t_asm - t_proj:.2f}s")
+        logger.debug(f"  -> Hamiltonian assembly completed in {t_asm - t0:.2f}s")
 
     n_mo = len(active_indices)
     if verbose:
-        print(f"  -> Diagonalizing Single-Particle Spinor Hamiltonian (Active Space = {n_mo} MOs)...")
+        logger.info(f"  -> Diagonalizing Single-Particle Spinor Hamiltonian (Active Space = {n_mo} MOs)...")
     t0 = time.time()
 
     eps_act = eps_Ha[active_indices]
@@ -363,12 +366,12 @@ def compute_spinor_subspace(
     soc_E, soc_U = eigh(H_total)
 
     if verbose:
-        print(f"  -> Spinor diagonalization completed in {time.time() - t0:.2f}s")
+        logger.debug(f"  -> Spinor diagonalization completed in {time.time() - t0:.2f}s")
     H0_diag = np.sort(np.repeat(eps_act, 2))
     max_shift = np.max(np.abs(soc_E - H0_diag)) * HA_TO_EV
     if verbose:
-        print(f"  -> Max SOC-induced energy shift: {max_shift:.3f} eV")
-        print("=" * 60 + "\n")
+        logger.info(f"  -> Max SOC-induced energy shift: {max_shift:.3f} eV")
+        logger.info("=" * 60 + "\n")
 
     return soc_E, soc_U, soc_cache
 
@@ -378,33 +381,33 @@ def compute_spinor_subspace_uks(
     C_beta_AO, eps_beta_Ha, active_beta_indices, S_AO, gth_file, nthreads=1,
     soc_cache=None, assume_orthonormal=False, SC_alpha_AO=None, SC_beta_AO=None, device="numpy",
 ):
-    print("\n" + "=" * 60)
-    print(" [SOC-UKS] Spin-Orbit Coupling Module Initialized")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info(" [SOC-UKS] Spin-Orbit Coupling Module Initialized")
+    logger.info("=" * 60)
 
     if soc_cache is None:
-        print(f"  -> Reading GTH Potentials from: {gth_file}")
+        logger.info(f"  -> Reading GTH Potentials from: {gth_file}")
         t0 = time.time()
         soc_cache = prepare_soc_overlap_cache(
             atom_symbols, coords_ang, shells, gth_file, nthreads=nthreads
         )
-        print(f"  -> Parsed potentials and overlaps in {time.time() - t0:.2f}s")
+        logger.debug(f"  -> Parsed potentials and overlaps in {time.time() - t0:.2f}s")
     else:
-        print("  -> Reusing cached AO-projector overlaps")
+        logger.info("  -> Reusing cached AO-projector overlaps")
 
     proj_groups = soc_cache['proj_groups']
     B_raw = soc_cache['B_raw']
-    print(
+    logger.info(
         f"  -> Using {len(soc_cache['projectors'])} HGH projectors "
         f"across {len(proj_groups)} angular blocks."
     )
-    print(f"  -> Cached overlap matrix shape: {B_raw.shape}")
+    logger.info(f"  -> Cached overlap matrix shape: {B_raw.shape}")
 
-    print("  -> Projecting overlaps to UKS alpha/beta active subspaces...")
+    logger.info("  -> Projecting overlaps to UKS alpha/beta active subspaces...")
     t0 = time.time()
 
     if assume_orthonormal:
-        print("  -> Active MOs already S-orthonormal; skipping Cholesky reorthogonalization")
+        logger.info("  -> Active MOs already S-orthonormal; skipping Cholesky reorthogonalization")
     B_alpha = _project_active_overlaps(
         C_alpha_AO, active_alpha_indices, B_raw, S_AO,
         assume_orthonormal=assume_orthonormal, SC_AO=SC_alpha_AO,
@@ -418,13 +421,13 @@ def compute_spinor_subspace_uks(
     t_asm = time.time()
     Hx_aa, Hy_aa, Hz_aa, Hx_ab, Hy_ab, Hz_ab, Hx_ba, Hy_ba, Hz_ba, Hx_bb, Hy_bb, Hz_bb = blocks
 
-    print(f"  -> MO projection completed in {t_proj - t0:.2f}s")
-    print(f"  -> UKS SOC block accumulation completed in {t_asm - t_proj:.2f}s")
-    print(f"  -> UKS Hamiltonian assembly completed in {t_asm - t0:.2f}s")
+    logger.debug(f"  -> MO projection completed in {t_proj - t0:.2f}s")
+    logger.debug(f"  -> UKS SOC block accumulation completed in {t_asm - t_proj:.2f}s")
+    logger.debug(f"  -> UKS Hamiltonian assembly completed in {t_asm - t0:.2f}s")
 
     n_alpha = len(active_alpha_indices)
     n_beta = len(active_beta_indices)
-    print(
+    logger.info(
         f"  -> Diagonalizing UKS Single-Particle Spinor Hamiltonian "
         f"(Alpha={n_alpha}, Beta={n_beta})..."
     )
@@ -442,10 +445,10 @@ def compute_spinor_subspace_uks(
     H_total = H0 - H_SO
     soc_E, soc_U = eigh(H_total)
 
-    print(f"  -> UKS spinor diagonalization completed in {time.time() - t0:.2f}s")
+    logger.debug(f"  -> UKS spinor diagonalization completed in {time.time() - t0:.2f}s")
     H0_diag = np.sort(np.diag(H0).real)
     max_shift = np.max(np.abs(soc_E - H0_diag)) * HA_TO_EV
-    print(f"  -> Max SOC-induced energy shift: {max_shift:.3f} eV")
-    print("=" * 60 + "\n")
+    logger.info(f"  -> Max SOC-induced energy shift: {max_shift:.3f} eV")
+    logger.info("=" * 60 + "\n")
 
     return soc_E, soc_U, soc_cache

@@ -17,6 +17,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Physical constants
 HBAR_EV_FS = 0.6582119569  # hbar in eV * fs
@@ -328,7 +331,7 @@ def calculate_auger_rates(
         )
 
     if eps_eff is not None and eps_eff > 0 and verbose:
-        print(
+        logger.info(
             "  [Auger] eps_eff is not applied. Resta already interpolates from the bare "
             "on-site interaction to 1/(eps_inf R). A constant eps_eff replaces eps_inf "
             "in a uniform-screening model; it is not a second factor on this kernel."
@@ -622,7 +625,7 @@ def calculate_auger_rates(
     )
 
     if verbose:
-        print(res.summary_table())
+        logger.info(res.summary_table())
 
     return res
 
@@ -772,7 +775,7 @@ def compute_trajectory_auger_rates(
     rates_hhe_ps = np.zeros(n_frames, dtype=np.float64)
 
     if verbose:
-        print(f"\nEvaluating Trajectory-Averaged Auger Recombination across {n_frames} frames...")
+        logger.info(f"\nEvaluating Trajectory-Averaged Auger Recombination across {n_frames} frames...")
 
     for k, sfile in enumerate(files_to_process):
         data = np.load(sfile, allow_pickle=True)
@@ -833,10 +836,10 @@ def compute_trajectory_auger_rates(
     }
 
     if verbose:
-        print(f"  Trajectory-Averaged Biexciton Auger Rate : {mean_xx_ns:.3e} +/- {std_xx_ns:.3e} ns^-1 ({mean_xx_ps:.3e} ps^-1)")
-        print(f"  Trajectory-Averaged Biexciton Lifetime  : {mean_tau_xx_ns:.4f} ns ({mean_tau_xx_ps:.2f} ps)")
-        print(f"  Trajectory-Averaged eeh Lifetime        : {mean_tau_eeh_ns:.4f} ns ({mean_tau_eeh_ns*1e3:.2f} ps)")
-        print(f"  Trajectory-Averaged hhe Lifetime        : {mean_tau_hhe_ns:.4f} ns ({mean_tau_hhe_ns*1e3:.2f} ps)")
+        logger.info(f"  Trajectory-Averaged Biexciton Auger Rate : {mean_xx_ns:.3e} +/- {std_xx_ns:.3e} ns^-1 ({mean_xx_ps:.3e} ps^-1)")
+        logger.info(f"  Trajectory-Averaged Biexciton Lifetime  : {mean_tau_xx_ns:.4f} ns ({mean_tau_xx_ps:.2f} ps)")
+        logger.info(f"  Trajectory-Averaged eeh Lifetime        : {mean_tau_eeh_ns:.4f} ns ({mean_tau_eeh_ns*1e3:.2f} ps)")
+        logger.info(f"  Trajectory-Averaged hhe Lifetime        : {mean_tau_hhe_ns:.4f} ns ({mean_tau_hhe_ns*1e3:.2f} ps)")
 
     return summary
 
@@ -912,15 +915,15 @@ def extract_auger_kinetics_from_trajectory(
     }
 
     if verbose:
-        print("\n" + "=" * 65)
-        print("  AUGER KINETICS EXTRACTION FROM TRAJECTORY FLUCTUATIONS")
-        print("=" * 65)
-        print(f"  Trajectory Duration          : {times_ps[-1]:.3f} ps ({times_fs[-1]:.1f} fs)")
-        print(f"  Trajectory-Averaged Rate     : {mean_rate_ns:.3e} ns^-1 ({mean_rate_ps:.3e} ps^-1)")
-        print(f"  Trajectory-Averaged Lifetime : {tau_ns:.4f} ns ({tau_ps:.2f} ps)")
-        print(f"  Initial Slope Decay Rate     : {slope_rate_ps * 1e3:.3e} ns^-1 ({slope_rate_ps:.3e} ps^-1)")
-        print(f"  Initial Slope Lifetime       : {slope_tau_ns:.4f} ns ({slope_tau_ps:.2f} ps)")
-        print("=" * 65 + "\n")
+        logger.info("\n" + "=" * 65)
+        logger.info("  AUGER KINETICS EXTRACTION FROM TRAJECTORY FLUCTUATIONS")
+        logger.info("=" * 65)
+        logger.info(f"  Trajectory Duration          : {times_ps[-1]:.3f} ps ({times_fs[-1]:.1f} fs)")
+        logger.info(f"  Trajectory-Averaged Rate     : {mean_rate_ns:.3e} ns^-1 ({mean_rate_ps:.3e} ps^-1)")
+        logger.info(f"  Trajectory-Averaged Lifetime : {tau_ns:.4f} ns ({tau_ps:.2f} ps)")
+        logger.info(f"  Initial Slope Decay Rate     : {slope_rate_ps * 1e3:.3e} ns^-1 ({slope_rate_ps:.3e} ps^-1)")
+        logger.info(f"  Initial Slope Lifetime       : {slope_tau_ns:.4f} ns ({slope_tau_ps:.2f} ps)")
+        logger.info("=" * 65 + "\n")
 
     return result
 

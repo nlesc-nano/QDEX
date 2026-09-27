@@ -1,5 +1,8 @@
 import numpy as np
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Try to import the new C++ function, fail gracefully if it's not compiled yet
 try:
@@ -61,13 +64,13 @@ def write_cube(filename, symbols, coords, origin, spacing, N, density, use_cpp=T
     end_time = time.perf_counter()
     total_time = end_time - start_time
     append_time = end_time - header_time
-    print(f"  [Cube] Exported {filename} ({mode_used}): Total {total_time:.3f}s (Data {append_time:.3f}s)")
+    logger.info(f"  [Cube] Exported {filename} ({mode_used}): Total {total_time:.3f}s (Data {append_time:.3f}s)")
 
 def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells, symbols, coords, spacing_ang=0.5, margin_ang=3.5, nthreads=4, use_cpp=True):
     import libint_cpp
     ANG_TO_BOHR = 1.8897259886
     
-    print(f"\n  [Cube] Initializing 3D Grid (spacing: {spacing_ang} Å, margin: {margin_ang} Å)...")
+    logger.info(f"\n  [Cube] Initializing 3D Grid (spacing: {spacing_ang} Å, margin: {margin_ang} Å)...")
     mins = np.min(coords, axis=0) - margin_ang
     maxs = np.max(coords, axis=0) + margin_ang
     
@@ -83,7 +86,7 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
     grid_points_bohr = np.vstack([X.ravel(), Y.ravel(), Z.ravel()]).T * ANG_TO_BOHR
     n_points = len(grid_points_bohr)
     
-    print(f"  [Cube] Grid size: {Nx} x {Ny} x {Nz} = {n_points} points.")
+    logger.info(f"  [Cube] Grid size: {Nx} x {Ny} x {Nz} = {n_points} points.")
     
     n_spatial_total = solver.C.shape[1]
     active_mos = set()
@@ -125,7 +128,7 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
     active_mos = sorted(list(active_mos))
     mo_to_col = {mo: col for col, mo in enumerate(active_mos)}
     
-    print(f"  [Cube] Union of Active Spatial MOs: {len(active_mos)}")
+    logger.info(f"  [Cube] Union of Active Spatial MOs: {len(active_mos)}")
     C_active = np.ascontiguousarray(solver.C[:, active_mos])
     
     # Initialize Density Arrays
@@ -136,7 +139,7 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
     
     chunk_size = 10000 
     n_chunks = int(np.ceil(n_points / chunk_size))
-    print(f"  [Cube] Evaluating grid in {n_chunks} chunks via C++ acceleration...")
+    logger.info(f"  [Cube] Evaluating grid in {n_chunks} chunks via C++ acceleration...")
     
     t0 = time.time()
     for c_idx, i in enumerate(range(0, n_points, chunk_size)):
@@ -178,7 +181,7 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
             rho_bse_e[prefix][i : i+chunk_size] = psi_sq @ ew_act
             
         if c_idx > 0 and c_idx % max(1, n_chunks // 10) == 0:
-            print(f"    ... {(c_idx / n_chunks) * 100:4.1f}% complete in {time.time() - t0:.1f}s")
+            logger.debug(f"    ... {(c_idx / n_chunks) * 100:4.1f}% complete in {time.time() - t0:.1f}s")
 
     origin_bohr = np.array([xs[0], ys[0], zs[0]]) * ANG_TO_BOHR
     spacing_bohr = spacing_ang * ANG_TO_BOHR
@@ -191,7 +194,7 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
         return f"{prefix}_LUMO" if idx == ref_idx + 1 else f"{prefix}_LUMO+{idx - ref_idx - 1}"
 
     # --- Write Files ---
-    print("\n  [Cube] Exporting Cube Files...")
+    logger.info("\n  [Cube] Exporting Cube Files...")
     
     for mo in mo_list:
         lbl = get_lbl(mo, solver.homo_index, False)
@@ -214,7 +217,7 @@ def generate_exciton_cubes(solver, bse_vec, shells, symbols, coords, prefix, spa
     import libint_cpp
     ANG_TO_BOHR = 1.8897259886
     
-    print(f"\n  [Cube] Initializing 3D Grid (spacing: {spacing_ang} Å, margin: {margin_ang} Å)...")
+    logger.info(f"\n  [Cube] Initializing 3D Grid (spacing: {spacing_ang} Å, margin: {margin_ang} Å)...")
     mins = np.min(coords, axis=0) - margin_ang
     maxs = np.max(coords, axis=0) + margin_ang
     
@@ -233,7 +236,7 @@ def generate_exciton_cubes(solver, bse_vec, shells, symbols, coords, prefix, spa
     grid_points_bohr = grid_points_ang * ANG_TO_BOHR
     n_points = len(grid_points_bohr)
     
-    print(f"  [Cube] Grid size: {Nx} x {Ny} x {Nz} = {n_points} points.")
+    logger.info(f"  [Cube] Grid size: {Nx} x {Ny} x {Nz} = {n_points} points.")
     
     # Pre-calculate MO weights for the exciton
     n_occ_tot = solver.C.shape[1] - solver.n_virt
@@ -267,8 +270,8 @@ def generate_exciton_cubes(solver, bse_vec, shells, symbols, coords, prefix, spa
     C_virt_active = C_virt[:, active_elecs]
     elec_weights_active = elec_weights[active_elecs]
     
-    print(f"  [Cube] Optimization: Reduced Hole MOs from {len(hole_weights)} to {len(active_holes)}")
-    print(f"  [Cube] Optimization: Reduced Elec MOs from {len(elec_weights)} to {len(active_elecs)}")
+    logger.info(f"  [Cube] Optimization: Reduced Hole MOs from {len(hole_weights)} to {len(active_holes)}")
+    logger.info(f"  [Cube] Optimization: Reduced Elec MOs from {len(elec_weights)} to {len(active_elecs)}")
     
     # NEW: Combine them so C++ only has to evaluate the Gaussians ONCE per chunk
     C_combined = np.ascontiguousarray(np.hstack([C_occ_active, C_virt_active]))
@@ -278,7 +281,7 @@ def generate_exciton_cubes(solver, bse_vec, shells, symbols, coords, prefix, spa
     # CHUNK LOGIC: Prevent RAM explosion
     chunk_size = 10000 
     n_chunks = int(np.ceil(n_points / chunk_size))
-    print(f"  [Cube] Evaluating grid in {n_chunks} chunks via C++ acceleration...")
+    logger.info(f"  [Cube] Evaluating grid in {n_chunks} chunks via C++ acceleration...")
     
     t0 = time.time()
     
@@ -300,20 +303,20 @@ def generate_exciton_cubes(solver, bse_vec, shells, symbols, coords, prefix, spa
         if c_idx > 0 and c_idx % max(1, n_chunks // 10) == 0:
             elapsed = time.time() - t0
             pct = (c_idx / n_chunks) * 100
-            print(f"    ... {pct:4.1f}% complete ({c_idx}/{n_chunks} chunks) in {elapsed:.1f}s")
+            logger.debug(f"    ... {pct:4.1f}% complete ({c_idx}/{n_chunks} chunks) in {elapsed:.1f}s")
 
     origin_bohr = np.array([xs[0], ys[0], zs[0]]) * ANG_TO_BOHR
     spacing_bohr = spacing_ang * ANG_TO_BOHR
 
     rho_diff = rho_e - rho_h
     
-    print(f"  [Cube] Writing {prefix}_hole.cube ...")
+    logger.info(f"  [Cube] Writing {prefix}_hole.cube ...")
     write_cube(f"{prefix}_hole.cube", symbols, coords, origin_bohr, spacing_bohr, (Nx, Ny, Nz), rho_h, use_cpp=use_cpp)
     
-    print(f"  [Cube] Writing {prefix}_elec.cube ...")
+    logger.info(f"  [Cube] Writing {prefix}_elec.cube ...")
     write_cube(f"{prefix}_elec.cube", symbols, coords, origin_bohr, spacing_bohr, (Nx, Ny, Nz), rho_e, use_cpp=use_cpp)
 
     # Write the combined difference file
-    print(f"  [Cube] Writing {prefix}_diff.cube (Electron = Positive, Hole = Negative)...")
+    logger.info(f"  [Cube] Writing {prefix}_diff.cube (Electron = Positive, Hole = Negative)...")
     write_cube(f"{prefix}_diff.cube", symbols, coords, origin_bohr, spacing_bohr, (Nx, Ny, Nz), rho_diff, use_cpp=use_cpp)
 

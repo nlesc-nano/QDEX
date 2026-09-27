@@ -3,6 +3,9 @@ import csv
 import time
 from qdex.io_utils import count_ao_from_shells
 from qdex.device_utils import is_gpu
+import logging
+
+logger = logging.getLogger(__name__)
 
 PDOS_PALETTE = ["#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A", "#19D3F3", "#FF6692"]
 TAG_PALETTE = ["#111111", "#8C564B", "#17BECF", "#D62728", "#2CA02C", "#9467BD", "#FF7F0E"]
@@ -65,10 +68,10 @@ def _normalize_population_bar_tags(population_bars, atom_symbols):
                 continue
             atom_idx = int(raw) - atom_index_base
             if atom_idx < 0 or atom_idx >= len(atom_symbols):
-                print(f"  [PDOS/COOP] Warning: tagged atom index {raw} is out of range; skipping.")
+                logger.warning(f"  [PDOS/COOP] Warning: tagged atom index {raw} is out of range; skipping.")
                 continue
             if atom_idx in used_atoms:
-                print(f"  [PDOS/COOP] Warning: tagged atom index {raw} appears more than once; skipping duplicate.")
+                logger.warning(f"  [PDOS/COOP] Warning: tagged atom index {raw} appears more than once; skipping duplicate.")
                 continue
             used_atoms.add(atom_idx)
             atom_indices.append(atom_idx)
@@ -173,7 +176,7 @@ def export_population_bar_plot(analysis, eps_eV, pdos_atoms, ewin, prefix="sf", 
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except Exception as exc:
-        print(f"  [PDOS/COOP] Warning: matplotlib unavailable; skipping population bar plot ({exc}).")
+        logger.warning(f"  [PDOS/COOP] Warning: matplotlib unavailable; skipping population bar plot ({exc}).")
         return
 
     P_weights = analysis["P_weights"]
@@ -277,7 +280,7 @@ def export_population_bar_plot(analysis, eps_eV, pdos_atoms, ewin, prefix="sf", 
 
 def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix="sf", pops=None, population_bars=None, device="numpy"):
     t0 = time.time()
-    print(f"  [PDOS/COOP] Analyzing {len(pdos_atoms)} elements, {len(coop_pairs)} bonds, IPR, and Surface/Core...")
+    logger.info(f"  [PDOS/COOP] Analyzing {len(pdos_atoms)} elements, {len(coop_pairs)} bonds, IPR, and Surface/Core...")
     
     C_dense = C.toarray() if hasattr(C, 'toarray') else C
     S_dense = S.toarray() if hasattr(S, 'toarray') else S
@@ -399,5 +402,5 @@ def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, si
 
     export_pdos_coop_data(analysis, eps_eV, pdos_atoms, coop_pairs, ewin, sigma=sigma, is_soc=is_soc, prefix=prefix, population_bars=population_bars)
                 
-    print(f"  [PDOS/COOP] Exported {prefix} data in {time.time() - t0:.2f} s")
+    logger.debug(f"  [PDOS/COOP] Exported {prefix} data in {time.time() - t0:.2f} s")
     return analysis

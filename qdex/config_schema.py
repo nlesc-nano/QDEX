@@ -108,7 +108,7 @@ SECTIONS = {
     "output": {k: k for k in (
         "broadening", "sigma", "plot", "show", "cube", "cube_spacing", "disable_cpp_cube", "cube_nhomos",
         "cube_nlumos", "nbse", "bse_states", "write_csv", "csv_roots", "time", "save_xia", "nto",
-        "nto_states", "nto_top", "nto_csv")},
+        "nto_states", "nto_top", "nto_csv", "verbosity")},
 }
 
 # Accepted spellings of a few dest names.

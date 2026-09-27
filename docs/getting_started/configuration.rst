@@ -251,7 +251,14 @@ analysis and output
   (:doc:`/electronic_structure/index`).
 * ``output``: ``plot``, ``show``, ``broadening``, ``sigma``, ``write_csv``, ``csv_roots``, ``save_xia``,
   ``time``, ``cube``, ``cube_spacing``, ``cube_nhomos``, ``cube_nlumos``, ``nbse``, ``bse_states``,
-  ``nto``, ``nto_states``, ``nto_top``, ``nto_csv`` (:doc:`/exciton_analysis/index`).
+  ``nto``, ``nto_states``, ``nto_top``, ``nto_csv`` (:doc:`/exciton_analysis/index`), ``verbosity``.
+
+**Output verbosity.** ``output.verbosity`` (``--verbosity``) sets what reaches the console:
+``full`` (default, everything), ``normal`` (without iteration traces, timings and diagnostics) or
+``quiet`` (warnings and errors only). The log file (``system.log_file``, default ``minibse.log``)
+always receives the full output, so a quiet run, for example a NAMD precompute, still leaves a complete
+record. The messages go through Python's ``logging`` module (logger ``qdex``); scripts that import QDEX
+can change the level with ``qdex.logging_setup.set_verbosity``.
 
 auger
 ~~~~~

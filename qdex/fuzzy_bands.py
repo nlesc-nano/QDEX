@@ -4,9 +4,12 @@ from pymatgen.core import Structure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.symmetry.bandstructure import HighSymmKpath
 from scipy.spatial.distance import pdist
+import logging
+
+logger = logging.getLogger(__name__)
 
 def generate_automated_kpath(cif_path, coords_ang, line_density=50, return_reciprocal=False):
-    print(f"  [Fuzzy] Loading CIF: {cif_path}")
+    logger.info(f"  [Fuzzy] Loading CIF: {cif_path}")
     struct = Structure.from_file(cif_path)
     sga = SpacegroupAnalyzer(struct)
     prim_struct = sga.get_primitive_standard_structure()
@@ -35,7 +38,7 @@ def generate_automated_kpath(cif_path, coords_ang, line_density=50, return_recip
     if len(xyz_dists) > 0:
         xyz_bond = np.percentile(xyz_dists, 5) 
         scale_factor = xyz_bond / cif_bond
-        print(f"  [Fuzzy] Phase correction: Scaling k-points by 1/({scale_factor:.4f}) to match XYZ bonds.")
+        logger.info(f"  [Fuzzy] Phase correction: Scaling k-points by 1/({scale_factor:.4f}) to match XYZ bonds.")
         kpts_cart = kpts_cart / scale_factor
         reciprocal_matrix = reciprocal_matrix / scale_factor
 
@@ -62,13 +65,13 @@ def generate_automated_kpath(cif_path, coords_ang, line_density=50, return_recip
         # Compute Rotation Matrix connecting CIF orientation to XYZ orientation
         R = vecs_xyz @ vecs_cif.T
         
-        print(f"  [Fuzzy] Applying PCA rotation to k-path to correct optimizer drift.")
+        logger.info(f"  [Fuzzy] Applying PCA rotation to k-path to correct optimizer drift.")
         kpts_cart = (R @ kpts_cart.T).T
         reciprocal_matrix = (R @ reciprocal_matrix.T).T
     except Exception as e:
-        print(f"  [Fuzzy] Warning: PCA Rotational alignment failed: {e}")
+        logger.warning(f"  [Fuzzy] Warning: PCA Rotational alignment failed: {e}")
 
-    print(f"  [Fuzzy] Generated {len(kpts_cart)} k-points for spacegroup {sga.get_space_group_symbol()}.")
+    logger.info(f"  [Fuzzy] Generated {len(kpts_cart)} k-points for spacegroup {sga.get_space_group_symbol()}.")
     if return_reciprocal:
         return kpts_cart, labels, reciprocal_matrix
     return kpts_cart, labels
@@ -120,7 +123,7 @@ def compute_fuzzy_intensity(C_dense, shells, kpts_cart, nthreads, fold_to_bz=Fal
     # This sums reciprocal replicas of the same finite-MO Fourier amplitude;
     # it is not a true Bloch band structure.
     G_vecs = make_reciprocal_replicas(reciprocal_matrix, g_shell)
-    print(f"  [Fuzzy] BZ folding enabled: g_shell={g_shell} ({len(G_vecs)} reciprocal replicas).")
+    logger.info(f"  [Fuzzy] BZ folding enabled: g_shell={g_shell} ({len(G_vecs)} reciprocal replicas).")
     intensity = np.zeros((C_project.shape[1], len(kpts_cart)), dtype=float)
     for G in G_vecs:
         qpts_bohr = (kpts_cart + G) / 1.8897259886
@@ -236,7 +239,7 @@ def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="
         ewin=np.array(ewin, dtype=np.float32),
         extent=np.array([0.0, float(Z.shape[1] - 1), float(ewin[0]), float(ewin[1])])
     )
-    print(f"  [Fuzzy] Exported {out_name} in {time.time()-t0:.2f} s")
+    logger.debug(f"  [Fuzzy] Exported {out_name} in {time.time()-t0:.2f} s")
 
 
 def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_beta, labels, ewin, sigma_ev, prefix="uks"):
@@ -269,7 +272,7 @@ def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_
     np.savez_compressed(f"fuzzy_data_{prefix}.npz", intensity=Z_total.astype(np.float32), spinpol=spinpol.astype(np.float32), **common)
     np.savez_compressed(f"fuzzy_data_{prefix}_alpha.npz", intensity=Z_a.astype(np.float32), **common)
     np.savez_compressed(f"fuzzy_data_{prefix}_beta.npz", intensity=Z_b.astype(np.float32), **common)
-    print(f"  [Fuzzy-UKS] Exported fuzzy_data_{prefix}.npz with spin polarization overlay in {time.time()-t0:.2f} s")
+    logger.debug(f"  [Fuzzy-UKS] Exported fuzzy_data_{prefix}.npz with spin polarization overlay in {time.time()-t0:.2f} s")
 
 def _matmul_real_matrix(A_real, B, device="numpy"):
     from qdex.device_utils import is_gpu
@@ -298,9 +301,9 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
     from qdex.device_utils import is_gpu
     from qdex.pdos_coop import compute_pdos_and_coop, export_pdos_coop_data
     
-    print("\n===================================================")
-    print(" [ FUZZY BANDS & PDOS ]")
-    print("===================================================")
+    logger.info("\n===================================================")
+    logger.info(" [ FUZZY BANDS & PDOS ]")
+    logger.info("===================================================")
     
     fold_to_bz = bool(getattr(args, 'fold_to_bz', False))
     g_shell = int(getattr(args, 'g_shell', 0))
@@ -314,12 +317,12 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
     # --- 1. SPIN-FREE CALCULATION ---
     n_occ = homo_index + 1
     n_virt = len(eps_shifted) - n_occ
-    print(f"\n  [Fuzzy] --- Spin-Free MO Statistics ---")
-    print(f"  [Fuzzy] Total MOs: {len(eps_shifted)} ({n_occ} Occupied, {n_virt} Virtual)")
-    print(f"  [Fuzzy] MO HOMO (Idx {homo_index}): {e_homo:8.4f} eV")
-    print(f"  [Fuzzy] MO LUMO (Idx {homo_index + 1}): {e_lumo:8.4f} eV")
-    print(f"  [Fuzzy] Fermi Level (raw shifted to 0.0): {e_fermi_raw:8.4f} eV")
-    print(f"  [Fuzzy] -------------------------------")
+    logger.info(f"\n  [Fuzzy] --- Spin-Free MO Statistics ---")
+    logger.info(f"  [Fuzzy] Total MOs: {len(eps_shifted)} ({n_occ} Occupied, {n_virt} Virtual)")
+    logger.info(f"  [Fuzzy] MO HOMO (Idx {homo_index}): {e_homo:8.4f} eV")
+    logger.info(f"  [Fuzzy] MO LUMO (Idx {homo_index + 1}): {e_lumo:8.4f} eV")
+    logger.info(f"  [Fuzzy] Fermi Level (raw shifted to 0.0): {e_fermi_raw:8.4f} eV")
+    logger.info(f"  [Fuzzy] -------------------------------")
 
     sigma_use = getattr(args, 'fuzzy_sigma', 0.03)
     pdos_sigma_use = getattr(args, 'pdos_sigma', 0.10)
@@ -340,11 +343,11 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
     eps_fuzzy = eps_shifted[fuzzy_indices]
     qp_fuzzy = qp_plot_energies[fuzzy_indices] if qp_plot_energies is not None else None
 
-    print(f"  [Fuzzy] Projecting {len(fuzzy_indices)} / {len(eps_shifted)} MOs in ewin [{dft_ewin[0]:.3f}, {dft_ewin[1]:.3f}] eV relative to mid-gap.")
+    logger.info(f"  [Fuzzy] Projecting {len(fuzzy_indices)} / {len(eps_shifted)} MOs in ewin [{dft_ewin[0]:.3f}, {dft_ewin[1]:.3f}] eV relative to mid-gap.")
     if qp_ewin is not None:
-        print(f"  [Fuzzy] QP plot window: [{qp_ewin[0]:.3f}, {qp_ewin[1]:.3f}] eV")
+        logger.info(f"  [Fuzzy] QP plot window: [{qp_ewin[0]:.3f}, {qp_ewin[1]:.3f}] eV")
 
-    print("  [Fuzzy] Computing Analytic AO-FT via C++ ...")
+    logger.info("  [Fuzzy] Computing Analytic AO-FT via C++ ...")
     intensity_sf = compute_fuzzy_intensity(
         C_dense, shells, kpts_cart, args.nthreads,
         fold_to_bz=fold_to_bz, g_shell=g_shell, reciprocal_matrix=reciprocal_matrix,
@@ -355,7 +358,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         intensity_ref = compute_fuzzy_intensity(C_dense, shells, kpts_cart, args.nthreads, fold_to_bz=False, mo_indices=fuzzy_indices)
         _, Z_ref = build_smeared_fuzzy(intensity_ref, eps_fuzzy, dft_ewin, sigma_use)
         _, Z_fold = build_smeared_fuzzy(intensity_sf, eps_fuzzy, dft_ewin, sigma_use)
-        print(
+        logger.info(
             "  [Fuzzy] g_shell=0 folding diagnostic: "
             f"max |dW|={np.max(np.abs(intensity_sf - intensity_ref)):.3e}, "
             f"max |dA|={np.max(np.abs(Z_fold - Z_ref)):.3e}"
@@ -365,7 +368,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
     
     pdos_analysis_sf = None
     if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
-        print("  [PDOS/COOP] Computing Spin-Free population analysis...")
+        logger.info("  [PDOS/COOP] Computing Spin-Free population analysis...")
         pdos_analysis_sf = compute_pdos_and_coop(
             C_dense, S_dense, eps_shifted, shells, args.pdos_atoms, args.coop_pairs, dft_ewin,
             sigma=pdos_sigma_use, is_soc=False, prefix="sf", pops=pops_sf,
@@ -378,7 +381,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             msg = "QP dashboard requested, but QP-corrected orbital energies were not found."
             if dashboard_energy_mode == "qp":
                 raise ValueError(msg)
-            print(f"  [Warning] {msg} Skipping QP dashboard.")
+            logger.warning(f"  [Warning] {msg} Skipping QP dashboard.")
         else:
             smear_and_export_fuzzy(intensity_sf, qp_fuzzy, labels, qp_ewin, sigma_use, prefix="sf_qp")
             if pdos_analysis_sf is not None:
@@ -390,7 +393,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
 
     is_uks = C_beta_dense is not None and eps_beta_shifted is not None and homo_index_beta is not None
     if is_uks:
-        print(f"\n  [Fuzzy-UKS] Computing alpha/beta fuzzy channels with total intensity and spin polarization...")
+        logger.info(f"\n  [Fuzzy-UKS] Computing alpha/beta fuzzy channels with total intensity and spin polarization...")
         dft_uks_ewin = dft_ewin
         qp_uks_ewin = auto_energy_window(qp_plot_energies, qp_plot_energies_beta, sigma_ev=sigma_use) if qp_plot_energies is not None and qp_plot_energies_beta is not None else None
         qp_mask_energies_beta = qp_plot_energies_beta if qp_energy_reference == "fermi" else None
@@ -419,10 +422,10 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         n_act_occ = np.sum(soc_active_indices <= homo_index)
         n_act_virt = n_act_mo - n_act_occ
 
-        print(f"\n  [Fuzzy-SOC] Applying Precomputed Unified SOC Projection...")
-        print(f"  [Fuzzy-SOC] --- Dual-Window SOC Statistics ---")
-        print(f"  [Fuzzy-SOC] Active Space Spatial MOs: {n_act_mo} ({n_act_occ} Occ, {n_act_virt} Virt)")
-        print(f"  [Fuzzy-SOC] Full spinor basis available: {len(eps_shifted) * 2} states")
+        logger.info(f"\n  [Fuzzy-SOC] Applying Precomputed Unified SOC Projection...")
+        logger.info(f"  [Fuzzy-SOC] --- Dual-Window SOC Statistics ---")
+        logger.info(f"  [Fuzzy-SOC] Active Space Spatial MOs: {n_act_mo} ({n_act_occ} Occ, {n_act_virt} Virt)")
+        logger.info(f"  [Fuzzy-SOC] Full spinor basis available: {len(eps_shifted) * 2} states")
 
         alpha_plot_indices = fuzzy_energy_indices(eps_shifted, dft_ewin, sigma_use, homo_index=homo_index)
         core_idx = alpha_plot_indices[alpha_plot_indices < soc_active_indices[0]]
@@ -516,10 +519,10 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         occupied_plot = np.where(eps_soc <= 0.0)[0]
         global_spinor_homo_idx = int(occupied_plot[-1]) if occupied_plot.size else 0
  
-        print(f"  [Fuzzy-SOC] Plotting {len(eps_soc)} spinors in ewin [{soc_ewin[0]:.3f}, {soc_ewin[1]:.3f}] eV relative to mid-gap.")
-        print(f"  [Fuzzy-SOC] Spinor HOMO (Idx {global_spinor_homo_idx}): {eps_soc[global_spinor_homo_idx]:8.4f} eV")
-        print(f"  [Fuzzy-SOC] Spinor LUMO (Idx {global_spinor_homo_idx + 1}): {eps_soc[global_spinor_homo_idx + 1]:8.4f} eV")
-        print(f"  [Fuzzy-SOC] ----------------------------------") 
+        logger.info(f"  [Fuzzy-SOC] Plotting {len(eps_soc)} spinors in ewin [{soc_ewin[0]:.3f}, {soc_ewin[1]:.3f}] eV relative to mid-gap.")
+        logger.info(f"  [Fuzzy-SOC] Spinor HOMO (Idx {global_spinor_homo_idx}): {eps_soc[global_spinor_homo_idx]:8.4f} eV")
+        logger.info(f"  [Fuzzy-SOC] Spinor LUMO (Idx {global_spinor_homo_idx + 1}): {eps_soc[global_spinor_homo_idx + 1]:8.4f} eV")
+        logger.info(f"  [Fuzzy-SOC] ----------------------------------") 
         
         smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc")
 
@@ -546,7 +549,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             smear_and_export_fuzzy(intensity_soc_qp, eps_soc_qp, labels, soc_qp_ewin, sigma_use, prefix="soc_qp")
         
         if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
-            print("  [PDOS/COOP] Computing SOC Spinor population analysis...")
+            logger.info("  [PDOS/COOP] Computing SOC Spinor population analysis...")
             t_pop = time.time()
             n_ao = S_dense.shape[0]
             device = getattr(args, "device", "numpy")
@@ -649,7 +652,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
 
             pops_soc_full = np.real(C_spinor_ao[:n_ao, :].conj() * SC_spinor_ao[:n_ao, :]) + \
                             np.real(C_spinor_ao[n_ao:, :].conj() * SC_spinor_ao[n_ao:, :])
-            print(f"  [PDOS/COOP] Pre-computed populations in {time.time() - t_pop:.2f}s")
+            logger.debug(f"  [PDOS/COOP] Pre-computed populations in {time.time() - t_pop:.2f}s")
             
             compute_pdos_and_coop(
                 C_spinor_ao, S_dense, eps_soc, shells, args.pdos_atoms, args.coop_pairs, soc_ewin,

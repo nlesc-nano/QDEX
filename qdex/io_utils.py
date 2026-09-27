@@ -9,6 +9,9 @@ import libint_cpp
 
 
 from qdex.constants import BOHR_PER_ANG
+import logging
+
+logger = logging.getLogger(__name__)
 
 BOHR_PER_ANGSTROM = BOHR_PER_ANG
 
@@ -175,7 +178,7 @@ def parse_basis(fname, wanted, required_elements=None):
                 "Use the complete CP2K basis name."
             )
 
-        print(f"  [Basis] {elem}: selected {matching_names[0]}")
+        logger.info(f"  [Basis] {elem}: selected {matching_names[0]}")
 
         # Extract the matched basis
         try:
@@ -352,7 +355,7 @@ def read_mos_mbse(path, n_ao_total, verbose=False):
         dt = time.perf_counter() - t0
         size_gib = os.path.getsize(path) / (1024.0 ** 3)
         rate = size_gib / dt if dt > 0.0 else float("inf")
-        print(
+        logger.debug(
             f"[MOs:MBSE] Loaded {size_gib:.2f} GiB in {dt:.4f} s "
             f"({rate:.2f} GiB/s) | C shape {C.shape} (n_occ={n_occ}, n_mo={n_mo})"
         )
@@ -548,7 +551,7 @@ def read_mos_h5(path, n_ao_total=None, spin=None, shell_ang_mom=None, verbose=Fa
         dt = time.perf_counter() - t0
         size_gib = os.path.getsize(path) / (1024.0 ** 3)
         rate = size_gib / dt if dt > 0.0 else float("inf")
-        print(
+        logger.debug(
             f"[MOs:HDF5] Loaded {size_gib * 1024.0:.2f} MiB in {dt:.4f} s "
             f"({rate:.2f} GiB/s) | C shape {C.shape} (n_mo={C.shape[1]})"
         )
@@ -684,7 +687,7 @@ def read_mos_auto(path, n_ao_total, verbose=False, cache=False):
         eps, occ = d["eps"], d["occ"]
 
         if verbose:
-            print(f"[MOs] Loaded NPZ: {C.shape}")
+            logger.info(f"[MOs] Loaded NPZ: {C.shape}")
 
         return C, eps, occ
 
@@ -714,13 +717,13 @@ def read_mos_auto(path, n_ao_total, verbose=False, cache=False):
                 t0 = time.perf_counter()
                 C, eps, occ = d["C"], d["eps"], d["occ"]
                 if verbose:
-                    print(
+                    logger.debug(
                         f"[MOs:cache] Loaded {cache_path} in {time.perf_counter() - t0:.4f} s "
                         f"| C shape {C.shape}"
                     )
                 return C, eps, occ
         if verbose:
-            print(f"[MOs:cache] Ignoring stale cache {cache_path}")
+            logger.info(f"[MOs:cache] Ignoring stale cache {cache_path}")
 
     C, eps, occ = read_mos_txt_cc(path, n_ao_total, verbose=verbose)
     if cache:
@@ -732,7 +735,7 @@ def read_mos_auto(path, n_ao_total, verbose=False, cache=False):
             n_ao_total=np.int64(n_ao_total),
         )
         if verbose:
-            print(
+            logger.debug(
                 f"[MOs:cache] Wrote reusable binary cache {cache_path} "
                 f"in {time.perf_counter() - t0:.2f} s"
             )
@@ -766,7 +769,7 @@ def read_mos_txt_cc(path, n_ao_total, verbose=False):
         dt = time.perf_counter() - t0
         size_gib = os.path.getsize(path) / (1024.0 ** 3)
         rate = size_gib / dt if dt > 0.0 else float("inf")
-        print(
+        logger.debug(
             f"[MOs:C++] Parsed {size_gib:.2f} GiB in {dt:.4f} s "
             f"({rate:.2f} GiB/s) | C shape {C.shape}"
         )
@@ -792,7 +795,7 @@ def parse_gth_soc_potentials(path, elements_to_parse):
         with open(path, "r") as f:
             line_iter = iter(f.readlines())
     except FileNotFoundError:
-        print(f"Warning: Potential file not found at {path}. SOC will be zero.")
+        logger.warning(f"Warning: Potential file not found at {path}. SOC will be zero.")
         return ecp_dict
 
     for line in line_iter:
@@ -835,15 +838,15 @@ def get_vxc_ao_matrix(txt_path, n_ao):
 
     # 1. Try instant binary load via C++
     if os.path.exists(bin_path):
-        print(f"  [Vxc] Found raw binary cache. Loading instantly via C++...")
+        logger.info(f"  [Vxc] Found raw binary cache. Loading instantly via C++...")
         return libint_cpp.load_raw_binary(bin_path, n_ao)
 
     # 2. Fallback to C++ text parser
-    print(f"  [Vxc] Cache not found. Parsing text block-matrix with C++ (First time only)...")
+    logger.info(f"  [Vxc] Cache not found. Parsing text block-matrix with C++ (First time only)...")
     V_ao = libint_cpp.parse_cp2k_block_matrix(txt_path, n_ao)
 
     # 3. Save as raw binary for future runs
-    print(f"  [Vxc] Caching raw binary matrix for high-speed future access...")
+    logger.info(f"  [Vxc] Caching raw binary matrix for high-speed future access...")
     with open(bin_path, "wb") as f:
         f.write(V_ao.tobytes()) # Zero-overhead raw dump
         

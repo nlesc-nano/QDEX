@@ -9,6 +9,9 @@ import time
 import platform
 import resource
 from contextlib import contextmanager
+import logging
+
+logger = logging.getLogger(__name__)
 
 # -----------------------------------------------------------------------------
 # Host RAM Inspection (Zero External Dependencies)
@@ -183,39 +186,39 @@ class ResourceTracker:
         cpu_cores = nthreads if nthreads else os.cpu_count()
         dev_str = str(device) if device else "numpy (CPU)"
 
-        print("\n" + "=" * 90)
-        print(" QDEX COMPUTATIONAL RESOURCE USAGE SUMMARY")
-        print("=" * 90)
-        print(f" Platform: {os_name} | Threads/Cores: {cpu_cores} | Device: {dev_str}")
-        print("-" * 90)
+        logger.info("\n" + "=" * 90)
+        logger.info(" QDEX COMPUTATIONAL RESOURCE USAGE SUMMARY")
+        logger.info("=" * 90)
+        logger.info(f" Platform: {os_name} | Threads/Cores: {cpu_cores} | Device: {dev_str}")
+        logger.info("-" * 90)
 
         if has_gpu:
             header = f" {'Module / Calculation Stage':<34} {'Wall Time':>11} {'% Total':>8} {'Peak RAM':>11} {'ΔRAM':>10} {'Peak VRAM':>11}"
-            print(header)
-            print("-" * 90)
+            logger.info(header)
+            logger.info("-" * 90)
             for s in self.stages:
                 pct = (s["elapsed"] / total_elapsed * 100.0) if total_elapsed > 0 else 0.0
                 d_ram_sign = "+" if s["delta_ram"] >= 0 else ""
                 d_ram_str = f"{d_ram_sign}{s['delta_ram']:.1f} MB"
                 vram_str = f"{s['gpu_peak']:.1f} MB" if s["gpu_peak"] is not None else "-"
-                print(f" {s['name']:<34} {s['elapsed']:>9.2f} s {pct:>7.1f}% {s['ram_peak']:>9.1f} MB {d_ram_str:>10} {vram_str:>11}")
-            print("-" * 90)
-            print(f" {'Total Execution Time':<34} {total_elapsed:>9.2f} s {'100.0%':>8}")
-            print(f" {'Overall Peak RAM Usage':<34} {overall_peak_ram:>9.1f} MB ({overall_peak_ram / 1024.0:.2f} GB)")
+                logger.info(f" {s['name']:<34} {s['elapsed']:>9.2f} s {pct:>7.1f}% {s['ram_peak']:>9.1f} MB {d_ram_str:>10} {vram_str:>11}")
+            logger.info("-" * 90)
+            logger.info(f" {'Total Execution Time':<34} {total_elapsed:>9.2f} s {'100.0%':>8}")
+            logger.info(f" {'Overall Peak RAM Usage':<34} {overall_peak_ram:>9.1f} MB ({overall_peak_ram / 1024.0:.2f} GB)")
             overall_gpu = max((s["gpu_peak"] for s in self.stages if s["gpu_peak"] is not None), default=None)
             if overall_gpu is not None:
-                print(f" {'Overall Peak GPU VRAM':<34} {overall_gpu:>9.1f} MB ({overall_gpu / 1024.0:.2f} GB)")
+                logger.info(f" {'Overall Peak GPU VRAM':<34} {overall_gpu:>9.1f} MB ({overall_gpu / 1024.0:.2f} GB)")
         else:
             header = f" {'Module / Calculation Stage':<36} {'Wall Time':>11} {'% Total':>8} {'Peak RAM':>11} {'ΔRAM':>10}"
-            print(header)
-            print("-" * 90)
+            logger.info(header)
+            logger.info("-" * 90)
             for s in self.stages:
                 pct = (s["elapsed"] / total_elapsed * 100.0) if total_elapsed > 0 else 0.0
                 d_ram_sign = "+" if s["delta_ram"] >= 0 else ""
                 d_ram_str = f"{d_ram_sign}{s['delta_ram']:.1f} MB"
-                print(f" {s['name']:<36} {s['elapsed']:>9.2f} s {pct:>7.1f}% {s['ram_peak']:>9.1f} MB {d_ram_str:>10}")
-            print("-" * 90)
-            print(f" {'Total Execution Time':<36} {total_elapsed:>9.2f} s {'100.0%':>8}")
-            print(f" {'Overall Peak RAM Usage':<36} {overall_peak_ram:>9.1f} MB ({overall_peak_ram / 1024.0:.2f} GB)")
+                logger.info(f" {s['name']:<36} {s['elapsed']:>9.2f} s {pct:>7.1f}% {s['ram_peak']:>9.1f} MB {d_ram_str:>10}")
+            logger.info("-" * 90)
+            logger.info(f" {'Total Execution Time':<36} {total_elapsed:>9.2f} s {'100.0%':>8}")
+            logger.info(f" {'Overall Peak RAM Usage':<36} {overall_peak_ram:>9.1f} MB ({overall_peak_ram / 1024.0:.2f} GB)")
 
-        print("=" * 90 + "\n")
+        logger.info("=" * 90 + "\n")

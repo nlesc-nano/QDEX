@@ -1,5 +1,8 @@
 import platform
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 _TORCH_AVAILABLE = False
 try:
@@ -25,7 +28,7 @@ def resolve_device(device_str="auto", verbose=False):
     if not _TORCH_AVAILABLE:
         if device_str not in ("auto", "numpy", None):
             if verbose:
-                print("  [Device] PyTorch is not available. Falling back to NumPy CPU.")
+                logger.info("  [Device] PyTorch is not available. Falling back to NumPy CPU.")
         return "numpy", None
 
     device_str = str(device_str).lower() if device_str is not None else "auto"
@@ -37,30 +40,30 @@ def resolve_device(device_str="auto", verbose=False):
         if torch.cuda.is_available():
             dev = torch.device("cuda")
             if verbose:
-                print(f"  [Device] GPU detected: {torch.cuda.get_device_name(0)} (CUDA)")
+                logger.info(f"  [Device] GPU detected: {torch.cuda.get_device_name(0)} (CUDA)")
             return "cuda", dev
         # Note: PyTorch MPS does not support float64/complex128 which is essential for BSE.
         if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             if verbose:
-                print("  [Device] Apple MPS detected, but float64/complex128 is unsupported on MPS.")
-                print("           Safely defaulting to CPU NumPy for double precision.")
+                logger.info("  [Device] Apple MPS detected, but float64/complex128 is unsupported on MPS.")
+                logger.info("           Safely defaulting to CPU NumPy for double precision.")
             return "numpy", None
         return "cpu", torch.device("cpu")
 
     if device_str == "cuda":
         if not torch.cuda.is_available():
             if verbose:
-                print("  [Device] Warning: CUDA requested but not available. Falling back to CPU.")
+                logger.warning("  [Device] Warning: CUDA requested but not available. Falling back to CPU.")
             return "cpu", torch.device("cpu")
         dev = torch.device("cuda")
         if verbose:
-            print(f"  [Device] Using GPU: {torch.cuda.get_device_name(0)} (CUDA)")
+            logger.info(f"  [Device] Using GPU: {torch.cuda.get_device_name(0)} (CUDA)")
         return "cuda", dev
 
     if device_str == "mps":
         if verbose:
-            print("  [Device] Warning: MPS does not support float64/complex128.")
-            print("           Falling back to CPU NumPy for numerical precision.")
+            logger.warning("  [Device] Warning: MPS does not support float64/complex128.")
+            logger.info("           Falling back to CPU NumPy for numerical precision.")
         return "numpy", None
 
     if device_str == "cpu":

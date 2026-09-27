@@ -1,4 +1,7 @@
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 def compute_spin_character(vec, soc_U, n_occ_sp, n_virt_sp, valid_mask=None):
     """
@@ -330,12 +333,12 @@ def print_orbital_summary(
     has_qp = (qp_breakdown is not None) and (not is_soc)
     table_width = 166 if has_qp else 115
 
-    print("\n" + "=" * table_width)
+    logger.info("\n" + "=" * table_width)
     if has_qp:
-        print(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'Bulk (eV)':>10} | {'Zn':>6} | {'dSigma (eV)':>11} | {'r_HL (eV)':>10} | {'s(R)':>6} | {'Shift (eV)':>11} | {'QP (eV)':>10} | {'Occ':>5} | {'Main Contributions':>45}")
+        logger.info(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'Bulk (eV)':>10} | {'Zn':>6} | {'dSigma (eV)':>11} | {'r_HL (eV)':>10} | {'s(R)':>6} | {'Shift (eV)':>11} | {'QP (eV)':>10} | {'Occ':>5} | {'Main Contributions':>45}")
     else:
-        print(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'Main Contributions':>45}")
-    print("-" * table_width)
+        logger.info(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'Main Contributions':>45}")
+    logger.info("-" * table_width)
     
     n_states = pops.shape[1]
     l_char = {0: 's', 1: 'p', 2: 'd', 3: 'f', 4: 'g'}
@@ -400,13 +403,13 @@ def print_orbital_summary(
             s_r = float(qp_breakdown["s_r"][idx]) if hasattr(qp_breakdown["s_r"], "__len__") else float(qp_breakdown["s_r"])
             tot_shift = b_shift + zn * d_sig + r_hl * s_r
             e_qp = float(qp_breakdown["eps_qp"][idx])
-            print(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {b_shift:+10.4f} | {zn:6.3f} | {d_sig:+11.4f} | {r_hl:+10.4f} | {s_r:6.3f} | {tot_shift:+11.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {contrib_str}")
+            logger.info(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {b_shift:+10.4f} | {zn:6.3f} | {d_sig:+11.4f} | {r_hl:+10.4f} | {s_r:6.3f} | {tot_shift:+11.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {contrib_str}")
         else:
-            print(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {contrib_str}")
+            logger.info(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {contrib_str}")
         
         if idx == homo_idx + 1:
             if has_qp:
-                print(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'------':>6} | {'-----------':>11} | {'----------':>10} | {'------':>6} | {'-----------':>11} | {'----------':>10} | {'-----':>5} | {'-'*45}")
+                logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'------':>6} | {'-----------':>11} | {'----------':>10} | {'------':>6} | {'-----------':>11} | {'----------':>10} | {'-----':>5} | {'-'*45}")
             else:
-                print(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'-'*45}")
-    print("=" * table_width + "\n")
+                logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'-'*45}")
+    logger.info("=" * table_width + "\n")

@@ -4,6 +4,9 @@ import time
 import sys
 from qdex.constants import HA_TO_EV
 from qdex.device_utils import is_gpu, to_tensor, to_numpy, has_torch
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ExcitonHamiltonian:
     def __init__(self, C, eps, overlap, atom_ao_ranges, homo_index, n_occ, n_virt, scissor_ev, gamma_qp, gamma_bse, material=None, 
@@ -76,10 +79,10 @@ class ExcitonHamiltonian:
         e_min_occ, e_homo = eps[occ_idx[0]], eps[occ_idx[-1]]
         e_lumo, e_max_virt = eps_beta_or_alpha[virt_idx[0]], eps_beta_or_alpha[virt_idx[-1]]
 
-        print(f"\n--- [4] Building Exciton Hamiltonian ---")
-        print(f"  Energy Window Diagnostics:")
-        print(f"    HOMO-LUMO Gap (Raw):            {e_lumo - e_homo:8.4f} eV")
-        print(f"    Max Possible Excitation Energy: {e_max_virt - e_min_occ + scissor_ev:8.4f} eV")
+        logger.info(f"\n--- [4] Building Exciton Hamiltonian ---")
+        logger.info(f"  Energy Window Diagnostics:")
+        logger.info(f"    HOMO-LUMO Gap (Raw):            {e_lumo - e_homo:8.4f} eV")
+        logger.info(f"    Max Possible Excitation Energy: {e_max_virt - e_min_occ + scissor_ev:8.4f} eV")
 
         # --------------------------------------------------
         # EXTRACT DENSE ACTIVE SPACE MATRICES
@@ -101,7 +104,7 @@ class ExcitonHamiltonian:
         
         # --- MOVE DENSITY BUILDER UP FOR QP CORRECTIONS ---
         if self.include_direct_eh or self.include_exchange or self.soc_flag or (self.estimate_qp and precomputed_sigma is None):
-            print(f"\n  Building hole/electron/transition density blocks for Active Space ({'Xs-QDEX (AO-resolved)' if self.is_xs else 'MNOK (Atom-resolved)'})...")
+            logger.info(f"\n  Building hole/electron/transition density blocks for Active Space ({'Xs-QDEX (AO-resolved)' if self.is_xs else 'MNOK (Atom-resolved)'})...")
             t_den = time.time()
             if self.is_xs or self.charge_type == 'lowdin':
                 from qdex.lowdin import lowdin_sqrt
@@ -116,7 +119,7 @@ class ExcitonHamiltonian:
                     self.q_virt_diag = (self.C_virt_low.real**2 + self.C_virt_low.imag**2).T
                     if self.include_direct_eh and self.W_resta is not None:
                         self.W_virt_diag = self.q_virt_diag @ self.W_resta.T
-                    print(f"    Xs-QDEX diagonal density blocks built in {time.time() - t_den:2.4f} s")
+                    logger.debug(f"    Xs-QDEX diagonal density blocks built in {time.time() - t_den:2.4f} s")
                 else:
                     self.q_occ = np.einsum("mi,mj->ijm", self.C_occ_low.conj(), self.C_occ_low, optimize=True)
                     self.q_virt = np.einsum("ma,mb->abm", self.C_virt_low.conj(), self.C_virt_low, optimize=True)
@@ -124,7 +127,7 @@ class ExcitonHamiltonian:
                     if self.include_direct_eh and self.W_resta is not None:
                         qv = self.q_virt.reshape(n_virt_act * n_virt_act, self.n_features)
                         self.W_virt = (qv @ self.W_resta.T).reshape(n_virt_act, n_virt_act, self.n_features)
-                    print(f"    Xs-QDEX blocks built in {time.time() - t_den:2.4f} s")
+                    logger.debug(f"    Xs-QDEX blocks built in {time.time() - t_den:2.4f} s")
             elif self.diagonal_mode:
                 # LOW-MEMORY DIAGONAL PATH: 1D Orbital Densities Only (O(N) vs O(N^2))
                 self.q_occ_diag = np.zeros((n_occ_act, self.n_atoms), dtype=np.float64)
@@ -152,7 +155,7 @@ class ExcitonHamiltonian:
                 if self.include_direct_eh and self.W_resta is not None:
                     self.W_virt_diag = self.q_virt_diag @ self.W_resta.T
 
-                print(f"    Diagonal density blocks built in {time.time() - t_den:2.4f} s")
+                logger.debug(f"    Diagonal density blocks built in {time.time() - t_den:2.4f} s")
             else:
                 density_dtype = np.result_type(C_occ_act, C_virt_act)
                 self.q_occ = np.zeros((n_occ_act, n_occ_act, self.n_atoms), dtype=density_dtype)
@@ -187,25 +190,25 @@ class ExcitonHamiltonian:
                     qv = self.q_virt.reshape(n_virt_act * n_virt_act, self.n_atoms)
                     self.W_virt = (qv @ self.W_resta.T).reshape(n_virt_act, n_virt_act, self.n_atoms)
 
-                print(f"    Blocks built in {time.time() - t_den:2.4f} s")
+                logger.debug(f"    Blocks built in {time.time() - t_den:2.4f} s")
 
         if self.estimate_qp:
             if precomputed_sigma is not None:
                 # --- FAST PATH: Use precomputed shifts ---
                 self.sigma_occ, self.sigma_virt = precomputed_sigma
-                print("\n  [QP] Using precomputed spatial Quasiparticle shifts. Bypassing COHSEX recalculation.")
+                logger.info("\n  [QP] Using precomputed spatial Quasiparticle shifts. Bypassing COHSEX recalculation.")
             else:
-                print(f"\n--- [G0W0-lite] Computing COHSEX Quasiparticle Corrections ---")
+                logger.info(f"\n--- [G0W0-lite] Computing COHSEX Quasiparticle Corrections ---")
                 t_qp = time.time()
                 
                 n_all_occ = homo_index + 1
                 n_valence_occ = min(100, n_all_occ)
                 val_start = n_all_occ - n_valence_occ
                 
-                print(f"  [QP] Parameters:")
-                print(f"       - Screened W Kernel (alpha) : {self.alpha:8.4f}")
-                print(f"       - Active Space MOs:             {self.n_occ_act} Occ, {self.n_virt_act} Virt")
-                print(f"       - Background Screening MOs:     {n_valence_occ} (Valence Occupied MOs only)")
+                logger.info(f"  [QP] Parameters:")
+                logger.info(f"       - Screened W Kernel (alpha) : {self.alpha:8.4f}")
+                logger.info(f"       - Active Space MOs:             {self.n_occ_act} Occ, {self.n_virt_act} Virt")
+                logger.info(f"       - Background Screening MOs:     {n_valence_occ} (Valence Occupied MOs only)")
 
                 C_val_occ = C[:, val_start:n_all_occ]
                 if hasattr(C_val_occ, "toarray"): C_val_occ = C_val_occ.toarray()
@@ -277,9 +280,9 @@ class ExcitonHamiltonian:
                 lumo_sex = sex_virt[0]
                 lumo_sic = sic_virt[0]
 
-                print(f"\n  [QP] Detailed Self-Energy Components:")
-                print(f"       HOMO COH: {homo_coh:8.4f} eV  |  SEX: {homo_sex:8.4f} eV  |  SIC: -{homo_sic:8.4f} eV")
-                print(f"       LUMO COH: {lumo_coh:8.4f} eV  |  SEX: {lumo_sex:8.4f} eV  |  SIC: +{lumo_sic:8.4f} eV")
+                logger.info(f"\n  [QP] Detailed Self-Energy Components:")
+                logger.info(f"       HOMO COH: {homo_coh:8.4f} eV  |  SEX: {homo_sex:8.4f} eV  |  SIC: -{homo_sic:8.4f} eV")
+                logger.info(f"       LUMO COH: {lumo_coh:8.4f} eV  |  SEX: {lumo_sex:8.4f} eV  |  SIC: +{lumo_sic:8.4f} eV")
                 # --- PROOF OF LOCALIZATION (IPR) ---
                 # Extract HOMO (last occupied) and LUMO (first virtual)
                 q_homo = self.q_occ_diag[-1, :] if self.diagonal_mode else self.q_occ[-1, -1, :]
@@ -288,20 +291,20 @@ class ExcitonHamiltonian:
                 ipr_homo = np.sum(q_homo ** 2)
                 ipr_lumo = np.sum(q_lumo ** 2)
                 
-                print(f"\n  [Theory Check] Orbital Localization (IPR = Sum of q^2):")
-                print(f"       HOMO IPR : {ipr_homo:8.5f}  (Higher means more localized)")
-                print(f"       LUMO IPR : {ipr_lumo:8.5f}  (Higher means more localized)")
+                logger.info(f"\n  [Theory Check] Orbital Localization (IPR = Sum of q^2):")
+                logger.info(f"       HOMO IPR : {ipr_homo:8.5f}  (Higher means more localized)")
+                logger.info(f"       LUMO IPR : {ipr_lumo:8.5f}  (Higher means more localized)")
                 
                 # Print the raw atomic charges for the top 5 most populated atoms in each
                 top_homo_atoms = np.argsort(q_homo)[-5:][::-1]
                 top_lumo_atoms = np.argsort(q_lumo)[-5:][::-1]
                 
-                print(f"       HOMO Top 5 Atom Charges (q): {q_homo[top_homo_atoms]}")
-                print(f"       LUMO Top 5 Atom Charges (q): {q_lumo[top_lumo_atoms]}")
+                logger.info(f"       HOMO Top 5 Atom Charges (q): {q_homo[top_homo_atoms]}")
+                logger.info(f"       LUMO Top 5 Atom Charges (q): {q_lumo[top_lumo_atoms]}")
                 # -----------------------------------
                 # 3. Exact Vxc Correction from AO Matrix OR HOMO Referencing
                 if vxc_ao_path is not None and os.path.exists(vxc_ao_path):
-                    print("\n  [Vxc] Applying Exact State-Dependent Vxc Integrals...")
+                    logger.info("\n  [Vxc] Applying Exact State-Dependent Vxc Integrals...")
                     from qdex.io_utils import get_vxc_ao_matrix
                     V_ao = get_vxc_ao_matrix(vxc_ao_path, self.overlap.shape[0])
                     
@@ -312,48 +315,48 @@ class ExcitonHamiltonian:
                     vxc_occ_ev = vxc_occ * HA_TO_EV
                     vxc_virt_ev = vxc_virt * HA_TO_EV
 
-                    print(f"       HOMO Exact Vxc: {vxc_occ_ev[-1]:8.4f} eV")
-                    print(f"       LUMO Exact Vxc: {vxc_virt_ev[0]:8.4f} eV")
+                    logger.info(f"       HOMO Exact Vxc: {vxc_occ_ev[-1]:8.4f} eV")
+                    logger.info(f"       LUMO Exact Vxc: {vxc_virt_ev[0]:8.4f} eV")
                     
                     # Apply Exact State-Dependent G0W0 Equation
                     self.sigma_occ = sigma_occ_raw - vxc_occ_ev
                     self.sigma_virt = sigma_virt_raw - vxc_virt_ev
                     
                     cohsex_gap_corr = self.sigma_virt[0] - self.sigma_occ[-1]
-                    print(f"       Exact Vxc Gap Correction: {cohsex_gap_corr:+8.4f} eV")
+                    logger.info(f"       Exact Vxc Gap Correction: {cohsex_gap_corr:+8.4f} eV")
 
                 else:
                     # Fallback to standard HOMO-referencing
                     if vxc_ao_path is not None:
-                        print(f"\n  [Vxc] WARNING: '{vxc_ao_path}' not found! Falling back to HOMO-referencing.")
+                        logger.warning(f"\n  [Vxc] WARNING: '{vxc_ao_path}' not found! Falling back to HOMO-referencing.")
                         
                     homo_raw_shift = sigma_occ_raw[-1]
                     self.sigma_occ = sigma_occ_raw - homo_raw_shift
                     self.sigma_virt = sigma_virt_raw - homo_raw_shift 
                     
                     cohsex_gap_corr = self.sigma_virt[0] - self.sigma_occ[-1]
-                    print(f"       Pure COHSEX Gap Correction: {cohsex_gap_corr:+8.4f} eV")
+                    logger.info(f"       Pure COHSEX Gap Correction: {cohsex_gap_corr:+8.4f} eV")
  
                 # 4. HYBRID GW APPROACH: Anchor to Tabulated GW Scissor
                 if scissor_ev != 0.0:
-                    print(f"       Tabulated GW Target Shift : {scissor_ev:+8.4f} eV")
+                    logger.info(f"       Tabulated GW Target Shift : {scissor_ev:+8.4f} eV")
                     residual_shift = scissor_ev - cohsex_gap_corr
                     self.sigma_virt += residual_shift
-                    print(f"       -> Applied residual shift of {residual_shift:+8.4f} eV to virtuals to match Tabulated GW Gap.")
+                    logger.info(f"       -> Applied residual shift of {residual_shift:+8.4f} eV to virtuals to match Tabulated GW Gap.")
                     
-                print(f"    Completed in {time.time() - t_qp:2.4f} s")
+                logger.debug(f"    Completed in {time.time() - t_qp:2.4f} s")
         else:
             # --- MANUAL SCISSOR MODE ---
             self.sigma_occ = np.zeros(self.n_occ_act)
             self.sigma_virt = np.full(self.n_virt_act, scissor_ev)
             if scissor_ev != 0.0:
-                print(f"\n  [QP] Rigid Scissor applied: +{scissor_ev:.4f} eV to Virtual Orbitals.")
+                logger.info(f"\n  [QP] Rigid Scissor applied: +{scissor_ev:.4f} eV to Virtual Orbitals.")
 
         # Apply shifts directly to the QP energy arrays
         eps_occ_qp += self.sigma_occ
         eps_virt_qp += self.sigma_virt
 
-        print(f"[QP] Final QP gap: {eps_virt_qp[0] - eps_occ_qp[-1]:.3f} eV")
+        logger.info(f"[QP] Final QP gap: {eps_virt_qp[0] - eps_occ_qp[-1]:.3f} eV")
         
         # ==========================================================
         # UNIFIED ORBITAL PRINTOUT (Always runs!)
@@ -362,19 +365,19 @@ class ExcitonHamiltonian:
         shift_occ = eps_occ_qp - ref_eps[occ_idx]
         shift_virt = eps_virt_qp - ref_eps[virt_idx]
 
-        print(f"\n  Retained Active Space Orbitals (Post-Shift):")
-        print(f"    {'Orbital':>12} | {'Index':>6} | {'DFT (eV)':>10} | {'Shift':>10} | {'QP Energy':>10} | {'Occ':>5}")
-        print(f"    {'-'*69}")
+        logger.info(f"\n  Retained Active Space Orbitals (Post-Shift):")
+        logger.info(f"    {'Orbital':>12} | {'Index':>6} | {'DFT (eV)':>10} | {'Shift':>10} | {'QP Energy':>10} | {'Occ':>5}")
+        logger.info(f"    {'-'*69}")
         
         for idx_local, idx_global in reversed(list(enumerate(virt_idx))):
             label = "LUMO" if idx_global == homo_index + 1 else f"LUMO+{idx_global - (homo_index + 1)}"
-            print(f"    {label:>12} | {idx_global:6d} | {ref_eps[idx_global]:10.4f} | {shift_virt[idx_local]:+10.4f} | {eps_virt_qp[idx_local]:10.4f} | {0.0:5.1f}")
+            logger.info(f"    {label:>12} | {idx_global:6d} | {ref_eps[idx_global]:10.4f} | {shift_virt[idx_local]:+10.4f} | {eps_virt_qp[idx_local]:10.4f} | {0.0:5.1f}")
             
-        print(f"    {'-- FERMI --':>12} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'----------':>10} | {'-----':>5}")
+        logger.info(f"    {'-- FERMI --':>12} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'----------':>10} | {'-----':>5}")
         
         for idx_local, idx_global in reversed(list(enumerate(occ_idx))):
             label = "HOMO" if idx_global == homo_index else f"HOMO-{homo_index - idx_global}"
-            print(f"    {label:>12} | {idx_global:6d} | {ref_eps[idx_global]:10.4f} | {shift_occ[idx_local]:+10.4f} | {eps_occ_qp[idx_local]:10.4f} | {2.0:5.1f}")
+            logger.info(f"    {label:>12} | {idx_global:6d} | {ref_eps[idx_global]:10.4f} | {shift_occ[idx_local]:+10.4f} | {eps_occ_qp[idx_local]:10.4f} | {2.0:5.1f}")
 
         # Consume the scissor_ev so it's not double counted in the CI Diagonal D matrix later
         self.scissor_ev = 0.0
@@ -403,7 +406,7 @@ class ExcitonHamiltonian:
         pt_shift = None
         if self.selection == "perturbative":
             if self.diagonal_mode or self.soc_flag or not hasattr(self, "q_ov"):
-                print("  [Selection] Perturbative selection applies to the coupled spin-free solvers only; skipped.")
+                logger.info("  [Selection] Perturbative selection applies to the coupled spin-free solvers only; skipped.")
             else:
                 from qdex.selection import perturbative_selection
                 kx_factor = (2.0 if self.spin == 'singlet' else 0.0) if self.include_exchange else 0.0
@@ -412,16 +415,16 @@ class ExcitonHamiltonian:
                 self.valid_mask, pt_shift, sel = perturbative_selection(
                     qp_gap_matrix + scissor_ev, self.q_ov, self.q_occ, w_virt, self.gamma, kx_factor,
                     w_virt is not None, self.selection_energy, self.selection_pt, base_mask=self.valid_mask)
-                print(f"\n  [Selection] Perturbative (Grimme): E_thr = {self.selection_energy:.2f} eV, "
+                logger.info(f"\n  [Selection] Perturbative (Grimme): E_thr = {self.selection_energy:.2f} eV, "
                       f"t = {self.selection_pt:.1e} Eh")
-                print(f"    {sel['n_primary']} primary + {sel['n_added']} added of {sel['n_candidates']} candidates "
+                logger.info(f"    {sel['n_primary']} primary + {sel['n_added']} added of {sel['n_candidates']} candidates "
                       f"({n_before} in the active space); PT2 lowering of primaries: mean "
                       f"{sel['pt2_mean_ev']*1000:.1f} meV, max {sel['pt2_max_ev']*1000:.1f} meV")
         self.valid_i, self.valid_a = np.where(self.valid_mask)
         self.dim = len(self.valid_i)
         
         if self.dim == 0:
-            print(f"ERROR: CI Space is empty! Energy threshold ({e_thresh}) or f_thresh ({f_thresh}) is too strict.")
+            logger.error(f"ERROR: CI Space is empty! Energy threshold ({e_thresh}) or f_thresh ({f_thresh}) is too strict.")
             sys.exit(1)
             
         # 3. Feed the corrected QP energies into the diagonal
@@ -432,9 +435,9 @@ class ExcitonHamiltonian:
         self.D_dft_spatial = dft_gap_matrix[self.valid_mask]
         self.D_dft = self.D_dft_spatial
 
-        print(f"\n  CI Space Truncation:")
-        print(f"    Transitions passing Energy Threshold ({e_thresh or 'None'} eV): {n_e_passed}")
-        print(f"    Final CI Space (Energy AND f0 >= {f_thresh}): {self.dim} valid transitions")
+        logger.info(f"\n  CI Space Truncation:")
+        logger.info(f"    Transitions passing Energy Threshold ({e_thresh or 'None'} eV): {n_e_passed}")
+        logger.info(f"    Final CI Space (Energy AND f0 >= {f_thresh}): {self.dim} valid transitions")
 
         # --------------------------------------------------
         # ULTRA-FAST Charge Construction
@@ -456,7 +459,7 @@ class ExcitonHamiltonian:
             if self.excitation_mode == "diagonal_bse" and self.include_exchange:
                 factor = 2.0 if self.spin == 'singlet' else 0.0
                 if factor > 0.0:
-                    print(f"  Building transition charges & exchange in streaming chunks...")
+                    logger.info(f"  Building transition charges & exchange in streaming chunks...")
                     gamma = to_numpy(self.gamma)
                     if self.is_xs:
                         for p0 in range(0, self.dim, chunk_size):
@@ -498,12 +501,12 @@ class ExcitonHamiltonian:
                             V_ch = q_ch @ gamma
                             self.kx_diag[p0:p1] = factor * np.sum(q_ch * V_ch, axis=1)
 
-            print(f"    Charges & diagonal kernels built in {time.time() - start_q:2.4f} s")
+            logger.debug(f"    Charges & diagonal kernels built in {time.time() - start_q:2.4f} s")
         else:
             self.q_flat = np.zeros((self.dim, self.n_features), dtype=np.float64)
 
             if self.is_xs:
-                print(f"  Building Xs-QDEX transition densities (AO-by-AO via {'GPU' if is_gpu(device) else 'CPU'})...")
+                logger.info(f"  Building Xs-QDEX transition densities (AO-by-AO via {'GPU' if is_gpu(device) else 'CPU'})...")
                 if is_gpu(device):
                     import torch
                     dev = torch.device(device) if isinstance(device, str) else device
@@ -518,7 +521,7 @@ class ExcitonHamiltonian:
                     self.q_flat = q_flat.real if not np.iscomplexobj(q_flat) else q_flat
 
             elif charge_type == 'mulliken':
-                print(f"  Building transition charges (Atom-by-Atom via {'GPU' if is_gpu(device) else 'CPU'})...")
+                logger.info(f"  Building transition charges (Atom-by-Atom via {'GPU' if is_gpu(device) else 'CPU'})...")
                 
                 if is_gpu(device):
                     import torch
@@ -559,14 +562,14 @@ class ExcitonHamiltonian:
                         self.q_flat[:, A] = 0.5 * (np.sum(Ci_A * SCa_A, axis=0) + np.sum(Ca_A * SCi_A, axis=0))
 
             elif charge_type == 'lowdin':
-                print(f"  Building transition charges (Atom-by-Atom via Lowdin symmetric orthogonalization)...")
+                logger.info(f"  Building transition charges (Atom-by-Atom via Lowdin symmetric orthogonalization)...")
                 from qdex.lowdin import build_lowdin_transition_charges_flat
                 S_dense = overlap.toarray() if hasattr(overlap, "toarray") else overlap
                 self.q_flat = build_lowdin_transition_charges_flat(
                     C_occ_act, C_virt_act, S_dense, atom_ao_ranges, self.valid_i, self.valid_a, device=device
                 )
 
-            print(f"    Charges built in {time.time() - start_q:2.4f} s")
+            logger.debug(f"    Charges built in {time.time() - start_q:2.4f} s")
 
         # --------------------------------------------------
         # SPIN-ORBIT COUPLING (SPINOR) TRANSFORMATION
@@ -585,7 +588,7 @@ class ExcitonHamiltonian:
         are coupled by the spin-independent Coulomb interaction J.
         Exchange K is block-diagonal: K_alpha acts only within alpha transitions, K_beta only within beta.
         """
-        print(f"\n--- [4] Building Exciton Hamiltonian (UKS Spin-Preserving, Manifold B) ---")
+        logger.info(f"\n--- [4] Building Exciton Hamiltonian (UKS Spin-Preserving, Manifold B) ---")
         n_atoms = len(atom_ao_ranges)
         self.n_atoms = n_atoms
         self.scissor_ev = 0.0  # will be consumed into D below
@@ -619,8 +622,8 @@ class ExcitonHamiltonian:
         n_occ_a, n_virt_a = len(occ_idx_a), len(virt_idx_a)
         n_occ_b, n_virt_b = len(occ_idx_b), len(virt_idx_b)
 
-        print(f"  Alpha channel: {n_occ_a} occ x {n_virt_a} virt = {n_occ_a * n_virt_a} transitions")
-        print(f"  Beta  channel: {n_occ_b} occ x {n_virt_b} virt = {n_occ_b * n_virt_b} transitions")
+        logger.info(f"  Alpha channel: {n_occ_a} occ x {n_virt_a} virt = {n_occ_a * n_virt_a} transitions")
+        logger.info(f"  Beta  channel: {n_occ_b} occ x {n_virt_b} virt = {n_occ_b * n_virt_b} transitions")
 
         # Store for later use in solver / analysis
         self.n_occ_act   = n_occ_a   # primary (alpha) sizes for compatibility
@@ -672,12 +675,12 @@ class ExcitonHamiltonian:
         dim_a, dim_b = len(vi_a), len(vi_b)
 
         if (dim_a + dim_b) == 0:
-            print(f"ERROR: UKS spin-preserving CI space is empty! e_thresh ({e_thresh}) is too strict.")
+            logger.error(f"ERROR: UKS spin-preserving CI space is empty! e_thresh ({e_thresh}) is too strict.")
             sys.exit(1)
 
-        print(f"  Alpha transitions after threshold: {dim_a}")
-        print(f"  Beta  transitions after threshold: {dim_b}")
-        print(f"  Total CI dimension: {dim_a + dim_b}")
+        logger.info(f"  Alpha transitions after threshold: {dim_a}")
+        logger.info(f"  Beta  transitions after threshold: {dim_b}")
+        logger.info(f"  Total CI dimension: {dim_a + dim_b}")
 
         # Store valid indices for both channels
         self.valid_i,   self.valid_a   = vi_a, va_a   # alpha (legacy compat)
@@ -697,15 +700,15 @@ class ExcitonHamiltonian:
         self.D_dft_spatial = np.concatenate([dft_gap_a[valid_mask_a], dft_gap_b[valid_mask_b]])
         self.D_dft = self.D_dft_spatial
 
-        print(f"  Alpha energy range: {D_a.min():.3f} – {D_a.max():.3f} eV" if dim_a else "  Alpha: no transitions")
-        print(f"  Beta  energy range: {D_b.min():.3f} – {D_b.max():.3f} eV" if dim_b else "  Beta:  no transitions")
+        logger.info(f"  Alpha energy range: {D_a.min():.3f} – {D_a.max():.3f} eV" if dim_a else "  Alpha: no transitions")
+        logger.info(f"  Beta  energy range: {D_b.min():.3f} – {D_b.max():.3f} eV" if dim_b else "  Beta:  no transitions")
 
         # ---- Build transition charges (concatenated, flat) ----
         start_q = time.time()
         S = overlap.toarray() if hasattr(overlap, 'toarray') else overlap
 
         if self.is_xs:
-            print(f"  Building Xs-QDEX transition densities (alpha + beta channels)...")
+            logger.info(f"  Building Xs-QDEX transition densities (alpha + beta channels)...")
             from qdex.lowdin import lowdin_sqrt
             S_half = lowdin_sqrt(S, device=device)
             self.C_occ_a_low = S_half @ C_occ_a
@@ -720,7 +723,7 @@ class ExcitonHamiltonian:
             sc_built = True
 
         elif charge_type == 'mulliken':
-            print(f"  Building Mulliken transition charges (alpha + beta channels via {'GPU' if is_gpu(device) else 'CPU'})...")
+            logger.info(f"  Building Mulliken transition charges (alpha + beta channels via {'GPU' if is_gpu(device) else 'CPU'})...")
             if is_gpu(device):
                 import torch
                 dev = torch.device(device) if isinstance(device, str) else device
@@ -785,7 +788,7 @@ class ExcitonHamiltonian:
                         q_flat_b[:, A] = 0.5 * (np.sum(Ci_B * SCa_B, axis=0) + np.sum(Ca_B * SCi_B, axis=0))
 
         elif charge_type == 'lowdin':
-            print(f"  Building Löwdin transition charges (alpha + beta channels)...")
+            logger.info(f"  Building Löwdin transition charges (alpha + beta channels)...")
             from qdex.lowdin import build_lowdin_transition_charges_flat
             q_flat_a = build_lowdin_transition_charges_flat(C_occ_a, C_virt_a, S, atom_ao_ranges, vi_a, va_a, device=device) if dim_a else np.zeros((0, n_atoms), dtype=np.float64)
             q_flat_b = build_lowdin_transition_charges_flat(C_occ_b, C_virt_b, S, atom_ao_ranges, vi_b, va_b, device=device) if dim_b else np.zeros((0, n_atoms), dtype=np.float64)
@@ -797,11 +800,11 @@ class ExcitonHamiltonian:
         self.q_flat   = np.concatenate([q_flat_a, q_flat_b], axis=0).astype(np.float64)
         self.q_flat_a = q_flat_a
         self.q_flat_b = q_flat_b
-        print(f"    Charges built in {time.time() - start_q:.4f} s")
+        logger.debug(f"    Charges built in {time.time() - start_q:.4f} s")
 
         # ---- Build full channel density blocks for exchange and/or SOC rotation ----
         if self.include_exchange or self.soc_flag:
-            print(f"  Building same-spin density blocks...")
+            logger.info(f"  Building same-spin density blocks...")
             t_ex = time.time()
             if self.is_xs:
                 self.q_occ_a = np.einsum("mi,mj->ijm", self.C_occ_a_low.conj(), self.C_occ_a_low, optimize=True)
@@ -873,13 +876,13 @@ class ExcitonHamiltonian:
                         self.W_virt_a = (qva @ self.W_resta.T).reshape(n_virt_a, n_virt_a, n_atoms)
                         qvb = self.q_virt_b.reshape(n_virt_b * n_virt_b, n_atoms)
                         self.W_virt_b = (qvb @ self.W_resta.T).reshape(n_virt_b, n_virt_b, n_atoms)
-            print(f"    Same-spin density blocks built in {time.time() - t_ex:.4f} s")
+            logger.debug(f"    Same-spin density blocks built in {time.time() - t_ex:.4f} s")
 
         if self.soc_flag:
             self.build_spinor_basis_uks(soc_U, soc_E, e_thresh)
 
     def build_spinor_basis(self, U_mo, soc_E, e_thresh):
-        print("\n--- [SOC] Transforming Exciton Hamiltonian to Spinor Basis ---")
+        logger.info("\n--- [SOC] Transforming Exciton Hamiltonian to Spinor Basis ---")
         k = self.n_occ_act + self.n_virt_act
         self.n_occ_spinor = 2 * self.n_occ_act
         self.n_virt_spinor = 2 * self.n_virt_act
@@ -893,11 +896,11 @@ class ExcitonHamiltonian:
         U_occ_b = U_mo[k : k + self.n_occ_act, 0 : self.n_occ_spinor]
         U_virt_b = U_mo[k + self.n_occ_act : 2*k, self.n_occ_spinor : 2*k]
 
-        print("  -> Rotating spatial charge tensors into the spinor basis...")
+        logger.info("  -> Rotating spatial charge tensors into the spinor basis...")
         t_sp = time.time()
 
         if self.diagonal_mode:
-            print("  -> Computing spinor diagonal populations (low-memory streaming mode)...")
+            logger.info("  -> Computing spinor diagonal populations (low-memory streaming mode)...")
             t_sp = time.time()
             if self.is_xs:
                 C_sp_occ_a = self.C_occ_low @ U_occ_a
@@ -936,7 +939,7 @@ class ExcitonHamiltonian:
             if self.include_direct_eh:
                 self.W_elec_spinor_diag = self.q_elec_spinor_diag @ self.W_resta.T
 
-            print(f"  -> Spinor diagonal populations compiled in {time.time() - t_sp:.2f}s")
+            logger.debug(f"  -> Spinor diagonal populations compiled in {time.time() - t_sp:.2f}s")
         elif is_gpu(self.device):
             import torch
             dev = torch.device(self.device) if isinstance(self.device, str) else self.device
@@ -986,7 +989,7 @@ class ExcitonHamiltonian:
                 qe = self.q_elec_spinor.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_features)
                 self.W_elec_spinor = (qe @ self.W_resta.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_features)
 
-        print(f"  -> Density mappings compiled in {time.time() - t_sp:.2f}s")
+        logger.debug(f"  -> Density mappings compiled in {time.time() - t_sp:.2f}s")
 
         # 3. Spinor Zero-Order Energies
         eps_occ_sp = soc_E[0 : self.n_occ_spinor].copy()
@@ -1000,9 +1003,9 @@ class ExcitonHamiltonian:
         sigma_virt_sp = np.concatenate([self.sigma_virt, self.sigma_virt])
         
         if self.estimate_qp:
-            print("  [QP-SOC] Mapped spatial Quasiparticle shifts onto Spinor energies.")
+            logger.info("  [QP-SOC] Mapped spatial Quasiparticle shifts onto Spinor energies.")
         elif self.sigma_virt[0] != 0.0:
-            print(f"  [QP-SOC] Mapped rigid scissor shift (+{self.sigma_virt[0]:.4f} eV) onto Spinor energies.")
+            logger.info(f"  [QP-SOC] Mapped rigid scissor shift (+{self.sigma_virt[0]:.4f} eV) onto Spinor energies.")
 
         # Apply shifts
         eps_occ_sp += sigma_occ_sp
@@ -1011,21 +1014,21 @@ class ExcitonHamiltonian:
         # ==========================================================
         # NEW ALIGNED PRINTOUT
         # ==========================================================
-        print(f"\n  Retained Active Space Spinors (Post-Shift Mapping):")
-        print(f"    {'Spinor':>12} | {'Index':>6} | {'DFT+SOC(eV)':>12} | {'Shift':>10} | {'QP Energy':>10} | {'Occ':>5}")
-        print(f"    {'-'*73}")
+        logger.info(f"\n  Retained Active Space Spinors (Post-Shift Mapping):")
+        logger.info(f"    {'Spinor':>12} | {'Index':>6} | {'DFT+SOC(eV)':>12} | {'Shift':>10} | {'QP Energy':>10} | {'Occ':>5}")
+        logger.info(f"    {'-'*73}")
         for idx in range(self.n_occ_spinor + self.n_virt_spinor - 1, self.n_occ_spinor - 1, -1):
             label = "spL" if idx - self.n_occ_spinor == 0 else f"spL+{idx - self.n_occ_spinor}"
             local_virt_idx = idx - self.n_occ_spinor
-            print(f"    {label:>12} | {idx + 1:6d} | {soc_E[idx]:12.4f} | {sigma_virt_sp[local_virt_idx]:+10.4f} | {eps_virt_sp[local_virt_idx]:10.4f} | {0.0:5.1f}")
+            logger.info(f"    {label:>12} | {idx + 1:6d} | {soc_E[idx]:12.4f} | {sigma_virt_sp[local_virt_idx]:+10.4f} | {eps_virt_sp[local_virt_idx]:10.4f} | {0.0:5.1f}")
             
-        print(f"    {'-- FERMI --':>12} | {'------':>6} | {'------------':>12} | {'----------':>10} | {'----------':>10} | {'-----':>5}")
+        logger.info(f"    {'-- FERMI --':>12} | {'------':>6} | {'------------':>12} | {'----------':>10} | {'----------':>10} | {'-----':>5}")
         
         for idx in range(self.n_occ_spinor - 1, -1, -1):
             label = "spH" if (self.n_occ_spinor - 1) - idx == 0 else f"spH-{(self.n_occ_spinor - 1) - idx}"
             local_occ_idx = idx
-            print(f"    {label:>12} | {idx + 1:6d} | {soc_E[idx]:12.4f} | {sigma_occ_sp[local_occ_idx]:+10.4f} | {eps_occ_sp[local_occ_idx]:10.4f} | {1.0:5.1f}")
-        print("\n")
+            logger.info(f"    {label:>12} | {idx + 1:6d} | {soc_E[idx]:12.4f} | {sigma_occ_sp[local_occ_idx]:+10.4f} | {eps_occ_sp[local_occ_idx]:10.4f} | {1.0:5.1f}")
+        logger.info("\n")
         # ==========================================================
 
         # Calculate QP gap for the actual Hamiltonian diagonal
@@ -1047,8 +1050,8 @@ class ExcitonHamiltonian:
         
         self.dim_spinor_full = len(raw_D_spinor)
         self.dim = len(self.D_spinor)
-        print(f"  -> BSE Active Space expanded to {self.dim_spinor_full} spinor transitions.")
-        print(f"  -> Truncated Spinor Space (Energy <= {e_thresh} eV): {self.dim} valid transitions")
+        logger.info(f"  -> BSE Active Space expanded to {self.dim_spinor_full} spinor transitions.")
+        logger.info(f"  -> Truncated Spinor Space (Energy <= {e_thresh} eV): {self.dim} valid transitions")
 
         if self.diagonal_mode:
             chunk_size = 50000
@@ -1064,7 +1067,7 @@ class ExcitonHamiltonian:
 
             if self.include_exchange:
                 if self.excitation_mode == "diagonal_bse":
-                    print(f"  Building spinor transition charges & exchange in streaming chunks...")
+                    logger.info(f"  Building spinor transition charges & exchange in streaming chunks...")
                     gamma = to_numpy(self.gamma)
                     if self.is_xs:
                         for p0 in range(0, self.dim, chunk_size):
@@ -1107,7 +1110,7 @@ class ExcitonHamiltonian:
             self.q_spinor = self.q_spinor[self.valid_spinor_mask, :]
 
     def build_spinor_basis_uks(self, U_mo, soc_E, e_thresh):
-        print("\n--- [SOC-UKS] Transforming Exciton Hamiltonian to Spinor Basis ---")
+        logger.info("\n--- [SOC-UKS] Transforming Exciton Hamiltonian to Spinor Basis ---")
         n_alpha = self.n_occ_act + self.n_virt_act
         n_beta = self.n_occ_act_b + self.n_virt_act_b
         self.n_occ_spinor = self.n_occ_act + self.n_occ_act_b
@@ -1124,7 +1127,7 @@ class ExcitonHamiltonian:
         U_occ_b = U_mo[n_alpha:n_alpha + self.n_occ_act_b, occ_cols]
         U_virt_b = U_mo[n_alpha + self.n_occ_act_b:n_alpha + n_beta, virt_cols]
 
-        print("  -> Rotating UKS alpha/beta charge tensors into the spinor basis...")
+        logger.info("  -> Rotating UKS alpha/beta charge tensors into the spinor basis...")
         t_sp = time.time()
         if is_gpu(self.device):
             import torch
@@ -1175,7 +1178,7 @@ class ExcitonHamiltonian:
                 qe = self.q_elec_spinor.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_features)
                 self.W_elec_spinor = (qe @ self.W_resta.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_features)
 
-        print(f"  -> UKS density mappings compiled in {time.time() - t_sp:.2f}s")
+        logger.debug(f"  -> UKS density mappings compiled in {time.time() - t_sp:.2f}s")
 
         eps_occ_sp = soc_E[:self.n_occ_spinor].copy()
         eps_virt_sp = soc_E[self.n_occ_spinor:self.n_occ_spinor + self.n_virt_spinor].copy()
@@ -1203,8 +1206,8 @@ class ExcitonHamiltonian:
 
         self.dim_spinor_full = len(raw_D_spinor)
         self.dim = len(self.D_spinor)
-        print(f"  -> UKS BSE Active Space expanded to {self.dim_spinor_full} spinor transitions.")
-        print(f"  -> Truncated UKS Spinor Space (Energy <= {e_thresh} eV): {self.dim} valid transitions")
+        logger.info(f"  -> UKS BSE Active Space expanded to {self.dim_spinor_full} spinor transitions.")
+        logger.info(f"  -> Truncated UKS Spinor Space (Energy <= {e_thresh} eV): {self.dim} valid transitions")
 
     def kernel_actions(self, x):
         """Return Kx_bare@x and Kd_screened@x in the active transition space."""
