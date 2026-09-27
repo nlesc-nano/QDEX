@@ -190,7 +190,7 @@ class ExcitonSolver:
                   n_occ_beta=None, n_virt_beta=None, include_direct_eh=None,
                   excitation_mode="bse", kernel_type="mnok", shells=None, eps_dft=None,
                   shared_W=None, shared_gamma_bare=None, selection=None, selection_energy=7.0,
-                  selection_pt=1e-4):
+                  selection_pt=1e-4, selection_shift=True):
 
         self.C = C
         self.eps = eps
@@ -403,6 +403,7 @@ class ExcitonSolver:
             include_direct_eh=self.include_direct_eh,
             eps_dft=self.eps_dft,
             selection=selection, selection_energy=selection_energy, selection_pt=selection_pt,
+            selection_shift=selection_shift,
         )
 
     def solve(self, nroots=10, full_diag=False, tol=1e-5, excitation_mode="bse"):

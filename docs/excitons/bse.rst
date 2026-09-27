@@ -55,6 +55,7 @@ Perturbative transition selection
      selection: perturbative
      selection_energy: 3.3     # E_thr in eV, on the diagonal A_ia,ia
      # selection_pt: 1.0e-4    # t in hartree
+     # selection_shift: on     # second-order lowering of the primaries (std2)
 
 Grimme's selection (J. Chem. Phys. 138, 244104 (2013); ``ptselect`` in std2), for the coupled solvers
 ``bse``, ``sbse`` and ``stda`` in the spin-free calculation:
@@ -106,7 +107,45 @@ E_thr should be set just above the lowest states.
      - 2.7884
      - 0.288
 
+With a 100 × 100 pool (10,000 transitions; the full dense calculation takes 237 s, the selected ones
+6–7 s):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Setting
+     - transitions
+     - S₁ (eV), with lowering
+     - S₁ (eV), ``selection_shift: off``
+   * - full 100 × 100
+     - 10,000
+     - 2.7809
+     - 2.7809
+   * - E_thr = 3.3 eV
+     - 37 + 36
+     - 2.7633
+     - 2.8081
+   * - E_thr = 3.6 eV
+     - 96 + 156
+     - 2.7644
+     - 2.8031
+   * - E_thr = 3.3 eV, t = 10⁻⁵
+     - 37 + 531
+     - 2.7671
+     - 2.7974
+
+The added transitions are the same as with the 50 × 50 pool: the extra ones enter only through the
+second-order lowering, which accumulates and overshoots (−14 to −18 meV). Without it the error is
++17 to +27 meV. The two bracket the full result; the std2 default (lowering on) is the closer one.
+
 S₁ is within 4–7 meV of the full 50 × 50 result with 3–20 % of the transitions, approaching it from
 below (the second-order lowering of the primaries slightly overshoots). Oscillator strengths converge
 more slowly: they need the larger selections. The diagonal solvers and the SOC calculation do not use
 the selection.
+
+**Dynamics.** The selection is meant for optical spectra near the band edge. Carrier cooling needs
+every state between the pump energy and the band edge, and the same transitions in every frame, so the
+NAMD precompute does not use it: it fixes the transition set on the first frame with an energy window
+(``namd.storage.active_energy_window_ev``) and propagates within ``[gap − 0.2, pump + 0.3]`` eV by default.
+A perturbative selection would change with geometry from frame to frame, breaking the state tracking
+and the couplings, and its second-order shifts would add noise to the energies.
