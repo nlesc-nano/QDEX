@@ -277,6 +277,13 @@ class ExcitonSolver:
             else:
                 raise ValueError(f"kernel 'qp': W has shape {shared_W.shape}; expected atom or AO dimensions.")
             gamma_qp, w_resta = shared_W, shared_W
+        elif k_name == "stda":
+            # Grimme sTDA: gamma^J (direct) and gamma^K (exchange) built by the CLI (build_stda_gammas).
+            if shared_W is None or shared_gamma_bare is None:
+                raise ValueError("kernel 'stda' needs the sTDA gamma^J and gamma^K matrices.")
+            print("  [Solver] Using the sTDA interactions of Grimme (gamma^J direct, gamma^K exchange; Loewdin charges).")
+            gamma_qp = w_resta = np.asarray(shared_W, dtype=float)
+            gamma_bare = np.asarray(shared_gamma_bare, dtype=float)
         elif is_xs:
             if shells is None:
                 raise ValueError("Xs-QDEX kernel requires Libint2 shell objects passed as `shells`.")
@@ -402,9 +409,9 @@ class ExcitonSolver:
             import sys; sys.exit(1)
 
         mode = str(excitation_mode).lower()
-        if mode == "sbse":
+        if mode in ("sbse", "stda"):
             mode = "bse"
-        elif mode == "diagonal_sbse":
+        elif mode in ("diagonal_sbse", "diagonal_stda"):
             mode = "diagonal_bse"
         self.excitation_mode = mode
         if mode != "bse":

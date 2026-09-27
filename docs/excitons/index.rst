@@ -50,9 +50,13 @@ The frameworks (``excitations.mode``) differ in two choices: which orbital energ
      - K\ :sup:`x`, K\ :sup:`d`, full
      - coupled excitons (TDA Bethe–Salpeter equation)
    * - ``sbse``, ``diagonal_sbse``
-     - KS + bulk GW
+     - PBE + bulk GW
      - K\ :sup:`x`, K\ :sup:`d` with bulk W
      - the same solvers with ΔW removed from both the energies and the kernel
+   * - ``stda``, ``diagonal_stda``
+     - DFT energies
+     - Grimme's γ\ :sup:`K`, a_x-dependent γ\ :sup:`J`
+     - the simplified TDA of Grimme
 
 Reading order:
 
@@ -61,7 +65,8 @@ Reading order:
 3. :doc:`diagonal_bse` and :doc:`bse`: the frameworks with K\ :sup:`x` and K\ :sup:`d`.
 4. :doc:`cancellation`: why ΔW in the QP energies and in K\ :sup:`d` does not cancel completely.
 5. :doc:`sbse`: dropping ΔW from both.
-6. :doc:`configuration`.
+6. :doc:`stda`: Grimme's simplified TDA.
+7. :doc:`configuration`.
 
 .. toctree::
    :maxdepth: 1
@@ -73,4 +78,5 @@ Reading order:
    bse
    cancellation
    sbse
+   stda
    configuration

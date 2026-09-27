@@ -826,6 +826,61 @@ def _mnok_denom(r_mat_au, damp_mat_au):
 
 
 # =====================================================================
+# sTDA (Grimme, J. Chem. Phys. 138, 244104 (2013)) interaction matrices
+# =====================================================================
+# Fock-exchange fraction a_x of common functionals (the functional of the MO file).
+STDA_FUNCTIONAL_AX = {
+    "pbe": 0.0, "blyp": 0.0, "bp86": 0.0, "lda": 0.0, "tpss": 0.0, "r2scan": 0.0,
+    "tpssh": 0.10, "b3lyp": 0.20, "b3pw91": 0.20, "pbe0": 0.25, "pw6b95": 0.28,
+    "m06": 0.27, "bhlyp": 0.50, "bhandhlyp": 0.50, "m06-2x": 0.54, "hf": 1.0,
+}
+# Global parameters of sTDA (std2 source, stda.f): beta = b1 + b2 a_x, alpha = a1 + a2 a_x.
+STDA_BETA1, STDA_BETA2 = 0.20, 1.83
+STDA_ALPHA1, STDA_ALPHA2 = 1.42, 0.48
+
+
+def stda_ax(functional=None, ax=None, material_name=None):
+    """Resolve a_x from an explicit value, 'dielectric' (1/eps_inf of the material) or a functional name."""
+    if ax is not None and str(ax).strip() != "":
+        if str(ax).lower() == "dielectric":
+            entry = MATERIAL_DB.get(str(material_name).upper()) if material_name else None
+            if entry is None:
+                raise ValueError("ax: dielectric needs a material with eps_inf in MATERIAL_DB")
+            return 1.0 / float(entry[0]), f"1/eps_inf ({material_name})"
+        return float(ax), "explicit"
+    if functional is None:
+        raise ValueError("sTDA needs excitations.functional (functional of the MO file) or excitations.ax")
+    key = str(functional).lower()
+    if key not in STDA_FUNCTIONAL_AX:
+        raise ValueError(f"Unknown functional '{functional}' for sTDA; give excitations.ax explicitly. "
+                         f"Known: {', '.join(sorted(STDA_FUNCTIONAL_AX))}")
+    return STDA_FUNCTIONAL_AX[key], str(functional)
+
+
+def build_stda_gammas(atom_symbols, coords, ax, eta_dict=HARDNESS_DICT):
+    """Coulomb (J) and exchange (K) interaction matrices of sTDA, in eV.
+
+    gamma^J_AB = (R^beta  + (a_x eta_AB)^-beta)^(-1/beta),   beta  = 0.20 + 1.83 a_x
+    gamma^K_AB = (R^alpha + eta_AB^-alpha)^(-1/alpha),        alpha = 1.42 + 0.48 a_x
+    with R in bohr and eta_AB = (eta_A + eta_B)/2 in hartree.  Grimme's hardness is twice the
+    Ghosh-Islam value stored in HARDNESS_DICT ((ii|ii) = IP - EA).  gamma^J enters the direct term
+    without a further a_x prefactor (std2, rtdamat); for a_x = 0 it vanishes.
+    """
+    ax = float(ax)
+    beta = STDA_BETA1 + STDA_BETA2 * ax
+    alpha = STDA_ALPHA1 + STDA_ALPHA2 * ax
+    r = squareform(pdist(np.asarray(coords, dtype=float) / ANG_PER_BOHR))
+    eta = 2.0 * np.array([eta_dict.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
+    eta_ab = 0.5 * (eta[:, None] + eta[None, :])
+    gam_k = (r ** alpha + eta_ab ** (-alpha)) ** (-1.0 / alpha)
+    if ax > 0.0:
+        gam_j = (r ** beta + (ax * eta_ab) ** (-beta)) ** (-1.0 / beta)
+    else:
+        gam_j = np.zeros_like(gam_k)
+    return gam_j * HA_TO_EV, gam_k * HA_TO_EV, {"ax": ax, "alpha_K": alpha, "beta_J": beta}
+
+
+# =====================================================================
 # Model 1: Classic MNOK Kernel (sTDA style)
 # =====================================================================
 def build_gamma(atom_symbols, coords, alpha, beta=0.0, eta_dict=HARDNESS_DICT):

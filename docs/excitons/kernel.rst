@@ -100,6 +100,7 @@ cancellation.
   (ε_eff ≈ 1).
 * ``bse``: uniform :math:`\alpha\,\gamma/\epsilon_\infty` (``kernel_scaling`` = α). It also screens
   on-site terms and underbinds.
+* ``stda``: Grimme's γ\ :sup:`J` / γ\ :sup:`K`, set by ``mode: stda`` (:doc:`stda`).
 
 3. Representation
 -----------------

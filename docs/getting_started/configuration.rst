@@ -176,9 +176,13 @@ excitations
      - Meaning
    * - ``mode`` [``--excitation-mode``]
      - ``bse``
-     - ``independent_dft``, ``independent_qp``, ``diagonal_bse``, ``bse``; ``sbse`` and ``diagonal_sbse``
+     - ``independent_dft``, ``independent_qp``, ``diagonal_bse``, ``bse``, ``stda``, ``diagonal_stda``; ``sbse`` and ``diagonal_sbse``
        are the same solvers, named for use with ``quasiparticles.model: bulk`` and a bulk kernel
        (:doc:`/excitons/index`)
+   * - ``functional`` [``--stda-functional``], ``ax`` [``--stda-ax``]
+     - —
+     - sTDA only: functional of the MO file (sets a_x), or a_x as a number or ``dielectric``
+       (1/ε∞) (:doc:`/excitons/stda`)
    * - ``kernel`` [``--kernel``]
      - model default
      - W of K\ :sup:`d`. Set by the QP model (``qp`` for Resta and DIM). Models without W (``none``, ``bulk``,

@@ -14,9 +14,9 @@ class ExcitonHamiltonian:
                  include_direct_eh=True, eps_dft=None):
         
         self.excitation_mode = str(excitation_mode).lower()
-        if self.excitation_mode == "diagonal_sbse":
+        if self.excitation_mode in ("diagonal_sbse", "diagonal_stda"):
             self.excitation_mode = "diagonal_bse"
-        elif self.excitation_mode == "sbse":
+        elif self.excitation_mode in ("sbse", "stda"):
             self.excitation_mode = "bse"
         self.diagonal_mode = (self.excitation_mode in {"diagonal_bse", "independent_dft", "independent_qp"})
         self.kernel_type = str(kernel_type).lower() if kernel_type is not None else "mnok"
@@ -1300,7 +1300,7 @@ class ExcitonHamiltonian:
         aliases = {
             'dft': 'independent_dft', 'qp': 'independent_qp',
             'qp_kernels': 'diagonal_bse', 'diagonal': 'diagonal_bse',
-            'diagonal_sbse': 'diagonal_bse',
+            'diagonal_sbse': 'diagonal_bse', 'diagonal_stda': 'diagonal_bse',
         }
         mode = aliases.get(mode, mode)
         if mode not in {'independent_dft', 'independent_qp', 'diagonal_bse'}:
