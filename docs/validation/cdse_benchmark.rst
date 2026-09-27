@@ -8,11 +8,12 @@ CdSe benchmark provenance
 
    Energy decomposition for the CdSe test run (gw QP model, Resta direct kernel, 25×25 active space, spin-free).
 
-``MATERIAL_DB["CDSE"]`` currently stores a bulk PBE gap of 0.64 eV, a bulk GW
-gap of 1.91 eV, and an optical dielectric constant of 6.2. The bulk gap
-opening used by the corresponding calibrated models is therefore 1.27 eV.
-Those values form one named parameter set; numbers from a different CdSe
-calculation must not be mixed into it without a separate source and convention.
+``MATERIAL_DB["CDSE"]`` stores a bulk PBE gap of 0.62 eV, a bulk pure 1.0 QSGW
+gap of 2.19 eV (spin-free), and an optical dielectric constant of 6.2. The bulk gap
+opening used by the corresponding calibrated models is therefore +1.57 eV.
+(In contrast, an empirical 0.8 QSGW bulk scaling yields 1.93 eV [~1.91 eV], which
+underestimates quasiparticle self-energies in 2–6 nm colloidal quantum dots where
+ladder vertex corrections are quenched by confinement).
 
 The original audit request supplied alternative bulk PBE gaps of 1.14 and
 1.25 eV and a GW gap of 2.76 eV. These imply openings of 1.62 and 1.51 eV,

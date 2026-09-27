@@ -14,6 +14,10 @@ class ExcitonHamiltonian:
                  include_direct_eh=True, eps_dft=None):
         
         self.excitation_mode = str(excitation_mode).lower()
+        if self.excitation_mode == "diagonal_sbse":
+            self.excitation_mode = "diagonal_bse"
+        elif self.excitation_mode == "sbse":
+            self.excitation_mode = "bse"
         self.diagonal_mode = (self.excitation_mode in {"diagonal_bse", "independent_dft", "independent_qp"})
         self.kernel_type = str(kernel_type).lower() if kernel_type is not None else "mnok"
         self.charge_type = str(charge_type).lower()
@@ -349,19 +353,23 @@ class ExcitonHamiltonian:
         # ==========================================================
         # UNIFIED ORBITAL PRINTOUT (Always runs!)
         # ==========================================================
+        ref_eps = self.eps_dft if self.eps_dft is not None else eps
+        shift_occ = eps_occ_qp - ref_eps[occ_idx]
+        shift_virt = eps_virt_qp - ref_eps[virt_idx]
+
         print(f"\n  Retained Active Space Orbitals (Post-Shift):")
         print(f"    {'Orbital':>12} | {'Index':>6} | {'DFT (eV)':>10} | {'Shift':>10} | {'QP Energy':>10} | {'Occ':>5}")
         print(f"    {'-'*69}")
         
         for idx_local, idx_global in reversed(list(enumerate(virt_idx))):
             label = "LUMO" if idx_global == homo_index + 1 else f"LUMO+{idx_global - (homo_index + 1)}"
-            print(f"    {label:>12} | {idx_global:6d} | {eps[idx_global]:10.4f} | {self.sigma_virt[idx_local]:+10.4f} | {eps_virt_qp[idx_local]:10.4f} | {0.0:5.1f}")
+            print(f"    {label:>12} | {idx_global:6d} | {ref_eps[idx_global]:10.4f} | {shift_virt[idx_local]:+10.4f} | {eps_virt_qp[idx_local]:10.4f} | {0.0:5.1f}")
             
         print(f"    {'-- FERMI --':>12} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'----------':>10} | {'-----':>5}")
         
         for idx_local, idx_global in reversed(list(enumerate(occ_idx))):
             label = "HOMO" if idx_global == homo_index else f"HOMO-{homo_index - idx_global}"
-            print(f"    {label:>12} | {idx_global:6d} | {eps[idx_global]:10.4f} | {self.sigma_occ[idx_local]:+10.4f} | {eps_occ_qp[idx_local]:10.4f} | {2.0:5.1f}")
+            print(f"    {label:>12} | {idx_global:6d} | {ref_eps[idx_global]:10.4f} | {shift_occ[idx_local]:+10.4f} | {eps_occ_qp[idx_local]:10.4f} | {2.0:5.1f}")
 
         # Consume the scissor_ev so it's not double counted in the CI Diagonal D matrix later
         self.scissor_ev = 0.0
@@ -1292,6 +1300,7 @@ class ExcitonHamiltonian:
         aliases = {
             'dft': 'independent_dft', 'qp': 'independent_qp',
             'qp_kernels': 'diagonal_bse', 'diagonal': 'diagonal_bse',
+            'diagonal_sbse': 'diagonal_bse',
         }
         mode = aliases.get(mode, mode)
         if mode not in {'independent_dft', 'independent_qp', 'diagonal_bse'}:

@@ -33,14 +33,14 @@ Command-Line Arguments
      - Description
    * - ``--excitation-mode <choice>``
      - ``bse``
-     - Excitation framework: ``bse`` (full sTDA), ``diagonal_bse``, ``independent_qp``, or ``independent_dft``.
+     - Excitation framework: ``bse`` / ``sbse`` (full coupled sTDA), ``diagonal_bse`` / ``diagonal_sbse`` (uncoupled diagonal transitions), ``independent_qp``, or ``independent_dft``.
    * - ``--2e-integrals <choice>``
      - ``mnok``
      - Two-electron integral representation: ``mnok`` (semi-empirical atom-centered) or ``xs`` (analytical Gaussian AO density-pair integrals).
    * - ``--kernel <choice>``
      - model default
-     - Set by the QP model: ``qp`` (Resta, DIM), ``resta-sphere`` (``gw``). Only models without W
-       (``pbe``, ``brus``, numeric gap) take ``resta``, ``dim``, ``rpa``, ``sbse``, ``xs-*`` or ``bse``
+     - Set by the QP model: ``qp`` (Resta, DIM), ``resta-sphere`` (``gw``). Models without W
+       (``none`` / ``bulk``, ``pbe``, ``brus``, numeric gap) take ``resta``, ``dim``, ``rpa``, ``sbse``, ``xs-*`` or ``bse``
        (default ``bse``); see :doc:`screened_kernel`.
    * - ``--nhomos <int>``
      - ``25``
@@ -69,3 +69,10 @@ Command-Line Arguments
    * - ``--charge_type <choice>``
      - ``mulliken``
      - Transition charge partitioning: ``mulliken`` or ``lowdin``.
+   * - ``--qp-window <choice>``
+     - ``active``
+     - Active space evaluated in orbital Delta-W / Delta-COHSEX self-energy: ``active`` (fast, evaluates states covering the BSE active space and clamps outer states) or ``all`` (evaluates all basis states).
+   * - ``--qp-window-size <int>``
+     - ``None``
+     - Number of occupied/virtual states around the Fermi level evaluated when ``qp-window: active`` (defaults to the BSE active space, minimum 25).
+

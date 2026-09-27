@@ -81,6 +81,32 @@ class QPLevelTests(unittest.TestCase):
         b = cohsex_diagonal(C, S, 1, RANGES, dW_ao=expand_atom_to_ao(dW, RANGES, 3))
         np.testing.assert_allclose(a, b, atol=1e-12)
 
+    def test_cohsex_active_window_exact_match(self):
+        rng = np.random.default_rng(42)
+        n_ao = 12
+        homo = 4
+        A = rng.normal(size=(n_ao, n_ao))
+        S = A @ A.T / n_ao + np.eye(n_ao)
+        w, V = np.linalg.eigh(S)
+        C = V / np.sqrt(w)
+        # Atom ranges
+        ranges = [(0, 4), (4, 8), (8, 12)]
+        dW = rng.uniform(0.5, 2.0, (3, 3))
+        dW = 0.5 * (dW + dW.T)
+
+        coh_full, sex_full = cohsex_diagonal(C, S, homo, ranges, dW_atom=dW)
+        eval_idx = np.array([3, 4, 5, 6])
+        coh_act, sex_act = cohsex_diagonal(C, S, homo, ranges, dW_atom=dW, eval_indices=eval_idx)
+
+        # On eval_idx, must be numerically identical to machine precision
+        np.testing.assert_allclose(coh_act[eval_idx], coh_full[eval_idx], atol=1e-14)
+        np.testing.assert_allclose(sex_act[eval_idx], sex_full[eval_idx], atol=1e-14)
+        # Outside window, should be clamped to edge values
+        self.assertEqual(coh_act[0], coh_act[3])
+        self.assertEqual(sex_act[0], sex_act[3])
+        self.assertEqual(coh_act[-1], coh_act[6])
+        self.assertEqual(sex_act[-1], sex_act[6])
+
     def test_residual_scale_econf(self):
         e = MATERIAL_DB["CDSE"]
         gap0 = e[11] - e[10]
