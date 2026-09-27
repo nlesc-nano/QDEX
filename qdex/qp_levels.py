@@ -101,10 +101,12 @@ def orbital_populations(C_cols, S, atom_ao_ranges, mode="mulliken", representati
         pop = C_cols * SC
     if representation == "atom":
         n_ao = pop.shape[0]
+        n_atoms = len(atom_ao_ranges)
         owner = _owner(atom_ao_ranges, n_ao)
-        q = np.zeros((len(atom_ao_ranges), pop.shape[1]))
-        np.add.at(q, owner, pop)
-        return q
+        import scipy.sparse as sp
+        P_atom = sp.csr_matrix((np.ones(n_ao, dtype=pop.dtype), (owner, np.arange(n_ao))),
+                               shape=(n_atoms, n_ao))
+        return P_atom @ pop
     return pop
 
 
@@ -169,14 +171,15 @@ def orbital_qp_energies(eps, q_occ, q_virt, occ_idx, virt_idx, dW,
         "z_lumo_orbital": float(z_v[0]),
         "z_min_window": float(min(z_o.min(), z_v.min())),
         "z_max_window": float(max(z_o.max(), z_v.max())),
+        "bulk_shifts": np.where(np.arange(len(eps)) <= homo, -float(homo_fraction_bulk) * bulk_shift, (1.0 - float(homo_fraction_bulk)) * bulk_shift),
+        "z_factors": np.concatenate([np.full(occ_idx[0], z_o[0]), z_o, np.full(lumo - homo - 1, z_o[-1]), z_v, np.full(len(eps) - virt_idx[-1] - 1, z_v[-1])]),
+        "delta_sigmas": np.concatenate([np.full(occ_idx[0], sig_o[0]), sig_o, np.full(lumo - homo - 1, sig_o[-1]), sig_v, np.full(len(eps) - virt_idx[-1] - 1, sig_v[-1])]),
     }
     return eps_qp, info
 
 
-def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None):
-    """Static Delta-COHSEX diagonal <n|Sigma|n> for ALL orbitals (one-shot, no orbital update).
-
-    Same form as the qsGW models, in the Löwdin basis (c = S^1/2 C):
+def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None, eval_indices=None):
+    """Static Delta-COHSEX diagonal <n|Sigma|n> in the Löwdin basis (c = S^1/2 C):
 
         COH_n = 1/2 sum_mu c_{mu n}^2 dW_{mu mu}
         SEX_n = -1/2 sum_{mu nu} c_{mu n} c_{nu n} P_{mu nu} dW_{mu nu},   P = 2 c_occ c_occ^T
@@ -184,17 +187,28 @@ def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None):
     dW is Delta W in the atom-block (mnok, ``dW_atom``) or AO (xs, ``dW_ao``)
     representation.  The classical charging term 1/2 q^T dW q is the limit in
     which the occupied states act as a complete set (SEX -> -dW(r, r)); the
-    difference is the non-classical screened exchange.  Cost: one cached
-    eigh(S) and three n^3 matrix products; memory about four n_ao^2 arrays.
-    Returns (coh, sex), each of length n_mo.
+    difference is the non-classical screened exchange.
+
+    Parameters
+    ----------
+    eval_indices : array-like of int, optional
+        If provided, evaluates the self-energy diagonal specifically for the
+        requested orbital indices (e.g. active space around the Fermi level),
+        returning (coh, sex) of length n_mo where eval_indices have exact values
+        and outer indices are clamped to the window edges.
+        If None, evaluates all n_mo orbitals in memory-efficient chunks.
     """
     from qdex.lowdin import lowdin_apply
     C = C.toarray() if hasattr(C, "toarray") else np.asarray(C, dtype=float)
     n_ao = C.shape[0]
-    Cl = lowdin_apply(S, C)
+    n_mo = C.shape[1]
     n_occ = homo_index + 1
-    P = Cl[:, :n_occ] @ Cl[:, :n_occ].T
+
+    # Form the 1-RDM P = 2 c_occ c_occ^T in the Löwdin basis (only occupied orbitals are needed)
+    Cl_occ = lowdin_apply(S, C[:, :n_occ])
+    P = Cl_occ @ Cl_occ.T
     P *= 2.0
+
     if dW_ao is None:
         owner = _owner(atom_ao_ranges, n_ao)
         dW_atom = np.asarray(dW_atom, dtype=float)
@@ -206,12 +220,86 @@ def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None):
     else:
         P *= dW_ao
         diag_dW = np.diag(dW_ao).copy()
-    MC = P @ Cl
-    del P
-    sex = -0.5 * np.einsum("mn,mn->n", Cl.conj(), MC, optimize=True).real
-    del MC
-    coh = 0.5 * ((np.abs(Cl) ** 2).T @ diag_dW)
-    return coh, sex
+
+    if eval_indices is not None:
+        eval_idx = np.asarray(eval_indices, dtype=int)
+        occ_mask = eval_idx < n_occ
+        virt_indices = eval_idx[~occ_mask]
+
+        if len(virt_indices) > 0:
+            Cl_virt = lowdin_apply(S, C[:, virt_indices])
+        else:
+            Cl_virt = np.empty((n_ao, 0), dtype=float)
+
+        n_eval = len(eval_idx)
+        Cl_eval = np.empty((n_ao, n_eval), dtype=float)
+        if np.any(occ_mask):
+            Cl_eval[:, occ_mask] = Cl_occ[:, eval_idx[occ_mask]]
+        if len(virt_indices) > 0:
+            Cl_eval[:, ~occ_mask] = Cl_virt
+
+        del Cl_occ
+        del Cl_virt
+
+        MC_eval = P @ Cl_eval
+        del P
+        sex_eval = -0.5 * np.sum(Cl_eval * MC_eval, axis=0)
+        del MC_eval
+        coh_eval = 0.5 * ((Cl_eval ** 2).T @ diag_dW)
+        del Cl_eval
+
+        coh = np.empty(n_mo, dtype=float)
+        sex = np.empty(n_mo, dtype=float)
+        coh[eval_idx] = coh_eval
+        sex[eval_idx] = sex_eval
+
+        # Edge clamping for indices outside the evaluated window
+        eval_sorted = np.sort(eval_idx)
+        occ_eval_sorted = eval_sorted[eval_sorted < n_occ]
+        virt_eval_sorted = eval_sorted[eval_sorted >= n_occ]
+
+        if len(occ_eval_sorted) > 0:
+            min_occ = occ_eval_sorted[0]
+            max_occ = occ_eval_sorted[-1]
+            coh[:min_occ] = coh[min_occ]
+            sex[:min_occ] = sex[min_occ]
+            if max_occ < homo_index:
+                coh[max_occ + 1: n_occ] = coh[max_occ]
+                sex[max_occ + 1: n_occ] = sex[max_occ]
+
+        if len(virt_eval_sorted) > 0:
+            min_virt = virt_eval_sorted[0]
+            max_virt = virt_eval_sorted[-1]
+            if min_virt > n_occ:
+                coh[n_occ: min_virt] = coh[min_virt]
+                sex[n_occ: min_virt] = sex[min_virt]
+            coh[max_virt + 1:] = coh[max_virt]
+            sex[max_virt + 1:] = sex[max_virt]
+
+        return coh, sex
+
+    else:
+        # Full evaluation: lowdin transform remaining columns
+        if n_occ < n_mo:
+            Cl_virt = lowdin_apply(S, C[:, n_occ:])
+            Cl = np.hstack([Cl_occ, Cl_virt])
+            del Cl_occ
+            del Cl_virt
+        else:
+            Cl = Cl_occ
+
+        coh = np.empty(n_mo, dtype=float)
+        sex = np.empty(n_mo, dtype=float)
+        chunk = 1024
+        for j0 in range(0, n_mo, chunk):
+            j1 = min(n_mo, j0 + chunk)
+            Cl_blk = Cl[:, j0:j1]
+            MC_blk = P @ Cl_blk
+            sex[j0:j1] = -0.5 * np.sum(Cl_blk * MC_blk, axis=0)
+            coh[j0:j1] = 0.5 * ((Cl_blk ** 2).T @ diag_dW)
+        del P
+        del Cl
+        return coh, sex
 
 
 def plasmon_pole_z(sigma, eps_z, material):
@@ -223,7 +311,7 @@ def plasmon_pole_z(sigma, eps_z, material):
 
 
 def cohsex_qp_energies(eps, coh, sex, homo_index, bulk_shift, z_mode, z_fixed, eps_z, material,
-                       homo_fraction_bulk=0.5):
+                       homo_fraction_bulk=0.5, occ_idx=None, virt_idx=None):
     """QP energies of all orbitals from the one-shot Delta-COHSEX diagonal.
 
     occupied:  e_n - f_b D_bulk + Z_n (COH_n + SEX_n)
@@ -234,20 +322,49 @@ def cohsex_qp_energies(eps, coh, sex, homo_index, bulk_shift, z_mode, z_fixed, e
     z = plasmon_pole_z(sig, eps_z, material) if z_mode == "derived" else np.full_like(sig, float(z_fixed))
     fb = float(homo_fraction_bulk)
     bulk = np.where(np.arange(len(eps)) <= homo_index, -fb * bulk_shift, (1.0 - fb) * bulk_shift)
-    eps_qp = eps + bulk + z * sig
+    shifts = bulk + z * sig
+    eps_qp = eps.copy()
     h, l = homo_index, homo_index + 1
-    occ, vir = slice(0, h + 1), slice(l, len(eps))
+
+    if occ_idx is not None and virt_idx is not None:
+        occ_idx = np.asarray(occ_idx, dtype=int)
+        virt_idx = np.asarray(virt_idx, dtype=int)
+        shift_o = shifts[occ_idx]
+        shift_v = shifts[virt_idx]
+        eps_qp[: occ_idx[0]] += shift_o[0]
+        eps_qp[occ_idx] += shift_o
+        eps_qp[h + 1: virt_idx[0]] += shift_o[-1]
+        eps_qp[virt_idx] += shift_v
+        eps_qp[virt_idx[-1] + 1:] += shift_v[-1]
+        spread_occ = float(np.ptp(shift_o))
+        spread_virt = float(np.ptp(shift_v))
+        z_min = float(min(z[occ_idx].min(), z[virt_idx].min()))
+        z_max = float(max(z[occ_idx].max(), z[virt_idx].max()))
+        w_range = [int(occ_idx[0]), int(virt_idx[-1])]
+    else:
+        eps_qp += shifts
+        occ, vir = slice(0, h + 1), slice(l, len(eps))
+        spread_occ = float(np.ptp(shifts[occ]))
+        spread_virt = float(np.ptp(shifts[vir]))
+        z_min = float(z.min())
+        z_max = float(z.max())
+        w_range = [0, len(eps) - 1]
+
     info = {
         "qp_levels": "orbital",
         "qp_selfenergy": "cohsex",
+        "qp_levels_window": w_range,
         "qp_homo_shift_ev": float(eps_qp[h] - eps[h]),
         "qp_lumo_shift_ev": float(eps_qp[l] - eps[l]),
         "cohsex_homo_coh_ev": float(coh[h]), "cohsex_homo_sex_ev": float(sex[h]),
         "cohsex_lumo_coh_ev": float(coh[l]), "cohsex_lumo_sex_ev": float(sex[l]),
-        "qp_shift_spread_occ_ev": float(np.ptp((eps_qp - eps)[occ])),
-        "qp_shift_spread_virt_ev": float(np.ptp((eps_qp - eps)[vir])),
+        "qp_shift_spread_occ_ev": spread_occ,
+        "qp_shift_spread_virt_ev": spread_virt,
         "z_homo_orbital": float(z[h]), "z_lumo_orbital": float(z[l]),
-        "z_min_window": float(z.min()), "z_max_window": float(z.max()),
+        "z_min_window": z_min, "z_max_window": z_max,
+        "bulk_shifts": bulk,
+        "z_factors": z,
+        "delta_sigmas": sig,
     }
     return eps_qp, info
 

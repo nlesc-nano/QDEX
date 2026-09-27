@@ -35,6 +35,9 @@ QP gap and the exciton binding must come from one W. What happens when they do n
    * - ``qp_gap``
      - ``kernel``
      - W in K\ :sup:`d`
+   * - ``none`` / ``bulk``
+     - ``resta`` or ``dim``
+     - :math:`W^{\mathrm{bulk}}_{AB}`: pure bulk screening (Resta or atomistic DIM), completely bypassing finite-size QP corrections
    * - ``brus``
      - ``resta`` (recommended)
      - :math:`W^{\mathrm{bulk}}_{AB} = S_{\epsilon_\infty}(r_{AB})\,\gamma_{AB}`: no ΔW, like the QP gap

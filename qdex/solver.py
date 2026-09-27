@@ -402,6 +402,10 @@ class ExcitonSolver:
             import sys; sys.exit(1)
 
         mode = str(excitation_mode).lower()
+        if mode == "sbse":
+            mode = "bse"
+        elif mode == "diagonal_sbse":
+            mode = "diagonal_bse"
         self.excitation_mode = mode
         if mode != "bse":
             energies, kx_diag, kd_diag = self.ham.independent_transition_energies(mode)

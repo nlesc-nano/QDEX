@@ -23,7 +23,7 @@ from qdex.constants import HA_TO_EV, BOHR_PER_ANG
 from qdex.exciton_analysis import ExcitonAnalyzer, plot_analysis_summary
 from qdex.integrals import compute_dipole_ao
 from qdex.oscillator import compute_oscillator_strengths
-from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap, build_gamma
+from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap, build_gamma, anchor_bulk_homo_fraction
 from qdex.qp_levels import (xs_shared_w, atom_delta_w, orbital_qp_energies, orbital_populations,
                              cohsex_diagonal, cohsex_qp_energies, anchor_key, load_anchor_table,
                              save_anchor_entry)
@@ -137,6 +137,18 @@ def print_qp_provenance(details, dft_gap=None, target_qp_gap=None, output_file=N
             print(f"    JSON                     : {output_file}")
         return
 
+    if details.get("qp_model") == "bulk_gw_scissor":
+        print("\n  [QP Provenance] Bulk GW Scissor Model (Bypassing Finite-Size QP)")
+        print(f"    Material                 : {details.get('material', 'N/A')}")
+        print(f"    Bulk PBE -> GW gap       : {details.get('bulk_pbe_gap_ev', 0.0):.3f} -> {details.get('bulk_gw_gap_ev', 0.0):.3f} eV")
+        print(f"    Bulk GW scissor          : {details.get('bulk_gw_shift_ev', 0.0):+.3f} eV")
+        print("    Finite-size Delta-W      : none (pure bulk limit)")
+        if dft_gap is not None and target_qp_gap is not None:
+            print(f"    Final gap                : {dft_gap:.3f} -> {target_qp_gap:.3f} eV")
+        if output_file:
+            print(f"    JSON                     : {output_file}")
+        return
+
     print("\n  [QP Provenance] Anchor-scaled PBE-to-QP model")
     print(f"    Material                 : {details['material']}")
     if "cluster_radius_ang" in details:
@@ -175,7 +187,13 @@ def write_qp_provenance(details, dft_gap, target_qp_gap, scissor, args, filename
     if not details:
         return None
 
-    payload = dict(details)
+    payload = {}
+    for k, v in details.items():
+        if isinstance(v, np.ndarray):
+            if v.size <= 10:
+                payload[k] = v.tolist()
+        else:
+            payload[k] = v
     payload.update({
         "dft_gap_ev": float(dft_gap),
         "target_qp_gap_ev": float(target_qp_gap),
@@ -762,7 +780,7 @@ def main():
     parser.add_argument("--f_thresh", type=float, default=0.0)
 
     parser.add_argument("--qp_gap", type=str, default="brus",
-                        help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'pbe' (uncorrected), or explicit gap in eV.")
+                        help="Quasiparticle gap model: 'none' / 'bulk' (bulk GW scissor without finite-size Delta-W), 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'pbe' (uncorrected), or explicit gap in eV.")
     parser.add_argument("--qp-z", dest="qp_z", type=str, default=None,
                         help="Quasiparticle renormalization Z for Delta-W models: 'derived' (default; one plasmon pole whose "
                              "frequency follows from the same eps as the model's W, see compute_dynamic_z) or a fixed "
@@ -821,6 +839,13 @@ def main():
     parser.add_argument("--qp-selfenergy", dest="qp_selfenergy", choices=["cohsex", "classical"], default="cohsex",
                         help="Orbital QP levels of the Delta-W models: 'cohsex' (default; one-shot static Delta-COHSEX "
                              "diagonal incl. non-classical screened exchange) or 'classical' (1/2 q^T dW q).")
+    parser.add_argument("--qp-window", dest="qp_window", choices=["active", "all"], default="active",
+                        help="Orbital space evaluated in orbital Delta-W / COHSEX self-energy: 'active' "
+                             "(default; evaluates states covering the BSE active space and clamps edges, fast) "
+                             "or 'all' (evaluates every orbital in the basis).")
+    parser.add_argument("--qp-window-size", dest="qp_window_size", type=int, default=None,
+                        help="Optional override for the number of active occupied/virtual states around the "
+                             "Fermi level evaluated in orbital QP mode (default: matches BSE active space, min 25).")
     parser.add_argument("--qp-solvent-term", dest="qp_solvent_term", choices=["sphere", "born"], default="sphere",
                         help="Environment part of Delta W in the Delta-W models: 'sphere' (default; reaction field "
                              "of a dielectric sphere, as in gw) or 'born' (earlier softened Born form).")
@@ -877,10 +902,10 @@ def main():
     parser.add_argument("--full-diag", action="store_true")
     parser.add_argument(
         "--excitation-mode",
-        choices=["bse", "independent_dft", "independent_qp", "diagonal_bse"],
+        choices=["bse", "independent_dft", "independent_qp", "diagonal_bse", "sbse", "diagonal_sbse"],
         default="bse",
-        help=("Excitation model: diagonalize BSE/TDA, or use uncoupled transitions with "
-              "DFT gaps, QP gaps, or QP gaps plus diagonal Kx/Kd corrections."),
+        help=("Excitation model: diagonalize BSE/TDA ('bse' or 'sbse'), or use uncoupled transitions with "
+              "DFT gaps ('independent_dft'), QP gaps ('independent_qp'), or diagonal Kx/Kd corrections ('diagonal_bse' or 'diagonal_sbse')."),
     )
     parser.add_argument("--tol", type=float, default=1e-5)
     parser.add_argument("--skip-orthonormality-check", dest="skip_orthonormality_check", action="store_true",
@@ -1182,6 +1207,27 @@ def main():
                   f"in {time.time() - t0p:.1f} s")
         return _pop_cache[representation]
 
+    def _frontier_populations(representation="atom"):
+        """Populations of HOMO and LUMO only (fast: avoids calculating all columns)."""
+        key = ("frontier", representation)
+        if key not in _pop_cache:
+            t0p = time.time()
+            h_cols = np.array([homo_index, homo_index + 1])
+            C_front = C[:, h_cols]
+            SC_front = None
+            if qp_pop_mode == "mulliken":
+                if id(C) in _sc_cache:
+                    SC_front = _sc_cache[id(C)][:, h_cols]
+                else:
+                    C_front_d = C_front.toarray() if hasattr(C_front, "toarray") else C_front
+                    SC_front = S @ C_front_d
+            _pop_cache[key] = orbital_populations(
+                C_front, S, atom_ao_ranges, qp_pop_mode, representation,
+                SC=SC_front
+            )
+            print(f"  [QP] Frontier {qp_pop_mode} populations (HOMO/LUMO) in {time.time() - t0p:.3f} s")
+        return _pop_cache[key]
+
     def _xs_gamma_ao():
         """Exact AO density-pair integrals (mu mu|nu nu) in eV when two_electron_integrals: xs."""
         if str(args.kernel_type).lower() not in ("xs", "xs-qdex"):
@@ -1192,6 +1238,7 @@ def main():
             _xs_cache["gamma"] = compute_two_electron_ao(shells, nthreads=args.nthreads) * HA_TO_EV
         return _xs_cache["gamma"]
     
+    entry = MATERIAL_DB.get(args.material.upper(), None)
     if isinstance(args.qp_gap, str):
         if args.qp_gap.lower() == "brus":
             target_qp_gap = estimate_brus_qp_gap(material_name=args.material, coords=np.array(coords_ang), atom_symbols=syms)
@@ -1219,6 +1266,7 @@ def main():
                     return_details=True,
                     dft_gap=dft_gap,
                     residual_scaling=getattr(args, "qp_residual_scaling", "econf"),
+                    anchor_residual=getattr(args, "qp_anchor_residual", "on"),
                 )
             
             if gw_scissor is not None:
@@ -1268,11 +1316,9 @@ def main():
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
             else:
-                # Populations of all orbitals are computed once; the Delta-W gap formula uses the
-                # HOMO and LUMO columns, the orbital-resolved levels below use all of them.
                 occ_idx_a = np.array([homo_index])
                 virt_idx_a = np.array([homo_index + 1])
-                q_edge = _all_populations("atom")[:, [homo_index, homo_index + 1]]
+                q_edge = _frontier_populations("atom")
                 C_occ_low = C_virt_low = None
 
                 sgw_scissor, qp_provenance = estimate_sgw_dim_qp_gap(
@@ -1341,11 +1387,9 @@ def main():
                 scissor = sgw_scissor
                 target_qp_gap = dft_gap + scissor
             else:
-                # Populations of all orbitals are computed once; the Delta-W gap formula uses the
-                # HOMO and LUMO columns, the orbital-resolved levels below use all of them.
                 occ_idx_a = np.array([homo_index])
                 virt_idx_a = np.array([homo_index + 1])
-                q_edge = _all_populations("atom")[:, [homo_index, homo_index + 1]]
+                q_edge = _frontier_populations("atom")
                 C_occ_low = C_virt_low = None
 
                 sgw_scissor, qp_provenance = estimate_sgw_resta_qp_gap(
@@ -1429,10 +1473,42 @@ def main():
         elif args.qp_gap.lower() == "pbe":
             scissor = 0.0
             target_qp_gap = dft_gap
-            print("  [QP] Explicit uncorrected PBE mode selected.")
+            print("  [QP] Explicit uncorrected PBE mode selected (scissor = 0.0000 eV).")
+        elif args.qp_gap.lower() in ["none", "bulk"]:
+            if entry is not None and len(entry) >= 9:
+                pbe_bulk_gap = float(entry[7])
+                gw_bulk_gap = float(entry[8])
+                scissor = gw_bulk_gap - pbe_bulk_gap
+            else:
+                scissor = 0.0
+            target_qp_gap = dft_gap + scissor
+            f_homo = anchor_bulk_homo_fraction(args.material)
+            f_lumo = 1.0 - f_homo
+            qp_provenance = {
+                "qp_model": "bulk_gw_scissor",
+                "material": str(args.material).upper(),
+                "bulk_pbe_gap_ev": float(pbe_bulk_gap) if entry is not None and len(entry) >= 9 else 0.0,
+                "bulk_gw_gap_ev": float(gw_bulk_gap) if entry is not None and len(entry) >= 9 else 0.0,
+                "bulk_gw_shift_ev": float(scissor),
+                "bulk_shift_ev": float(scissor),
+                "f_homo": float(f_homo),
+                "f_lumo": float(f_lumo),
+                "finite_size_shift_vacuum_ev": 0.0,
+                "finite_size_shift_solvent_ev": 0.0,
+                "anchor_residual_homo_ev": 0.0,
+                "anchor_residual_lumo_ev": 0.0,
+                "edge_residual_homo_ev": 0.0,
+                "edge_residual_lumo_ev": 0.0,
+                "residual_scale": 0.0,
+                "anchor_residual_scale": 0.0,
+                "bulk_homo_fraction": float(f_homo),
+            }
+            print(f"  [QP] Pure Bulk GW Scissor mode selected ('{args.qp_gap}'):")
+            print(f"       -> Scissor = {scissor:+.4f} eV (PBE bulk {pbe_bulk_gap:.3f} -> GW bulk {gw_bulk_gap:.3f} eV)")
+            print(f"       -> Zero finite-size Delta-W or boundary polarization applied.")
         else:
             raise ValueError(
-                f"Unknown qp_gap mode '{args.qp_gap}'. Use 'gw', 'sgw-dim', 'evgw-dim', 'qsgw-dim', 'sgw-resta', 'evgw-resta', 'qsgw-resta', 'sgw', 'brus', 'pbe', or a numeric gap."
+                f"Unknown qp_gap mode '{args.qp_gap}'. Use 'none', 'bulk', 'gw', 'sgw-dim', 'evgw-dim', 'qsgw-dim', 'sgw-resta', 'evgw-resta', 'qsgw-resta', 'sgw', 'brus', 'pbe', or a numeric gap."
             )
     else:
         # Numeric explicit gap provided
@@ -1452,7 +1528,7 @@ def main():
             and args.kernel in (None, "resta-sphere")):
         # Anchor-scaled gw model: the BSE sees the same dielectric sphere as the
         # QP polarization term, W = Resta(eps_inf) + sphere reaction field.
-        from qdex.hardness import build_resta_mnok, build_sphere_reaction_field, anchor_bulk_homo_fraction
+        from qdex.hardness import build_resta_mnok, build_sphere_reaction_field
         w_resta, _ = build_resta_mnok(syms, np.array(coords_ang), args.alpha, args.material, eps_out=args.eps_out)
         w_sphere = build_sphere_reaction_field(np.array(coords_ang), syms, args.material, args.eps_out)
         qp_w = (w_resta + w_sphere, f"Resta(eps_inf) + sphere reaction field (eps_out = {args.eps_out:.2f})")
@@ -1487,8 +1563,33 @@ def main():
 
         levels_mode = str(getattr(args, "qp_levels", "orbital")).lower()
         if levels_mode == "orbital" and eps_qp_active is None:
-            occ_w = np.arange(0, homo_index + 1)
-            virt_w = np.arange(homo_index + 1, len(eps))
+            qp_win_mode = str(getattr(args, "qp_window", "active")).lower()
+            if qp_win_mode == "all":
+                occ_w = np.arange(0, homo_index + 1)
+                virt_w = np.arange(homo_index + 1, len(eps))
+                eval_indices = None
+            else:
+                n_win_override = getattr(args, "qp_window_size", None)
+                if n_win_override is not None:
+                    n_occ_req = int(n_win_override)
+                    n_virt_req = int(n_win_override)
+                elif args.nhomos is not None or args.nlumos is not None:
+                    n_occ_req = args.nhomos if args.nhomos is not None else 25
+                    n_virt_req = args.nlumos if args.nlumos is not None else 25
+                elif args.e_thresh is not None:
+                    dft_pairs = (eps[homo_index + 1:] - eps[homo_index]) <= float(args.e_thresh)
+                    n_virt_req = int(np.where(dft_pairs)[0][-1] + 1) if np.any(dft_pairs) else 25
+                    dft_pairs_occ = (eps[homo_index + 1] - eps[:homo_index + 1]) <= float(args.e_thresh)
+                    n_occ_req = int(homo_index - np.where(dft_pairs_occ)[0][0] + 1) if np.any(dft_pairs_occ) else 25
+                else:
+                    n_occ_req = 25
+                    n_virt_req = 25
+                n_occ_act = min(homo_index + 1, max(1, n_occ_req))
+                n_virt_act = min(len(eps) - (homo_index + 1), max(1, n_virt_req))
+                occ_w = np.arange(homo_index - n_occ_act + 1, homo_index + 1)
+                virt_w = np.arange(homo_index + 1, homo_index + 1 + n_virt_act)
+                eval_indices = np.concatenate([occ_w, virt_w])
+
             is_anchor_model = bool(w_parts.get("anchor_edges"))
             z_mode = "derived" if qp_provenance.get("dynamic_z") else "fixed"
             z_fixed = float(qp_provenance.get("z_factor", 1.0))
@@ -1498,21 +1599,32 @@ def main():
                 t0c = time.time()
                 coh, sex = cohsex_diagonal(C, S, homo_index, atom_ao_ranges,
                                            dW_atom=None if use_xs else dW_levels,
-                                           dW_ao=dW_levels if use_xs else None)
+                                           dW_ao=dW_levels if use_xs else None,
+                                           eval_indices=eval_indices)
                 eps_qp, lev_info = cohsex_qp_energies(
                     eps, coh, sex, homo_index, float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
-                    w_parts.get("eps_z"), args.material, homo_fraction_bulk=fb)
-                print(f"\n  [QP Levels] One-shot Delta-COHSEX for all {len(eps)} orbitals in {time.time() - t0c:.1f} s: "
+                    w_parts.get("eps_z"), args.material, homo_fraction_bulk=fb,
+                    occ_idx=occ_w, virt_idx=virt_w)
+                n_eval_str = f"{len(eval_indices)} active" if eval_indices is not None else f"all {len(eps)}"
+                print(f"\n  [QP Levels] One-shot Delta-COHSEX for {n_eval_str} orbitals in {time.time() - t0c:.1f} s: "
                       f"HOMO COH {coh[homo_index]:+.3f} SEX {sex[homo_index]:+.3f} eV; "
                       f"LUMO COH {coh[homo_index + 1]:+.3f} SEX {sex[homo_index + 1]:+.3f} eV")
             else:
-                q_w = _all_populations(representation)
+                if eval_indices is not None:
+                    C_act = C[:, eval_indices]
+                    q_act = orbital_populations(C_act, S, atom_ao_ranges, qp_pop_mode, representation)
+                    q_occ = q_act[:, :len(occ_w)]
+                    q_virt = q_act[:, len(occ_w):]
+                else:
+                    q_w = _all_populations(representation)
+                    q_occ = q_w[:, :len(occ_w)]
+                    q_virt = q_w[:, len(occ_w):]
                 edges = None
                 if is_anchor_model:
                     f_h = float(qp_provenance.get("f_homo", 0.5))
                     edges = (f_h * scissor, (1.0 - f_h) * scissor)
                 eps_qp, lev_info = orbital_qp_energies(
-                    eps, q_w[:, :len(occ_w)], q_w[:, len(occ_w):], occ_w, virt_w, dW_levels,
+                    eps, q_occ, q_virt, occ_w, virt_w, dW_levels,
                     float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
                     w_parts.get("eps_z"), args.material, homo_fraction_bulk=fb, edge_shifts=edges,
                     representation=representation)
@@ -1584,7 +1696,7 @@ def main():
                               f"--qp-anchor-calibrate); none applied.")
                         lev_info["anchor_key"] = a_key
             new_scissor = float(eps_qp[homo_index + 1] - eps_qp[homo_index]) - dft_gap
-            print(f"\n  [QP Levels] Orbital-resolved ({representation}): all {len(occ_w)} occ + {len(virt_w)} virt levels; "
+            print(f"\n  [QP Levels] Orbital-resolved ({representation}): {len(occ_w)} occ + {len(virt_w)} virt levels; "
                   f"HOMO {lev_info['qp_homo_shift_ev']:+.3f} eV, LUMO {lev_info['qp_lumo_shift_ev']:+.3f} eV; "
                   f"spread occ {lev_info['qp_shift_spread_occ_ev']:.3f} / virt {lev_info['qp_shift_spread_virt_ev']:.3f} eV; "
                   f"Z in [{lev_info['z_min_window']:.3f}, {lev_info['z_max_window']:.3f}]")
@@ -1853,18 +1965,61 @@ def main():
         bse_soc_E = (bse_soc_E * HA_TO_EV) - e_fermi_raw
         bse_soc_E -= (bse_soc_E[bse_spinor_homo_idx] + bse_soc_E[bse_spinor_homo_idx + 1]) / 2.0
 
+    qp_breakdown_alpha = None
+    if qp_provenance is not None and getattr(args, "qp_gap", "").lower() != "pbe":
+        fb = qp_provenance.get("bulk_homo_fraction", anchor_bulk_homo_fraction(args.material))
+        d_bulk = float(qp_provenance.get("bulk_gw_shift_ev", qp_provenance.get("bulk_shift_ev", 0.0)))
+        bulk_arr = np.where(np.arange(len(eps)) <= homo_index, -fb * d_bulk, (1.0 - fb) * d_bulk)
+        
+        if eps_qp_active is not None:
+            zn_arr = qp_provenance.get("z_factors", np.ones(len(eps)))
+            d_sig_arr = qp_provenance.get("delta_sigmas", np.zeros(len(eps)))
+            r_scale = float(qp_provenance.get("anchor_residual_scale", 1.0))
+            if str(getattr(args, "qp_anchor_residual", "on")).lower() == "off":
+                r_scale = 0.0
+            r_h = float(qp_provenance.get("anchor_residual_homo_ev", 0.0)) / max(r_scale, 1e-12) if r_scale > 0 else 0.0
+            r_l = float(qp_provenance.get("anchor_residual_lumo_ev", 0.0)) / max(r_scale, 1e-12) if r_scale > 0 else 0.0
+            r_hl_arr = np.where(np.arange(len(eps)) <= homo_index, r_h, r_l)
+            eps_qp_print = eps_shifted
+        else:
+            zn_arr = np.ones(len(eps))
+            f_h = float(qp_provenance.get("f_homo", 0.5))
+            f_l = float(qp_provenance.get("f_lumo", 0.5))
+            pol_vac = float(qp_provenance.get("finite_size_shift_vacuum_ev", 0.0))
+            pol_solv = float(qp_provenance.get("finite_size_shift_solvent_ev", pol_vac))
+            pol = pol_solv if args.eps_out > 1.0 else pol_vac
+            d_sig_arr = np.where(np.arange(len(eps)) <= homo_index, -f_h * pol, f_l * pol)
+            r_scale = float(qp_provenance.get("residual_scale", 1.0))
+            if str(getattr(args, "qp_anchor_residual", "on")).lower() == "off":
+                r_scale = 0.0
+            r_h = float(qp_provenance.get("edge_residual_homo_ev", 0.0))
+            r_l = float(qp_provenance.get("edge_residual_lumo_ev", 0.0))
+            r_hl_arr = np.where(np.arange(len(eps)) <= homo_index, r_h, r_l)
+            tot_shift_arr = bulk_arr + zn_arr * d_sig_arr + r_hl_arr * r_scale
+            eps_qp_print = eps_dft_shifted + tot_shift_arr
+
+        qp_breakdown_alpha = {
+            "eps_dft": eps_dft_shifted,
+            "eps_qp": eps_qp_print,
+            "bulk_shift": bulk_arr,
+            "zn": zn_arr,
+            "delta_sigma": d_sig_arr,
+            "r_hl": r_hl_arr,
+            "s_r": r_scale,
+        }
+
     if C_beta is not None:
         pop_range = max(0, int(getattr(args, "population_print_range", 15)))
         pop_tags = getattr(args, "population_bars", None)
         print("\n--- Spin-Free Alpha MO Population Analysis ---")
-        print_orbital_summary(eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags)
+        print_orbital_summary(eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha)
         print("\n--- Spin-Free Beta MO Population Analysis ---")
         print_orbital_summary(eps_beta_shifted, occ_beta, homo_index_beta, pops_beta, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags)
     else:
         print("\n--- Spin-Free MO Population Analysis ---")
         pop_range = max(0, int(getattr(args, "population_print_range", 15)))
         pop_tags = getattr(args, "population_bars", None)
-        print_orbital_summary(eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags)
+        print_orbital_summary(eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha)
 
     if args.soc_flag:
         if args.gth_file is None: sys.exit("ERROR: --gth_file is required when --soc_flag is enabled.")

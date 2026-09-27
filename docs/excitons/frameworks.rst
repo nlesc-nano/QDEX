@@ -36,17 +36,18 @@ model (:doc:`screened_kernel`).
      - none
      - Non-interacting quasiparticles. The QP gap contains the full ΔW self-image, and nothing
        compensates it: the energies are far too high and strongly solvent dependent.
-   * - ``diagonal_bse``
+   * - ``diagonal_bse`` / ``diagonal_sbse``
      - :math:`\varepsilon_a^{\mathrm{QP}} - \varepsilon_i^{\mathrm{QP}} + 2K^x_{ia,ia} - K^d_{ia,ia}`
      - diagonal only
-     - Each transition with its own exchange and its own electron–hole attraction, no mixing. The
-       mutual image of each pair compensates its QP self-image, so most of the ΔW cancellation
-       (:doc:`cancellation`) is already there.
-   * - ``bse``
+     - Each transition with its own exchange and its own electron–hole attraction, no mixing. When used
+       with ``qp_gap: none`` (or ``bulk``) and a bulk kernel (``resta`` or ``dim``), this yields a
+       boundary-independent **diagonal sBSE** using purely DFT eigenvalues and bulk GW scissor.
+   * - ``bse`` / ``sbse``
      - eigenvalues of :math:`A_{ia,jb}`
      - full
-     - Coupled TDA BSE: transitions mix, the electron and hole correlate, and the oscillator
-       strength redistributes.
+     - Coupled TDA BSE / sBSE: transitions mix, the electron and hole correlate, and oscillator
+       strength redistributes. When paired with ``qp_gap: none`` and ``kernel: resta`` / ``dim``,
+       the full Hamiltonian is solved with bulk W, bypassing finite-size QP corrections.
 
 **K**\ :sup:`x` **in each framework.** The diagonal element :math:`K^x_{ia,ia}` is the self-interaction
 of the transition density. It shifts singlets up relative to triplets. The off-diagonal elements
