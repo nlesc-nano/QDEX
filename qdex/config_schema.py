@@ -34,6 +34,7 @@ SECTIONS = {
         "skip_orthonormality_check": "skip_orthonormality_check",
         "orthonormality_tol": "orthonormality_tol",
         "log_file": "log_file",
+        "inorganic_elements": "inorganic_elements",
     },
     "environment": {
         "eps_out": "eps_out",

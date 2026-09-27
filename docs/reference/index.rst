@@ -7,4 +7,5 @@ Topics in reference data pair each derivation with the QDEX callable, CLI flags 
    :maxdepth: 1
 
    materials
+   cluster_size
    documentation_math

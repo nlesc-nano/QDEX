@@ -92,6 +92,9 @@ system
      - CPU threads; ``auto``, ``cpu``, ``cuda`` or ``mps``
    * - ``skip_orthonormality_check``
      - skip the Cᵀ S C test of the MO file (saves one n_ao³ product)
+   * - ``inorganic_elements``
+     - elements seen by SAXS for the reported size (default: all but H, C, N, O, P, B, Si, F;
+       :doc:`/reference/cluster_size`)
    * - ``cache_mos``, ``log_file``, ``orthonormality_tol``
      - binary MO cache, log file name, tolerance of the orthonormality test
 

@@ -118,7 +118,7 @@ appropriate for molecules, but not for a dielectric: in a large dot the attracti
   weight with size, so sTDA binds increasingly more than the sBSE in larger dots and does not reach the
   bulk exciton limit.
 * **Solvent.** sTDA contains no environment term; S₁ is independent of ε_out.
-* **Against experiment** (2 nm, window 2.83–3.39 eV): the dielectric sTDA gives 2.58 eV, 0.1 eV below
+* **Against experiment** (2 nm, window 2.77–3.31 eV): the dielectric sTDA gives 2.58 eV, 0.1 eV below
   the sBSE and 0.3 eV below the ΔW models.
 * **diagonal_stda** recovers most of the coupled result here (2.72 vs 2.70 eV, dielectric, 2 nm).
 
