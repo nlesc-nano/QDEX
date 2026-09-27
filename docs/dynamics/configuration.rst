@@ -56,7 +56,9 @@ with k\ :sub:`x` = 2 (spin-free singlet) or 1 (spinors with SOC), Mulliken charg
 representation (:doc:`/excitons/sbse`). The sBSE is the consistent choice for dynamics: the surface
 polarization is dropped from both the orbital energies and the kernel, the correction is one constant
 for all frames, and the energy fluctuations along the trajectory come only from the KS levels and the
-interaction terms.
+interaction terms. The ``integrals`` keys (``mnok_exponent``, ``mnok_exponent_exchange``,
+``mnok_onsite``) apply as in a single-point run, and the precompute prints the same
+``--- Two-electron integrals ---`` block (:doc:`/integrals/representation`) after its header.
 
 ``gw`` with the bulk kernel is accepted for old runs with a warning: its QP gap contains the surface
 polarization but the kernel lacks the matching electron–hole image, which places the excitons too high

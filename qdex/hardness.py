@@ -859,6 +859,7 @@ def set_mnok_options(exponent=2.0, exponent_exchange=None, onsite="ip_ea", verbo
 _KERNEL_DESCRIPTION = {
     "qp": "W of the QP model (the same W as in the QP correction)",
     "resta": "bulk Resta W_AB = S_eps_inf(R_AB) gamma_AB",
+    "resta-sphere": "bulk Resta W + dielectric-sphere reaction field",
     "dim": "DIM W_AB = S_eps_AB(R_AB) gamma_AB",
     "rpa": "RPA W = (1 + gamma Pi0)^-1 gamma of the active space",
     "sbse": "sBSE screening (Cho, Bintrim, Berkelbach)",

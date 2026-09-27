@@ -629,7 +629,13 @@ def precompute_namd_data(config):
     print(f"  GW Scissor (Δ_GW)    : {scissor:+.4f} eV (HOMO: {-scissor*f_homo:+.4f} eV, LUMO: {+scissor*f_lumo:+.4f} eV)")
     print(f"  Spin-Orbit Coupling  : soc={soc}" + (f" (GTH: {os.path.basename(gth_file)})" if soc else ""))
     print(f"  Tracking             : phase_correction={phase_correction}, hungarian={hungarian_tracking}")
-    print("=" * 65 + "\n")
+    print("=" * 65)
+    if excitation_mode in DIAGONAL_MODES:
+        from qdex.hardness import format_integrals_block
+        print(format_integrals_block("mnok", "mulliken", kernel, syms0, include_direct=include_direct_eh,
+                                     include_exchange=include_exchange)
+              + "\n  (diagonal elements K_ia,ia only; rebuilt from each frame's geometry)")
+    print()
 
     prev_data = None
     fixed_pair_mask = None
