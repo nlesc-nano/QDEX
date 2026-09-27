@@ -113,10 +113,11 @@ INDEPENDENT_MODES = ("independent_qp", "independent_dft")
 
 def frame_kernels(syms, coords, kernel="resta", material=None, alpha=1.0, eps_out=2.0):
     """Direct kernel W and bare exchange interaction gamma for one frame (atom resolution, eV)."""
+    import qdex.hardness as _hardness
     from qdex.hardness import build_gamma
     k = str(kernel).lower()
     coords = np.asarray(coords, dtype=float)
-    gamma = build_gamma(atom_symbols=syms, coords=coords, alpha=1.0, beta=0.0)
+    gamma = build_gamma(atom_symbols=syms, coords=coords, alpha=1.0, beta=0.0, exponent=_hardness.MNOK_EXPONENT_K)
     if k == "resta":
         from qdex.hardness import build_resta_mnok
         _, w = build_resta_mnok(atom_symbols=syms, coords=coords, alpha=alpha, material_name=material, eps_out=eps_out)
@@ -472,6 +473,10 @@ def precompute_namd_data(config):
 
     nhomos = phys_cfg.get("nhomos", None)
     nlumos = phys_cfg.get("nlumos", None)
+    from qdex.hardness import set_mnok_options
+    set_mnok_options(phys_cfg.get("mnok_exponent", 2.0), phys_cfg.get("mnok_exponent_exchange"),
+                     phys_cfg.get("mnok_onsite", "ip_ea"))
+
     # Defaults: sBSE on the diagonal (PBE + bulk GW correction, bulk Resta W, K^x and K^d).
     qp_model = str(phys_cfg.get("qp_gap", "bulk"))
     eps_out = float(phys_cfg.get("eps_out", 2.0))

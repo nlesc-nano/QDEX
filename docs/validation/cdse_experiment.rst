@@ -9,7 +9,8 @@ colloidal CdSe dots. All numbers were produced with the code as it is, with the 
 * bulk QSGW correction (Δ_bulk = 1.57 eV for CdSe, valence share f_b = 41.2 %);
 * shared W in the QP correction and in K\ :sup:`d`;
 * one-shot ΔCOHSEX for all orbitals, plasmon-pole Z;
-* sphere reaction field for the environment;
+* sphere reaction field for the environment, with the SAXS radius;
+* MNOK integrals with γ_AA = IP − EA and exponent 2;
 * no term fitted to a cluster calculation.
 
 The raw results are in ``benchmarks/results/cdse_validation_2026-09-27.csv``.
@@ -36,7 +37,9 @@ Systems and settings
 d is the diameter a SAXS measurement would give: the Debye intensity of the inorganic atoms (Cd, Se
 and the Cl surface) fitted with a homogeneous-sphere form factor (``qdex.cluster_size``). The sizing
 curves use the SAXS core diameter. Organic ligands would be invisible to SAXS and are excluded in the
-same way. Every QDEX run prints this size block. MNOK integrals, Mulliken charges, 25 × 25 active space, dense diagonalization.
+same way. Every QDEX run prints this size block.
+
+MNOK integrals, Mulliken charges, 25 × 25 active space, dense diagonalization.
 "Toluene" is ε_out = 2.24. With SOC, the first bright state is the lowest state with at least 10 % of
 the largest oscillator strength.
 
@@ -88,11 +91,11 @@ Results at 2.0 nm
      - bright S₁, tol, SOC
    * - ``bulk`` + ``sbse`` (Resta)
      - 3.027 / 3.027
-     - 2.800 / 2.800
-     - 2.680
+     - 2.779 / 2.779
+     - 2.652
    * - ``bulk`` + ``sbse`` (DIM)
      - 3.027 / 3.027
-     - 2.706 / 2.706
+     - 2.675 / 2.675
      -
    * - ``bulk`` + ``stda``, a_x = 1/ε∞
      - 3.027 / 3.027
@@ -104,57 +107,59 @@ Results at 2.0 nm
      - 1.391
    * - ``brus`` + Resta
      - 3.713 / 3.713
-     - 3.486 / 3.486
+     - 3.465 / 3.465
      -
    * - ``sgw-resta``
-     - 4.537 / 3.681
-     - 3.043 / 2.968
-     - 2.842
+     - 4.561 / 3.707
+     - 3.038 / 2.964
+     - 2.833
    * - ``sgw-dim``
-     - 4.589 / 3.735
-     - 3.067 / 2.993
-     - 2.866
+     - 4.623 / 3.771
+     - 3.070 / 2.997
+     - 2.851
    * - ``evgw-resta``
-     - 4.693 / 3.746
-     - 3.089 / 2.988
+     - 4.760 / 3.791
+     - 3.114 / 2.998
      -
    * - ``evgw-dim``
-     - 4.570 / 3.721
-     - 3.060 / 2.988
+     - 4.600 / 3.753
+     - 3.059 / 2.989
      -
    * - ``qsgw-resta``
-     - 4.735 / 3.770
-     - 3.091 / 2.992
+     - 4.826 / 3.830
+     - 3.125 / 3.009
      -
    * - ``qsgw-dim``
-     - 4.573 / 3.721
-     - 3.055 / 2.985
-     - 2.850
+     - 4.603 / 3.753
+     - 3.053 / 2.986
+     - 2.833
 
 **Against experiment (toluene, bright state with SOC).** The Resta, DIM and qsGW models give
-2.84–2.87 eV, inside the window 2.77–3.31 eV, 0.07–0.10 eV above the Yu curve and 0.17–0.47 eV below
-the Hens curves. The sBSE gives 2.68 eV, 0.09 eV below the window, and the sTDA with a_x = 1/ε∞
+2.83–2.85 eV, inside the window 2.77–3.31 eV, 0.06–0.08 eV above the Yu curve and 0.19–0.48 eV below
+the Hens curves. The sBSE gives 2.65 eV, 0.12 eV below the window, and the sTDA with a_x = 1/ε∞
 2.58 eV, 0.19 eV below it. ``brus`` is far too high: the effective-mass kinetic term overestimates
 confinement at this size.
 
 **What the table shows.**
 
-* **All ΔW models agree on S₁ within 0.05 eV**, although their QP gaps spread over 0.09 eV in toluene
-  and 0.20 eV in vacuum. The extra QP opening of evGW and qsGW is compensated by a stronger K\ :sup:`d`.
-* **Solvent.** The QP gap drops by 0.85–0.95 eV from vacuum to toluene; S₁ by 0.07–0.10 eV
+* **All ΔW models agree on S₁ within 0.05 eV**, although their QP gaps spread over 0.12 eV in toluene
+  and 0.27 eV in vacuum. The extra QP opening of evGW and qsGW is compensated by a stronger K\ :sup:`d`.
+* **Solvent.** The QP gap drops by 0.85–1.00 eV from vacuum to toluene; S₁ by 0.07–0.12 eV
   (:doc:`/excitons/cancellation`).
-* **SOC** lowers the bright state by 0.12–0.14 eV.
-* **ΔW models vs sBSE.** The ΔW models are 0.17–0.19 eV above the sBSE. This is what does not cancel between
+* **SOC** lowers the bright state by 0.13–0.15 eV. With SOC the lowest state is dark, 30–45 meV below
+  the bright one (band-edge fine structure).
+* **ΔW models vs sBSE.** The ΔW models are 0.19–0.23 eV above the sBSE. This is what does not cancel between
   the QP correction and K\ :sup:`d`: the image multipoles and the non-classical screened exchange. The
   sBSE, which drops both, misses it.
 * **Resta vs DIM** differ by less than 0.03 eV in the ΔW models. In the sBSE, where only the bulk
-  kernel changes, DIM binds 0.09 eV more.
+  kernel changes, DIM binds 0.10 eV more.
 * **sTDA** (:doc:`/excitons/stda`). With PBE orbitals the faithful setting is a_x = 0: no electron–hole
   attraction, so S₁ is the KS gap plus a small exchange term (1.50 eV), far below experiment. With the
-  bulk GW gap and a_x = 1/ε∞, S₁ lies 0.10 eV below the sBSE. sTDA screens the short range more than
-  Resta but leaves the 1/R tail unscreened; at 2 nm it binds 0.33 eV against 0.23 eV for the sBSE, and
+  bulk GW gap and a_x = 1/ε∞, S₁ lies 0.08 eV below the sBSE. sTDA screens the short range more than
+  Resta but leaves the 1/R tail unscreened; at 2 nm it binds 0.33 eV against 0.25 eV for the sBSE, and
   the gap to the sBSE will grow with size. sTDA is Grimme's method as published only with hybrid MO
-  files, which were not used here.
+  files, which were not used here. sTDA uses its own Grimme integrals and is not affected by the MNOK
+  settings (:doc:`/integrals/representation`).
 
 Results at 1.2 nm
 -----------------
@@ -165,59 +170,73 @@ Results at 1.2 nm
    * - Model
      - QP gap vac / tol
      - S₁ vac / tol (spin-free)
+     - bright vac / tol (spin-free)
      - bright S₁, tol, SOC
    * - ``bulk`` + ``sbse`` (Resta)
      - 4.209 / 4.209
-     - 3.756 / 3.756
-     - 3.645
+     - 3.323 / 3.323
+     - 3.617 / 3.617
+     - 3.551
    * - ``bulk`` + ``sbse`` (DIM)
      - 4.209 / 4.209
-     - 3.620 / 3.620
+     - 3.137 / 3.137
+     - 3.442 / 3.442
      -
    * - ``bulk`` + ``stda``, a_x = 1/ε∞
      - 4.209 / 4.209
      - 3.808 / 3.808
+     -
      - 3.668
    * - ``none`` + ``stda``, a_x = 0 (PBE)
      - 2.639 / 2.639
      - 2.748 / 2.748
+     -
      - 2.626
    * - ``brus`` + Resta
      - 5.926 / 5.926
-     - 5.472 / 5.472
+     - 5.040 / 5.040
+     - 5.333 / 5.333
      -
    * - ``sgw-resta``
-     - 6.703 / 5.338
-     - 3.977 / 3.909
-     - 3.758
+     - 6.767 / 5.407
+     - 3.454 / 3.406
+     - 3.819 / 3.746
+     - 3.305
    * - ``sgw-dim``
-     - 6.603 / 5.230
-     - 3.983 / 3.912
-     - 3.782
+     - 6.635 / 5.265
+     - 3.476 / 3.426
+     - 3.845 / 3.771
+     - 3.347
    * - ``evgw-resta``
-     - 6.982 / 5.467
-     - 3.966 / 3.908
+     - 7.124 / 5.578
+     - 3.402 / 3.386
+     - 3.785 / 3.733
      -
    * - ``evgw-dim``
-     - 6.591 / 5.219
-     - 3.982 / 3.911
+     - 6.619 / 5.251
+     - 3.476 / 3.427
+     - 3.846 / 3.771
      -
    * - ``qsgw-resta``
-     - 7.031 / 5.498
-     - 3.957 / 3.907
+     - 7.197 / 5.628
+     - 3.420 / 3.397
+     - 3.752 / 3.718
      -
    * - ``qsgw-dim``
-     - 6.596 / 5.218
-     - 3.967 / 3.903
-     - 3.782
+     - 6.626 / 5.250
+     - 3.437 / 3.408
+     - 3.809 / 3.755
+     - 3.362
 
-The same pattern holds, larger:
+At this size S₁ is dark in the spin-free calculation: the exchange splits the band-edge manifold and
+the first bright state lies 0.30–0.37 eV above S₁. The rest of the pattern holds:
 
-* the ΔW models agree on S₁ within 0.03 eV while their QP gaps spread over 0.44 eV;
-* they lie 0.20–0.23 eV above the sBSE;
-* the sTDA with a_x = 1/ε∞ lies 0.05 eV above the sBSE here (it binds 0.40 eV against 0.45 eV: at this
-  size the more strongly screened short range dominates, at 2 nm the unscreened tail);
-* S₁ moves by 0.07 eV with the solvent against 1.4 eV for the QP gap.
+* the ΔW models agree on S₁ within 0.04 eV and on the bright state within 0.05 eV, while their QP
+  gaps spread over 0.38 eV in toluene;
+* they lie 0.06–0.10 eV (S₁) and 0.10–0.15 eV (bright) above the sBSE;
+* the sTDA with a_x = 1/ε∞ lies 0.49 eV above the sBSE here (it binds 0.40 eV against 0.89 eV: at this
+  size the on-site exchange and the strongly screened short range dominate, at 2 nm the unscreened tail);
+* S₁ moves by 0.02–0.05 eV with the solvent against 1.4–1.6 eV for the QP gap.
 
 How the results moved toward experiment
 ---------------------------------------
@@ -248,10 +267,14 @@ S₁ at 2 nm in toluene (spin-free, ``sgw-resta``) through the successive versio
      - 3.734
      - 2.999
      - +0.52
-   * - Current: SAXS radius for the dielectric sphere
+   * - SAXS radius for the dielectric sphere
      - 3.681
      - 2.968
      - −0.03
+   * - Current: MNOK on-site γ_AA = IP − EA (benchmarked against exact integrals)
+     - 3.707
+     - 2.964
+     - −0.004
 
 * **The first row matched experiment for the wrong reason.** The QP gap contained the surface
   polarization and the kernel did not contain the matching electron–hole image, so the whole
@@ -268,6 +291,11 @@ S₁ at 2 nm in toluene (spin-free, ``sgw-resta``) through the successive versio
   value 9.22 Å): the image terms shrink, the QP gap drops by 0.05 eV (0.10 eV in vacuum) and S₁ by
   0.03 eV, to 2.84 eV for the bright state with SOC. The experimental references are evaluated at the
   same SAXS diameter.
+* **MNOK on-site value.** The on-site integral is now IP − EA (twice the hardness η), the choice that
+  reproduces exact (μμ|νν) integrals (:doc:`/integrals/representation`). At 2 nm S₁ barely moves
+  (−0.004 eV spin-free, −0.01 eV for the bright state with SOC, now 2.83 eV), because the direct
+  terms are dominated by the long range. At 1.2 nm the stronger on-site exchange and attraction lower
+  S₁ by 0.5 eV and the bright state by 0.2 eV.
 
 Limits
 ------
@@ -278,7 +306,7 @@ Limits
 * **Extrapolated references** at 1.93 nm, and a 0.5 eV spread between them. The size definition
   matters at the 0.05 eV level: the formula-unit diameter (1.87 nm) raises the references by 0.05–0.07 eV.
 * **The QP gap is not validated by experiment here.** At 1.2 nm it is compared with evGW\@PBE0 in
-  :doc:`evgw_cluster`; the ΔW models are 0.6–1.0 eV above it.
+  :doc:`evgw_cluster`; the ΔW models are 0.6–1.2 eV above it.
 
 Rerun with ``benchmarks/qp_bse_sweep.py`` (:doc:`qp_bse_sweep`) or with the configs in
 ``tests/CdSe``.

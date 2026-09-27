@@ -33,46 +33,72 @@ MNOK: atom-condensed densities (``mnok``)
    \gamma_{AB} = \big(r_{AB}^{\beta} + a_{AB}^{\beta}\big)^{-1/\beta},\qquad
    a_{AB} = \tfrac12\big(\eta_A^{-1} + \eta_B^{-1}\big),\qquad \gamma_{AA} = \eta_A ,
 
-in atomic units. What QDEX uses:
+in atomic units, with the on-site value γ_AA = s η_A. QDEX uses (``integrals`` section):
 
-* **Exponent β = 2** (Ohno–Klopman) for every MNOK interaction: the exchange K\ :sup:`x`, the bare γ
-  inside the screened W and ΔW, and the direct term. β = 1 is the Mataga–Nishimoto form. There is no
-  separate exponent for exchange. (The key ``excitations.kernel_scaling``, historically called
-  ``alpha``, is a scale factor of the uniform ``bse`` kernel, not an exponent.)
-* **Damping** by the mean of the inverse hardnesses, so that the on-site value is η_A.
-* **Hardness** η_A of Ghosh and Islam (``HARDNESS_DICT``), defined as ½ ∂²E/∂N², i.e. half of IP − EA
-  (Cd 3.50 eV, Se 5.48 eV). The on-site Coulomb integral of a monopole, (ii|ii) = IP − EA, would be
-  2η_A.
+.. list-table::
+   :header-rows: 1
+   :widths: 30 16 54
 
-Grimme's sTDA uses the same functional form with other choices (:doc:`/excitons/stda`): separate
-fitted exponents for exchange (α = 1.42 + 0.48 a_x) and direct term (β = 0.20 + 1.83 a_x), damping by
-the mean hardness, and the on-site value 2η_A. These apply only in ``mode: stda``.
+   * - Key
+     - Default
+     - Meaning
+   * - ``mnok_exponent``
+     - 2
+     - β for every MNOK interaction: exchange K\ :sup:`x`, the bare γ in the screened W and ΔW, the
+       direct term (2 = Ohno–Klopman, 1 = Mataga–Nishimoto)
+   * - ``mnok_exponent_exchange``
+     - = ``mnok_exponent``
+     - β of the exchange interaction only
+   * - ``mnok_onsite``
+     - ``ip_ea``
+     - on-site value: ``ip_ea`` gives γ_AA = 2η_A = IP − EA, the Coulomb integral of a monopole;
+       ``eta`` gives γ_AA = η_A = (IP − EA)/2, the earlier convention
 
-**Sensitivity** (Cd₆₈Se₅₅Cl₂₆, vacuum, 25 × 25; changes applied to all MNOK interactions):
+η_A is the hardness of Ghosh and Islam (``HARDNESS_DICT``), defined as ½ ∂²E/∂N² (Cd 3.50 eV,
+Se 5.48 eV), and the damping is the mean of the inverse on-site values. (``excitations.kernel_scaling``,
+historically ``alpha``, is a scale factor of the uniform ``bse`` kernel, not an exponent.) Grimme's sTDA
+uses the same form with its own fitted exponents and 2η (:doc:`/excitons/stda`); those apply only in
+``mode: stda``.
+
+**Benchmark against exact integrals.** The ``xs`` representation evaluates K\ :sup:`x` from exact
+(μμ|νν) integrals, with no hardness or exponent, and uses the same distance-dependent screening. It is
+the reference for the short range, where MNOK is semi-empirical. The triplet (no K\ :sup:`x`) tests the
+direct term, the singlet–triplet splitting ΔST tests exchange. sBSE (bulk Resta W), vacuum,
+25 × 25, Löwdin charges as in xs; deviations from xs:
 
 .. list-table::
    :header-rows: 1
 
-   * - Choice
-     - S₁ sBSE (eV)
-     - S₁ ``sgw-resta`` (eV)
-     - singlet–triplet, sBSE (meV)
-   * - β = 2, γ_AA = η (current)
-     - 2.800
-     - 3.043
-     - 57
-   * - β = 1 (Mataga–Nishimoto)
-     - 2.854
-     - 3.093
-     -
-   * - β = 2, γ_AA = 2η
-     - 2.779
-     - 3.038
-     - 99
+   * - MNOK choice
+     - 1.2 nm: S₁ / T₁ / ΔST
+     - 2.0 nm: S₁ / T₁ / ΔST
+   * - xs reference (absolute)
+     - 3.246 / 3.043 eV / 203 meV
+     - 2.759 / 2.663 eV / 96 meV
+   * - β = 2, γ_AA = η (earlier default)
+     - +0.44 / +0.49 eV / −50 meV
+     - +0.04 / +0.07 eV / −39 meV
+   * - β = 1, γ_AA = η
+     - +0.56 / +0.61 eV / −55 meV
+     - +0.09 / +0.14 eV / −50 meV
+   * - β = 2, γ_AA = 2η (default)
+     - −0.15 / −0.17 eV / +19 meV
+     - +0.01 / −0.01 eV / +13 meV
+   * - β = 1, γ_AA = 2η
+     - −0.02 / −0.03 eV / +10 meV
+     - +0.05 / +0.05 eV / −3 meV
+   * - β = 3, γ_AA = 2η
+     - −0.20 / −0.22 eV / +23 meV
+     - −0.00 / −0.02 eV / +17 meV
 
-The exponent shifts S₁ by about 0.05 eV; the on-site convention hardly moves S₁ but nearly doubles
-the exchange (singlet–triplet) splitting, which is short-range. Neither choice has been validated
-against a reference for dots yet.
+* **The on-site value decides exchange.** With η, ΔST is about half the exact value on both clusters;
+  with 2η it is within 20 meV. 2η is also the physically correct monopole integral.
+* **The exponent tunes the direct term.** With 2η, β = 2 reproduces the 2 nm cluster within 10 meV;
+  the 35-atom cluster prefers β = 1. β = 2 is kept as the default for dots of production size.
+* **A separate exchange exponent changes ΔST by less than 6 meV** once the on-site value is 2η.
+* **Mulliken charges** (the default of ``integrals.charges``) give the same result at 2 nm (ΔST 99 meV)
+  but underestimate exchange in the 1.2 nm cluster (ΔST 51 meV); Löwdin charges are closer to xs for
+  very small clusters.
 
 **Integrals.**
 
@@ -89,8 +115,8 @@ and contracted with Löwdin coefficients (:doc:`/quasiparticles/models`, section
   density are lost, and with them the shape of p and d orbitals and intra-atomic transitions
   (for example s → p on one atom, whose transition charge on that atom is zero).
 * **Parameters.** The short range is set by the hardness η_A and the exponent β, not by the basis.
-  It is the semi-empirical part of the interaction, and it matters most for exchange (see the
-  sensitivity table).
+  It is the semi-empirical part of the interaction; the defaults are chosen against the exact ``xs``
+  integrals (see the benchmark above).
 * **Population dependence.** Mulliken and Löwdin charges differ, most for diffuse basis sets.
   Mulliken populations can be negative.
 * **Exact at long range.** For r_AB ≫ a_AB, γ_AB → 1/r_AB. The surface polarization, the solvent term

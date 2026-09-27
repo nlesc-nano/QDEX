@@ -67,6 +67,9 @@ SECTIONS = {
     "integrals": {
         "representation": "kernel_type",
         "charges": "charge_type",
+        "mnok_exponent": "mnok_exponent",
+        "mnok_exponent_exchange": "mnok_exponent_exchange",
+        "mnok_onsite": "mnok_onsite",
         "beta": "beta",
     },
     "excitations": {

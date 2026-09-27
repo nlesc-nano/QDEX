@@ -380,6 +380,13 @@ class ExcitonSolver:
             raise ValueError(
                 "beta > 0 is disabled until the bare on-site U parameters are defined and validated"
             )
+        # Exchange interaction with its own MNOK exponent (integrals.mnok_exponent_exchange).
+        import qdex.hardness as _hardness
+        if (_hardness.MNOK_EXPONENT_K is not None and k_type == "mnok" and k_name != "stda"
+                and np.shape(gamma_bare) == (len(atom_symbols), len(atom_symbols))):
+            gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0,
+                                     exponent=_hardness.MNOK_EXPONENT_K)
+            print(f"  [Solver] Exchange gamma with MNOK exponent {_hardness.MNOK_EXPONENT_K:g}")
         gamma_penalty = np.zeros_like(gamma_bare)
 
         self.ham = ExcitonHamiltonian(

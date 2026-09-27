@@ -97,8 +97,9 @@ they are not. The difference
 * has **no counterpart in K**\ :sup:`d`, which contains only the densities of the electron and the
   hole, not the other occupied states.
 
-It therefore goes straight into S₁. At 1.2 nm (``sgw-resta``), ΔSEX is −2.74 eV for the HOMO and
-−0.13 eV for the LUMO. It raises the QP gap by 0.26 eV over the classical value, and S₁ by 0.36 eV. It is the physical reason why a microscopic ΔW (Resta, DIM) changes S₁ and a
+It therefore goes straight into S₁. At 1.2 nm (``sgw-resta``), ΔSEX is −2.79 eV for the HOMO and
+−0.11 eV for the LUMO. It raises the QP gap by about 0.26 eV over the classical value, and S₁ by
+about 0.36 eV (estimated with the earlier on-site η; the order of magnitude is unchanged). It is the physical reason why a microscopic ΔW (Resta, DIM) changes S₁ and a
 purely classical one does not.
 
 4. The bulk correction

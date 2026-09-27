@@ -77,7 +77,9 @@ replaces Grimme's orbital window. The selection lets a large pool be used at the
 matrix. Defaults are those of std2 (E_thr = 7 eV, t = 10⁻⁴ E\ :sub:`h`); for band-edge excitons of dots
 E_thr should be set just above the lowest states.
 
-**Cd₆₈Se₅₅Cl₂₆** (sBSE, bulk Resta W, vacuum), pool 50 × 50 = 2,500 transitions:
+**Cd₆₈Se₅₅Cl₂₆** (sBSE, bulk Resta W, vacuum), pool 50 × 50 = 2,500 transitions. These tests used the earlier MNOK
+on-site value η; with the default IP − EA the full 25 × 25 S₁ is 2.779 eV (−0.02 eV). The selection
+errors below are differences within the same integrals and do not depend on that choice:
 
 .. list-table::
    :header-rows: 1

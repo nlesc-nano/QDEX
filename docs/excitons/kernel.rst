@@ -121,7 +121,9 @@ With the representation chosen in :doc:`/integrals/index`:
      K^x_{ia,jb} = \sum_{\mu\nu} c_{\mu i}c_{\mu a}\,(\mu\mu|\nu\nu)\,c_{\nu j}c_{\nu b},\qquad
      K^d_{ia,jb} = \sum_{\mu\nu} c_{\mu i}c_{\mu j}\,W_{\mu\nu}\,c_{\nu a}c_{\nu b}.
 
-xs binds more at short range: S₁ is 0.6 eV lower at 1.2 nm and 0.05 eV lower at 2 nm.
+With the default on-site value γ_AA = IP − EA, MNOK reproduces xs within 0.15 eV at 1.2 nm and
+0.01 eV at 2 nm (:doc:`/integrals/representation`). With the on-site hardness η instead, MNOK
+underbinds by 0.4–0.5 eV at 1.2 nm.
 
 4. Size of the binding
 ----------------------
@@ -135,20 +137,20 @@ Binding energy E_b = E_g^QP − S₁ at 2 nm (CdSe, 25 × 25, spin-free, coupled
      - E_b vacuum (eV)
      - E_b toluene (eV)
    * - ``sgw-resta``
-     - 1.49
-     - 0.71
+     - 1.52
+     - 0.74
    * - ``sgw-dim``
-     - 1.52
-     - 0.74
+     - 1.55
+     - 0.77
    * - ``evgw-resta``
-     - 1.60
-     - 0.76
+     - 1.65
+     - 0.79
    * - ``qsgw-dim``
-     - 1.52
-     - 0.74
+     - 1.55
+     - 0.77
 
 * **Most of the binding is the mutual image.** Bulk W alone binds by 0.2–0.3 eV at 2 nm.
 * **All shared-W models bind alike.** The sphere term dominates; the interior part of ΔW adds a
   little.
-* **The QP gap and E_b move together** with the solvent (about 0.85–0.95 eV), so S₁ moves by only
-  0.07–0.10 eV (:doc:`cancellation`).
+* **The QP gap and E_b move together** with the solvent (about 0.85–1.00 eV), so S₁ moves by only
+  0.07–0.12 eV (:doc:`cancellation`).
