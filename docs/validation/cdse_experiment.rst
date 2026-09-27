@@ -90,6 +90,14 @@ Results at 2.0 nm
      - 3.027 / 3.027
      - 2.706 / 2.706
      -
+   * - ``bulk`` + ``stda``, a_x = 1/ε∞
+     - 3.027 / 3.027
+     - 2.699 / 2.699
+     - 2.576
+   * - ``none`` + ``stda``, a_x = 0 (PBE)
+     - 1.457 / 1.457
+     - 1.501 / 1.501
+     - 1.391
    * - ``brus`` + Resta
      - 3.856 / 3.856
      - 3.629 / 3.629
@@ -121,8 +129,9 @@ Results at 2.0 nm
 
 **Against experiment (toluene, bright state with SOC).** The Resta, DIM and qsGW models give
 2.87–2.91 eV, inside the window 2.83–3.39 eV, 0.05–0.08 eV above the Yu curve and 0.2–0.5 eV below
-the Hens curves. The sBSE gives 2.68 eV, 0.15 eV below the window. ``brus`` is far too high: the
-effective-mass kinetic term overestimates confinement at this size.
+the Hens curves. The sBSE gives 2.68 eV, 0.15 eV below the window, and the sTDA with a_x = 1/ε∞
+2.58 eV, 0.25 eV below it. ``brus`` is far too high: the effective-mass kinetic term overestimates
+confinement at this size.
 
 **What the table shows.**
 
@@ -136,6 +145,12 @@ effective-mass kinetic term overestimates confinement at this size.
   sBSE, which drops both, misses it.
 * **Resta vs DIM** differ by less than 0.03 eV in the ΔW models. In the sBSE, where only the bulk
   kernel changes, DIM binds 0.09 eV more.
+* **sTDA** (:doc:`/excitons/stda`). With PBE orbitals the faithful setting is a_x = 0: no electron–hole
+  attraction, so S₁ is the KS gap plus a small exchange term (1.50 eV), far below experiment. With the
+  bulk GW gap and a_x = 1/ε∞, S₁ lies 0.10 eV below the sBSE. sTDA screens the short range more than
+  Resta but leaves the 1/R tail unscreened; at 2 nm it binds 0.33 eV against 0.23 eV for the sBSE, and
+  the gap to the sBSE will grow with size. sTDA is Grimme's method as published only with hybrid MO
+  files, which were not used here.
 
 Results at 1.2 nm
 -----------------
@@ -155,6 +170,14 @@ Results at 1.2 nm
      - 4.209 / 4.209
      - 3.620 / 3.620
      -
+   * - ``bulk`` + ``stda``, a_x = 1/ε∞
+     - 4.209 / 4.209
+     - 3.808 / 3.808
+     - 3.668
+   * - ``none`` + ``stda``, a_x = 0 (PBE)
+     - 2.639 / 2.639
+     - 2.748 / 2.748
+     - 2.626
    * - ``brus`` + Resta
      - 6.220 / 6.220
      - 5.766 / 5.766
@@ -188,6 +211,8 @@ The same pattern holds, larger:
 
 * the ΔW models agree on S₁ within 0.02 eV while their QP gaps spread over 0.46 eV;
 * they lie 0.27 eV above the sBSE;
+* the sTDA with a_x = 1/ε∞ lies 0.05 eV above the sBSE here (it binds 0.40 eV against 0.45 eV: at this
+  size the more strongly screened short range dominates, at 2 nm the unscreened tail);
 * S₁ moves by 0.08 eV with the solvent against 1.5 eV for the QP gap.
 
 How the results moved toward experiment
