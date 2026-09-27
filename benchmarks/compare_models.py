@@ -170,25 +170,21 @@ def experimental_window(name, system, cfg, d_override=None):
     ref = refs[name]
     if d_override is not None:
         d_nm = float(d_override)
+        d_note = "given"
     else:
-        from qdex.hardness import get_cluster_size_metrics
-        lines = (system / cfg["system"]["xyz"]).read_text().split("\n")
-        n_at = int(lines[0])
-        rows = [ln.split() for ln in lines[2:2 + n_at]]
-        syms = [r[0] for r in rows]
-        xyz = np.array([[float(v) for v in r[1:4]] for r in rows])
-        from qdex.hardness import MATERIAL_DB, MATERIAL_ELEMENTS
-        mat = str(cfg["system"].get("material", "")).upper()
-        if mat in MATERIAL_ELEMENTS and mat in MATERIAL_DB and len(MATERIAL_ELEMENTS[mat]) == 2:
-            n_core = sum(1 for s_ in syms if s_ in MATERIAL_ELEMENTS[mat])
-            v_fu = float(MATERIAL_DB[mat][2]) ** 3 / 4.0
-            d_nm = 0.1 * (6.0 * 0.5 * n_core * v_fu / np.pi) ** (1.0 / 3.0)
-        else:
-            m = get_cluster_size_metrics(xyz, syms, cfg["system"].get("material"))
-            d_nm = 0.2 * m["R_eff_hull"]
+        # SAXS-equivalent diameter (Debye intensity of the inorganic atoms, sphere fit), the size the
+        # sizing curves are measured against; the formula-unit volume diameter is reported beside it.
+        from qdex.cluster_size import cluster_size
+        from qdex.io_utils import read_xyz
+        syms, xyz = read_xyz(str(system / cfg["system"]["xyz"]))
+        size = cluster_size(np.array(xyz), syms, cfg["system"].get("material"),
+                            cfg["system"].get("inorganic_elements"))
+        d_nm = size.get("d_saxs_nm", size["d_hull_nm"])
+        d_note = "SAXS" + (f"; formula-unit volume {size['d_formula_unit_nm']:.2f} nm"
+                           if "d_formula_unit_nm" in size else "")
     e = sizing_energy(ref, d_nm)
     tol = float(ref.get("tolerance_ev", 0.1))
-    return (e - tol, e + tol), f"{ref['citation']}: E_1S({d_nm:.2f} nm) = {e:.3f} eV (+/- {tol:.2f})"
+    return (e - tol, e + tol), f"{ref['citation']}: E_1S({d_nm:.2f} nm, {d_note}) = {e:.3f} eV (+/- {tol:.2f})"
 
 
 # ---------------------------------------------------------------------------

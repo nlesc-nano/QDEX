@@ -22,55 +22,59 @@ Systems and settings
 
    * - Folder
      - Cluster
-     - Core diameter d
+     - SAXS diameter d (formula-unit, hull)
      - KS (PBE) gap
    * - ``tests/CdSe/1.2nm``
      - Cd₁₆Se₁₃Cl₆ (35 atoms)
-     - 1.15 nm
+     - 1.12 nm (1.15, 1.06)
      - 2.639 eV
    * - ``tests/CdSe/2.0nm``
      - Cd₆₈Se₅₅Cl₂₆ (149 atoms, 2,753 basis functions)
-     - 1.87 nm
+     - 1.93 nm (1.87, 1.84)
      - 1.457 eV
 
-d is the volume-equivalent diameter of the inorganic core, the quantity SAXS measures and the one
-the sizing curves use. MNOK integrals, Mulliken charges, 25 × 25 active space, dense diagonalization.
+d is the diameter a SAXS measurement would give: the Debye intensity of the inorganic atoms (Cd, Se
+and the Cl surface) fitted with a homogeneous-sphere form factor (``qdex.cluster_size``). The sizing
+curves use the SAXS core diameter. Organic ligands would be invisible to SAXS and are excluded in the
+same way. Every QDEX run prints this size block. MNOK integrals, Mulliken charges, 25 × 25 active space, dense diagonalization.
 "Toluene" is ε_out = 2.24. With SOC, the first bright state is the lowest state with at least 10 % of
 the largest oscillator strength.
 
 Experimental references
 -----------------------
 
-``benchmarks/experimental_sizing.yaml``, evaluated at the core diameter:
+``benchmarks/experimental_sizing.yaml``, evaluated at the SAXS diameter (for 2.4 and 3.2 nm at the
+nominal diameter; these dots are not part of this page yet):
 
 .. list-table::
    :header-rows: 1
 
    * - Reference
-     - d = 1.87 nm
+     - d = 1.93 nm
      - d = 2.4 nm
      - d = 3.2 nm
    * - Aubert, Hens et al., Nano Lett. 22, 1778 (2022), zinc blende
-     - 3.39
+     - 3.31
      - 2.89
      - 2.46
    * - same, wurtzite
-     - 3.11
+     - 3.04
      - 2.69
      - 2.35
    * - same, all CdSe
-     - 3.30
+     - 3.22
      - 2.83
      - 2.43
    * - Yu, Qu, Guo, Peng, Chem. Mater. 15, 2854 (2003)
-     - 2.83
+     - 2.77
      - 2.45
      - 2.22
 
-At 1.87 nm both curves are extrapolated: the Hens fits start at 2.65–2.88 nm and the Yu fit at
-450 nm (2.76 eV). The spread between them, 2.83–3.39 eV, comes mostly from the size calibration (TEM
-for Yu, SAXS for Hens) and is the realistic experimental window. There is no sizing reference at
-1.15 nm; that cluster is compared with evGW instead (:doc:`evgw_cluster`).
+At 1.93 nm both curves are extrapolated: the Hens fits start at 2.65–2.88 nm and the Yu fit at
+450 nm (2.76 eV). The spread between them, 2.77–3.31 eV, comes mostly from the size calibration (TEM
+for Yu, SAXS for Hens) and is the realistic experimental window. With the formula-unit diameter
+(1.87 nm) the window would be 2.82–3.38 eV. There is no sizing reference at 1.12 nm; that cluster is
+compared with evGW instead (:doc:`evgw_cluster`).
 
 Results at 2.0 nm
 -----------------
@@ -128,9 +132,9 @@ Results at 2.0 nm
      - 2.912
 
 **Against experiment (toluene, bright state with SOC).** The Resta, DIM and qsGW models give
-2.87–2.91 eV, inside the window 2.83–3.39 eV, 0.05–0.08 eV above the Yu curve and 0.2–0.5 eV below
-the Hens curves. The sBSE gives 2.68 eV, 0.15 eV below the window, and the sTDA with a_x = 1/ε∞
-2.58 eV, 0.25 eV below it. ``brus`` is far too high: the effective-mass kinetic term overestimates
+2.87–2.91 eV, inside the window 2.77–3.31 eV, 0.10–0.14 eV above the Yu curve and 0.13–0.44 eV below
+the Hens curves. The sBSE gives 2.68 eV, 0.09 eV below the window, and the sTDA with a_x = 1/ε∞
+2.58 eV, 0.19 eV below it. ``brus`` is far too high: the effective-mass kinetic term overestimates
 confinement at this size.
 
 **What the table shows.**
@@ -263,7 +267,8 @@ Limits
 * **Two sizes only.** The 2.4 and 3.2 nm dots (6k and 13k basis functions) are the decisive test of
   the size dependence; their targets are in the table above (Hens 2.69–2.89 and 2.35–2.46 eV).
 * **Active space.** S₁ decreases by about 0.06 eV from 25 × 25 to 100 × 100 at 2 nm.
-* **Extrapolated references** at 1.87 nm, and a 0.5 eV spread between them.
+* **Extrapolated references** at 1.93 nm, and a 0.5 eV spread between them. The size definition
+  matters at the 0.05 eV level: the formula-unit diameter (1.87 nm) raises the references by 0.05–0.07 eV.
 * **The QP gap is not validated by experiment here.** At 1.2 nm it is compared with evGW\@PBE0 in
   :doc:`evgw_cluster`; the ΔW models are 0.7–1.2 eV above it.
 

@@ -535,6 +535,13 @@ def precompute_namd_data(config):
     # One-time setup on frame 0: Basis, Geometry, GW Scissor, Resta Matrix
     first_xyz = os.path.join(frame_dirs[0], xyz_name)
     syms0, coords0 = read_xyz(first_xyz)
+    try:
+        from qdex.cluster_size import cluster_size, format_cluster_size
+        size0 = cluster_size(np.array(coords0), syms0, material, sys_cfg.get("inorganic_elements"))
+        print(format_cluster_size(size0, None if qp_key in ("bulk", "none", "pbe", "dft") else
+                                  f"core hull radius {size0['hull_radius_ang']:.3f} A ('{qp_model}')") + "  [frame 0]")
+    except Exception as exc:
+        print(f"  [Size] Could not evaluate the cluster size: {exc}")
     basis_dict = parse_basis(basis_txt, basis_name, required_elements=set(syms0))
     shells0 = build_shell_dicts(syms0, coords0, basis_dict)
     n_ao = count_ao_from_shells(shells0)

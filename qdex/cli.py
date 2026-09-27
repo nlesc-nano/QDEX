@@ -189,6 +189,8 @@ def write_qp_provenance(details, dft_gap, target_qp_gap, scissor, args, filename
         return None
 
     payload = {}
+    if getattr(args, "cluster_size_info", None):
+        payload["cluster_size"] = args.cluster_size_info
     for k, v in details.items():
         if isinstance(v, np.ndarray):
             if v.size <= 10:
@@ -932,6 +934,8 @@ def main():
     parser.add_argument("--selection-shift", dest="selection_shift", choices=["on", "off"], default="on",
                         help="Lower the primary diagonal by the second-order contributions of the rejected "
                              "transitions (std2 behaviour, default on).")
+    parser.add_argument("--inorganic-elements", dest="inorganic_elements", nargs="+", default=None,
+                        help="Elements seen by SAXS for the reported size (default: all but H, C, N, O, P, B, Si, F).")
     parser.add_argument("--stda-functional", dest="stda_functional", type=str, default=None,
                         help="sTDA: functional of the MO file, sets a_x (pbe 0, b3lyp 0.20, pbe0 0.25, ...).")
     parser.add_argument("--stda-ax", dest="stda_ax", type=str, default=None,
@@ -1135,6 +1139,24 @@ def main():
     n_ao = count_ao_from_shells(shells)
     atom_ao_ranges = build_atom_ao_ranges(shells)
     print(f"  -> Parsed in {time.time() - t0_parse:.2f} s | Total AOs: {n_ao}")
+
+    # Size of the dot, always reported (SAXS definition), whether or not the model uses it.
+    cluster_size_info = None
+    try:
+        from qdex.cluster_size import cluster_size, format_cluster_size
+        cluster_size_info = cluster_size(np.array(coords_ang), syms, args.material,
+                                         getattr(args, "inorganic_elements", None))
+        qp_name_sz = str(args.qp_gap).lower()
+        uses_radius = not (qp_name_sz in ("none", "pbe", "dft", "bulk")
+                           or qp_name_sz.replace(".", "", 1).isdigit())
+        radius_note = (f"core hull radius {cluster_size_info['hull_radius_ang']:.3f} A "
+                       f"(sphere reaction field / confinement of '{args.qp_gap}')") if uses_radius else None
+        print(format_cluster_size(cluster_size_info, radius_note))
+        with open("cluster_size.json", "w", encoding="utf-8") as fh:
+            json.dump(cluster_size_info, fh, indent=2)
+        args.cluster_size_info = cluster_size_info
+    except Exception as exc:  # the size report must never stop a calculation
+        print(f"  [Size] Could not evaluate the cluster size: {exc}")
 
     tracker.start_stage("AO Overlap Matrix (S)")
     print("\n--- Computing AO overlap ---")
