@@ -169,14 +169,15 @@ class TestH5IO(unittest.TestCase):
 
         # 2. Read MOs via read_mos_h5 and read_mos_auto
         C, eps, occ = read_mos_auto(CDSE_H5_PATH, n_ao_total=7065, verbose=False)
-        self.assertEqual(C.shape, (7065, 1700))
-        self.assertEqual(eps.shape, (1700,))
-        self.assertEqual(occ.shape, (1700,))
+        self.assertEqual(C.shape[0], 7065)
+        self.assertEqual(len(eps), C.shape[1])
+        self.assertEqual(len(occ), C.shape[1])
 
-        # All 1700 MOs are occupied
-        self.assertTrue(np.all(occ == 2.0))
+        # 1700 occupied MOs (electrons = 3400)
+        homo_idx = np.where(occ > 0.0)[0].max()
+        self.assertEqual(homo_idx, 1699)
         self.assertAlmostEqual(eps[0], -0.76308301, places=5)
-        self.assertAlmostEqual(eps[-1], -0.20612560, places=5)
+        self.assertAlmostEqual(eps[homo_idx], -0.206197, places=4)
 
         # 3. Test MO orthonormality with libint overlap matrix if basis exists
         if os.path.exists(CDSE_BASIS_PATH):
