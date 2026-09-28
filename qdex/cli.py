@@ -1188,16 +1188,28 @@ def _read_geometry_and_basis(args, *, tracker):
     tracker.start_stage("Geometry & Basis Parsing")
     logger.info("\n--- Parsing Geometry and Basis Set ---")
     t0_parse = time.time()
-    if (
-        getattr(args, "xyz", None)
-        and not os.path.exists(args.xyz)
-        and os.path.exists(getattr(args, "mo_file", ""))
-        and (str(args.mo_file).lower().endswith((".h5", ".hdf5")) or is_h5_file(args.mo_file))
-    ):
-        logger.info(f"  [Geometry] '{args.xyz}' not found on disk; extracting nuclear geometry directly from HDF5 '{args.mo_file}'")
-        syms, coords_ang = read_geometry_h5(args.mo_file)
+    mo_path = str(getattr(args, "mo_file", "") or "")
+    is_h5_mo = os.path.exists(mo_path) and (mo_path.lower().endswith((".h5", ".hdf5")) or is_h5_file(mo_path))
+
+    if getattr(args, "xyz", None) and not os.path.exists(args.xyz) and is_h5_mo:
+        logger.info(f"  [Geometry] '{args.xyz}' not found on disk; extracting nuclear geometry directly from HDF5 '{mo_path}'")
+        syms, coords_ang = read_geometry_h5(mo_path)
     else:
         syms, coords_ang = read_xyz(args.xyz)
+        if is_h5_mo:
+            try:
+                syms_h5, coords_h5 = read_geometry_h5(mo_path)
+                if len(syms_h5) == len(syms):
+                    max_dev = float(np.max(np.abs(np.asarray(coords_ang) - coords_h5)))
+                    if max_dev > 1e-4:
+                        logger.warning(
+                            f"  [Geometry:Warning] Coordinates in '{args.xyz}' differ from '{mo_path}' "
+                            f"by up to {max_dev:.4f} Å. Using the self-consistent nuclear coordinates "
+                            f"from '{mo_path}' to ensure exact basis set centering and MO orthonormality."
+                        )
+                        syms, coords_ang = syms_h5, coords_h5
+            except Exception:
+                pass
     basis_dict = parse_basis(args.basis_txt, args.basis_name, required_elements=set(syms))
     shells = build_shell_dicts(syms, coords_ang, basis_dict)
     shells = [{**sh, 'pure': True} for sh in shells] # Use Sphericals 
