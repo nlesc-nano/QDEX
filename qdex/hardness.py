@@ -918,6 +918,67 @@ def format_integrals_block(representation, charges, kernel, symbols, stda_info=N
     return "\n".join(lines)
 
 
+# Vertex correction of the bulk QSGW gap (quasiparticles.bulk_vertex).
+# QSGW overestimates bulk gaps because its W lacks the electron-hole (ladder) vertex, which makes the
+# polarizability too small; the bulk fix is Delta_bulk -> factor * Delta_bulk (factor 0.8). In a dot the
+# polarizability is reduced by confinement, and with it the missing vertex part.
+#   none   : pure QSGW correction (default)
+#   full   : the bulk vertex correction at every size, Delta = factor * Delta_QSGW
+#   scaled : the correction times the fraction of bulk screening the dot keeps,
+#            f = (eps_eff - 1)/(eps_inf - 1), eps_eff from the Penn model at the DFT gap
+BULK_VERTEX = "none"
+BULK_VERTEX_FACTOR = 0.8
+
+
+def set_bulk_vertex(mode="none", factor=0.8, verbose=True):
+    """Set the vertex correction of the bulk QP shift ('none', 'full' or 'scaled') and the bulk factor."""
+    global BULK_VERTEX, BULK_VERTEX_FACTOR
+    mode = str(mode or "none").lower()
+    if mode not in ("none", "full", "scaled"):
+        raise ValueError(f"bulk_vertex must be 'none', 'full' or 'scaled', not '{mode}'")
+    factor = float(0.8 if factor in (None, "") else factor)
+    if not 0.0 < factor <= 1.0:
+        raise ValueError(f"bulk_vertex_factor must be in (0, 1], not {factor}")
+    BULK_VERTEX, BULK_VERTEX_FACTOR = mode, factor
+    if verbose and mode != "none":
+        logger.info(f"  [QP] Bulk vertex correction: {mode} (bulk factor {factor:g})")
+
+
+def bulk_qp_shift(material_name, dft_gap=None):
+    """Bulk QP correction added to the PBE orbital energies, with the vertex correction of BULK_VERTEX.
+
+    Returns (shift_ev, info). Without bulk GW data the shift is 0.
+    """
+    m_name = str(material_name).upper() if material_name else "DEFAULT"
+    entry = MATERIAL_DB.get(m_name)
+    info = {"bulk_vertex": BULK_VERTEX, "bulk_vertex_factor": float(BULK_VERTEX_FACTOR)}
+    if entry is None or len(entry) < 9:
+        info.update(bulk_qsgw_shift_ev=0.0, bulk_vertex_fraction=0.0, bulk_vertex_correction_ev=0.0)
+        return 0.0, info
+    eps_inf, pbe_gap, gw_gap = float(entry[0]), float(entry[7]), float(entry[8])
+    d_qsgw = gw_gap - pbe_gap
+    delta_v = (1.0 - BULK_VERTEX_FACTOR) * d_qsgw
+    eps_eff = None
+    if BULK_VERTEX == "none":
+        frac = 0.0
+    elif BULK_VERTEX == "full" or dft_gap is None:
+        frac = 1.0
+    else:
+        d_e_conf = max(0.0, float(dft_gap) - pbe_gap)
+        eps_eff = penn_eps_eff(eps_inf, d_e_conf, penn_gap_ev(m_name, eps_inf))
+        frac = float(np.clip((eps_eff - 1.0) / max(eps_inf - 1.0, 1e-12), 0.0, 1.0))
+    shift = d_qsgw - delta_v * frac if frac else d_qsgw
+    info.update(bulk_qsgw_shift_ev=float(d_qsgw), bulk_vertex_fraction=float(frac),
+                bulk_vertex_correction_ev=float(shift - d_qsgw))
+    if eps_eff is not None:
+        info["bulk_vertex_eps_eff"] = float(eps_eff)
+    if BULK_VERTEX != "none":
+        extra = f", Penn eps_eff {eps_eff:.2f} at the DFT gap" if eps_eff is not None else ""
+        logger.info(f"  [QP] Bulk vertex correction ({BULK_VERTEX}): fraction {frac:.3f}{extra}; "
+                    f"Delta_bulk {d_qsgw:.3f} -> {shift:.3f} eV")
+    return float(shift), info
+
+
 def _mnok_denom(r_mat_au, damp_mat_au, exponent=None):
     """MNOK denominator (r^beta + damp^beta)^(1/beta). Default beta = MNOK_EXPONENT (2, Ohno-Klopman)."""
     beta = float(MNOK_EXPONENT if exponent is None else exponent)
@@ -1817,6 +1878,8 @@ class _ScreeningModel:
         self.pbe_bulk_gap = float(entry[7])
         self.gw_bulk_gap = float(entry[8])
         self.bulk_shift = self.gw_bulk_gap - self.pbe_bulk_gap
+        self.qp_bulk_ref = self.gw_bulk_gap   # bulk QP gap used as the screening reference
+        self.bulk_vertex_info = {}
         self.n_atoms = len(atom_symbols)
         self.R_QD_ang = qd_radius(coords, atom_symbols, m_name)
 
@@ -1847,6 +1910,14 @@ class _ScreeningModel:
         self.delta_W_solv = solvent_reaction_term(coords, atom_symbols, m_name, self.eps_out_val, eps_bulk,
                                                   self.R_mat_ang, self.R_QD_ang, solvent_term)
 
+    def set_dft_gap(self, dft_gap):
+        """Bulk QP shift (with the bulk vertex correction) for a cluster with this DFT gap."""
+        if BULK_VERTEX == "none":          # pure QSGW: record the setting, keep the shift as it is
+            _, self.bulk_vertex_info = bulk_qp_shift(self.m_name, dft_gap)
+            return
+        self.bulk_shift, self.bulk_vertex_info = bulk_qp_shift(self.m_name, dft_gap)
+        self.qp_bulk_ref = self.pbe_bulk_gap + self.bulk_shift
+
     def _resta_w(self, eps):
         from qdex.constants import ANG_PER_BOHR
         k_s_ang = (np.sqrt(max(0.0, eps - 1.0)) / self.d_NN_au) / ANG_PER_BOHR
@@ -1865,7 +1936,7 @@ class _ScreeningModel:
         return S_dim * self.gamma_bare_ev, eps_z
 
     def _dim_scaled_alpha(self, gap):
-        return float(np.clip(self.alpha * (self.gw_bulk_gap / max(0.5, gap)), 0.20, 1.0))
+        return float(np.clip(self.alpha * (self.qp_bulk_ref / max(0.5, gap)), 0.20, 1.0))
 
     def one_shot(self, gap_dft):
         """W^QD and the eps entering Z for a one-shot correction at the DFT gap."""
@@ -1885,8 +1956,8 @@ class _ScreeningModel:
             a = self._dim_scaled_alpha(gap)
             w, eps_z = self._dim(a)
             return w, eps_z, f"alpha_scale = {a:.3f}"
-        if self.penn_scaling and (gap > self.gw_bulk_gap or not strict_penn):
-            eps = self._penn(max(0.0, gap - self.gw_bulk_gap))
+        if self.penn_scaling and (gap > self.qp_bulk_ref or not strict_penn):
+            eps = self._penn(max(0.0, gap - self.qp_bulk_ref))
             return self._resta_w(eps), eps, f"eps_eff = {eps:.3f}"
         return self.W_bulk_ev, self.eps_bulk, f"eps_eff = {self.eps_bulk:.3f}"
 
@@ -1934,6 +2005,8 @@ def _estimate_sgw_delta_w(model, dft_gap=None, C_occ_low=None, C_virt_low=None, 
         gap_dft = float(eps_virt[0] - eps_occ[-1])
     else:
         gap_dft = pbe_bulk_gap
+    m.set_dft_gap(gap_dft)
+    bulk_shift = m.bulk_shift
 
     def sigmas(w_qd):
         delta_W_conf = np.maximum(0.0, w_qd - W_bulk_ev)
@@ -2061,6 +2134,7 @@ def _estimate_sgw_delta_w(model, dft_gap=None, C_occ_low=None, C_virt_low=None, 
     if m.kind == "resta":
         provenance["eps_eff_qd"] = float(eps_z)
         provenance["penn_scaling"] = bool(penn_active)
+    provenance.update(m.bulk_vertex_info)
     provenance.update({
         "total_scissor_ev": total_sgw_scissor,
         "total_scissor_solvent_ev": total_sgw_scissor,
@@ -2189,6 +2263,8 @@ def _estimate_qsgw_delta_w(model, C, eps, S, atom_ao_ranges, homo_index, dynamic
     n_occ = homo_index + 1
     lumo_index = homo_index + 1
     dft_gap = float(eps_dft[lumo_index] - eps_dft[homo_index])
+    m.set_dft_gap(dft_gap)
+    bulk_shift = m.bulk_shift
     gap_curr = dft_gap + bulk_shift
 
     C_curr = C_low_init.copy()
@@ -2314,6 +2390,7 @@ def _estimate_qsgw_delta_w(model, C, eps, S, atom_ao_ranges, homo_index, dynamic
     }
     if m.kind == "resta":
         provenance["eps_eff_qd"] = float(eps_z)
+    provenance.update(m.bulk_vertex_info)
     provenance["total_scissor_ev"] = final_scissor
     # The screened interaction this QP model is built on.  The CLI passes it
     # to the BSE (kernel "qp") so that GW and BSE share the same W.

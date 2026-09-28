@@ -158,6 +158,44 @@ calculation as the gap opening
 
 split between the valence and conduction band: :math:`-f_b\,\Delta_{\mathrm{bulk}}` for occupied, :math:`+(1 - f_b)\,\Delta_{\mathrm{bulk}}` for empty states, where :math:`f_b` is the valence share of the bulk opening. In the literature for II-VI semiconductors (Hinuma et al., *PRB* 90, 155405 (2014); Schleife et al., *PRB* 73, 245212 (2006)), the bulk GW opening is asymmetric: the valence-band maximum shifts down by ~42–43% while the conduction-band minimum shifts up by ~57–58%. In QDEX, :math:`f_b` is 41.2 % for CdSe. All dynamical effects of the bulk are inside this number.
 
+**Vertex correction of the bulk part** (``quasiparticles.bulk_vertex``). QSGW overestimates bulk gaps
+by 10–20 %: its W lacks the electron–hole (ladder) vertex, so the polarizability and ε are too small.
+The usual bulk remedy scales the opening, :math:`\Delta_{\mathrm{bulk}} \to a\,\Delta_{\mathrm{bulk}}`
+with :math:`a = 0.8` (``bulk_vertex_factor``); for CdSe this gives a spin-free bulk gap of 1.88 eV,
+the experimental 1.74 eV plus :math:`\Delta_{so}/3`. The missing vertex part is proportional to the
+polarizability, which is reduced in a dot. With ``scaled`` the correction follows the fraction of bulk
+screening the dot keeps,
+
+.. math::
+
+   \Delta_{\mathrm{bulk}}(R) = \Delta_{\mathrm{QSGW}} - (1 - a)\,\Delta_{\mathrm{QSGW}}\,f(R),\qquad
+   f(R) = \frac{\epsilon_{\mathrm{eff}}(R) - 1}{\epsilon_\infty - 1},
+
+with :math:`\epsilon_{\mathrm{eff}}` the Penn value at the DFT gap of the cluster (the same Penn model
+as the Resta W). f → 1 in the bulk (experimental gap), f → 0 in the molecular limit (QSGW). f uses
+the DFT gap, so Δ_bulk is the same for every QP model of a given cluster; the screening of the ΔW
+models is referenced to the same corrected bulk gap, so the vertex correction changes the bulk shift
+and nothing else.
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``bulk_vertex``
+     - Δ_bulk
+     - CdSe: 1.2 nm / 2.0 nm / bulk (eV)
+   * - ``none`` (default)
+     - pure QSGW
+     - 1.57 / 1.57 / 1.57
+   * - ``full``
+     - :math:`a\,\Delta_{\mathrm{QSGW}}` at every size
+     - 1.26 / 1.26 / 1.26
+   * - ``scaled``
+     - :math:`\Delta_{\mathrm{QSGW}}\,[1 - (1-a) f(R)]`
+     - 1.39 / 1.33 / 1.26
+
+It applies to ``bulk`` (the sBSE), the ΔW models and the NAMD precompute, not to the legacy ``gw``
+and ``sgw`` models.
+
 **Finite-size part.** ΔW is computed for each dot and inserted in the static COHSEX form:
 
 .. math::

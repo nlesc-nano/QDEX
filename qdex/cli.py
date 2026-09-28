@@ -809,6 +809,11 @@ def _build_parser():
 
     parser.add_argument("--qp_gap", type=str, default="brus",
                         help="Quasiparticle gap model: 'sgw-anchor' / 'gw' (anchor-scaled), 'sgw-dim' (atomistic polarizable dipole Delta-W), 'evgw-dim' / 'evgw' (DIM gap/screening fixed-point iteration), 'qsgw-dim' / 'qsgw' (static DIM Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta' (Resta Penn-scaled Delta-W), 'evgw-resta' (Resta gap/screening fixed-point iteration), 'qsgw-resta' (static Resta Delta-COHSEX orbital-relaxation model, full AO update), 'sgw-resta-pure' (Resta boundary Delta-W), 'sgw' (site-diagonal Delta-W on the sBSE-screened kernel), 'brus' (bulk experimental gap + effective-mass kinetic confinement), 'bulk' (PBE orbitals + bulk GW correction, PBE only), 'none' / 'pbe' / 'dft' (uncorrected DFT energies), or explicit gap in eV.")
+    parser.add_argument("--bulk-vertex", dest="bulk_vertex", choices=["none", "full", "scaled"], default="none",
+                        help="Vertex correction of the bulk QSGW shift: 'none' (pure QSGW, default), 'full' (bulk factor "
+                             "at every size) or 'scaled' (times the Penn fraction of bulk screening the dot keeps).")
+    parser.add_argument("--bulk-vertex-factor", dest="bulk_vertex_factor", type=float, default=0.8,
+                        help="Bulk vertex factor: Delta_bulk -> factor * Delta_bulk in the bulk (default 0.8).")
     parser.add_argument("--qp-z", dest="qp_z", type=str, default=None,
                         help="Quasiparticle renormalization Z for Delta-W models: 'derived' (default; one plasmon pole whose "
                              "frequency follows from the same eps as the model's W, see compute_dynamic_z) or a fixed "
@@ -1154,6 +1159,7 @@ def _prepare_run(args, *, config_path, parser):
     validate_args(args, parser)
     import qdex.hardness as _hardness
     _hardness.RADIUS_DEFINITION = str(getattr(args, "qp_radius", "saxs") or "saxs").lower()
+    _hardness.set_bulk_vertex(getattr(args, "bulk_vertex", "none"), getattr(args, "bulk_vertex_factor", 0.8))
     _hardness.set_mnok_options(getattr(args, "mnok_exponent", 2.0), getattr(args, "mnok_exponent_exchange", None),
                                getattr(args, "mnok_onsite", "ip_ea"))
     compute_device, dev_obj = resolve_device(args.device, verbose=True)
@@ -1609,12 +1615,11 @@ def _quasiparticle_correction(args, *,
                       "'none' no longer adds it.")
         elif args.qp_gap.lower() == "bulk":
             logger.info("  [QP] Bulk GW correction (bulk QSGW - bulk PBE). Valid only for PBE orbitals.")
+            from qdex.hardness import bulk_qp_shift
+            scissor, bulk_vertex_info = bulk_qp_shift(args.material, dft_gap)
             if entry is not None and len(entry) >= 9:
                 pbe_bulk_gap = float(entry[7])
                 gw_bulk_gap = float(entry[8])
-                scissor = gw_bulk_gap - pbe_bulk_gap
-            else:
-                scissor = 0.0
             target_qp_gap = dft_gap + scissor
             f_homo = anchor_bulk_homo_fraction(args.material)
             f_lumo = 1.0 - f_homo
@@ -1625,6 +1630,7 @@ def _quasiparticle_correction(args, *,
                 "bulk_gw_gap_ev": float(gw_bulk_gap) if entry is not None and len(entry) >= 9 else 0.0,
                 "bulk_gw_shift_ev": float(scissor),
                 "bulk_shift_ev": float(scissor),
+                **bulk_vertex_info,
                 "f_homo": float(f_homo),
                 "f_lumo": float(f_lumo),
                 "finite_size_shift_vacuum_ev": 0.0,

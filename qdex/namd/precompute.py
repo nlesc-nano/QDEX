@@ -497,7 +497,8 @@ def precompute_namd_data(config):
 
     nhomos = phys_cfg.get("nhomos", None)
     nlumos = phys_cfg.get("nlumos", None)
-    from qdex.hardness import set_mnok_options
+    from qdex.hardness import set_mnok_options, set_bulk_vertex
+    set_bulk_vertex(phys_cfg.get("bulk_vertex", "none"), phys_cfg.get("bulk_vertex_factor", 0.8))
     set_mnok_options(phys_cfg.get("mnok_exponent", 2.0), phys_cfg.get("mnok_exponent_exchange"),
                      phys_cfg.get("mnok_onsite", "ip_ea"))
 
@@ -603,9 +604,14 @@ def precompute_namd_data(config):
     elif str(qp_model).lower() in ("pbe", "none", "dft"):
         scissor = 0.0
     elif str(qp_model).lower() == "bulk":
-        from qdex.hardness import MATERIAL_DB
-        entry = MATERIAL_DB.get(str(material).upper())
-        scissor = float(entry[8]) - float(entry[7]) if entry is not None and len(entry) >= 9 else 0.0
+        from qdex.hardness import bulk_qp_shift
+        dft_gap0 = None
+        if phys_cfg.get("bulk_vertex", "none") == "scaled":   # the scaled correction needs the DFT gap of frame 0
+            C0, eps0, occ0 = read_mos_dense(os.path.join(frame_dirs[0], mo_name), n_ao)
+            eps0 = eps0 * HA_TO_EV
+            n_occ_tot = int(np.sum(occ0 > 0.5))
+            dft_gap0 = float(eps0[n_occ_tot] - eps0[n_occ_tot - 1])
+        scissor, _ = bulk_qp_shift(material, dft_gap0)
     else:
         try:
             target_gap = float(qp_model)
