@@ -41,6 +41,8 @@ SECTIONS = {
     },
     "quasiparticles": {
         "model": "qp_gap",
+        "bulk_vertex": "bulk_vertex",
+        "bulk_vertex_factor": "bulk_vertex_factor",
         "z": "qp_z",
         "selfenergy": "qp_selfenergy",
         "levels": "qp_levels",

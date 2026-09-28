@@ -129,6 +129,13 @@ quasiparticles
        (DFT energies as they are; also ``pbe``, ``dft``), ``bulk`` (PBE energies + bulk GW correction,
        PBE orbitals only; with a bulk kernel this is the sBSE), ``brus``, or a gap
        in eV (:doc:`/quasiparticles/models`)
+   * - ``bulk_vertex`` [``--bulk-vertex``]
+     - ``none``
+     - vertex correction of the bulk QSGW opening: ``none`` (pure QSGW), ``full`` (bulk factor at every
+       size) or ``scaled`` (times the Penn fraction of bulk screening; :doc:`/quasiparticles/gw`)
+   * - ``bulk_vertex_factor`` [``--bulk-vertex-factor``]
+     - 0.8
+     - bulk factor a: Δ_bulk → a Δ_bulk in the bulk
    * - ``z`` [``--qp-z``]
      - ``derived``
      - quasiparticle weight: plasmon pole of the model's ε, or a number
