@@ -11,9 +11,12 @@ colloidal CdSe dots. All numbers were produced with the code as it is, with the 
 * one-shot ΔCOHSEX for all orbitals, plasmon-pole Z;
 * sphere reaction field for the environment, with the SAXS radius;
 * MNOK integrals with γ_AA = IP − EA and exponent 2;
-* no term fitted to a cluster calculation.
+* no term fitted to a cluster calculation;
+* ``quasiparticles.bulk_vertex: none`` (pure QSGW bulk shift) for the 1.2 and 2.0 nm tables; the
+  2.6–4.1 nm series below uses ``scaled`` (:doc:`/quasiparticles/gw`).
 
-The raw results are in ``benchmarks/results/cdse_validation_2026-09-27.csv``.
+The raw results are in ``benchmarks/results/cdse_validation_2026-09-27.csv`` (1.2 and 2.0 nm) and
+``benchmarks/results/cdse_large_dots_2026-09-29.csv`` (2.6–4.1 nm).
 
 Systems and settings
 --------------------
@@ -33,6 +36,18 @@ Systems and settings
      - Cd₆₈Se₅₅Cl₂₆ (149 atoms, 2,753 basis functions)
      - 1.93 nm (1.87, 1.84)
      - 1.457 eV
+   * - (not in the repository)
+     - three larger dots, PBE-relaxed
+     - 2.62 nm
+     - 1.4535 eV
+   * -
+     -
+     - 3.34 nm
+     - 1.1511 eV
+   * -
+     -
+     - 4.10 nm
+     - not recorded
 
 d is the diameter a SAXS measurement would give: the Debye intensity of the inorganic atoms (Cd, Se
 and the Cl surface) fitted with a homogeneous-sphere form factor (``qdex.cluster_size``). The sizing
@@ -41,46 +56,63 @@ same way. Every QDEX run prints this size block.
 
 MNOK integrals, Mulliken charges, 25 × 25 active space, dense diagonalization.
 "Toluene" is ε_out = 2.24. With SOC, the first bright state is the lowest state with at least 10 % of
-the largest oscillator strength.
+the largest oscillator strength (1.2 and 2.0 nm tables). For the larger dots only the lowest states
+were kept, and the first bright state is the first with f\ :sub:`osc` ≥ 0.1 among them. All clusters are
+PBE-relaxed.
 
 Experimental references
 -----------------------
 
-``benchmarks/experimental_sizing.yaml``, evaluated at the SAXS diameter (for 2.4 and 3.2 nm at the
-nominal diameter; these dots are not part of this page yet):
+``benchmarks/experimental_sizing.yaml``, evaluated at the SAXS diameter of each cluster (eV):
 
 .. list-table::
    :header-rows: 1
 
    * - Reference
      - d = 1.93 nm
-     - d = 2.4 nm
-     - d = 3.2 nm
+     - d = 2.62 nm
+     - d = 3.34 nm
+     - d = 4.10 nm
    * - Aubert, Hens et al., Nano Lett. 22, 1778 (2022), zinc blende
      - 3.31
-     - 2.89
-     - 2.46
+     - 2.74
+     - 2.41
+     - 2.20
    * - same, wurtzite
-     - 3.04
-     - 2.69
-     - 2.35
+     - 3.05
+     - 2.57
+     - 2.30
+     - 2.14
    * - same, all CdSe
-     - 3.22
-     - 2.83
-     - 2.43
+     - 3.23
+     - 2.69
+     - 2.38
+     - 2.19
    * - Yu, Qu, Guo, Peng, Chem. Mater. 15, 2854 (2003)
      - 2.77
-     - 2.45
-     - 2.22
+     - 2.36
+     - 2.20
+     - 2.11
 
-At 1.93 nm both curves are extrapolated: the Hens fits start at 2.65–2.88 nm and the Yu fit at
-450 nm (2.76 eV). The spread between them, 2.77–3.31 eV, comes mostly from the size calibration (TEM
-for Yu, SAXS for Hens) and is the realistic experimental window. With the formula-unit diameter
-(1.87 nm) the window would be 2.82–3.38 eV. There is no sizing reference at 1.12 nm; that cluster is
+The Hens fits were made on SAXS-sized dots of 2.88–4.77 nm (zinc blende) and 2.65–5.05 nm (wurtzite),
+the Yu fit on 450–700 nm absorption. At 1.93 nm both are extrapolated (the Hens curves start at
+2.65–2.88 nm, the Yu fit at 450 nm, 2.76 eV); at 2.62 nm the Hens zinc-blende and wurtzite curves are
+slightly outside their fit range. At 3.34 and 4.10 nm all curves are interpolated, so these are the
+sizes where the comparison is cleanest. The spread between the curves comes mostly from the size
+calibration (TEM for Yu, SAXS for Hens) and is the realistic experimental window: 0.54 eV at 1.93 nm,
+0.38 eV at 2.62 nm, 0.21 eV at 3.34 nm and 0.09 eV at 4.10 nm. There is no sizing reference at 1.12 nm; that cluster is
 compared with evGW instead (:doc:`evgw_cluster`).
 
 Results at 2.0 nm
 -----------------
+
+.. note::
+
+   This cluster (SAXS d = 1.93 nm) has under-coordinated surface atoms with weight in the
+   conduction-band edge; its KS gap is as large as that of the 2.62 nm dot. Comparisons with
+   experiment at this size are unreliable until the surface is reconstructed
+   (:ref:`surface-states-193`). The comparison between models below, and the integral and
+   selection benchmarks, are not affected.
 
 .. list-table::
    :header-rows: 1
@@ -238,6 +270,141 @@ the first bright state lies 0.30–0.37 eV above S₁. The rest of the pattern h
   size the on-site exchange and the strongly screened short range dominate, at 2 nm the unscreened tail);
 * S₁ moves by 0.02–0.05 eV with the solvent against 1.4–1.6 eV for the QP gap.
 
+Larger dots: 2.6–4.1 nm
+-----------------------
+
+Three larger PBE-relaxed clusters, computed with the bulk QP correction and the bulk Resta W:
+
+.. code-block:: yaml
+
+   environment:
+     eps_out: 2.24                # toluene
+   quasiparticles:
+     model: bulk                  # PBE + bulk QSGW shift, no ΔW
+     bulk_vertex: scaled
+   excitations:
+     mode: bse
+     kernel: resta
+     nhomos: 25
+     nlumos: 25
+     full_diag: true
+
+with spin–orbit coupling. Δ_bulk is the pure QSGW shift of 1.57 eV reduced by the vertex correction
+(0.314 eV × f, f the fraction of bulk screening the dot keeps; :doc:`/quasiparticles/gw`). Lowest
+states (eV):
+
+.. list-table::
+   :header-rows: 1
+
+   * - SAXS d
+     - KS gap
+     - Δ_bulk (f)
+     - S₁ (lowest state)
+     - first state with f\ :sub:`osc` ≥ 0.1
+   * - 2.62 nm
+     - 1.4535
+     - 1.326 (0.78)
+     - 2.4397, dark
+     - 2.4824 (f = 0.115)
+   * - 3.34 nm
+     - 1.1511
+     - 1.304 (0.85)
+     - 2.1990, dark
+     - 2.2207 (f = 0.148)
+   * - 4.10 nm
+     - not recorded
+     - not recorded
+     - 2.0883, dark
+     - 2.1051 (f = 0.389)
+   * - 1.93 nm, surface states
+     - 1.4568
+     - 1.326 (0.78)
+     - 2.3760, dark
+     - none among the six lowest (largest f = 0.076 at 2.4410)
+
+The lowest states are dark: 98–99 % triplet character in the spin-free basis, as for the band-edge
+exciton of CdSe (17–43 meV below the first bright state). f and Δ_bulk of the first two
+rows are those printed by the runs and agree with the formula.
+
+**Against experiment** (bright state, eV):
+
+.. list-table::
+   :header-rows: 1
+
+   * - d
+     - model
+     - Yu
+     - Hens wz
+     - Hens all CdSe
+     - Hens zb
+     - model − Yu
+     - model − Hens (all)
+   * - 2.62 nm
+     - 2.482
+     - 2.364
+     - 2.572
+     - 2.689
+     - 2.740
+     - +0.12
+     - −0.21
+   * - 3.34 nm
+     - 2.221
+     - 2.201
+     - 2.303
+     - 2.382
+     - 2.411
+     - +0.02
+     - −0.16
+   * - 4.10 nm
+     - 2.105
+     - 2.108
+     - 2.135
+     - 2.187
+     - 2.201
+     - 0.00
+     - −0.08
+
+* **The model follows the Yu curve at 3.3 and 4.1 nm** (within 0.02 eV) and lies 0.08–0.16 eV below
+  the Hens all-CdSe curve (0.08–0.16 eV), within the experimental spread of 0.21 and 0.09 eV at those
+  sizes. At 2.62 nm it is inside the window (2.36–2.74 eV).
+* **Size dependence.** From 2.62 to 4.10 nm the model drops by 0.38 eV; the experimental curves drop by
+  0.26 (Yu), 0.44 (Hens wz), 0.50 (Hens all) and 0.54 eV (Hens zb). The model lies between them.
+* **Without the vertex correction** (``bulk_vertex: none``) every energy is higher by 0.314 eV × f:
+  +0.24 eV at 2.62 nm, +0.27 eV at 3.34 nm and about +0.27 eV at 4.10 nm (f not recorded there; about
+  0.88 if the KS gap is near 1.0 eV). This gives about 2.73 eV at 2.62 nm (top of the window, 2.74 eV), about
+  2.49 eV at 3.34 nm and about 2.38 eV at 4.10 nm, above all four curves by 0.08–0.29 eV and
+  0.18–0.27 eV respectively. These are the shift applied to the computed values, not separate runs.
+* **The vertex correction is needed at the large sizes** and cannot be separated from a constant
+  offset by these data: ``full`` (0.314 eV at every size) and ``scaled`` differ by 0.314 eV × (1 − f),
+  0.03–0.07 eV over this range, less than the spread of the experimental curves.
+* **Geometry.** The clusters are PBE-relaxed, whose bonds are about 2 % too long. A gap deformation
+  potential of −2 to −2.5 eV puts the KS gap 0.10–0.15 eV too low (an estimate, not a calculation). With
+  bulk-like bond lengths the computed energies would rise by about that amount, to 2.21–2.26 eV
+  at 4.10 nm and 2.32–2.37 eV at 3.34 nm: inside the Hens range, and consistent with a vertex correction
+  as well as with the bulk limit (1.88 eV spin-free, 1.74 eV experimental plus Δ\ :sub:`so`/3). Geometry
+  and vertex correction have to be settled together.
+
+.. _surface-states-193:
+
+The 1.93 nm cluster
+~~~~~~~~~~~~~~~~~~~
+
+Cd₆₈Se₅₅Cl₂₆ (``tests/CdSe/2.0nm``) does not follow the series:
+
+* **Its KS gap (1.4568 eV) equals that of the 2.62 nm dot (1.4535 eV).** The confinement of the 2.62 and
+  3.34 nm dots, gap − 0.62 eV ∝ d\ :sup:`−n` with n = 1.9, predicts 2.09 eV at 1.93 nm (1.76 eV for
+  n = 1.4): 0.3–0.6 eV more.
+* **Under-coordinated surface Cd.** 24 of the 68 Cd atoms have fewer than four Se and Cl neighbours.
+  The LUMO has 44 % of its weight on them and the LUMO+1, 0.28 eV higher, 65 %, and neither shows the
+  spread over the dot of a clean 1S/1P pair. The HOMO (50 % on under-coordinated Se, as for any Se
+  surface) is unremarkable.
+* **The lowest states (2.38–2.44 eV) are 0.33–0.94 eV below the experimental curves at this size,**
+  the same size as the missing KS gap.
+
+The 2 nm conclusions of the previous versions of this page (the models "too low at small size") most
+likely reflect this cluster and not the models. The dot needs a reconstructed surface (as used for the
+larger dots) before it can be compared with experiment.
+
 How the results moved toward experiment
 ---------------------------------------
 
@@ -300,9 +467,18 @@ S₁ at 2 nm in toluene (spin-free, ``sgw-resta``) through the successive versio
 Limits
 ------
 
-* **Two sizes only.** The 2.4 and 3.2 nm dots (6k and 13k basis functions) are the decisive test of
-  the size dependence; their targets are in the table above (Hens 2.69–2.89 and 2.35–2.46 eV).
-* **Active space.** S₁ decreases by about 0.06 eV from 25 × 25 to 100 × 100 at 2 nm.
+* **One model in the large-dot series.** The 2.6–4.1 nm dots were computed with the bulk QP
+  correction and the bulk Resta W only; the ΔW models and the sBSE-DIM variant have not been run there.
+  The 1.93 nm cluster has surface states (:ref:`surface-states-193`) and the 1.2 nm cluster is not
+  covered by an experimental curve.
+* **Bright-state definition.** For the larger dots only the lowest states were kept, so the first
+  bright state is the first with f\ :sub:`osc` ≥ 0.1 among them, not the state with a fraction of the
+  largest oscillator strength. The KS gap and Δ_bulk of the 4.10 nm dot were not recorded.
+* **Geometry.** PBE-relaxed structures have bonds about 2 % too long (measured 1.6 % on the 1.93 nm
+  cluster), which lowers the KS gap by an estimated 0.10–0.15 eV; the bulk correction refers to the
+  experimental lattice. Relaxing with PBEsol or HLE17, followed by PBE single points, is the remedy.
+* **Active space.** S₁ decreases by about 0.06 eV from 25 × 25 to 100 × 100 at 2 nm; the truncation
+  error is expected to grow with size and is unknown for the larger dots.
 * **Extrapolated references** at 1.93 nm, and a 0.5 eV spread between them. The size definition
   matters at the 0.05 eV level: the formula-unit diameter (1.87 nm) raises the references by 0.05–0.07 eV.
 * **The QP gap is not validated by experiment here.** At 1.2 nm it is compared with evGW\@PBE0 in

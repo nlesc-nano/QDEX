@@ -1,0 +1,5 @@
+saxs_d_nm,dft_gap_ev,soc_gap_ev,qp_shift_ev,bulk_vertex,model,eps_out,s1_ev,s1_character,first_f_ge_0p1_ev,first_f_ge_0p1_f,note
+2.62,1.4535,1.3793,1.3261,scaled,bulk+resta bse,2.24,2.4397,dark (99.4% T),2.4824,0.115,PBE-relaxed
+3.34,1.1511,1.0847,1.3037,scaled,bulk+resta bse,2.24,2.1990,dark (98.9% T),2.2207,0.148,PBE-relaxed
+4.10,,,,scaled,bulk+resta bse,2.24,2.0883,dark (98.6% T),2.1051,0.389,PBE-relaxed; KS gap and shift not recorded
+1.93,1.4568,1.3795,1.3263,scaled,bulk+resta bse,2.24,2.3760,dark (97.8% T),,,PBE-relaxed; surface states; no state with f>=0.1 among the six lowest (max f=0.076 at 2.4410)
