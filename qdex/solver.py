@@ -5,7 +5,10 @@ from qdex.exciton_hamiltonian import ExcitonHamiltonian
 from qdex.device_utils import is_gpu, to_tensor, to_numpy
 
 # --- UPDATED IMPORTS ---
-from qdex.hardness import build_gamma, build_resta_mnok
+from qdex.hardness import build_gamma, build_resta_mnok, build_xs_kernel, build_sbse_kernel
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_full_elements=12_000_000, device="numpy"):
@@ -182,16 +185,19 @@ class DiagonalBSEVectors:
 class ExcitonSolver:
     def __init__(self, C, eps, occ, overlap, atom_symbols, atom_coords, atom_ao_ranges, 
                  homo_index, n_occ, n_virt, scissor_ev, kernel, alpha, beta=0.0, material=None, 
-                 include_exchange=False, estimate_qp=False, e_thresh=None, f_thresh=0.0, 
+                 include_exchange=True, estimate_qp=False, e_thresh=None, f_thresh=0.0,
                  mu_ia_x=None, mu_ia_y=None, mu_ia_z=None, eps_out=2.0, 
                  soc_U=None, soc_E=None, device="numpy", precomputed_sigma=None, 
                  vxc_ao_path=None, nthreads=1, spin='singlet', 
                  C_beta=None, eps_beta=None, homo_index_beta=None, charge_type='mulliken',
                   n_occ_beta=None, n_virt_beta=None, include_direct_eh=None,
-                  excitation_mode="bse"):
+                  excitation_mode="bse", kernel_type="mnok", shells=None, eps_dft=None,
+                  shared_W=None, shared_gamma_bare=None, selection=None, selection_energy=7.0,
+                  selection_pt=1e-4, selection_shift=True):
 
         self.C = C
         self.eps = eps
+        self.eps_dft = eps_dft
         self.occ = occ
         self.overlap = overlap
         self.atom_symbols = atom_symbols
@@ -207,33 +213,183 @@ class ExcitonSolver:
         self.eps_beta = eps_beta
         self.homo_index_beta = homo_index_beta
         self.excitation_mode = str(excitation_mode).lower()
-        # ``exchange`` historically enabled the attractive density-density term.
-        # Keep it as an input alias, but use the physical name internally.
-        include_direct_eh = include_exchange if include_direct_eh is None else include_direct_eh
+        self.include_direct_eh = True if include_direct_eh is None else bool(include_direct_eh)
+        self.include_exchange = True if include_exchange is None else bool(include_exchange)
+
+        k_type = str(kernel_type).lower() if kernel_type is not None else "mnok"
+        k_name = str(kernel).lower()
+        is_ao_sbse = (k_name in ["sbse-ao", "sbse_ao", "xs-sbse"]) or (k_type in ["xs", "xs-qdex"] and k_name in ["sbse", "sbse-ao", "sbse_ao"])
+        is_atom_sbse = (k_name in ["sbse", "sbse-atom", "sbse_atom"]) and not is_ao_sbse
+        is_xs = is_ao_sbse or (k_type in ["xs", "xs-qdex", "xstd"]) or (k_name in ["xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "xs_rpa", "zdo-rpa", "xs-dim", "xs_dim", "xs-dipole", "xs_dipole"])
+
+        self.eps_info = None
+
+        C_occ_low = None
+        C_virt_low = None
+        eps_occ_act = None
+        eps_virt_act = None
+        C_occ_b_low = None
+        C_virt_b_low = None
+        eps_occ_b_act = None
+        eps_virt_b_act = None
+
+        need_lowdin = is_atom_sbse or is_ao_sbse or (is_xs and any(x in k_name for x in ["rpa", "dim", "sbse"]))
+        if need_lowdin:
+            from qdex.lowdin import lowdin_sqrt
+            S_dense = overlap.toarray() if hasattr(overlap, 'toarray') else overlap
+            S_half = lowdin_sqrt(S_dense, device=device)
+
+            n_occ_tot = homo_index + 1
+            n_virt_tot = min(1000, len(eps) - n_occ_tot)
+            occ_idx_a = np.arange(0, n_occ_tot)
+            virt_idx_a = np.arange(n_occ_tot, n_occ_tot + n_virt_tot)
+            C_occ_act = C[:, occ_idx_a].toarray() if hasattr(C, 'toarray') else C[:, occ_idx_a]
+            C_virt_act = C[:, virt_idx_a].toarray() if hasattr(C, 'toarray') else C[:, virt_idx_a]
+            C_occ_low = S_half @ C_occ_act
+            C_virt_low = S_half @ C_virt_act
+            eps_occ_act = eps[occ_idx_a]
+            eps_virt_act = eps[virt_idx_a]
+
+            if C_beta is not None and eps_beta is not None and homo_index_beta is not None:
+                n_o_b_tot = homo_index_beta + 1
+                n_v_b_tot = min(1000, len(eps_beta) - n_o_b_tot)
+                occ_idx_b = np.arange(0, n_o_b_tot)
+                virt_idx_b = np.arange(n_o_b_tot, n_o_b_tot + n_v_b_tot)
+                C_occ_b_act = C_beta[:, occ_idx_b].toarray() if hasattr(C_beta, 'toarray') else C_beta[:, occ_idx_b]
+                C_virt_b_act = C_beta[:, virt_idx_b].toarray() if hasattr(C_beta, 'toarray') else C_beta[:, virt_idx_b]
+                C_occ_b_low = S_half @ C_occ_b_act
+                C_virt_b_low = S_half @ C_virt_b_act
+                eps_occ_b_act = eps_beta[occ_idx_b]
+                eps_virt_b_act = eps_beta[virt_idx_b]
 
         # --- UPDATED KERNEL LOGIC in solver.py ---
-        if kernel.lower() == "resta":
-            print(f"  [Solver] Using electronic Resta-MNOK direct kernel for material: {material}")
+        if k_name == "qp":
+            # Same screened interaction as the quasiparticle model (GW and BSE share W).
+            if shared_W is None:
+                raise ValueError("kernel 'qp' requires the W matrix of the quasiparticle model.")
+            shared_W = np.asarray(shared_W, dtype=float)
+            n_ao_tot = C.shape[0]
+            if shared_W.shape == (len(atom_symbols), len(atom_symbols)):
+                logger.info("  [Solver] Using the screened interaction of the QP model as direct kernel (kernel = qp, mnok).")
+                gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0)
+            elif shared_W.shape == (n_ao_tot, n_ao_tot):
+                if shared_gamma_bare is None:
+                    raise ValueError("kernel 'qp' in the xs representation needs the bare AO integrals.")
+                logger.info("  [Solver] Using the screened interaction of the QP model as direct kernel (kernel = qp, xs).")
+                k_type = "xs"
+                gamma_bare = np.asarray(shared_gamma_bare, dtype=float)
+            else:
+                raise ValueError(f"kernel 'qp': W has shape {shared_W.shape}; expected atom or AO dimensions.")
+            gamma_qp, w_resta = shared_W, shared_W
+        elif k_name == "stda":
+            # Grimme sTDA: gamma^J (direct) and gamma^K (exchange) built by the CLI (build_stda_gammas).
+            if shared_W is None or shared_gamma_bare is None:
+                raise ValueError("kernel 'stda' needs the sTDA gamma^J and gamma^K matrices.")
+            logger.info("  [Solver] Using the sTDA interactions of Grimme (gamma^J direct, gamma^K exchange; Loewdin charges).")
+            gamma_qp = w_resta = np.asarray(shared_W, dtype=float)
+            gamma_bare = np.asarray(shared_gamma_bare, dtype=float)
+        elif is_xs:
+            if shells is None:
+                raise ValueError("Xs-QDEX kernel requires Libint2 shell objects passed as `shells`.")
+            k_type = "xs"
+            if is_ao_sbse or "sbse" in k_name:
+                xs_mode = "sbse"
+            elif "rpa" in k_name or "rpa" in k_type:
+                xs_mode = "rpa"
+            elif "dim" in k_name or "dim" in k_type or "dipole" in k_name or "dipole" in k_type:
+                xs_mode = "dim"
+            elif "resta" in k_name or "resta" in k_type:
+                xs_mode = "resta"
+            else:
+                xs_mode = "uniform"
+
+            logger.info(f"  [Solver] Using exact two-electron AO repulsion kernel (Xs-QDEX, mode='{xs_mode}').")
+
+            res_kernel = build_xs_kernel(
+                shells=shells,
+                atom_symbols=atom_symbols,
+                coords=atom_coords,
+                atom_ao_ranges=atom_ao_ranges,
+                material_name=material,
+                kernel_mode=xs_mode,
+                alpha=alpha,
+                nthreads=nthreads,
+                C_occ_low=C_occ_low,
+                C_virt_low=C_virt_low,
+                eps_occ=eps_occ_act,
+                eps_virt=eps_virt_act,
+                C_occ_b_low=C_occ_b_low,
+                C_virt_b_low=C_virt_b_low,
+                eps_occ_b=eps_occ_b_act,
+                eps_virt_b=eps_virt_b_act,
+                eps_out=eps_out,
+                return_eps_info=True
+            )
+            gamma_qp, w_resta, gamma_bare, eps_info = res_kernel
+            self.eps_info = eps_info
+        elif is_atom_sbse:
+            logger.info(f"  [Solver] Using Simplified BSE kernel (sBSE, atom-resolved) for material: {material}")
+            res_kernel = build_sbse_kernel(
+                atom_symbols=atom_symbols,
+                coords=atom_coords,
+                atom_ao_ranges=atom_ao_ranges,
+                shells=shells,
+                C_occ_low=C_occ_low,
+                C_virt_low=C_virt_low,
+                eps_occ=eps_occ_act,
+                eps_virt=eps_virt_act,
+                C_occ_b_low=C_occ_b_low,
+                C_virt_b_low=C_virt_b_low,
+                eps_occ_b=eps_occ_b_act,
+                eps_virt_b=eps_virt_b_act,
+                mode="atom",
+                eps_out=eps_out,
+                material_name=material,
+                alpha=alpha,
+                nthreads=nthreads,
+                return_eps_info=True
+            )
+            w_sbse, _, gamma_bare, eps_info = res_kernel
+            gamma_qp, w_resta = w_sbse, w_sbse
+            self.eps_info = eps_info
+        elif k_name in ["dim", "dipole", "polarizable_dipole"]:
+            logger.info(f"  [Solver] Using Polarizable Dipole Interaction Model (DIM-MNOK) for material: {material}")
+            from qdex.hardness import build_dim_mnok
+            w_dim, _, gamma_bare, eps_info = build_dim_mnok(
+                atom_symbols=atom_symbols, coords=atom_coords,
+                material_name=material, eps_out=eps_out, alpha=alpha
+            )
+            gamma_qp, w_resta = w_dim, w_dim
+            self.eps_info = eps_info
+        elif k_name == "resta":
+            logger.info(f"  [Solver] Using electronic Resta-MNOK direct kernel for material: {material}")
             if alpha != 1.0:
-                print("  [Warning] alpha does not tune RESTA and is ignored for this kernel.")
+                logger.warning("  [Warning] alpha does not tune RESTA and is ignored for this kernel.")
             gamma_qp, w_resta = build_resta_mnok(
                 atom_symbols=atom_symbols, coords=atom_coords,
                 alpha=alpha, material_name=material, eps_out=eps_out
             )
+            logger.info(f"  [Solver] Building Bare Kernel V (alpha = 1.000, beta = 0.000)")
+            gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0)
         else:
-            print(f"  [Solver] Using standard Grimme sTDA MNOK kernel.")
-            print(f"           -> Screened W/BSE (alpha = {alpha:.3f})")
+            logger.info(f"  [Solver] Using standard Grimme sTDA MNOK kernel.")
+            logger.info(f"           -> Screened W/BSE (alpha = {alpha:.3f})")
             g = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=alpha, beta=0.0)
             gamma_qp, w_resta = g, g
-
-        print(f"  [Solver] Building Bare Kernel V (alpha = 1.000, beta = 0.000)")
-        # This MUST be beta=0.0 to preserve your baseline COH polarization!
-        gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0)
+            logger.info(f"  [Solver] Building Bare Kernel V (alpha = 1.000, beta = 0.000)")
+            gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0)
 
         if beta > 0.0:
             raise ValueError(
                 "beta > 0 is disabled until the bare on-site U parameters are defined and validated"
             )
+        # Exchange interaction with its own MNOK exponent (integrals.mnok_exponent_exchange).
+        import qdex.hardness as _hardness
+        if (_hardness.MNOK_EXPONENT_K is not None and k_type == "mnok" and k_name != "stda"
+                and np.shape(gamma_bare) == (len(atom_symbols), len(atom_symbols))):
+            gamma_bare = build_gamma(atom_symbols=atom_symbols, coords=atom_coords, alpha=1.0, beta=0.0,
+                                     exponent=_hardness.MNOK_EXPONENT_K)
+            logger.info(f"  [Solver] Exchange gamma with MNOK exponent {_hardness.MNOK_EXPONENT_K:g}")
         gamma_penalty = np.zeros_like(gamma_bare)
 
         self.ham = ExcitonHamiltonian(
@@ -245,22 +401,31 @@ class ExcitonSolver:
             gamma_bare=gamma_bare,
             gamma_penalty=gamma_penalty,
             alpha=alpha,            
-            include_exchange=include_direct_eh, estimate_qp=estimate_qp, e_thresh=e_thresh,
+            include_exchange=self.include_exchange, estimate_qp=estimate_qp, e_thresh=e_thresh,
             f_thresh=f_thresh, mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z, 
             soc_U=soc_U, soc_E=soc_E, device=device, precomputed_sigma=precomputed_sigma,
             vxc_ao_path=vxc_ao_path, nthreads=nthreads, spin=spin,
             C_beta=C_beta, eps_beta=eps_beta, homo_index_beta=homo_index_beta,
             charge_type=charge_type,
             n_occ_beta=n_occ_beta, n_virt_beta=n_virt_beta,
-            excitation_mode=excitation_mode
+            excitation_mode=excitation_mode,
+            kernel_type=k_type,
+            include_direct_eh=self.include_direct_eh,
+            eps_dft=self.eps_dft,
+            selection=selection, selection_energy=selection_energy, selection_pt=selection_pt,
+            selection_shift=selection_shift,
         )
 
     def solve(self, nroots=10, full_diag=False, tol=1e-5, excitation_mode="bse"):
         if self.ham.dim == 0:
-            print("ERROR: Active space dimension is 0! Your energy threshold is filtering out all transitions.")
+            logger.error("ERROR: Active space dimension is 0! Your energy threshold is filtering out all transitions.")
             import sys; sys.exit(1)
 
         mode = str(excitation_mode).lower()
+        if mode in ("sbse", "stda"):
+            mode = "bse"
+        elif mode in ("diagonal_sbse", "diagonal_stda"):
+            mode = "diagonal_bse"
         self.excitation_mode = mode
         if mode != "bse":
             energies, kx_diag, kd_diag = self.ham.independent_transition_energies(mode)
@@ -274,11 +439,11 @@ class ExcitonSolver:
             )
             self.diagonal_kx = kx_diag
             self.diagonal_kd = kd_diag
-            print(f"  Independent-transition approximation: {mode} (no BSE/TDA diagonalization)")
+            logger.info(f"  Independent-transition approximation: {mode} (no BSE/TDA diagonalization)")
             return energies[order], vectors
 
         if full_diag:
-            print(f"  Building dense Hamiltonian in truncated space ({self.ham.dim}x{self.ham.dim})...")
+            logger.info(f"  Building dense Hamiltonian in truncated space ({self.ham.dim}x{self.ham.dim})...")
             use_gpu = is_gpu(self.device)
             dev = self.device if use_gpu else None
             
@@ -290,14 +455,14 @@ class ExcitonSolver:
                 is_uks_sp  = getattr(self.ham, 'spin', 'singlet') == 'uks_spin_preserving'
 
                 if is_triplet:
-                    print("  [Dense] Building triplet BSE/TDA Hamiltonian (Kx_bare absent)...")
+                    logger.info("  [Dense] Building triplet BSE/TDA Hamiltonian (Kx_bare absent)...")
                     if use_gpu:
                         import torch
                         H = torch.diag(to_tensor(self.ham.D, dev))
                         J_mat = torch.zeros((self.ham.dim, self.ham.dim), dtype=H.dtype, device=dev)
                         K_mat = torch.zeros_like(J_mat)
-                        if self.ham.include_exchange:
-                            print("  [Dense] Building screened direct electron-hole matrix (-Kd_screened via GPU)...")
+                        if self.ham.include_direct_eh:
+                            logger.info("  [Dense] Building screened direct electron-hole matrix (-Kd_screened via GPU)...")
                             t1 = time.time()
                             vi, va = self.ham.valid_i, self.ham.valid_a
                             K_truncated = _assemble_truncated_exchange(
@@ -305,13 +470,13 @@ class ExcitonSolver:
                             )
                             H -= K_truncated
                             K_mat = K_truncated
-                            print(f"    -> Triplet K built in {time.time()-t1:.2f}s")
+                            logger.debug(f"    -> Triplet K built in {time.time()-t1:.2f}s")
                     else:
                         H = np.diag(self.ham.D).copy()
                         J_mat = np.zeros((self.ham.dim, self.ham.dim))
                         K_mat = np.zeros_like(J_mat)
-                        if self.ham.include_exchange:
-                            print("  [Dense] Building screened direct electron-hole matrix (-Kd_screened)...")
+                        if self.ham.include_direct_eh:
+                            logger.info("  [Dense] Building screened direct electron-hole matrix (-Kd_screened)...")
                             t1 = time.time()
                             vi, va = self.ham.valid_i, self.ham.valid_a
                             K_truncated = _assemble_truncated_exchange(
@@ -319,13 +484,13 @@ class ExcitonSolver:
                             )
                             H -= K_truncated
                             K_mat = K_truncated
-                            print(f"    -> Triplet K built in {time.time()-t1:.2f}s")
+                            logger.debug(f"    -> Triplet K built in {time.time()-t1:.2f}s")
 
                 elif is_uks_sp:
                     # ----------------------------------------------------------
                     # UKS SPIN-PRESERVING (Manifold B) DENSE BUILDER
                     # ----------------------------------------------------------
-                    print("  [Dense] Building UKS Spin-Preserving Hamiltonian (Manifold B)...")
+                    logger.info("  [Dense] Building UKS Spin-Preserving Hamiltonian (Manifold B)...")
                     t0 = time.time()
 
                     if use_gpu:
@@ -336,10 +501,10 @@ class ExcitonSolver:
                         J_mat = temp @ q_flat_t.T
                         H = torch.diag(to_tensor(self.ham.D, dev)) + 1.0 * J_mat
                         K_mat = torch.zeros_like(J_mat)
-                        print(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
+                        logger.debug(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
 
                         if self.ham.include_exchange:
-                            print("  [Dense] Building block-diagonal screened direct matrix (-Kd_alpha, -Kd_beta via GPU)...")
+                            logger.info("  [Dense] Building block-diagonal screened direct matrix (-Kd_alpha, -Kd_beta via GPU)...")
                             t1 = time.time()
                             dim_a = self.ham.dim_a
                             dim_b = self.ham.dim_b
@@ -363,17 +528,17 @@ class ExcitonSolver:
 
                             H -= K_full
                             K_mat = K_full
-                            print(f"    -> Exchange built in {time.time()-t1:.2f}s")
+                            logger.debug(f"    -> Exchange built in {time.time()-t1:.2f}s")
                     else:
                         # Bare exchange/local-field Kx couples alpha and beta transitions.
                         temp = self.ham.q_flat @ self.ham.gamma
                         J_mat = temp @ self.ham.q_flat.T
                         H = np.diag(self.ham.D) + 1.0 * J_mat
                         K_mat = np.zeros_like(J_mat)
-                        print(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
+                        logger.debug(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
 
                         if self.ham.include_exchange:
-                            print("  [Dense] Building block-diagonal screened direct matrix (-Kd_alpha, -Kd_beta)...")
+                            logger.info("  [Dense] Building block-diagonal screened direct matrix (-Kd_alpha, -Kd_beta)...")
                             t1 = time.time()
                             dim_a = self.ham.dim_a
                             dim_b = self.ham.dim_b
@@ -397,10 +562,10 @@ class ExcitonSolver:
 
                             H -= K_full
                             K_mat = K_full
-                            print(f"    -> Exchange built in {time.time()-t1:.2f}s")
+                            logger.debug(f"    -> Exchange built in {time.time()-t1:.2f}s")
 
                 else:
-                    print("  [Dense] Building bare singlet exchange/local-field term (2Kx_bare)...")
+                    logger.info("  [Dense] Building bare singlet exchange/local-field term (2Kx_bare)...")
                     t0 = time.time()
                     if use_gpu:
                         import torch
@@ -408,12 +573,14 @@ class ExcitonSolver:
                         gamma_t = to_tensor(self.ham.gamma, dev)
                         temp = q_flat_t @ gamma_t
                         J_mat = 2.0 * (temp @ q_flat_t.T)
-                        H = torch.diag(to_tensor(self.ham.D, dev)) + J_mat
+                        H = torch.diag(to_tensor(self.ham.D, dev))
+                        if self.ham.include_exchange:
+                            H = H + J_mat
                         K_mat = torch.zeros_like(J_mat)
-                        print(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
+                        logger.debug(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
 
-                        if self.ham.include_exchange and not is_uks_sp and not is_triplet:
-                            print("  [Dense] Building screened direct electron-hole matrix (-Kd_screened via GPU)...")
+                        if self.ham.include_direct_eh and not is_uks_sp and not is_triplet:
+                            logger.info("  [Dense] Building screened direct electron-hole matrix (-Kd_screened via GPU)...")
                             t1 = time.time()
                             c_x = getattr(self.ham, 'c_x', 1.0)
                             vi, va = self.ham.valid_i, self.ham.valid_a
@@ -422,16 +589,18 @@ class ExcitonSolver:
                             )
                             H -= c_x * K_truncated
                             K_mat = c_x * K_truncated
-                            print(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
+                            logger.debug(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
                     else:
                         temp = self.ham.q_flat @ self.ham.gamma
                         J_mat = temp @ self.ham.q_flat.T
-                        H = np.diag(self.ham.D) + 2.0 * J_mat
+                        H = np.diag(self.ham.D)
+                        if self.ham.include_exchange:
+                            H = H + 2.0 * J_mat
                         K_mat = np.zeros_like(J_mat)
-                        print(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
+                        logger.debug(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
 
-                        if self.ham.include_exchange and not is_uks_sp and not is_triplet:
-                            print("  [Dense] Building screened direct electron-hole matrix (-Kd_screened)...")
+                        if self.ham.include_direct_eh and not is_uks_sp and not is_triplet:
+                            logger.info("  [Dense] Building screened direct electron-hole matrix (-Kd_screened)...")
                             t1 = time.time()
                             c_x = getattr(self.ham, 'c_x', 1.0)
                             vi, va = self.ham.valid_i, self.ham.valid_a
@@ -440,13 +609,13 @@ class ExcitonSolver:
                             )
                             H -= c_x * K_truncated
                             K_mat = c_x * K_truncated
-                            print(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
+                            logger.debug(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
  
             else:
                 # ==========================================================
                 # SPINOR DENSE BUILDER (Relativistic Spin-Orbit)
                 # ==========================================================
-                print("  [Dense-SOC] Building spinor bare exchange/local-field term (Kx_bare)...")
+                logger.info("  [Dense-SOC] Building spinor bare exchange/local-field term (Kx_bare)...")
                 t0 = time.time()
                 if use_gpu:
                     import torch
@@ -454,12 +623,14 @@ class ExcitonSolver:
                     gamma_t = to_tensor(self.ham.gamma, dev)
                     temp = q_sp.conj() @ gamma_t
                     J_mat = temp @ q_sp.T
-                    H = torch.diag(to_tensor(self.ham.D, dev, dtype=torch.complex128)) + J_mat
-                    K_mat = torch.zeros_like(J_mat)
-                    print(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
-
+                    H = torch.diag(to_tensor(self.ham.D, dev, dtype=torch.complex128))
                     if self.ham.include_exchange:
-                        print("  [Dense-SOC] Building screened direct electron-hole matrix (-Kd_screened via GPU)...")
+                        H = H + J_mat
+                    K_mat = torch.zeros_like(J_mat)
+                    logger.debug(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
+
+                    if self.ham.include_direct_eh:
+                        logger.info("  [Dense-SOC] Building screened direct electron-hole matrix (-Kd_screened via GPU)...")
                         t1 = time.time()
                         n_occ_sp = self.ham.n_occ_spinor
                         n_virt_sp = self.ham.n_virt_spinor
@@ -481,17 +652,19 @@ class ExcitonSolver:
                             K_2d = K_full_trans.reshape(n_occ_sp * n_virt_sp, n_occ_sp * n_virt_sp)
                             H -= K_2d
                             K_mat = K_2d
-                        print(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
+                        logger.debug(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
                 else:
                     # Notice: No factor of 2.0, and requires complex conjugate transpose
                     temp = self.ham.q_spinor.conj() @ self.ham.gamma
                     J_mat = temp @ self.ham.q_spinor.T
-                    H = np.diag(self.ham.D).astype(complex) + J_mat
-                    K_mat = np.zeros_like(J_mat)
-                    print(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
-
+                    H = np.diag(self.ham.D).astype(complex)
                     if self.ham.include_exchange:
-                        print("  [Dense-SOC] Building screened direct electron-hole matrix (-Kd_screened)...")
+                        H = H + J_mat
+                    K_mat = np.zeros_like(J_mat)
+                    logger.debug(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
+
+                    if self.ham.include_direct_eh:
+                        logger.info("  [Dense-SOC] Building screened direct electron-hole matrix (-Kd_screened)...")
                         t1 = time.time()
                         n_occ_sp = self.ham.n_occ_spinor
                         n_virt_sp = self.ham.n_virt_spinor
@@ -514,10 +687,10 @@ class ExcitonSolver:
                             H -= K_2d
                             K_mat = K_2d
 
-                        print(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
+                        logger.debug(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
 
             # --- 3. Diagonalization ---
-            print(f"  [Dense] Diagonalizing {self.ham.dim}x{self.ham.dim} matrix...")
+            logger.info(f"  [Dense] Diagonalizing {self.ham.dim}x{self.ham.dim} matrix...")
             t_diag = time.time()
             if use_gpu:
                 import torch
@@ -530,7 +703,7 @@ class ExcitonSolver:
                 evals, evecs = np.linalg.eigh(H)
                 self.J_mat = J_mat
                 self.K_mat = K_mat
-            print(f"    -> Diagonalization complete in {time.time()-t_diag:.2f}s")
+            logger.debug(f"    -> Diagonalization complete in {time.time()-t_diag:.2f}s")
 
             self.Kx_mat = self.J_mat
             self.Kd_mat = self.K_mat
@@ -540,7 +713,7 @@ class ExcitonSolver:
         if self.ham.dim <= 2 or nroots >= self.ham.dim:
             return self.solve(nroots=nroots, full_diag=True, tol=tol, excitation_mode="bse")
         nroots = min(nroots, self.ham.dim - 1)
-        print(f"  Using Davidson solver on {nroots} roots out of {self.ham.dim} transitions")
+        logger.info(f"  Using Davidson solver on {nroots} roots out of {self.ham.dim} transitions")
         return davidson(self.ham.matvec, self.ham.D, nroots, tol=tol, device=self.device)
 
     def expectation_components(self, vec):

@@ -17,6 +17,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Physical constants
 HBAR_EV_FS = 0.6582119569  # hbar in eV * fs
@@ -328,7 +331,7 @@ def calculate_auger_rates(
         )
 
     if eps_eff is not None and eps_eff > 0 and verbose:
-        print(
+        logger.info(
             "  [Auger] eps_eff is not applied. Resta already interpolates from the bare "
             "on-site interaction to 1/(eps_inf R). A constant eps_eff replaces eps_inf "
             "in a uniform-screening model; it is not a second factor on this kernel."
@@ -622,7 +625,7 @@ def calculate_auger_rates(
     )
 
     if verbose:
-        print(res.summary_table())
+        logger.info(res.summary_table())
 
     return res
 
@@ -639,16 +642,17 @@ def auger_rates_from_config(config: Dict[str, Any]) -> AugerResult:
     from qdex.constants import HA_TO_EV
     from qdex.io_utils import (
         read_xyz, parse_basis, build_shell_dicts, build_atom_ao_ranges,
-        count_ao_from_shells, read_mos_mbse,
+        count_ao_from_shells, read_mos_dense, geometry_source,
     )
     from qdex.integrals import compute_cross_overlap_ao
 
     sys_cfg = config.get("system", {})
-    phys = config.get("physics", {})
+    from qdex.config_schema import flatten_config
+    phys = flatten_config(config)
     aug = config.get("auger", {})
     namd = config.get("namd", {})
-    xyz_path = sys_cfg.get("xyz")
     mo_path = sys_cfg.get("mo_file")
+    xyz_path = geometry_source(sys_cfg.get("xyz"), mo_path)
     basis_txt = sys_cfg.get("basis_txt")
     basis_name = sys_cfg.get("basis_name")
     if not xyz_path or not mo_path or not os.path.exists(str(mo_path)):
@@ -669,7 +673,7 @@ def auger_rates_from_config(config: Dict[str, Any]) -> AugerResult:
     n_ao = count_ao_from_shells(shells)
     atom_ao_ranges = build_atom_ao_ranges(shells)
     nthreads = int(sys_cfg.get("nthreads", 1))
-    C, eps, occ = read_mos_mbse(mo_path, n_ao)
+    C, eps, occ = read_mos_dense(mo_path, n_ao)
     eps = np.asarray(eps, dtype=np.float64) * HA_TO_EV
     homo_idx = int(np.sum(np.asarray(occ) > 0.5)) - 1
     if homo_idx < 0 or homo_idx >= len(eps) - 1:
@@ -771,7 +775,7 @@ def compute_trajectory_auger_rates(
     rates_hhe_ps = np.zeros(n_frames, dtype=np.float64)
 
     if verbose:
-        print(f"\nEvaluating Trajectory-Averaged Auger Recombination across {n_frames} frames...")
+        logger.info(f"\nEvaluating Trajectory-Averaged Auger Recombination across {n_frames} frames...")
 
     for k, sfile in enumerate(files_to_process):
         data = np.load(sfile, allow_pickle=True)
@@ -832,10 +836,10 @@ def compute_trajectory_auger_rates(
     }
 
     if verbose:
-        print(f"  Trajectory-Averaged Biexciton Auger Rate : {mean_xx_ns:.3e} +/- {std_xx_ns:.3e} ns^-1 ({mean_xx_ps:.3e} ps^-1)")
-        print(f"  Trajectory-Averaged Biexciton Lifetime  : {mean_tau_xx_ns:.4f} ns ({mean_tau_xx_ps:.2f} ps)")
-        print(f"  Trajectory-Averaged eeh Lifetime        : {mean_tau_eeh_ns:.4f} ns ({mean_tau_eeh_ns*1e3:.2f} ps)")
-        print(f"  Trajectory-Averaged hhe Lifetime        : {mean_tau_hhe_ns:.4f} ns ({mean_tau_hhe_ns*1e3:.2f} ps)")
+        logger.info(f"  Trajectory-Averaged Biexciton Auger Rate : {mean_xx_ns:.3e} +/- {std_xx_ns:.3e} ns^-1 ({mean_xx_ps:.3e} ps^-1)")
+        logger.info(f"  Trajectory-Averaged Biexciton Lifetime  : {mean_tau_xx_ns:.4f} ns ({mean_tau_xx_ps:.2f} ps)")
+        logger.info(f"  Trajectory-Averaged eeh Lifetime        : {mean_tau_eeh_ns:.4f} ns ({mean_tau_eeh_ns*1e3:.2f} ps)")
+        logger.info(f"  Trajectory-Averaged hhe Lifetime        : {mean_tau_hhe_ns:.4f} ns ({mean_tau_hhe_ns*1e3:.2f} ps)")
 
     return summary
 
@@ -911,15 +915,15 @@ def extract_auger_kinetics_from_trajectory(
     }
 
     if verbose:
-        print("\n" + "=" * 65)
-        print("  AUGER KINETICS EXTRACTION FROM TRAJECTORY FLUCTUATIONS")
-        print("=" * 65)
-        print(f"  Trajectory Duration          : {times_ps[-1]:.3f} ps ({times_fs[-1]:.1f} fs)")
-        print(f"  Trajectory-Averaged Rate     : {mean_rate_ns:.3e} ns^-1 ({mean_rate_ps:.3e} ps^-1)")
-        print(f"  Trajectory-Averaged Lifetime : {tau_ns:.4f} ns ({tau_ps:.2f} ps)")
-        print(f"  Initial Slope Decay Rate     : {slope_rate_ps * 1e3:.3e} ns^-1 ({slope_rate_ps:.3e} ps^-1)")
-        print(f"  Initial Slope Lifetime       : {slope_tau_ns:.4f} ns ({slope_tau_ps:.2f} ps)")
-        print("=" * 65 + "\n")
+        logger.info("\n" + "=" * 65)
+        logger.info("  AUGER KINETICS EXTRACTION FROM TRAJECTORY FLUCTUATIONS")
+        logger.info("=" * 65)
+        logger.info(f"  Trajectory Duration          : {times_ps[-1]:.3f} ps ({times_fs[-1]:.1f} fs)")
+        logger.info(f"  Trajectory-Averaged Rate     : {mean_rate_ns:.3e} ns^-1 ({mean_rate_ps:.3e} ps^-1)")
+        logger.info(f"  Trajectory-Averaged Lifetime : {tau_ns:.4f} ns ({tau_ps:.2f} ps)")
+        logger.info(f"  Initial Slope Decay Rate     : {slope_rate_ps * 1e3:.3e} ns^-1 ({slope_rate_ps:.3e} ps^-1)")
+        logger.info(f"  Initial Slope Lifetime       : {slope_tau_ns:.4f} ns ({slope_tau_ps:.2f} ps)")
+        logger.info("=" * 65 + "\n")
 
     return result
 

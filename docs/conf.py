@@ -35,6 +35,9 @@ master_doc = "index"
 autodoc_mock_imports = [
     "libint_cpp",
     "torch",
+    "matplotlib",
+    "pymatgen",
+    "plotly",
 ]
 
 # Autodoc settings
@@ -55,7 +58,7 @@ copybutton_prompt_is_regexp = True
 
 # Templates & static paths
 templates_path = ["_templates"]
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+exclude_patterns = ["_build", "_legacy_parts", "Thumbs.db", ".DS_Store"]
 
 # -- Options for HTML output -------------------------------------------------
 html_theme = "sphinx_rtd_theme"

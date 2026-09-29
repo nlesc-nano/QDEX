@@ -1,6 +1,34 @@
 import numpy as np
 from qdex.device_utils import is_gpu, to_tensor, to_numpy
 
+_FACTOR_CACHE = {}
+_SQRT_CACHE = {}
+
+
+def _key(S):
+    """Cheap fingerprint of an overlap matrix (same S -> same key within a run)."""
+    S = np.asarray(S)
+    return (S.shape, float(np.trace(S)), float(S[::97, ::89].sum()), float(S[-1, ::53].sum()))
+
+
+def lowdin_factor(S):
+    """Eigen-decomposition of S (eigenvalues, eigenvectors), computed once per S and cached."""
+    S = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
+    k = _key(S)
+    if k not in _FACTOR_CACHE:
+        _FACTOR_CACHE.clear()
+        w, V = np.linalg.eigh(S)
+        _FACTOR_CACHE[k] = (np.clip(w, 1e-15, None), V)
+    return _FACTOR_CACHE[k]
+
+
+def lowdin_apply(S, X):
+    """S^{1/2} X for selected columns X without forming S^{1/2}: V (sqrt(w) * (V^T X))."""
+    w, V = lowdin_factor(S)
+    X = X.toarray() if hasattr(X, "toarray") else np.asarray(X)
+    return V @ (np.sqrt(w)[:, None] * (V.T @ X))
+
+
 def lowdin_sqrt(S, device="numpy"):
     if is_gpu(device):
         import torch
@@ -8,12 +36,17 @@ def lowdin_sqrt(S, device="numpy"):
         S_t = to_tensor(S, dev, dtype=torch.float64)
         eigvals, eigvecs = torch.linalg.eigh(S_t)
         eigvals = torch.clamp(eigvals, min=1e-15)
-        S_half = eigvecs @ torch.diag(torch.sqrt(eigvals)) @ eigvecs.T
+        S_half = (eigvecs * torch.sqrt(eigvals)[None, :]) @ eigvecs.T
         return to_numpy(S_half)
 
-    eigvals, eigvecs = np.linalg.eigh(S)
-    eigvals = np.clip(eigvals, a_min=1e-15, a_max=None)
-    return eigvecs @ np.diag(np.sqrt(eigvals)) @ eigvecs.T
+    S = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
+    k = _key(S)
+    if k not in _SQRT_CACHE:
+        _SQRT_CACHE.clear()
+        w, V = lowdin_factor(S)
+        # one GEMM; the old V @ diag(sqrt w) @ V.T did two n^3 products and an n x n diagonal
+        _SQRT_CACHE[k] = (V * np.sqrt(w)[None, :]) @ V.T
+    return _SQRT_CACHE[k]
 
 def transform_mos(C, S, device="numpy"):
     S_half = lowdin_sqrt(S, device=device)
@@ -65,3 +98,52 @@ def build_lowdin_transition_charges_flat(C_occ_act, C_virt_act, S, atom_ao_range
         q_flat[:, A] = np.sum(Ci_A * Ca_A, axis=0)
         
     return q_flat
+
+
+def build_xs_transition_densities_flat(C_occ_act, C_virt_act, S, valid_i, valid_a, device="numpy"):
+    """
+    Computes AO-resolved transition densities for XsTD-DFT:
+    C^L = S^{1/2} * C
+    Q_{ia}(\mu) = C^L_{\mu i} * C^L_{\mu a}
+    Returns shape (dim, n_ao).
+    """
+    if is_gpu(device):
+        import torch
+        dev = torch.device(device) if isinstance(device, str) else device
+        S_t = to_tensor(S, dev, dtype=torch.float64)
+        eigvals, eigvecs = torch.linalg.eigh(S_t)
+        eigvals = torch.clamp(eigvals, min=1e-15)
+        S_half = eigvecs @ torch.diag(torch.sqrt(eigvals)) @ eigvecs.T
+
+        C_occ_t = to_tensor(C_occ_act, dev, dtype=torch.float64)
+        C_virt_t = to_tensor(C_virt_act, dev, dtype=torch.float64)
+        C_occ_lowdin = S_half @ C_occ_t
+        C_virt_lowdin = S_half @ C_virt_t
+
+        vi_t = torch.as_tensor(valid_i, device=dev, dtype=torch.long)
+        va_t = torch.as_tensor(valid_a, device=dev, dtype=torch.long)
+        Q_t = (C_occ_lowdin[:, vi_t] * C_virt_lowdin[:, va_t]).T
+        return to_numpy(Q_t)
+
+    S_half = lowdin_sqrt(S, device=device)
+    C_occ_lowdin = S_half @ C_occ_act
+    C_virt_lowdin = S_half @ C_virt_act
+    Q = (C_occ_lowdin[:, valid_i] * C_virt_lowdin[:, valid_a]).T
+    return Q
+
+
+def build_xs_state_densities(C_occ_act, C_virt_act, S, device="numpy"):
+    """
+    Computes AO-resolved pair densities for occupied and virtual MOs for XsTD-DFT:
+    Q_occ[i, j, mu] = C^L_{mu i} * C^L_{mu j}
+    Q_virt[a, b, mu] = C^L_{mu a} * C^L_{mu b}
+    Q_ov[i, a, mu] = C^L_{mu i} * C^L_{mu a}
+    """
+    S_half = lowdin_sqrt(S, device=device)
+    C_occ_lowdin = S_half @ C_occ_act
+    C_virt_lowdin = S_half @ C_virt_act
+
+    Q_occ = np.einsum("mi,mj->ijm", C_occ_lowdin, C_occ_lowdin, optimize=True)
+    Q_virt = np.einsum("ma,mb->abm", C_virt_lowdin, C_virt_lowdin, optimize=True)
+    Q_ov = np.einsum("mi,ma->iam", C_occ_lowdin, C_virt_lowdin, optimize=True)
+    return Q_occ, Q_virt, Q_ov

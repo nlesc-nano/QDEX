@@ -7,12 +7,15 @@ from scipy.optimize import linear_sum_assignment
 
 from qdex.io_utils import (
     read_xyz, parse_basis, build_shell_dicts,
-    build_atom_ao_ranges, count_ao_from_shells, read_mos_mbse
+    build_atom_ao_ranges, count_ao_from_shells, read_mos_dense, geometry_source
 )
 from qdex.integrals import compute_dipole_ao, compute_cross_overlap_ao
 import libint_cpp
 from qdex.hardness import estimate_gw_qp_gap, estimate_brus_qp_gap, build_resta_mnok, build_gamma
 from qdex.constants import BOHR_PER_ANG, HA_TO_EV
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def natural_sort_key(s):
@@ -107,6 +110,53 @@ def align_spinor_phases_and_crossings(S_mat, U_list, track_crossings=True, lock_
     return S_mat, U_list, perm
 
 
+DIAGONAL_MODES = ("diagonal_bse", "diagonal_sbse")
+INDEPENDENT_MODES = ("independent_qp", "independent_dft")
+
+
+def frame_kernels(syms, coords, kernel="resta", material=None, alpha=1.0, eps_out=2.0):
+    """Direct kernel W and bare exchange interaction gamma for one frame (atom resolution, eV)."""
+    import qdex.hardness as _hardness
+    from qdex.hardness import build_gamma
+    k = str(kernel).lower()
+    coords = np.asarray(coords, dtype=float)
+    gamma = build_gamma(atom_symbols=syms, coords=coords, alpha=1.0, beta=0.0, exponent=_hardness.MNOK_EXPONENT_K)
+    if k == "resta":
+        from qdex.hardness import build_resta_mnok
+        _, w = build_resta_mnok(atom_symbols=syms, coords=coords, alpha=alpha, material_name=material, eps_out=eps_out)
+    elif k in ("dim", "dipole"):
+        from qdex.hardness import build_dim_mnok
+        w = build_dim_mnok(syms, coords, material_name=material, alpha=alpha)[0]
+    elif k in ("bse", "mnok"):
+        w = build_gamma(atom_symbols=syms, coords=coords, alpha=alpha, beta=0.0)
+    else:
+        raise ValueError(f"NAMD precompute: kernel '{kernel}' is not supported (use resta, dim or bse).")
+    return w, gamma
+
+
+def _diag_exchange(C_occ_list, C_virt_list, SC_occ_list, SC_virt_list, atom_ao_ranges, gamma, chunk_elems=4e7):
+    """K^x_{ia,ia} = q^{ia} . gamma . q^{ia} with Mulliken transition charges, summed over spin components.
+
+    C_*_list hold one coefficient block per spin component (one for spin-free orbitals, alpha and beta
+    for spinors); the charge of each component is added before contraction.
+    """
+    n_o = C_occ_list[0].shape[1]
+    n_v = C_virt_list[0].shape[1]
+    n_at = len(atom_ao_ranges)
+    kx = np.zeros((n_o, n_v))
+    step = max(1, int(chunk_elems // max(1, n_v * n_at)))
+    for i0 in range(0, n_o, step):
+        i1 = min(n_o, i0 + step)
+        q = np.zeros((i1 - i0, n_v, n_at), dtype=np.result_type(*C_occ_list, *C_virt_list))
+        for Co, Cv, SCo, SCv in zip(C_occ_list, C_virt_list, SC_occ_list, SC_virt_list):
+            for A, (a0, a1) in enumerate(atom_ao_ranges):
+                q[:, :, A] += 0.5 * (Co[a0:a1, i0:i1].conj().T @ SCv[a0:a1, :]
+                                     + SCo[a0:a1, i0:i1].conj().T @ Cv[a0:a1, :])
+        qg = q @ gamma
+        kx[i0:i1] = np.real(np.einsum("iam,iam->ia", qg, q.conj()))
+    return kx
+
+
 def compute_frame_diagonal_bse(
     xyz_path,
     mo_path,
@@ -119,8 +169,13 @@ def compute_frame_diagonal_bse(
     w_resta=None,
     nhomos=None,
     nlumos=None,
-    excitation_mode="diagonal_bse",
+    excitation_mode="diagonal_sbse",
     include_exchange=True,
+    include_direct_eh=True,
+    kernel=None,
+    material=None,
+    alpha=1.0,
+    eps_out=2.0,
     energy_window=None,
     fixed_pair_mask=None,
     compute_dipoles=True,
@@ -134,12 +189,23 @@ def compute_frame_diagonal_bse(
     Computes single-particle QP energies, diagonal BSE exciton energies,
     and transition dipoles / oscillator strengths for a single frame.
     Supports both spin-free (RKS) and 2-component spinor (SOC) representations.
+
+    Diagonal modes: E_ia = e_a^QP - e_i^QP + k_x K^x_ia,ia - K^d_ia,ia with k_x = 2 (spin-free
+    singlet) or 1 (spinors). With ``kernel`` given, W and the bare gamma are rebuilt from this
+    frame's geometry; otherwise ``w_resta`` (fixed) is used for K^d and K^x is skipped.
     """
     syms, coords = read_xyz(xyz_path)
     shells = build_shell_dicts(syms, coords, basis_dict)
     n_atoms = len(atom_ao_ranges)
+    mode = str(excitation_mode).lower()
+    use_kernel = mode in DIAGONAL_MODES
+    gamma_bare = None
+    if use_kernel and kernel is not None:
+        w_resta, gamma_bare = frame_kernels(syms, coords, kernel, material, alpha, eps_out)
+    do_kd = use_kernel and include_direct_eh and w_resta is not None
+    do_kx = use_kernel and include_exchange and gamma_bare is not None
 
-    C_all, eps_all, occ_all = read_mos_mbse(mo_path, n_ao)
+    C_all, eps_all, occ_all = read_mos_dense(mo_path, n_ao)
     eps_all = eps_all * HA_TO_EV
     n_occ_total = int(np.sum(occ_all > 0.5))
     n_mo_total = C_all.shape[1]
@@ -168,12 +234,18 @@ def compute_frame_diagonal_bse(
         a_indices = np.tile(np.arange(n_virt_act), n_occ_act)
         E_sp = qp_eps_virt[a_indices] - qp_eps_occ[i_indices]
 
-        # Electron-hole direct interaction (Kd) for diagonal BSE
+        # Electron-hole interaction for diagonal BSE: direct K^d and exchange K^x
         Kd_mat = None
-        if excitation_mode == "diagonal_bse" and include_exchange and w_resta is not None:
+        Kx_mat = None
+        E_diag = E_sp.copy()
+        if do_kd or do_kx:
             S_ao_intra = compute_cross_overlap_ao(shells, shells, nthreads=nthreads)
             SC_occ = S_ao_intra @ C_occ
             SC_virt = S_ao_intra @ C_virt
+        if do_kx:
+            Kx_mat = _diag_exchange([C_occ], [C_virt], [SC_occ], [SC_virt], atom_ao_ranges, gamma_bare)
+            E_diag = E_diag + 2.0 * Kx_mat[i_indices, a_indices]
+        if do_kd:
 
             q_occ_diag = np.zeros((n_occ_act, n_atoms), dtype=np.float64)
             q_virt_diag = np.zeros((n_virt_act, n_atoms), dtype=np.float64)
@@ -184,9 +256,7 @@ def compute_frame_diagonal_bse(
             W_virt_diag = q_virt_diag @ w_resta.T
             Kd_mat = q_occ_diag @ W_virt_diag.T
             Kd_pairs = Kd_mat[i_indices, a_indices]
-            E_diag = E_sp - Kd_pairs
-        else:
-            E_diag = E_sp
+            E_diag = E_diag - Kd_pairs
 
         if compute_dipoles:
             mu_ao_x, mu_ao_y, mu_ao_z = compute_dipole_ao(shells, nthreads=nthreads)
@@ -255,7 +325,7 @@ def compute_frame_diagonal_bse(
             active_indices=act_idx,
             gth_file=gth_file,
             nthreads=nthreads,
-            assume_orthonormal=False,
+            assume_orthonormal=True,
             device=device,
             verbose=verbose_soc
         )
@@ -284,25 +354,54 @@ def compute_frame_diagonal_bse(
         U_virt_beta  = U_beta[:, n_occ_sp:n_occ_sp + n_virt_sp]
 
         Kd_mat = None
-        if excitation_mode == "diagonal_bse" and include_exchange and w_resta is not None:
+        Kx_mat = None
+        E_diag = E_sp.copy()
+        if do_kd or do_kx:
             SC_act = S_ao_intra @ C_act
-            C_sp_a = C_act @ U_alpha
-            C_sp_b = C_act @ U_beta
-            SC_sp_a = SC_act @ U_alpha
-            SC_sp_b = SC_act @ U_beta
+            if do_kx:
+                C_sp_a = C_act @ U_alpha
+                C_sp_b = C_act @ U_beta
+                SC_sp_a = SC_act @ U_alpha
+                SC_sp_b = SC_act @ U_beta
 
-            C_occ_sp_a = C_sp_a[:, :n_occ_sp]
-            C_virt_sp_a = C_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
-            C_occ_sp_b = C_sp_b[:, :n_occ_sp]
-            C_virt_sp_b = C_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
+                C_occ_sp_a = C_sp_a[:, :n_occ_sp]
+                C_virt_sp_a = C_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
+                C_occ_sp_b = C_sp_b[:, :n_occ_sp]
+                C_virt_sp_b = C_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
 
-            SC_occ_sp_a = SC_sp_a[:, :n_occ_sp]
-            SC_virt_sp_a = SC_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
-            SC_occ_sp_b = SC_sp_b[:, :n_occ_sp]
-            SC_virt_sp_b = SC_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
+                SC_occ_sp_a = SC_sp_a[:, :n_occ_sp]
+                SC_virt_sp_a = SC_sp_a[:, n_occ_sp:n_occ_sp + n_virt_sp]
+                SC_occ_sp_b = SC_sp_b[:, :n_occ_sp]
+                SC_virt_sp_b = SC_sp_b[:, n_occ_sp:n_occ_sp + n_virt_sp]
+            else:
+                # Optimized low-memory path when exchange is disabled:
+                # Transform occupied and virtual subspaces separately to compute diagonal densities.
+                C_occ_sp_a = C_act @ U_occ_alpha
+                SC_occ_sp_a = SC_act @ U_occ_alpha
+                C_occ_sp_b = C_act @ U_occ_beta
+                SC_occ_sp_b = SC_act @ U_occ_beta
 
-            dens_occ = np.real(C_occ_sp_a.conj() * SC_occ_sp_a + C_occ_sp_b.conj() * SC_occ_sp_b)
-            dens_virt = np.real(C_virt_sp_a.conj() * SC_virt_sp_a + C_virt_sp_b.conj() * SC_virt_sp_b)
+                dens_occ = np.real(C_occ_sp_a.conj() * SC_occ_sp_a + C_occ_sp_b.conj() * SC_occ_sp_b)
+                del C_occ_sp_a, SC_occ_sp_a, C_occ_sp_b, SC_occ_sp_b
+
+                C_virt_sp_a = C_act @ U_virt_alpha
+                SC_virt_sp_a = SC_act @ U_virt_alpha
+                C_virt_sp_b = C_act @ U_virt_beta
+                SC_virt_sp_b = SC_act @ U_virt_beta
+
+                dens_virt = np.real(C_virt_sp_a.conj() * SC_virt_sp_a + C_virt_sp_b.conj() * SC_virt_sp_b)
+                del C_virt_sp_a, SC_virt_sp_a, C_virt_sp_b, SC_virt_sp_b
+
+        if do_kx:
+            # Spinor transition densities: exchange enters once (K^x - K^d).
+            Kx_mat = _diag_exchange([C_occ_sp_a, C_occ_sp_b], [C_virt_sp_a, C_virt_sp_b],
+                                    [SC_occ_sp_a, SC_occ_sp_b], [SC_virt_sp_a, SC_virt_sp_b],
+                                    atom_ao_ranges, gamma_bare)
+            E_diag = E_diag + Kx_mat[i_indices, a_indices]
+        if do_kd:
+            if do_kx:
+                dens_occ = np.real(C_occ_sp_a.conj() * SC_occ_sp_a + C_occ_sp_b.conj() * SC_occ_sp_b)
+                dens_virt = np.real(C_virt_sp_a.conj() * SC_virt_sp_a + C_virt_sp_b.conj() * SC_virt_sp_b)
 
             q_occ_diag = np.empty((n_occ_sp, n_atoms), dtype=np.float64)
             q_virt_diag = np.empty((n_virt_sp, n_atoms), dtype=np.float64)
@@ -313,9 +412,7 @@ def compute_frame_diagonal_bse(
             W_virt_diag = q_virt_diag @ w_resta.T
             Kd_mat = q_occ_diag @ W_virt_diag.T
             Kd_pairs = Kd_mat[i_indices, a_indices]
-            E_diag = E_sp - Kd_pairs
-        else:
-            E_diag = E_sp
+            E_diag = E_diag - Kd_pairs
 
         if compute_dipoles:
             mu_ao_x, mu_ao_y, mu_ao_z = compute_dipole_ao(shells, nthreads=nthreads)
@@ -381,14 +478,16 @@ def precompute_namd_data(config):
     namd_cfg = config.get("namd", {})
     traj_cfg = namd_cfg.get("trajectory", {})
     sys_cfg = config.get("system", {})
-    phys_cfg = config.get("physics", {})
+    from qdex.config_schema import flatten_config
+    phys_cfg = flatten_config(config)
     storage_cfg = namd_cfg.get("storage", {})
     track_cfg = namd_cfg.get("tracking", {})
 
     traj_dir = traj_cfg.get("dir", ".")
     frame_pattern = traj_cfg.get("frame_pattern", "frame_*")
-    xyz_name = traj_cfg.get("xyz_file", "frame.xyz")
     mo_name = traj_cfg.get("mo_file", "MOs.mbse")
+    # Geometry per frame: xyz_file, or the MO file itself when it is TREXIO HDF5
+    xyz_name = geometry_source(traj_cfg.get("xyz_file"), mo_name) or "frame.xyz"
     dt_nuc_fs = float(traj_cfg.get("dt_nuc_fs", 2.0))
 
     basis_txt = sys_cfg.get("basis_txt", "BASIS_MOLOPT_UZH")
@@ -398,12 +497,38 @@ def precompute_namd_data(config):
 
     nhomos = phys_cfg.get("nhomos", None)
     nlumos = phys_cfg.get("nlumos", None)
-    qp_model = phys_cfg.get("qp_gap", "gw")
-    eps_out = float(phys_cfg.get("eps_out", 2.4))
-    excitation_mode = phys_cfg.get("excitation_mode", "diagonal_bse").lower()
-    include_exchange = phys_cfg.get("exchange", True)
-    kernel = phys_cfg.get("kernel", "resta")
+    from qdex.hardness import set_mnok_options, set_bulk_vertex
+    set_bulk_vertex(phys_cfg.get("bulk_vertex", "none"), phys_cfg.get("bulk_vertex_factor", 0.8))
+    set_mnok_options(phys_cfg.get("mnok_exponent", 2.0), phys_cfg.get("mnok_exponent_exchange"),
+                     phys_cfg.get("mnok_onsite", "ip_ea"))
+
+    # Defaults: sBSE on the diagonal (PBE + bulk GW correction, bulk Resta W, K^x and K^d).
+    qp_model = str(phys_cfg.get("qp_gap", "bulk"))
+    eps_out = float(phys_cfg.get("eps_out", 2.0))
+    excitation_mode = str(phys_cfg.get("excitation_mode", "diagonal_sbse")).lower()
+    include_exchange = bool(phys_cfg.get("include_exchange", True))                     # K^x
+    include_direct_eh = bool(phys_cfg.get("include_direct_eh", phys_cfg.get("exchange", True)))  # K^d
+    kernel = phys_cfg.get("kernel", None) or "resta"
     alpha = float(phys_cfg.get("alpha", 1.0))
+
+    qp_key = qp_model.lower()
+    if excitation_mode not in DIAGONAL_MODES + INDEPENDENT_MODES:
+        raise ValueError(f"NAMD precompute supports diagonal_sbse, diagonal_bse, independent_qp and "
+                         f"independent_dft, not '{excitation_mode}'.")
+    if qp_key not in ("bulk", "none", "pbe", "dft", "brus", "gw"):
+        try:
+            float(qp_model)
+        except ValueError:
+            raise ValueError(f"NAMD precompute: QP model '{qp_model}' is not supported (it needs a QP step "
+                             "per frame). Use bulk (default), none, brus, gw or a gap in eV.") from None
+    if qp_key == "gw" and excitation_mode in DIAGONAL_MODES and str(kernel).lower() != "resta-sphere":
+        logger.warning("  [NAMD Warning] qp_gap 'gw' contains the surface polarization, but the kernel "
+              f"'{kernel}' has no matching electron-hole image: the excitons are too high. "
+              "Use qp_gap: bulk with diagonal_sbse for a consistent treatment.")
+    if qp_key == "gw" and str(kernel).lower() == "resta-sphere":
+        raise ValueError("NAMD precompute: the resta-sphere kernel is not available; use qp_gap: bulk.")
+    if excitation_mode == "independent_dft":
+        qp_model, qp_key = "none", "none"
 
     precompute_dir = storage_cfg.get("precompute_dir", "namd_precomputed")
     energy_window = storage_cfg.get("active_energy_window_ev", None)
@@ -411,7 +536,7 @@ def precompute_namd_data(config):
     hungarian_tracking = track_cfg.get("hungarian_tracking", True)
     completeness_thresh = float(track_cfg.get("completeness_threshold", 0.99))
 
-    soc = bool(phys_cfg.get("soc", False) or namd_cfg.get("soc", False))
+    soc = bool(phys_cfg.get("soc_flag", False) or phys_cfg.get("soc") is True or namd_cfg.get("soc", False))
     gth_file = sys_cfg.get("gth_file", None)
     if soc:
         if not gth_file:
@@ -440,6 +565,13 @@ def precompute_namd_data(config):
     # One-time setup on frame 0: Basis, Geometry, GW Scissor, Resta Matrix
     first_xyz = os.path.join(frame_dirs[0], xyz_name)
     syms0, coords0 = read_xyz(first_xyz)
+    try:
+        from qdex.cluster_size import cluster_size, format_cluster_size
+        size0 = cluster_size(np.array(coords0), syms0, material, sys_cfg.get("inorganic_elements"))
+        logger.info(format_cluster_size(size0, None if qp_key in ("bulk", "none", "pbe", "dft") else
+                                  f"core hull radius {size0['hull_radius_ang']:.3f} A ('{qp_model}')") + "  [frame 0]")
+    except Exception as exc:
+        logger.info(f"  [Size] Could not evaluate the cluster size: {exc}")
     basis_dict = parse_basis(basis_txt, basis_name, required_elements=set(syms0))
     shells0 = build_shell_dicts(syms0, coords0, basis_dict)
     n_ao = count_ao_from_shells(shells0)
@@ -460,7 +592,7 @@ def precompute_namd_data(config):
             raise ValueError(f"GW QP estimation failed for material '{material}'.")
     elif str(qp_model).lower() == "brus":
         from qdex.hardness import estimate_brus_qp_gap
-        C0, eps0, occ0 = read_mos_mbse(os.path.join(frame_dirs[0], mo_name), n_ao)
+        C0, eps0, occ0 = read_mos_dense(os.path.join(frame_dirs[0], mo_name), n_ao)
         eps0 = eps0 * HA_TO_EV
         n_occ_tot = int(np.sum(occ0 > 0.5))
         dft_gap0 = float(eps0[n_occ_tot] - eps0[n_occ_tot - 1])
@@ -469,12 +601,21 @@ def precompute_namd_data(config):
             scissor = float(res) - dft_gap0
         else:
             raise ValueError(f"Brus QP estimation failed for material '{material}'.")
-    elif str(qp_model).lower() == "pbe":
+    elif str(qp_model).lower() in ("pbe", "none", "dft"):
         scissor = 0.0
+    elif str(qp_model).lower() == "bulk":
+        from qdex.hardness import bulk_qp_shift
+        dft_gap0 = None
+        if phys_cfg.get("bulk_vertex", "none") == "scaled":   # the scaled correction needs the DFT gap of frame 0
+            C0, eps0, occ0 = read_mos_dense(os.path.join(frame_dirs[0], mo_name), n_ao)
+            eps0 = eps0 * HA_TO_EV
+            n_occ_tot = int(np.sum(occ0 > 0.5))
+            dft_gap0 = float(eps0[n_occ_tot] - eps0[n_occ_tot - 1])
+        scissor, _ = bulk_qp_shift(material, dft_gap0)
     else:
         try:
             target_gap = float(qp_model)
-            C0, eps0, occ0 = read_mos_mbse(os.path.join(frame_dirs[0], mo_name), n_ao)
+            C0, eps0, occ0 = read_mos_dense(os.path.join(frame_dirs[0], mo_name), n_ao)
             eps0 = eps0 * HA_TO_EV
             n_occ_tot = int(np.sum(occ0 > 0.5))
             dft_gap0 = float(eps0[n_occ_tot] - eps0[n_occ_tot - 1])
@@ -498,34 +639,33 @@ def precompute_namd_data(config):
     else:
         f_homo, f_lumo = 0.5, 0.5
 
-    # Screened direct kernel W (computed once on frame 0)
+    # The direct kernel W and the bare exchange gamma are rebuilt for every frame (frame_kernels).
     w_resta = None
-    if excitation_mode == "diagonal_bse" and include_exchange:
-        if str(kernel).lower() == "resta":
-            from qdex.hardness import build_resta_mnok
-            _, w_resta = build_resta_mnok(
-                atom_symbols=syms0, coords=coords0, alpha=alpha, material_name=material, eps_out=eps_out
-            )
-        else:
-            from qdex.hardness import build_gamma
-            w_resta = build_gamma(atom_symbols=syms0, coords=coords0, alpha=alpha, beta=0.0)
 
-    print("=" * 65)
-    print(" QDEX - NAMD Precomputation Pipeline")
-    print("=" * 65)
-    print(f"  Trajectory directory : {traj_dir}")
-    print(f"  Frames to process    : {n_frames} (dt = {dt_nuc_fs:.2f} fs)")
-    print(f"  Precompute output    : {precompute_dir}")
-    print(f"  Active Space         : nhomos={nhomos}, nlumos={nlumos}")
-    print(f"  Excitation Framework : {excitation_mode.upper()} (kernel: {kernel}, exchange: {include_exchange})")
+    logger.info("=" * 65)
+    logger.info(" QDEX - NAMD Precomputation Pipeline")
+    logger.info("=" * 65)
+    logger.info(f"  Trajectory directory : {traj_dir}")
+    logger.info(f"  Frames to process    : {n_frames} (dt = {dt_nuc_fs:.2f} fs)")
+    logger.info(f"  Precompute output    : {precompute_dir}")
+    logger.info(f"  Active Space         : nhomos={nhomos}, nlumos={nlumos}")
+    logger.info(f"  QP Model             : {qp_model}" + ("  (PBE orbitals + bulk GW correction)" if qp_key == "bulk" else ""))
+    logger.info(f"  Excitation Framework : {excitation_mode.upper()} (kernel: {kernel}, per frame; "
+          f"K^x: {include_exchange}, K^d: {include_direct_eh})")
     if energy_window:
-        print(f"  Active Energy Window : [{energy_window[0]:.2f}, {energy_window[1]:.2f}] eV")
+        logger.info(f"  Active Energy Window : [{energy_window[0]:.2f}, {energy_window[1]:.2f}] eV")
     if cluster_radius:
-        print(f"  Nanocrystal Radius   : {cluster_radius:.3f} Å (constant across trajectory)")
-    print(f"  GW Scissor (Δ_GW)    : {scissor:+.4f} eV (HOMO: {-scissor*f_homo:+.4f} eV, LUMO: {+scissor*f_lumo:+.4f} eV)")
-    print(f"  Spin-Orbit Coupling  : soc={soc}" + (f" (GTH: {os.path.basename(gth_file)})" if soc else ""))
-    print(f"  Tracking             : phase_correction={phase_correction}, hungarian={hungarian_tracking}")
-    print("=" * 65 + "\n")
+        logger.info(f"  Nanocrystal Radius   : {cluster_radius:.3f} Å (constant across trajectory)")
+    logger.info(f"  GW Scissor (Δ_GW)    : {scissor:+.4f} eV (HOMO: {-scissor*f_homo:+.4f} eV, LUMO: {+scissor*f_lumo:+.4f} eV)")
+    logger.info(f"  Spin-Orbit Coupling  : soc={soc}" + (f" (GTH: {os.path.basename(gth_file)})" if soc else ""))
+    logger.info(f"  Tracking             : phase_correction={phase_correction}, hungarian={hungarian_tracking}")
+    logger.info("=" * 65)
+    if excitation_mode in DIAGONAL_MODES:
+        from qdex.hardness import format_integrals_block
+        logger.info(format_integrals_block("mnok", "mulliken", kernel, syms0, include_direct=include_direct_eh,
+                                     include_exchange=include_exchange)
+              + "\n  (diagonal elements K_ia,ia only; rebuilt from each frame's geometry)")
+    logger.info("")
 
     prev_data = None
     fixed_pair_mask = None
@@ -557,6 +697,11 @@ def precompute_namd_data(config):
             nlumos=nlumos,
             excitation_mode=excitation_mode,
             include_exchange=include_exchange,
+            include_direct_eh=include_direct_eh,
+            kernel=kernel,
+            material=material,
+            alpha=alpha,
+            eps_out=eps_out,
             energy_window=energy_window if k == 0 else None,
             fixed_pair_mask=fixed_pair_mask,
             compute_dipoles=(k == 0),
@@ -707,7 +852,7 @@ def precompute_namd_data(config):
             )
 
         dt_f = time.time() - t0_frame
-        print(f" done ({dt_f:.2f} s | {len(curr_data['E_pairs'])} active pairs)")
+        logger.info(f" done ({dt_f:.2f} s | {len(curr_data['E_pairs'])} active pairs)")
         prev_data = curr_data
 
     # Save summary metadata with pair indices
@@ -737,8 +882,8 @@ def precompute_namd_data(config):
     )
 
     total_time = time.time() - t0_all
-    print(f"\n[NAMD Precompute] Successfully processed {n_frames} frames in {total_time:.2f} s")
-    print(f"[NAMD Precompute] Cached data written to: {precompute_dir}\n")
+    logger.info(f"\n[NAMD Precompute] Successfully processed {n_frames} frames in {total_time:.2f} s")
+    logger.info(f"[NAMD Precompute] Cached data written to: {precompute_dir}\n")
 
 
 def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
@@ -767,16 +912,16 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
 
     size_before_mb = get_dir_size_mb(precompute_dir)
     if verbose:
-        print("=" * 65)
-        print(f" QDEX - Compacting Precomputed Data: {precompute_dir}")
-        print("=" * 65)
-        print(f"  Initial Directory Size : {size_before_mb / 1024.0:.2f} GB ({size_before_mb:.1f} MB)")
+        logger.info("=" * 65)
+        logger.info(f" QDEX - Compacting Precomputed Data: {precompute_dir}")
+        logger.info("=" * 65)
+        logger.info(f"  Initial Directory Size : {size_before_mb / 1024.0:.2f} GB ({size_before_mb:.1f} MB)")
 
     # 1. Compact step files
     step_files = sorted(glob.glob(os.path.join(precompute_dir, "step_*.npz")))
     n_steps = len(step_files)
     if verbose:
-        print(f"  Compacting {n_steps} step files (removing duplicate pair indices and compressing)...")
+        logger.info(f"  Compacting {n_steps} step files (removing duplicate pair indices and compressing)...")
 
     for k, sf in enumerate(step_files):
         d = np.load(sf)
@@ -796,7 +941,7 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
         # Overwrite in-place with compressed format
         np.savez_compressed(sf, **clean_dict)
         if verbose and (k + 1) % 50 == 0:
-            print(f"    [{k+1}/{n_steps}] steps compacted...")
+            logger.info(f"    [{k+1}/{n_steps}] steps compacted...")
 
     # 2. Handle frame files
     if not keep_frames:
@@ -808,7 +953,7 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
                 os.remove(ff)
                 removed_count += 1
         if verbose:
-            print(f"  Removed {removed_count} redundant frame archives (frame_00000.npz retained).")
+            logger.info(f"  Removed {removed_count} redundant frame archives (frame_00000.npz retained).")
     else:
         # Compress frame_00000.npz
         f0_path = os.path.join(precompute_dir, "frame_00000.npz")
@@ -837,9 +982,9 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
     pct = (saved_mb / max(size_before_mb, 1e-3)) * 100.0
 
     if verbose:
-        print(f"  Final Directory Size   : {size_after_mb / 1024.0:.2f} GB ({size_after_mb:.1f} MB)")
-        print(f"  Storage Reclaimed      : {saved_gb:.2f} GB ({pct:.1f}% reduction)")
-        print("=" * 65 + "\n")
+        logger.info(f"  Final Directory Size   : {size_after_mb / 1024.0:.2f} GB ({size_after_mb:.1f} MB)")
+        logger.info(f"  Storage Reclaimed      : {saved_gb:.2f} GB ({pct:.1f}% reduction)")
+        logger.info("=" * 65 + "\n")
 
     return size_before_mb, size_after_mb
 
@@ -916,12 +1061,12 @@ def compute_trajectory_decoherence_times(
     n_frames = occ_arr.shape[0]
 
     if verbose:
-        print("=" * 65)
-        print(f" QDEX - Computing State-Pair Decoherence Times ({n_frames} frames)")
-        print("=" * 65)
-        print(f"  Target Directory : {precompute_dir}")
-        print(f"  Occupied States  : {occ_arr.shape[1]}")
-        print(f"  Virtual States   : {virt_arr.shape[1]}")
+        logger.info("=" * 65)
+        logger.info(f" QDEX - Computing State-Pair Decoherence Times ({n_frames} frames)")
+        logger.info("=" * 65)
+        logger.info(f"  Target Directory : {precompute_dir}")
+        logger.info(f"  Occupied States  : {occ_arr.shape[1]}")
+        logger.info(f"  Virtual States   : {virt_arr.shape[1]}")
 
     # 1. Hole channel: cov(eps_i, eps_j)
     cov_occ = np.cov(occ_arr, rowvar=False)
@@ -972,10 +1117,10 @@ def compute_trajectory_decoherence_times(
     if verbose:
         offdiag_occ = tau_occ[~np.eye(tau_occ.shape[0], dtype=bool)]
         offdiag_virt = tau_virt[~np.eye(tau_virt.shape[0], dtype=bool)]
-        print(f"  Hole Dephasing   (tau_occ)  : min={np.min(offdiag_occ):.2f} fs, median={np.median(offdiag_occ):.2f} fs, max={np.max(offdiag_occ):.2f} fs")
-        print(f"  Electron Dephasing (tau_virt): min={np.min(offdiag_virt):.2f} fs, median={np.median(offdiag_virt):.2f} fs, max={np.max(offdiag_virt):.2f} fs")
-        print(f"  Cached to: {out_path}")
-        print("=" * 65 + "\n")
+        logger.info(f"  Hole Dephasing   (tau_occ)  : min={np.min(offdiag_occ):.2f} fs, median={np.median(offdiag_occ):.2f} fs, max={np.max(offdiag_occ):.2f} fs")
+        logger.info(f"  Electron Dephasing (tau_virt): min={np.min(offdiag_virt):.2f} fs, median={np.median(offdiag_virt):.2f} fs, max={np.max(offdiag_virt):.2f} fs")
+        logger.info(f"  Cached to: {out_path}")
+        logger.info("=" * 65 + "\n")
 
     return tau_occ, tau_virt
 

@@ -17,6 +17,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Optional, Dict, Any, Tuple, List
 from scipy.optimize import curve_fit
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def compute_transient_absorption(
@@ -366,7 +369,7 @@ def plot_transient_absorption(
     plt.tight_layout()
     plt.savefig(plot_file, dpi=300)
     plt.close()
-    print(f"  [Transient Absorption] Publication dashboard saved to: {plot_file}")
+    logger.info(f"  [Transient Absorption] Publication dashboard saved to: {plot_file}")
 
 
 def export_transient_absorption_data(
@@ -388,7 +391,7 @@ def export_transient_absorption_data(
         "pop_1s": ta_data.get("p_1s", np.zeros_like(delta_A_1s))
     })
     df.to_csv(kinetics_csv, index=False)
-    print(f"  [Transient Absorption] 1S Bleach kinetics exported to: {kinetics_csv}")
+    logger.info(f"  [Transient Absorption] 1S Bleach kinetics exported to: {kinetics_csv}")
 
     if map_npz:
         np.savez_compressed(
@@ -400,4 +403,4 @@ def export_transient_absorption_data(
             tau_rise_fs=fit.get("tau_rise_fs", np.nan),
             k_cool_ps=fit.get("k_cool_ps", np.nan)
         )
-        print(f"  [Transient Absorption] 2D Map array exported to: {map_npz}")
+        logger.info(f"  [Transient Absorption] 2D Map array exported to: {map_npz}")

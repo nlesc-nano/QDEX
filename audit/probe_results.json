@@ -1,0 +1,96 @@
+{
+  "pure_resta_eps_1.0": {
+    "total_scissor_ev": 5.058889057558508,
+    "confinement_shift_ev": 3.7888890575585084,
+    "f_homo": 0.5,
+    "f_lumo": 0.5
+  },
+  "pure_resta_eps_2.4": {
+    "total_scissor_ev": 2.4236681425258277,
+    "confinement_shift_ev": 1.1536681425258277,
+    "f_homo": 0.5,
+    "f_lumo": 0.5
+  },
+  "pure_resta_eps_6.2": {
+    "total_scissor_ev": 1.27,
+    "confinement_shift_ev": 0.0,
+    "f_homo": 0.5,
+    "f_lumo": 0.5
+  },
+  "pure_resta_eps_10.0": {
+    "total_scissor_ev": 0.9931196457938014,
+    "confinement_shift_ev": -0.27688035420619855,
+    "f_homo": 0.5,
+    "f_lumo": 0.5
+  },
+  "qsgw_zero_delta_w": {
+    "scissor": 1.27,
+    "expected_bulk_shift": 1.27,
+    "eps": [
+      -4.635,
+      -0.7649999999999999
+    ],
+    "converged": true
+  },
+  "dynamic_z": {
+    "0.0": 0.99,
+    "0.2": 0.9730811802448016,
+    "0.5": 0.9353148235216835,
+    "1.0": 0.8784895706122682,
+    "2.0": 0.783309318926141
+  },
+  "dynamic_z_low_eps": 0.9146185262170173,
+  "dynamic_z_documented_low_eps": 0.8843734039932317,
+  "global_phase_probe": {
+    "real_shift": 3.0403134974958728,
+    "phased_shift": 3.0403134974958728
+  },
+  "rectangular_mos": {
+    "error": "ValueError('Full-AO qsGW requires complete square MO coefficients (got shape (3, 2) for 3 AOs). Please provide full MOs or use non-orbital QP methods (e.g. sgw-resta, evgw-resta).')"
+  },
+  "dim_separated_pair": {
+    "eta": [
+      1.0,
+      0.6458333333333334
+    ],
+    "screening": 0.29756813351875433,
+    "claimed_bulk_screening": 0.16129032258064516
+  },
+  "cdse_anchor_at_model_radius_10A": {
+    "bulk_pbe": 0.64,
+    "bulk_gw": 1.91,
+    "bulk_shift": 1.27,
+    "anchor_shift": 3.3949000000000003,
+    "A": 0.5809172130986981,
+    "kappa_out": 2.9419354838709677,
+    "scissor": 1.6980401118397952
+  },
+  "cdse_consistency": {
+    "volume_A3": 4188.790204786391,
+    "mu_for_15meV": 0.04237931871606981,
+    "radius_nm_for_15meV": 7.741744797695195,
+    "binding_eV_for_radius_5p6nm": 0.020736751152073733
+  },
+  "diagonal_full_consistency_direct_False": {
+    "full_diagonal": [
+      2.1339815676556597,
+      3.0243077027982648
+    ],
+    "diagonal_mode": [
+      2.13398156765566,
+      3.024307702798265
+    ],
+    "max_error": 4.440892098500626e-16
+  },
+  "diagonal_full_consistency_direct_True": {
+    "full_diagonal": [
+      4.215479443113993,
+      3.2199530589812553
+    ],
+    "diagonal_mode": [
+      4.215479443113994,
+      3.2199530589812557
+    ],
+    "max_error": 8.881784197001252e-16
+  }
+}

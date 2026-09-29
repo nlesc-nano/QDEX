@@ -1,0 +1,26 @@
+# Conda environment for CI (tests and docs). Same toolchain as environment.yml, without PyTorch
+# (optional; QDEX falls back to NumPy) and without the editable install.
+name: qdex-ci
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - cxx-compiler
+  - cmake>=3.16
+  - pybind11>=2.10.0
+  - eigen>=3.4.0
+  - libint>=2.6.0
+  - libboost-devel
+  - numpy>=1.24.0
+  - scipy>=1.10.0
+  - pandas>=2.0.0
+  - pyyaml>=6.0
+  - h5py>=3.8.0
+  - pymatgen
+  - matplotlib>=3.7.0
+  - plotly>=5.14.0
+  - pytest
+  - sphinx>=7.0.0
+  - sphinx_rtd_theme>=2.0.0
+  - myst-parser>=2.0.0
+  - sphinx-copybutton>=0.5.2

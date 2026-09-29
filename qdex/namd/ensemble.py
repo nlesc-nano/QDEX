@@ -25,6 +25,9 @@ from qdex.namd.analysis import (
     natural_sort_key
 )
 from qdex.namd.master_equation import propagate_pme_tensor
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def compute_energy_autocorrelation_time(times_fs, series):
@@ -160,7 +163,7 @@ def estimate_pilot_cooling_time(
             return float(tau_pilot)
         return 1000.0
     except Exception as exc:
-        print(f"  [NAMD:Warn] Pilot cooling estimation encountered: {exc}; falling back to 1000.0 fs")
+        logger.warning(f"  [NAMD:Warn] Pilot cooling estimation encountered: {exc}; falling back to 1000.0 fs")
         return 1000.0
 
 

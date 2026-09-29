@@ -111,13 +111,24 @@ system:
   material: "CSPBBR3"
   nthreads: 8
 
-physics:
-  excitation_mode: "diagonal_bse"
-  qp_gap: "gw"
-  kernel: "resta"
-  eps_out: 2.4
-  soc: true
   gth_file: "GTH_SOC_POTENTIALS.txt"
+
+environment:
+  eps_out: 2.4
+
+quasiparticles:
+  model: "sgw-resta"
+
+integrals:
+  representation: "mnok"
+
+excitations:
+  mode: "bse"
+  nhomos: 25
+  nlumos: 25
+
+soc:
+  enabled: true
 ```
 
 Run static calculation:
@@ -145,6 +156,19 @@ A run of `QDEX` produces rich publication-ready data and interactive dashboards:
 6. **Volumetric Cube Files**: Gaussian `.cube` files of frontier orbitals or exciton hole, electron, and difference densities ready for VMD, PyMOL, or ChimeraX.
 
 ---
+
+## Testing
+
+```bash
+python -m pytest tests -q                                   # unit tests (~20 s)
+QDEX_RUN_REGRESSION=1 python -m pytest tests/test_cdse_regression.py   # CdSe validation numbers, 1.2 nm (~25 s)
+QDEX_RUN_REGRESSION=1 QDEX_RUN_CDSE=1 python -m pytest tests/test_cdse_regression.py tests/test_cdse_integration.py  # + 2.0 nm
+```
+
+The regression test checks the QP gap, S1 and the first bright state of the validation cases
+(`docs/validation/cdse_experiment.rst`) to 5 meV. GitHub Actions (`.github/workflows/ci.yml`) runs
+the unit tests, the 1.2 nm regression and the documentation build (`sphinx -W`) on every push and
+pull request.
 
 ## Documentation
 
