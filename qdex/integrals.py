@@ -22,3 +22,11 @@ def compute_cross_overlap_ao(shells1, shells2, nthreads=1):
     return libint_cpp.cross_overlap_geometries(shells1, shells2, nthreads)
 
 
+def compute_two_electron_ao(shells, nthreads=1):
+    """
+    Computes exact diagonal 2-electron Coulomb integral matrix:
+        Gamma_{mu, nu} = (mu mu | nu nu)
+    using libint_cpp (Libint2).
+    Returns (nbf, nbf) numpy array in Hartree (atomic units).
+    """
+    return libint_cpp.compute_aabb_coulomb(shells, nthreads)

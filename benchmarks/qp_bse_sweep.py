@@ -1,0 +1,398 @@
+#!/usr/bin/env python
+"""Full sweep of consistent QP x BSE combinations for one quantum dot.
+
+Copy this file into a system folder that contains ``config.yaml`` and the
+files it references (MO file or MO .gz, xyz, basis, GTH SOC file), then run::
+
+    python qp_bse_sweep.py --list              # show the cases
+    python qp_bse_sweep.py --dry-run           # only write sweep/<case>/config.yaml
+    python qp_bse_sweep.py --jobs 2 --nthreads 4
+    python qp_bse_sweep.py --groups A,E        # a subset
+    python qp_bse_sweep.py --collect           # rebuild sweep/summary.* from finished runs
+
+For large dots (thousands of basis functions) use the targeted profile, with a
+fixed active space and Davidson instead of the convergence scans::
+
+    python qp_bse_sweep.py --profile large --list
+    python qp_bse_sweep.py --profile large --nthreads 16          # 25 x 25 active space
+    python qp_bse_sweep.py --profile large --no-xs --no-qsgw   # cheapest subset
+    python qp_bse_sweep.py --profile large --collect   # results in sweep_large/
+
+Every case gets its own folder ``sweep/<case>/`` with a complete
+``config.yaml`` (so each combination can be inspected and rerun by hand with
+``qdex --config config.yaml``), its log ``run.out`` and the usual QDEX outputs.
+Finished cases are skipped unless ``--force`` is given.
+
+Consistency rule: one W for QP and BSE
+--------------------------------------
+* ``two_electron_integrals`` (mnok | xs) is the representation of W. The QP
+  correction and the BSE kernel use the same representation.
+* Delta-W QP models (sgw-*, evgw-*, qsgw-*; Resta or DIM) define W; the BSE uses
+  that W (``kernel: qp``). Resta and DIM are never mixed.
+* sBSE: ``qp_gap: bulk`` (PBE KS + bulk GW) with a bulk kernel (resta or dim) and
+  ``excitation_mode: sbse``: Delta-W is dropped from both sides.
+* ``brus`` defines no W and uses the bulk Resta kernel.
+
+Groups
+------
+A  core matrix: integrals {mnok, xs} x QP model x eps_out {1, solvent}
+B  quasiparticle weight: Z = 1 and Z = 0.8 against the derived default
+C  self-energy (classical vs Delta-COHSEX), Born vs sphere solvent term, rigid levels
+E  spin-orbit coupling for the main models, in the solvent
+F  active-space convergence (50 x 50, 100 x 100, Davidson)
+G  transition charges: Loewdin instead of Mulliken
+H  singlet-triplet splitting; diagonal solvers
+"""
+import argparse
+import copy
+import csv
+import gzip
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import yaml
+
+from qdex.config_schema import flatten_config, section_dest, to_sections
+
+HERE = Path.cwd()
+SWEEP_DIR = ["sweep"]  # "sweep_large" for --profile large
+
+QP_MODELS = {
+    # name: overrides (command-line key names)
+    "sbse-resta": {"qp_gap": "bulk", "excitation_mode": "sbse", "kernel": "resta"},
+    "sbse-dim": {"qp_gap": "bulk", "excitation_mode": "sbse", "kernel": "dim"},
+    "brus": {"qp_gap": "brus", "kernel": "resta"},
+    "sgw-resta": {"qp_gap": "sgw-resta", "kernel": "qp"},
+    "evgw-resta": {"qp_gap": "evgw-resta", "kernel": "qp"},
+    "qsgw-resta": {"qp_gap": "qsgw-resta", "kernel": "qp"},
+    "sgw-dim": {"qp_gap": "sgw-dim", "kernel": "qp"},
+    "evgw-dim": {"qp_gap": "evgw-dim", "kernel": "qp"},
+    "qsgw-dim": {"qp_gap": "qsgw-dim", "kernel": "qp"},
+}
+MAIN = ("sbse-resta", "sgw-resta", "sgw-dim", "qsgw-dim")
+
+
+def build_cases(eps_solvent):
+    es = f"{eps_solvent:g}"
+    cases = []
+
+    def add(group, name, phys, soc=False, solver=None):
+        cases.append({"group": group, "name": name, "physics": phys, "soc": soc, "solver": solver or {}})
+
+    envs = [(1.0, "vac"), (eps_solvent, f"eps{es}")]
+    # A: core matrix
+    for ints in ("mnok", "xs"):
+        for m, ph in QP_MODELS.items():
+            for eo, tag in envs:
+                add("A", f"{ints}_{m}_{tag}", {**ph, "two_electron_integrals": ints, "eps_out": eo})
+    # B: Z
+    for m in ("sgw-resta", "sgw-dim", "qsgw-dim"):
+        for z in ("1.0", "0.8"):
+            add("B", f"mnok_{m}_Z{z}_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
+                                            "qp_z": z})
+    # C: self-energy and environment term
+    for m in ("sgw-resta", "sgw-dim"):
+        for eo, tag in envs:
+            add("C", f"mnok_{m}_classical_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+                                                  "qp_selfenergy": "classical"})
+            add("C", f"mnok_{m}_born_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+                                             "qp_solvent_term": "born"})
+        add("C", f"mnok_{m}_rigid_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
+                                         "qp_levels": "rigid"})
+    # E: SOC in the solvent
+    for ints in ("mnok", "xs"):
+        for m in MAIN:
+            add("E", f"{ints}_{m}_soc_eps{es}", {**QP_MODELS[m], "two_electron_integrals": ints,
+                                                 "eps_out": eps_solvent}, soc=True)
+    # F: active space
+    for n in (50, 100):
+        for m in ("sbse-resta", "sgw-resta"):
+            add("F", f"mnok_{m}_as{n}_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
+                                             "nhomos": n, "nlumos": n, "nroots": 10},
+                solver={"full_diag": False})
+    # G: charges
+    for m in ("sbse-resta", "sgw-resta"):
+        add("G", f"mnok_{m}_lowdin_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
+                                          "charge_type": "lowdin"})
+    # H: triplets and diagonal solvers
+    for m in ("sbse-resta", "sgw-resta"):
+        add("H", f"mnok_{m}_triplet_vac", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": 1.0,
+                                           "triplet": True})
+    add("H", "mnok_sgw-resta_diagonal_vac", {**QP_MODELS["sgw-resta"], "two_electron_integrals": "mnok",
+                                             "eps_out": 1.0, "excitation_mode": "diagonal_bse"})
+    add("H", "mnok_sbse-resta_diagonal_vac", {**QP_MODELS["sbse-resta"], "two_electron_integrals": "mnok",
+                                              "eps_out": 1.0, "excitation_mode": "diagonal_sbse"})
+    return cases
+
+
+def build_cases_large(eps_solvent, nact, nroots, xs=True, qsgw=True, soc=True):
+    """Targeted set for large dots: fixed active space, Davidson, no convergence scans.
+
+    A  mnok core: every QP model with its kernel, vacuum and solvent
+    C  self-energy: classical 1/2 q^T dW q instead of Delta-COHSEX; the old softened Born term
+    H  triplet (singlet-triplet splitting)
+    E  SOC in the solvent for the main models
+    X  xs representation for the main models (memory ~ 4-5 x n_ao^2 x 8 bytes)
+    Cases are ordered from cheap to expensive.
+    """
+    es = f"{eps_solvent:g}"
+    act = {"nhomos": nact, "nlumos": nact, "nroots": nroots, "skip_orthonormality_check": True}
+    dav = {"full_diag": False}
+    cases = []
+
+    def add(group, name, phys, soc_on=False, cost=0):
+        cases.append({"group": group, "name": name, "physics": {**phys, **act}, "soc": soc_on,
+                      "solver": dict(dav), "cost": cost})
+
+    envs = [(1.0, "vac"), (eps_solvent, f"eps{es}")]
+    for m in ("sbse-resta", "sbse-dim", "sgw-resta", "evgw-resta", "sgw-dim", "evgw-dim"):
+        for eo, tag in envs:
+            add("A", f"mnok_{m}_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo}, cost=0)
+    for m in ("sgw-resta", "sgw-dim"):
+        for eo, tag in envs:
+            add("C", f"mnok_{m}_classical_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+                                                  "qp_selfenergy": "classical"}, cost=0)
+            add("C", f"mnok_{m}_born_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo,
+                                             "qp_solvent_term": "born"}, cost=0)
+    add("H", "mnok_sgw-resta_triplet_vac", {**QP_MODELS["sgw-resta"], "two_electron_integrals": "mnok",
+                                            "eps_out": 1.0, "triplet": True}, cost=0)
+    if qsgw:
+        for m in ("qsgw-resta", "qsgw-dim"):
+            for eo, tag in envs:
+                add("A", f"mnok_{m}_{tag}", {**QP_MODELS[m], "two_electron_integrals": "mnok", "eps_out": eo},
+                    cost=1)
+    if soc:
+        for m in MAIN:
+            if m.startswith("qsgw") and not qsgw:
+                continue
+            add("E", f"mnok_{m}_soc_eps{es}", {**QP_MODELS[m], "two_electron_integrals": "mnok",
+                                               "eps_out": eps_solvent}, soc_on=True, cost=2)
+    if xs:
+        for m in ("sbse-resta", "sgw-resta", "sgw-dim"):
+            for eo, tag in envs:
+                add("X", f"xs_{m}_{tag}", {**QP_MODELS[m], "two_electron_integrals": "xs", "eps_out": eo}, cost=3)
+        if soc:
+            add("X", f"xs_sgw-resta_soc_eps{es}", {**QP_MODELS["sgw-resta"], "two_electron_integrals": "xs",
+                                                   "eps_out": eps_solvent}, soc_on=True, cost=4)
+    cases.sort(key=lambda c: c["cost"])
+    return cases
+
+
+# ---------------------------------------------------------------------------
+def input_files(cfg):
+    files = []
+    for key in ("mo_file", "xyz", "basis_txt", "mo_file_beta", "vxc_ao"):
+        val = flatten_config(cfg).get(key)
+        if val:
+            files.append(val)
+    if flatten_config(cfg).get("gth_file"):
+        files.append(flatten_config(cfg)["gth_file"])
+    for f in files:
+        p = HERE / f
+        if not p.exists() and (HERE / (f + ".gz")).exists():
+            print(f"decompressing {f}.gz ...")
+            with gzip.open(HERE / (f + ".gz"), "rb") as src, open(p, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        if not p.exists():
+            raise FileNotFoundError(f"{p} (referenced by config.yaml) is missing")
+    return files
+
+
+def case_config(base, case, nthreads):
+    """Config of one case in the current YAML layout (system, environment, quasiparticles,
+    integrals, excitations, soc, analysis, output)."""
+    flat = flatten_config(to_sections(copy.deepcopy(base)))
+    for k in ("qp_z", "qp_levels", "qp_residual_power", "charge_type", "triplet", "nroots", "qp_polarization",
+              "dynamic_z", "qp_selfenergy", "qp_residual_scaling", "qp_anchor_residual", "qp_solvent_term"):
+        flat.pop(k, None)
+    flat.update({section_dest("physics", k): v for k, v in case["physics"].items()})
+    flat.update({"nthreads": nthreads, "soc_flag": bool(case["soc"]), "full_diag": True, **case["solver"],
+                 "plot": False, "cube": False, "run_fuzzy": False})
+    extra = {k: v for k, v in base.items() if k in ("namd", "auger", "periodic")}
+    return to_sections({"physics": flat, **extra})
+
+
+def is_done(d):
+    log = d / "run.out"
+    return log.exists() and "All calculations finished successfully." in log.read_text(errors="replace")
+
+
+def run_case(case, base, files, nthreads, force, dry):
+    d = HERE / SWEEP_DIR[0] / case["name"]
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / "config.yaml", "w") as fh:
+        yaml.safe_dump(case_config(base, case, nthreads), fh, sort_keys=False)
+    for f in files:
+        link = d / Path(f).name
+        if not link.exists():
+            os.symlink(HERE / f, link)
+    if dry or (is_done(d) and not force):
+        return case["name"], "skipped" if not dry else "written", 0.0
+    t0 = time.time()
+    with open(d / "run.out", "w") as log:
+        rc = subprocess.run(["qdex", "--config", "config.yaml"], cwd=d, stdout=log, stderr=subprocess.STDOUT).returncode
+    wall = time.time() - t0
+    (d / "wall_s.txt").write_text(f"{wall:.1f}\n")
+    return case["name"], "ok" if rc == 0 else f"FAILED (rc={rc})", wall
+
+
+# ---------------------------------------------------------------------------
+def _csv(path):
+    if not path.exists():
+        return []
+    with open(path) as fh:
+        return list(csv.DictReader(fh))
+
+
+def main_peak(rows, frac=0.3, sigma=0.05):
+    """First absorption peak: first local maximum of the Gaussian-broadened
+    stick spectrum (sigma in eV) that reaches frac x its global maximum.
+
+    With SOC the band-edge oscillator strength spreads over many weak lines, so
+    a threshold on single lines (f > 0.05) can pick a weak side line; the
+    broadened spectrum picks the first band that actually dominates the edge.
+    """
+    import numpy as np
+    E = np.array([float(x["Energy_eV"]) for x in rows])
+    f = np.array([float(x["f_osc"]) for x in rows])
+    if len(E) == 0 or f.max() <= 0.0:
+        return None
+    grid = np.arange(E.min() - 0.2, E.max() + 0.2, 0.002)
+    spec = (f[None, :] * np.exp(-0.5 * ((grid[:, None] - E[None, :]) / sigma) ** 2)).sum(axis=1)
+    top = spec.max()
+    for i in range(1, len(grid) - 1):
+        if spec[i] >= frac * top and spec[i] >= spec[i - 1] and spec[i] >= spec[i + 1]:
+            return float(grid[i])
+    return float(grid[int(spec.argmax())])
+
+
+def parse_case(case):
+    d = HERE / SWEEP_DIR[0] / case["name"]
+    r = {"group": case["group"], "case": case["name"], "ok": is_done(d)}
+    log = (d / "run.out").read_text(errors="replace") if (d / "run.out").exists() else ""
+    m = re.findall(r"\[QP\] Final QP gap: ([-\d.]+)", log)
+    r["qp_gap"] = float(m[-1]) if m else None
+    m = re.search(r"\[DFT\] Initial Gap\s*:\s*([-\d.]+)", log)
+    r["dft_gap"] = float(m.group(1)) if m else None
+    prov = {}
+    if (d / "qp_provenance.json").exists():
+        prov = json.loads((d / "qp_provenance.json").read_text())
+        prov = prov.get("details", prov)
+    for key, pk in [("qp_homo", "modeled_qp_homo_ev"), ("qp_lumo", "modeled_qp_lumo_ev"),
+                    ("z_homo", "z_homo_orbital"), ("z_lumo", "z_lumo_orbital"),
+                    ("z_min", "z_min_window"), ("z_max", "z_max_window"),
+                    ("eps_eff", "eps_eff_qd"), ("qp_levels", "qp_levels"),
+                    ("spread_occ", "qp_shift_spread_occ_ev"), ("spread_virt", "qp_shift_spread_virt_ev"),
+                    ("f_homo", "f_homo"), ("radius", "cluster_radius_ang")]:
+        r[key] = prov.get(pk)
+    if r["z_homo"] is None:
+        r["z_homo"], r["z_lumo"] = prov.get("z_homo"), prov.get("z_lumo")
+    sf = _csv(d / "exciton_results.csv") or _csv(d / "exciton_results_sf.csv")
+    soc = _csv(d / "exciton_results_soc.csv")
+    if sf:
+        r["s1"] = float(sf[0]["Energy_eV"])
+        r["f1"] = float(sf[0]["f_osc"])
+        b = [x for x in sf if float(x["f_osc"]) > 0.05]
+        r["bright"] = float(b[0]["Energy_eV"]) if b else None
+        r["peak"] = main_peak(sf)
+    if soc:
+        r["s1_soc"] = float(soc[0]["Energy_eV"])
+        b = [x for x in soc if float(x["f_osc"]) > 0.05]
+        r["bright_soc"] = float(b[0]["Energy_eV"]) if b else None
+        r["peak_soc"] = main_peak(soc)
+    w = d / "wall_s.txt"
+    r["wall_s"] = float(w.read_text()) if w.exists() else None
+    err = re.findall(r"^(\w*Error: .*)$", log, flags=re.M)
+    r["error"] = err[-1][:200] if err else None
+    return r
+
+
+def collect(cases):
+    rows = [parse_case(c) for c in cases]
+    cols = ["group", "case", "ok", "dft_gap", "qp_gap", "qp_homo", "qp_lumo", "f_homo", "z_homo", "z_lumo",
+            "z_min", "z_max", "eps_eff", "qp_levels", "spread_occ", "spread_virt", "s1", "f1", "bright", "peak",
+            "s1_soc", "bright_soc", "peak_soc", "radius", "wall_s", "error"]
+    out = HERE / SWEEP_DIR[0]
+    with open(out / "summary.csv", "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
+        w.writeheader()
+        w.writerows(rows)
+
+    def f(v, n=3):
+        return "—" if v is None else (f"{v:.{n}f}" if isinstance(v, float) else str(v))
+
+    lines = [f"# QP x BSE sweep: {HERE}", "",
+             "| group | case | QP gap | HOMO | LUMO | Z_H / Z_L | S1 | bright | peak | S1 SOC | peak SOC | status |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        z = "—" if r.get("z_homo") is None else f"{r['z_homo']:.3f} / {r['z_lumo']:.3f}"
+        st = "ok" if r["ok"] else (r.get("error") or "missing")
+        lines.append(f"| {r['group']} | `{r['case']}` | {f(r.get('qp_gap'))} | {f(r.get('qp_homo'))} | "
+                     f"{f(r.get('qp_lumo'))} | {z} | {f(r.get('s1'))} | {f(r.get('bright'))} | {f(r.get('peak'))} | "
+                     f"{f(r.get('s1_soc'))} | {f(r.get('peak_soc'))} | {st} |")
+    (out / "summary.md").write_text("\n".join(lines) + "\n")
+    n_ok = sum(r["ok"] for r in rows)
+    print(f"{n_ok}/{len(rows)} cases finished. Summary: {out / 'summary.md'} and summary.csv")
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--profile", choices=["full", "large"], default="full",
+                    help="full: 69-case sweep with convergence scans (small dots); "
+                         "large: targeted set with a fixed active space and Davidson (big dots)")
+    ap.add_argument("--nact", type=int, default=25, help="large profile: nhomos = nlumos (default 25)")
+    ap.add_argument("--nroots", type=int, default=40, help="large profile: Davidson roots (default 40)")
+    ap.add_argument("--no-xs", action="store_true", help="large profile: skip the xs cases (memory ~ 5 n_ao^2 x 8 B)")
+    ap.add_argument("--no-qsgw", action="store_true", help="large profile: skip qsGW (full AO diagonalizations)")
+    ap.add_argument("--no-soc", action="store_true", help="large profile: skip the SOC cases")
+    ap.add_argument("--groups", default=None, help="groups to run, e.g. A or A,E (default: all of the profile)")
+    ap.add_argument("--only", default=None, help="regular expression on case names")
+    ap.add_argument("--eps-solvent", type=float, default=2.24, help="solvent eps_out (optical, n^2); toluene 2.24")
+    ap.add_argument("--nthreads", type=int, default=4, help="threads per qdex run")
+    ap.add_argument("--jobs", type=int, default=1, help="qdex runs in parallel")
+    ap.add_argument("--list", action="store_true")
+    ap.add_argument("--dry-run", action="store_true", help="write the case folders and YAMLs only")
+    ap.add_argument("--collect", action="store_true", help="only rebuild the summary")
+    ap.add_argument("--force", action="store_true", help="rerun finished cases")
+    a = ap.parse_args()
+
+    base = yaml.safe_load((HERE / "config.yaml").read_text())
+    if a.profile == "large":
+        SWEEP_DIR[0] = "sweep_large"
+        all_cases = build_cases_large(a.eps_solvent, a.nact, a.nroots, xs=not a.no_xs, qsgw=not a.no_qsgw,
+                                      soc=not a.no_soc)
+    else:
+        all_cases = build_cases(a.eps_solvent)
+    groups = set(a.groups.replace(",", "")) if a.groups else {c["group"] for c in all_cases}
+    cases = [c for c in all_cases if c["group"] in groups]
+    if a.only:
+        cases = [c for c in cases if re.search(a.only, c["name"])]
+    if a.list:
+        for c in cases:
+            extra = " soc" if c["soc"] else ""
+            print(f"{c['group']}  {c['name']:40s} {json.dumps(c['physics'])}{extra}")
+        print(f"{len(cases)} cases")
+        return
+    if a.collect:
+        collect(cases)
+        return
+    files = input_files(base)
+    (HERE / SWEEP_DIR[0]).mkdir(exist_ok=True)
+    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
+        futs = [pool.submit(run_case, c, base, files, a.nthreads, a.force, a.dry_run) for c in cases]
+        for k, fu in enumerate(futs, 1):
+            name, status, wall = fu.result()
+            print(f"[{k:3d}/{len(cases)}] {name:40s} {status}  ({wall:.0f} s)", flush=True)
+    if not a.dry_run:
+        collect(cases)
+
+
+if __name__ == "__main__":
+    main()

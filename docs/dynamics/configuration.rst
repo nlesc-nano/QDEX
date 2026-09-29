@@ -1,0 +1,158 @@
+Configuration
+=============
+
+Part of :doc:`/dynamics/index`.
+
+.. rubric:: QDEX implementation
+
+Implementation entry point:
+
+* Module: ``qdex.namd.precompute``
+* Callable: ``qdex.namd.precompute.precompute_namd_data``
+* CLI: ``--namd``
+* YAML: ``namd.engine, namd.dt_fs``
+
+.. code-block:: python
+
+   precompute_namd_data(config)
+
+
+Excited states of each frame
+----------------------------
+
+The precompute evaluates the excited states of every frame with a diagonal framework (one energy per
+transition, no mixing), so that the same transitions can be followed along the trajectory.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 50
+
+   * - Key
+     - Default
+     - Meaning
+   * - ``quasiparticles.model``
+     - ``bulk``
+     - ``bulk`` (PBE orbitals + bulk GW correction, one constant for all frames), ``none``, ``brus``,
+       ``gw`` or a gap in eV. Models that need a QP step per frame (``sgw-*``, ``evgw-*``, ``qsgw-*``)
+       are rejected.
+   * - ``excitations.mode``
+     - ``diagonal_sbse``
+     - ``diagonal_sbse`` / ``diagonal_bse`` (same solver), ``independent_qp``, ``independent_dft``
+   * - ``excitations.kernel``
+     - ``resta``
+     - ``resta`` (bulk Resta W), ``dim`` or ``bse``; rebuilt from every frame's geometry
+   * - ``excitations.include_exchange``, ``include_direct_eh``
+     - true
+     - K\ :sup:`x` and K\ :sup:`d`
+
+Each transition energy is
+
+.. math::
+
+   E_{ia}(t) = \varepsilon_a(t) - \varepsilon_i(t) + \Delta_{\mathrm{bulk}}
+   + k_x K^x_{ia,ia}(t) - K^d_{ia,ia}(t),
+
+with k\ :sub:`x` = 2 (spin-free singlet) or 1 (spinors with SOC), Mulliken charges and the MNOK
+representation (:doc:`/excitons/sbse`). The sBSE is the consistent choice for dynamics: the surface
+polarization is dropped from both the orbital energies and the kernel, the correction is one constant
+for all frames, and the energy fluctuations along the trajectory come only from the KS levels and the
+interaction terms. The ``integrals`` keys (``mnok_exponent``, ``mnok_exponent_exchange``,
+``mnok_onsite``) apply as in a single-point run, and the precompute prints the same
+``--- Two-electron integrals ---`` block (:doc:`/integrals/representation`) after its header.
+
+``gw`` with the bulk kernel is accepted for old runs with a warning: its QP gap contains the surface
+polarization but the kernel lacks the matching electron–hole image, which places the excitons too high
+(0.4 eV for the 2 nm CdSe cluster at ε_out = 2).
+
+11. CLI Flags & YAML Configuration Reference
+--------------------------------------------
+
+
+Command-Line Arguments
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :widths: 25 20 55
+   :header-rows: 1
+
+   * - CLI Flag
+     - Default
+     - Description
+   * - ``--namd-precompute``
+     - ``False``
+     - Execute Stage 1 trajectory precomputation (cross-overlaps, NACs, phase tracking, caching).
+   * - ``--namd-run``
+     - ``False``
+     - Execute Stage 2 NAMD carrier cooling simulation from precomputed data.
+   * - ``--namd-decoherence [dir]``
+     - ``None``
+     - Compute and cache state-pair pure-dephasing matrices (:math:`\tau_{ij}`) into ``decoherence_times.npz``.
+   * - ``--namd-compact [dir]``
+     - ``None``
+     - Compress precomputed directory, eliminating redundant duplicate arrays.
+   * - ``--namd-soc``
+     - ``False``
+     - Enable relativistic Spin-Orbit Coupling across NAMD precomputation.
+   * - ``--namd-ta``
+     - ``False``
+     - Compute ultrafast pump-probe transient absorption (TA) spectra from NAMD dynamics.
+   * - ``--namd-ta-sigma <float>``
+     - ``0.03``
+     - Gaussian line broadening in eV for transient absorption probe spectra.
+   * - ``--namd-ta-plot``
+     - ``False``
+     - Generate 2D false-color TA map and 1S bleach rise kinetics plot.
+   * - ``--namd-ecsh-auger``
+     - ``False``
+     - Enable Energy-Conserving Surface Hopping (ECSH) for two-body Auger processes during NAMD.
+   * - ``--namd-biexciton``
+     - ``False``
+     - Initialize NAMD from a biexciton state (XX) to simulate Auger annihilation dynamics.
+   * - ``--namd-initial-conditions <mode>``
+     - ``"single"``
+     - Set initial condition sampling: ``"single"`` (start from :math:`t_0 = 0`) or ``"multiple"`` (automated ensemble sampling across uncorrelated trajectory origins).
+   * - ``--namd-multi-init``
+     - ``False``
+     - Convenience shortcut for ``--namd-initial-conditions multiple``.
+   * - ``--namd-origins <int>``
+     - ``None`` (auto)
+     - Explicit number of ensemble origins (when unset, calibrated automatically from :math:`\Delta t_0 \ge 2\tau_{\mathrm{corr}}`).
+   * - ``--namd-window-fs <float>``
+     - ``None`` (auto)
+     - Simulation window duration in fs per origin (when unset, calibrated automatically from pilot cooling :math:`3\tau_{\mathrm{cool}}`).
+
+
+YAML Configuration Example
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: yaml
+
+   namd:
+     trajectory:
+       dir: "./trajectory"               # Directory containing frame_* subdirectories
+       frame_pattern: "frame_*"
+       mo_file: "MOs.mbse"               # per frame: .mbse, text, or TREXIO HDF5 (orbitals.h5)
+       xyz_file: "frame.xyz"             # per frame; not needed when mo_file is .h5 (geometry read from it)
+       dt_nuc_fs: 2.0                    # Nuclear MD time step in femtoseconds
+       start_frame: 1
+       end_frame: 500
+
+     dynamics:
+       method: "dish"                    # "master_equation" (PME), "dish" (DISH), or "cpa_fssh" (FSSH-EDC)
+       initial_conditions: "multiple"    # "single" (t0 = 0) or "multiple" (auto-calibrated ensemble)
+       temperature_k: 300.0              # Lattice temperature for detailed balance
+       tau_dec_fs: "cumulant"            # "cumulant" (ab initio), "edc", or fixed float in fs
+       decoherence: "edc"                # Decoherence scheme for FSSH (continuous EDC)
+       n_trajectories: 1000              # Trajectory count (split evenly across origins in multi-mode)
+       detailed_balance: true            # Enforce Boltzmann detailed balance factor
+
+     integration:
+       integrator: "strang"              # Unitary Strang operator splitting
+       n_substeps: 2                     # Electronic sub-steps per nuclear interval
+
+     transient_absorption:
+       run: true                         # Enable pump-probe transient absorption calculation
+       sigma: 0.03                       # Probe spectral broadening in eV
+       plot: true                        # Generate 2D TA map and kinetics figure
+       plot_file: "transient_absorption_map.png"
+       csv_file: "ta_bleach_kinetics.csv"

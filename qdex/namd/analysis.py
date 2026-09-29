@@ -4,6 +4,9 @@ import re
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def natural_sort_key(s):
@@ -434,7 +437,7 @@ def analyze_and_plot_namd_results(
 
     df = pd.DataFrame(csv_dict)
     df.to_csv(csv_file, index=False)
-    print(f"  [Output] Carrier cooling curve exported to: {csv_file}")
+    logger.info(f"  [Output] Carrier cooling curve exported to: {csv_file}")
 
     # 2. Export Populations & Dynamics NPZ
     np.savez_compressed(
@@ -456,7 +459,7 @@ def analyze_and_plot_namd_results(
         qp_gap_ev=qp_gap_ev,
         pump_energy_ev=pump_energy_ev
     )
-    print(f"  [Output] State populations saved to: {npz_file}")
+    logger.info(f"  [Output] State populations saved to: {npz_file}")
 
     # 3. Fit Lifetimes & Band Edge Arrival Times
     tau_total = fit_exponential_lifetime(times_fs, excess_total)
@@ -467,43 +470,43 @@ def analyze_and_plot_namd_results(
     arr_e = compute_band_edge_arrival_times(times_fs, mean_excess_e, tau_e)
     arr_h = compute_band_edge_arrival_times(times_fs, mean_excess_h, tau_h)
 
-    print("\n" + "=" * 68)
-    print(" NAMD Carrier Cooling & Relaxation Summary")
-    print("=" * 68)
-    print(f"  Initial Energy <E(0)>        : {mean_energies_ev[0]:.4f} eV")
-    print(f"  Final Energy   <E(end)>      : {mean_energies_ev[-1]:.4f} eV")
-    print(f"  Band Edge Gap (Eg)           : {qp_gap_ev:.4f} eV")
-    print(f"  Total Energy Dissipated      : {mean_energies_ev[0] - mean_energies_ev[-1]:.4f} eV")
-    print()
-    print("  --- Exponential Cooling Lifetimes & Rates (k_cool = 1/tau) ---")
+    logger.info("\n" + "=" * 68)
+    logger.info(" NAMD Carrier Cooling & Relaxation Summary")
+    logger.info("=" * 68)
+    logger.info(f"  Initial Energy <E(0)>        : {mean_energies_ev[0]:.4f} eV")
+    logger.info(f"  Final Energy   <E(end)>      : {mean_energies_ev[-1]:.4f} eV")
+    logger.info(f"  Band Edge Gap (Eg)           : {qp_gap_ev:.4f} eV")
+    logger.info(f"  Total Energy Dissipated      : {mean_energies_ev[0] - mean_energies_ev[-1]:.4f} eV")
+    logger.info("")
+    logger.info("  --- Exponential Cooling Lifetimes & Rates (k_cool = 1/tau) ---")
     if np.isfinite(tau_total):
-        print(f"  Exciton Lifetime (tau)       : {tau_total:.1f} fs (k_cool = {arr_tot['k_cool_ps']:.2f} ps^-1)")
+        logger.info(f"  Exciton Lifetime (tau)       : {tau_total:.1f} fs (k_cool = {arr_tot['k_cool_ps']:.2f} ps^-1)")
     if np.isfinite(tau_e):
-        print(f"  Electron Lifetime (tau_e)    : {tau_e:.1f} fs (k_cool = {arr_e['k_cool_ps']:.2f} ps^-1)")
+        logger.info(f"  Electron Lifetime (tau_e)    : {tau_e:.1f} fs (k_cool = {arr_e['k_cool_ps']:.2f} ps^-1)")
     if np.isfinite(tau_h):
-        print(f"  Hole Lifetime (tau_h)        : {tau_h:.1f} fs (k_cool = {arr_h['k_cool_ps']:.2f} ps^-1)")
-    print()
-    print("  --- Band Edge Arrival Time (95% excess dissipated, ~3.0*tau) ---")
-    print(f"  Exciton                      : Estimated = {format_time_fs(arr_tot['est_95_fs']):<10} | Actual = {format_time_fs(arr_tot['act_95_fs'], times_fs[-1])}")
-    print(f"  Electron                     : Estimated = {format_time_fs(arr_e['est_95_fs']):<10} | Actual = {format_time_fs(arr_e['act_95_fs'], times_fs[-1])}")
-    print(f"  Hole                         : Estimated = {format_time_fs(arr_h['est_95_fs']):<10} | Actual = {format_time_fs(arr_h['act_95_fs'], times_fs[-1])}")
-    print()
-    print("  --- Complete Thermalization Time (99% excess dissipated, ~4.6*tau) ---")
-    print(f"  Exciton                      : Estimated = {format_time_fs(arr_tot['est_99_fs']):<10} | Actual = {format_time_fs(arr_tot['act_99_fs'], times_fs[-1])}")
-    print(f"  Electron                     : Estimated = {format_time_fs(arr_e['est_99_fs']):<10} | Actual = {format_time_fs(arr_e['act_99_fs'], times_fs[-1])}")
-    print(f"  Hole                         : Estimated = {format_time_fs(arr_h['est_99_fs']):<10} | Actual = {format_time_fs(arr_h['act_99_fs'], times_fs[-1])}")
-    print()
-    print("  --- Lattice Thermalization Window (Excess <= k_B*T ≈ 25.8 meV) ---")
-    print(f"  Exciton                      : Actual = {format_time_fs(arr_tot['act_therm_fs'], times_fs[-1])}")
-    print(f"  Electron                     : Actual = {format_time_fs(arr_e['act_therm_fs'], times_fs[-1])}")
-    print(f"  Hole                         : Actual = {format_time_fs(arr_h['act_therm_fs'], times_fs[-1])}")
+        logger.info(f"  Hole Lifetime (tau_h)        : {tau_h:.1f} fs (k_cool = {arr_h['k_cool_ps']:.2f} ps^-1)")
+    logger.info("")
+    logger.info("  --- Band Edge Arrival Time (95% excess dissipated, ~3.0*tau) ---")
+    logger.info(f"  Exciton                      : Estimated = {format_time_fs(arr_tot['est_95_fs']):<10} | Actual = {format_time_fs(arr_tot['act_95_fs'], times_fs[-1])}")
+    logger.info(f"  Electron                     : Estimated = {format_time_fs(arr_e['est_95_fs']):<10} | Actual = {format_time_fs(arr_e['act_95_fs'], times_fs[-1])}")
+    logger.info(f"  Hole                         : Estimated = {format_time_fs(arr_h['est_95_fs']):<10} | Actual = {format_time_fs(arr_h['act_95_fs'], times_fs[-1])}")
+    logger.info("")
+    logger.info("  --- Complete Thermalization Time (99% excess dissipated, ~4.6*tau) ---")
+    logger.info(f"  Exciton                      : Estimated = {format_time_fs(arr_tot['est_99_fs']):<10} | Actual = {format_time_fs(arr_tot['act_99_fs'], times_fs[-1])}")
+    logger.info(f"  Electron                     : Estimated = {format_time_fs(arr_e['est_99_fs']):<10} | Actual = {format_time_fs(arr_e['act_99_fs'], times_fs[-1])}")
+    logger.info(f"  Hole                         : Estimated = {format_time_fs(arr_h['est_99_fs']):<10} | Actual = {format_time_fs(arr_h['act_99_fs'], times_fs[-1])}")
+    logger.info("")
+    logger.info("  --- Lattice Thermalization Window (Excess <= k_B*T ≈ 25.8 meV) ---")
+    logger.info(f"  Exciton                      : Actual = {format_time_fs(arr_tot['act_therm_fs'], times_fs[-1])}")
+    logger.info(f"  Electron                     : Actual = {format_time_fs(arr_e['act_therm_fs'], times_fs[-1])}")
+    logger.info(f"  Hole                         : Actual = {format_time_fs(arr_h['act_therm_fs'], times_fs[-1])}")
     if n_origins > 1 and std_energies_ev is not None and len(std_energies_ev) > 0:
-        print()
-        print(f"  --- Multi-Origin Thermal Ensemble ({n_origins} AIMD Initial Conditions) ---")
+        logger.info("")
+        logger.info(f"  --- Multi-Origin Thermal Ensemble ({n_origins} AIMD Initial Conditions) ---")
         mean_spd = np.mean(std_energies_ev) * 1e3
         max_spd = np.max(std_energies_ev) * 1e3
-        print(f"  Mean Thermal Spread (sigma)  : {mean_spd:.2f} meV (max = {max_spd:.2f} meV)")
-    print("=" * 68 + "\n")
+        logger.info(f"  Mean Thermal Spread (sigma)  : {mean_spd:.2f} meV (max = {max_spd:.2f} meV)")
+    logger.info("=" * 68 + "\n")
 
     bg_data = None
     nac_data = None
@@ -524,52 +527,52 @@ def analyze_and_plot_namd_results(
         k_rad_therm_s = recombination_info.get("k_rad_therm_s", 0.0)
         k_nr_s = recombination_info.get("k_nr_s", 0.0)
 
-        print("=" * 68)
-        print(" Recombination & Photoluminescence Summary")
-        print("=" * 68)
-        print(f"  Material                     : {mat_name} (Refractive Index n = {n_refr:.2f})")
+        logger.info("=" * 68)
+        logger.info(" Recombination & Photoluminescence Summary")
+        logger.info("=" * 68)
+        logger.info(f"  Material                     : {mat_name} (Refractive Index n = {n_refr:.2f})")
         if np.isfinite(tau_rad_1):
-            print(f"  Lowest Exciton Rad Lifetime  : {tau_rad_1:.2f} ns (k_rad = {1e9/max(tau_rad_1, 1e-12):.2e} s^-1)")
+            logger.info(f"  Lowest Exciton Rad Lifetime  : {tau_rad_1:.2f} ns (k_rad = {1e9/max(tau_rad_1, 1e-12):.2e} s^-1)")
         if np.isfinite(tau_rad_therm):
-            print(f"  Thermalized Rad Lifetime     : {tau_rad_therm:.2f} ns (k_rad = {k_rad_therm_s:.2e} s^-1)")
+            logger.info(f"  Thermalized Rad Lifetime     : {tau_rad_therm:.2f} ns (k_rad = {k_rad_therm_s:.2e} s^-1)")
         if np.isfinite(tau_nr):
             if tau_nr > 1e6:
-                print(f"  Effective Non-Rad Lifetime   : > 1 ms (intrinsic limit, k_nr = {k_nr_s:.2e} s^-1)")
+                logger.info(f"  Effective Non-Rad Lifetime   : > 1 ms (intrinsic limit, k_nr = {k_nr_s:.2e} s^-1)")
             else:
-                print(f"  Effective Non-Rad Lifetime   : {tau_nr:.2f} ns (k_nr = {k_nr_s:.2e} s^-1)")
+                logger.info(f"  Effective Non-Rad Lifetime   : {tau_nr:.2f} ns (k_nr = {k_nr_s:.2e} s^-1)")
         if np.isfinite(plqy):
-            print(f"  Predicted PL Quantum Yield   : {plqy:.1f} %")
+            logger.info(f"  Predicted PL Quantum Yield   : {plqy:.1f} %")
         if "tau_auger_ps" in recombination_info and np.isfinite(recombination_info["tau_auger_ps"]):
             tau_aug_ps = recombination_info["tau_auger_ps"]
             tau_aug_ns = tau_aug_ps * 1.0e-3
             k_aug_s = recombination_info.get("k_auger_s", 1e12 / max(tau_aug_ps, 1e-12))
-            print(f"  Biexciton Auger Lifetime     : {tau_aug_ns:.4f} ns ({tau_aug_ps:.2f} ps, k_Auger = {k_aug_s:.2e} s^-1)")
+            logger.info(f"  Biexciton Auger Lifetime     : {tau_aug_ns:.4f} ns ({tau_aug_ps:.2f} ps, k_Auger = {k_aug_s:.2e} s^-1)")
 
         if bg_data is not None and "recomb_params" in bg_data:
             rp = bg_data["recomb_params"]
             from qdex.hardness import compute_energy_gap_law_rate, compute_fcwd_rate
             # Intraband RMS NACs are not the exciton-to-ground coupling.
             k_jort_s, _ = compute_energy_gap_law_rate(qp_gap_ev, E_LO_ev=rp["E_LO_ev"], S_hr=rp["S_hr"])
-            print()
-            print("  --- Trajectory-Derived Parameters (Non-Empirical from NAMD) ---")
+            logger.info("")
+            logger.info("  --- Trajectory-Derived Parameters (Non-Empirical from NAMD) ---")
             rayleigh = bg_data.get("rayleigh_cm", np.nan)
             rayleigh_txt = f", resolution {rayleigh:.0f} cm^-1" if np.isfinite(rayleigh) else ""
-            print(f"  Dominant Optical Phonon      : {rp['dominant_freq_cm1']:.1f} cm^-1 (hbar*omega_LO = {rp['E_LO_ev']*1e3:.1f} meV{rayleigh_txt})")
-            print(f"  Nuclear Reorganization (lam) : {rp['lambda_ev']*1e3:.1f} meV")
-            print(f"  Huang-Rhys Factor (S)        : {rp['S_hr']:.3f}")
-            print(f"  Thermal Gap Fluctuation (sig): {rp['sigma_ev']*1e3:.1f} meV")
+            logger.info(f"  Dominant Optical Phonon      : {rp['dominant_freq_cm1']:.1f} cm^-1 (hbar*omega_LO = {rp['E_LO_ev']*1e3:.1f} meV{rayleigh_txt})")
+            logger.info(f"  Nuclear Reorganization (lam) : {rp['lambda_ev']*1e3:.1f} meV")
+            logger.info(f"  Huang-Rhys Factor (S)        : {rp['S_hr']:.3f}")
+            logger.info(f"  Thermal Gap Fluctuation (sig): {rp['sigma_ev']*1e3:.1f} meV")
             if rp.get("V_el_ev") is not None:
-                print(f"  Electronic Coupling (V_el)   : {rp['V_el_ev']*1e3:.2f} meV (<|d_10|> = {mean_nac_fs:.4f} fs^-1)")
+                logger.info(f"  Electronic Coupling (V_el)   : {rp['V_el_ev']*1e3:.2f} meV (<|d_10|> = {mean_nac_fs:.4f} fs^-1)")
                 k_fcwd_s, _ = compute_fcwd_rate(qp_gap_ev, V_el_ev=rp["V_el_ev"], lambda_ev=rp["lambda_ev"], sigma_ev=rp["sigma_ev"])
                 if k_fcwd_s > 0:
                     tau_fcwd = 1e9 / k_fcwd_s
                     fcwd_str = f"{tau_fcwd:.2f} ns" if tau_fcwd < 1e6 else "> 1 ms (intrinsic wide-gap limit)"
-                    print(f"  FCWD Multi-Phonon Rate       : {k_fcwd_s:.2e} s^-1 (tau_nr = {fcwd_str})")
+                    logger.info(f"  FCWD Multi-Phonon Rate       : {k_fcwd_s:.2e} s^-1 (tau_nr = {fcwd_str})")
             if k_jort_s > 0:
                 tau_jort = 1e9 / k_jort_s
                 jort_str = f"{tau_jort:.2f} ns" if tau_jort < 1e6 else "> 1 ms (intrinsic wide-gap limit)"
-                print(f"  Jortner Energy Gap Law Rate  : {k_jort_s:.2e} s^-1 (tau_nr = {jort_str})")
-        print("=" * 68 + "\n")
+                logger.info(f"  Jortner Energy Gap Law Rate  : {k_jort_s:.2e} s^-1 (tau_nr = {jort_str})")
+        logger.info("=" * 68 + "\n")
 
     # 4. Generate Multi-Panel Visualizations (6-panel publication layout)
     if plot_enabled:
@@ -811,7 +814,7 @@ def analyze_and_plot_namd_results(
         fig.tight_layout()
         plt.savefig(plot_file, dpi=300, bbox_inches="tight")
         plt.close()
-        print(f"  [Plot] Comprehensive carrier cooling figure saved to: {plot_file}")
+        logger.info(f"  [Plot] Comprehensive carrier cooling figure saved to: {plot_file}")
 
         # 5. Interactive Plotly Dashboard
         html_file = out_cfg.get("html_file", plot_file.rsplit(".", 1)[0] + ".html")
@@ -839,9 +842,9 @@ def analyze_and_plot_namd_results(
                     precompute_dir=precompute_dir,
                     html_file=html_file
                 )
-                print(f"  [Plotly] Interactive 6-panel dashboard saved to: {html_file}")
+                logger.info(f"  [Plotly] Interactive 6-panel dashboard saved to: {html_file}")
             except Exception as e:
-                print(f"  [Plotly:Warn] Could not generate interactive HTML: {e}")
+                logger.warning(f"  [Plotly:Warn] Could not generate interactive HTML: {e}")
 
 
 def generate_interactive_plotly_dashboard(
@@ -1543,7 +1546,7 @@ def plot_time_resolved_spectral_density(
 
     fig.savefig(plot_file, dpi=300, bbox_inches="tight")
     plt.close(fig)
-    print(f"  [NAMD:Spectrogram] Saved publication plot to: {plot_file}")
+    logger.info(f"  [NAMD:Spectrogram] Saved publication plot to: {plot_file}")
 
     # -------------------------------------------------------------
     # 2. Interactive Plotly Figure (HTML)
@@ -1648,9 +1651,9 @@ def plot_time_resolved_spectral_density(
         )
 
         fig_plotly.write_html(html_file, include_plotlyjs=True)
-        print(f"  [NAMD:Spectrogram] Saved interactive HTML to: {html_file}")
+        logger.info(f"  [NAMD:Spectrogram] Saved interactive HTML to: {html_file}")
     except Exception as e:
-        print(f"  [NAMD:Warn] Failed to create Plotly HTML widget: {e}")
+        logger.warning(f"  [NAMD:Warn] Failed to create Plotly HTML widget: {e}")
 
 
 def export_time_resolved_spectral_density(
@@ -1674,7 +1677,7 @@ def export_time_resolved_spectral_density(
         J_bandgap=tr_sd_data["J_bandgap"] if tr_sd_data["J_bandgap"] is not None else np.zeros_like(tr_sd_data["wavenumbers_cm"]),
         method=str(tr_sd_data.get("method", "NAMD"))
     )
-    print(f"  [NAMD:Spectrogram] Exported 2D spectrogram arrays to: {output_npz}")
+    logger.info(f"  [NAMD:Spectrogram] Exported 2D spectrogram arrays to: {output_npz}")
 
     # Export 1D time-integrated spectrum to CSV
     cols = [
@@ -1695,7 +1698,7 @@ def export_time_resolved_spectral_density(
         delimiter=",",
         comments=""
     )
-    print(f"  [NAMD:Spectrogram] Exported 1D integrated spectra to: {output_csv}")
+    logger.info(f"  [NAMD:Spectrogram] Exported 1D integrated spectra to: {output_csv}")
 
 
 def compute_2d_vibronic_action_map(
@@ -1895,7 +1898,7 @@ def plot_2d_vibronic_action_map(
 
     fig.savefig(output_png, dpi=300, bbox_inches="tight")
     plt.close(fig)
-    print(f"  [NAMD:2D-Map] Saved publication plot to: {output_png}")
+    logger.info(f"  [NAMD:2D-Map] Saved publication plot to: {output_png}")
 
     # Plotly interactive widget
     try:
@@ -1964,9 +1967,9 @@ def plot_2d_vibronic_action_map(
             legend=dict(orientation="h", yanchor="bottom", y=-0.12, xanchor="center", x=0.5)
         )
         fig_p.write_html(output_html, include_plotlyjs=True)
-        print(f"  [NAMD:2D-Map] Saved interactive HTML to: {output_html}")
+        logger.info(f"  [NAMD:2D-Map] Saved interactive HTML to: {output_html}")
     except Exception as e:
-        print(f"  [NAMD:Warn] Failed to create Plotly HTML 2D map: {e}")
+        logger.warning(f"  [NAMD:Warn] Failed to create Plotly HTML 2D map: {e}")
 
 
 def export_2d_vibronic_action_map(
@@ -1988,7 +1991,7 @@ def export_2d_vibronic_action_map(
         proj_prom=vib2d_data["proj_prom"],
         method=str(vib2d_data.get("method", "NAMD"))
     )
-    print(f"  [NAMD:2D-Map] Exported 2D vibronic arrays to: {output_npz}")
+    logger.info(f"  [NAMD:2D-Map] Exported 2D vibronic arrays to: {output_npz}")
 
     # Export 1D marginal projections to CSV
     # Pad to equal length if needed
@@ -2008,7 +2011,7 @@ def export_2d_vibronic_action_map(
         delimiter=",",
         comments=""
     )
-    print(f"  [NAMD:2D-Map] Exported 1D marginal projections to: {output_csv}")
+    logger.info(f"  [NAMD:2D-Map] Exported 1D marginal projections to: {output_csv}")
 
 
 

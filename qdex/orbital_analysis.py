@@ -1,4 +1,7 @@
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 def compute_spin_character(vec, soc_U, n_occ_sp, n_virt_sp, valid_mask=None):
     """
@@ -320,15 +323,22 @@ def _normalize_population_tags(population_bars, n_atoms):
 
 def print_orbital_summary(
     energies_eV, occ, homo_idx, pops, syms, shells, is_soc=False, offset=0,
-    print_range=15, population_bars=None
+    print_range=15, population_bars=None, qp_breakdown=None
 ):
     """
     Fast Mulliken population analysis broken down by Element and Angular Momentum (s, p, d).
     Expects precomputed 'pops' matrix to avoid duplicating S @ C multiplications.
+    If qp_breakdown is provided, also displays the microscopic breakdown of each orbital's QP shift.
     """
-    print("\n" + "="*115)
-    print(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'Main Contributions':>45}")
-    print("-" * 115)
+    has_qp = (qp_breakdown is not None) and (not is_soc)
+    table_width = 166 if has_qp else 115
+
+    logger.info("\n" + "=" * table_width)
+    if has_qp:
+        logger.info(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'Bulk (eV)':>10} | {'Zn':>6} | {'dSigma (eV)':>11} | {'r_HL (eV)':>10} | {'s(R)':>6} | {'Shift (eV)':>11} | {'QP (eV)':>10} | {'Occ':>5} | {'Main Contributions':>45}")
+    else:
+        logger.info(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'Main Contributions':>45}")
+    logger.info("-" * table_width)
     
     n_states = pops.shape[1]
     l_char = {0: 's', 1: 'p', 2: 'd', 3: 'f', 4: 'g'}
@@ -384,8 +394,22 @@ def print_orbital_summary(
         top_indices = np.argsort(-state_pops)[:5]
         contrib_str = ", ".join([f"{unique_labels[i]} ({state_pops[i]*100:.0f}%)" for i in top_indices if state_pops[i] > 0.05])
         
-        print(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {contrib_str}")
+        if has_qp:
+            e_dft = float(qp_breakdown["eps_dft"][idx])
+            b_shift = float(qp_breakdown["bulk_shift"][idx])
+            zn = float(qp_breakdown["zn"][idx])
+            d_sig = float(qp_breakdown["delta_sigma"][idx])
+            r_hl = float(qp_breakdown["r_hl"][idx])
+            s_r = float(qp_breakdown["s_r"][idx]) if hasattr(qp_breakdown["s_r"], "__len__") else float(qp_breakdown["s_r"])
+            tot_shift = b_shift + zn * d_sig + r_hl * s_r
+            e_qp = float(qp_breakdown["eps_qp"][idx])
+            logger.info(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {b_shift:+10.4f} | {zn:6.3f} | {d_sig:+11.4f} | {r_hl:+10.4f} | {s_r:6.3f} | {tot_shift:+11.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {contrib_str}")
+        else:
+            logger.info(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {contrib_str}")
         
         if idx == homo_idx + 1:
-            print(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'-'*45}")
-    print("=" * 115 + "\n")
+            if has_qp:
+                logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'------':>6} | {'-----------':>11} | {'----------':>10} | {'------':>6} | {'-----------':>11} | {'----------':>10} | {'-----':>5} | {'-'*45}")
+            else:
+                logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'-'*45}")
+    logger.info("=" * table_width + "\n")

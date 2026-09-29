@@ -1,5 +1,8 @@
 import numpy as np
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def coherent_mulliken_ao_populations(coeff, overlap_coeff, density):
@@ -18,7 +21,7 @@ class ExcitonAnalyzer:
         self.symbols = atom_symbols
         self.n_atoms = len(atom_symbols)
         
-        print(f"  [Analyzer] Initializing Exciton Analyzer...")
+        logger.info(f"  [Analyzer] Initializing Exciton Analyzer...")
         t0 = time.time()
         
         ham = solver.ham
@@ -64,13 +67,13 @@ class ExcitonAnalyzer:
         self.n_occ_act  = self.C_occ.shape[1]
         self.n_virt_act = self.C_virt.shape[1]
         
-        print(f"  [Analyzer] Extracted active space: {self.n_occ_act} occupied, {self.n_virt_act} virtual orbitals.")
+        logger.info(f"  [Analyzer] Extracted active space: {self.n_occ_act} occupied, {self.n_virt_act} virtual orbitals.")
 
         self.SC_occ  = self.solver.overlap @ self.C_occ
         self.SC_virt = self.solver.overlap @ self.C_virt
 
         # --- PRE-COMPUTE MO SPATIAL CENTERS ---
-        print(f"  [Analyzer] Precomputing spatial centers for orbitals...")
+        logger.info(f"  [Analyzer] Precomputing spatial centers for orbitals...")
         pop_occ_ao  = self.C_occ  * self.SC_occ
         pop_virt_ao = self.C_virt * self.SC_virt
         
@@ -90,7 +93,7 @@ class ExcitonAnalyzer:
         self.r_occ  = q_occ.T  @ self.coords  # Shape: (n_occ_act, 3)
         self.r_virt = q_virt.T @ self.coords  # Shape: (n_virt_act, 3)
         
-        print(f"  [Analyzer] Initialization completed in {time.time()-t0:.2f}s.")
+        logger.debug(f"  [Analyzer] Initialization completed in {time.time()-t0:.2f}s.")
 
     def get_particle_densities(self, bse_vec):
         """Mulliken populations from coherent reduced hole/electron density matrices."""
@@ -416,7 +419,7 @@ def plot_analysis_summary(analysis_results, physics_metrics=None, filename=None,
         
         with open(filename, 'w', encoding='utf-8') as f:
             f.write(html_template)
-        print(f"  Saved Exciton Analysis dashboard to {filename}")
+        logger.info(f"  Saved Exciton Analysis dashboard to {filename}")
 
     if show:
         fig.show()

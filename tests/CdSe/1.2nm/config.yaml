@@ -1,0 +1,58 @@
+system:
+  mo_file: "MOs_cleaned_12ang.txt"
+  xyz: "geom.xyz"
+  basis_txt: "BASIS_MOLOPT_UZH"
+  basis_name: "DZVP-MOLOPT-PBE-GTH"
+  material: "CDSE"
+  gth_file: "GTH_SOC_POTENTIALS.txt"
+  nthreads: 12
+
+environment:
+  eps_out: 1.0                  # vacuum; toluene 2.24
+
+quasiparticles:
+  model: "sgw-resta"            # none (uncorrected DFT), bulk (PBE + bulk GW; PBE only), brus,
+                                # sgw-resta, sgw-dim, evgw-resta, evgw-dim, qsgw-resta, qsgw-dim, gw
+  # z: derived                  # plasmon-pole Z of the same dielectric model (default)
+  # radius: saxs                # sphere radius for the reaction field: saxs (default) or hull
+
+integrals:
+  representation: "mnok"        # mnok (atom pairs) or xs (exact AO density pairs)
+  charges: "mulliken"           # mulliken or lowdin
+  # mnok_onsite: ip_ea          # on-site gamma_AA = IP - EA (default) or eta = (IP - EA)/2
+  # mnok_exponent: 2            # 2 = Ohno-Klopman (default), 1 = Mataga-Nishimoto
+  # mnok_exponent_exchange: 2   # separate exponent for K^x (default: mnok_exponent)
+
+excitations:
+  mode: "bse"                   # independent_dft, independent_qp, diagonal_bse, bse,
+                                # diagonal_sbse, sbse (use model: bulk), diagonal_stda, stda
+  # kernel: set by the QP model (its own W); resta or dim for sbse
+  nhomos: 25
+  nlumos: 25
+  full_diag: true
+  # selection: perturbative     # Grimme's transition selection (coupled solvers)
+  # selection_energy: 3.3       # E_thr in eV
+  # selection_pt: 1.0e-5        # t in hartree
+
+soc:
+  enabled: true
+  window: 10.0                  # eV window around the Fermi level for full SOC mixing
+
+analysis:
+  run_fuzzy: false
+  cif: "CdSe_zb.cif"            # used for automated K-path generation
+  pdos_atoms: ["Cd", "Se", "Cl"]
+  coop_pairs: ["Cd-Se", "Cd-Cd", "Se-Se"]
+  fuzzy_sigma: 0.01
+  pdos_sigma: 0.08
+  ewin: [-5.0, 5.0]
+
+output:
+  cube: false
+  cube_spacing: 0.5
+  sigma: 0.03
+  plot: true
+  write_csv: true
+  csv_roots: 200
+  time: 10.0
+  save_xia: true

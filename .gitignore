@@ -25,9 +25,26 @@ CMakeScripts/
 # Simulation outputs and data caches
 *.npz
 *.csv
+!benchmarks/results/*.csv
 *.png
 *.log
 namd_precomputed*/
 docs/_build/
 NAMD_STUDY
 
+tests/CdSe/MOs_cleaned_20ang.txt
+
+# CdSe benchmark run directories (outputs, symlinks)
+tests/CdSe/run1/
+tests/CdSe/sweep/
+tests/CdSe/MOs_cleaned_20ang.txt
+
+# comparison-suite outputs
+tests/CdSe/compare_*/
+tests/CdSe/sweep_env/
+tests/CdSe/probe_*/
+tests/CdSe/consist/
+tests/CdSe/2.0nm/MOs_cleaned_20ang.txt
+tests/CdSe/1.2nm/MOs_cleaned_12ang.txt
+tests/CdSe/*/compare_*/
+tests/CdSe/*/sweep/
