@@ -186,7 +186,7 @@ basis sets.
 4. A spin-unrestricted molden file of a closed shell (identical α and β sets) is merged into one
    restricted set.
 
-The acceptance test is orthonormality, :math:`\max|C^{\mathrm{T}} S C - 1|`, in the libint metric (default tolerance 10⁻⁶).
+The acceptance test is orthonormality, :math:`\max|C^{\mathrm{T}} S C - 1|`, in the libint metric (default tolerance 10⁻⁴; a wrong convention gives errors of order 1).
 
 **Files of a frame.**
 

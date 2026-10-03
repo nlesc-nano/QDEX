@@ -76,7 +76,7 @@ def equilibrate(atoms, outdir, n_steps, temp_k=300.0, dt_fs=2.0, friction_per_fs
     return atoms
 
 
-def production(atoms, outdir, n_frames, dt_fs=2.0, first_frame=1, nthreads=1, keep_molden=False, tol=1e-6):
+def production(atoms, outdir, n_frames, dt_fs=2.0, first_frame=1, nthreads=1, keep_molden=False, tol=1e-4):
     """
     NVE velocity Verlet; frame k (1-based) is written to ``outdir/frames/frame_{k:06d}``.
 

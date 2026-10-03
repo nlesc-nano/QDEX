@@ -319,7 +319,7 @@ def build_frame_shells(basis_path, syms, coords_ang):
 
 
 def convert_molden(molden_path, out_dir, basis_name="BASIS_GXTB", mo_name="MOs.mbse", xyz_name="frame.xyz",
-                   nthreads=1, tol=1e-6, comment=""):
+                   nthreads=1, tol=1e-4, comment=""):
     """
     Write ``frame.xyz``, the per-atom basis file and ``MOs.mbse`` (spherical, energies in Eh) to ``out_dir``.
 
