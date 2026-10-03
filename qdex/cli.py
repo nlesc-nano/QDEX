@@ -796,7 +796,7 @@ def _build_parser():
     parser.add_argument("--mo_file")
     parser.add_argument("--xyz") 
     parser.add_argument("--basis_txt")
-    parser.add_argument("--basis_name")
+    parser.add_argument("--basis_name", help="CP2K basis name, or 'per-atom' for a per-atom basis file (g-xTB frames, qdex.xtb.molden).")
     parser.add_argument(
         "--cache-mos", dest="cache_mos", action="store_true",
         help="Cache parsed text MOs as a validated uncompressed binary NPZ sidecar for faster repeated runs.",
@@ -814,6 +814,9 @@ def _build_parser():
                              "at every size) or 'scaled' (times the Penn fraction of bulk screening the dot keeps).")
     parser.add_argument("--bulk-vertex-factor", dest="bulk_vertex_factor", type=float, default=0.8,
                         help="Bulk vertex factor: Delta_bulk -> factor * Delta_bulk in the bulk (default 0.8).")
+    parser.add_argument("--qp-reference", dest="qp_reference", choices=["pbe", "gxtb"], default="pbe",
+                        help="Orbitals the 'bulk' QP shift corrects: 'pbe' (default, bulk QSGW - bulk PBE) or 'gxtb' "
+                             "(g-xTB frames: spin-free experimental gap - g-xTB bulk gap; NAMD precompute only).")
     parser.add_argument("--qp-z", dest="qp_z", type=str, default=None,
                         help="Quasiparticle renormalization Z for Delta-W models: 'derived' (default; one plasmon pole whose "
                              "frequency follows from the same eps as the model's W, see compute_dynamic_z) or a fixed "
@@ -971,9 +974,14 @@ def _build_parser():
     parser.add_argument("--inorganic-elements", dest="inorganic_elements", nargs="+", default=None,
                         help="Elements seen by SAXS for the reported size (default: all but H, C, N, O, P, B, Si, F).")
     parser.add_argument("--stda-functional", dest="stda_functional", type=str, default=None,
-                        help="sTDA: functional of the MO file, sets a_x (pbe 0, b3lyp 0.20, pbe0 0.25, ...).")
+                        help="sTDA: functional of the MO file, sets a_x (pbe 0, b3lyp 0.20, pbe0 0.25, ...); a "
+                             "range-separated one (cam-b3lyp, wb97x-d3, wb97m-v, gxtb) sets a_x, alpha and beta.")
     parser.add_argument("--stda-ax", dest="stda_ax", type=str, default=None,
                         help="sTDA: explicit Fock-exchange fraction a_x, or 'dielectric' for 1/eps_inf of the material.")
+    parser.add_argument("--stda-alpha", dest="stda_alpha", type=float, default=None,
+                        help="sTDA: explicit alpha of gamma^K (default 1.42 + 0.48 a_x, or the range-separated set).")
+    parser.add_argument("--stda-beta", dest="stda_beta", type=float, default=None,
+                        help="sTDA: explicit beta of gamma^J (default 0.20 + 1.83 a_x, or the range-separated set).")
     parser.add_argument("--tol", type=float, default=1e-5)
     parser.add_argument("--skip-orthonormality-check", dest="skip_orthonormality_check", action="store_true",
                         help="Skip the C^T S C = I check (a full n_ao^3 product); use only for MO files already "
@@ -1210,9 +1218,15 @@ def _read_geometry_and_basis(args, *, tracker):
                         syms, coords_ang = syms_h5, coords_h5
             except Exception:
                 pass
-    basis_dict = parse_basis(args.basis_txt, args.basis_name, required_elements=set(syms))
-    shells = build_shell_dicts(syms, coords_ang, basis_dict)
-    shells = [{**sh, 'pure': True} for sh in shells] # Use Sphericals 
+    if str(args.basis_name).lower() == "per-atom":
+        # One basis block per atom (qdex.xtb.molden): the g-xTB basis depends on the atomic charge
+        from qdex.xtb.molden import build_frame_shells
+        shells = build_frame_shells(args.basis_txt, syms, coords_ang)
+        logger.info(f"  [Basis] per-atom basis file '{args.basis_txt}'")
+    else:
+        basis_dict = parse_basis(args.basis_txt, args.basis_name, required_elements=set(syms))
+        shells = build_shell_dicts(syms, coords_ang, basis_dict)
+    shells = [{**sh, 'pure': True} for sh in shells] # Use Sphericals
     n_ao = count_ao_from_shells(shells)
     atom_ao_ranges = build_atom_ao_ranges(shells)
     logger.debug(f"  -> Parsed in {time.time() - t0_parse:.2f} s | Total AOs: {n_ao}")
@@ -1626,6 +1640,8 @@ def _quasiparticle_correction(args, *,
                 logger.info("  [QP Notice] The sBSE adds the bulk GW correction to PBE orbitals: use quasiparticles.model: bulk. "
                       "'none' no longer adds it.")
         elif args.qp_gap.lower() == "bulk":
+            if str(getattr(args, "qp_reference", "pbe")).lower() == "gxtb":
+                raise ValueError("quasiparticles.reference: gxtb is only supported by the NAMD precompute (g-xTB frames).")
             logger.info("  [QP] Bulk GW correction (bulk QSGW - bulk PBE). Valid only for PBE orbitals.")
             from qdex.hardness import bulk_qp_shift
             scissor, bulk_vertex_info = bulk_qp_shift(args.material, dft_gap)
@@ -1877,9 +1893,12 @@ def _qp_levels_and_kernel(args, *,
     args.kernel = resolve_bse_kernel(args, qp_w)
     stda_gamma_j = stda_gamma_k = None
     if args.kernel == "stda":
-        from qdex.hardness import build_stda_gammas, stda_ax
-        ax_val, ax_src = stda_ax(getattr(args, "stda_functional", None), getattr(args, "stda_ax", None), args.material)
-        stda_gamma_j, stda_gamma_k, stda_info = build_stda_gammas(syms, np.array(coords_ang), ax_val)
+        from qdex.hardness import build_stda_gammas, stda_parameters
+        ax_val, alpha_k, beta_j, ax_src = stda_parameters(
+            getattr(args, "stda_functional", None), getattr(args, "stda_ax", None),
+            getattr(args, "stda_alpha", None), getattr(args, "stda_beta", None), args.material)
+        stda_gamma_j, stda_gamma_k, stda_info = build_stda_gammas(syms, np.array(coords_ang), ax_val,
+                                                                  alpha=alpha_k, beta=beta_j)
         if str(args.charge_type).lower() != "lowdin":
             logger.info("  [sTDA] Transition charges set to Loewdin, as in sTDA.")
             args.charge_type = "lowdin"

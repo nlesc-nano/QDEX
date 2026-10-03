@@ -38,6 +38,7 @@ autodoc_mock_imports = [
     "matplotlib",
     "pymatgen",
     "plotly",
+    "ase",
 ]
 
 # Autodoc settings
