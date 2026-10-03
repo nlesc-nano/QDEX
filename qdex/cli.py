@@ -975,7 +975,7 @@ def _build_parser():
                         help="Elements seen by SAXS for the reported size (default: all but H, C, N, O, P, B, Si, F).")
     parser.add_argument("--stda-functional", dest="stda_functional", type=str, default=None,
                         help="sTDA: functional of the MO file, sets a_x (pbe 0, b3lyp 0.20, pbe0 0.25, ...); a "
-                             "range-separated one (cam-b3lyp, wb97x-d3, wb97m-v, gxtb) sets a_x, alpha and beta.")
+                             "range-separated one (cam-b3lyp, wb97x-d3, wb97m-v, gxtb) or stda-xtb/gfn2 sets a_x, alpha and beta.")
     parser.add_argument("--stda-ax", dest="stda_ax", type=str, default=None,
                         help="sTDA: explicit Fock-exchange fraction a_x, or 'dielectric' for 1/eps_inf of the material.")
     parser.add_argument("--stda-alpha", dest="stda_alpha", type=float, default=None,

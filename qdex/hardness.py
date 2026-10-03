@@ -1056,20 +1056,36 @@ STDA_RSH_PARAMS = {
     "gxtb": (0.51, 4.51, 8.0),
     "g-xtb": (0.51, 4.51, 8.0),
 }
+# sTDA-xTB set of the stda program (main.f, -xtb): a_x 0.50, alpha 2.0, beta 4.0 (Grimme, Bannwarth,
+# J. Chem. Phys. 145, 054103 (2016)). It was fitted for the sTDA-xTB Hamiltonian (xtb4stda orbitals,
+# with a +3.1 eV shift of the virtual levels and a K_ia diagonal shift, neither applied here). No sTDA
+# set has been published for GFN2-xTB orbitals; 'gfn2' takes this one as the closest xTB values.
+STDA_XTB_PARAMS = {
+    "stda-xtb": (0.50, 2.0, 4.0),
+    "gfn2": (0.50, 2.0, 4.0),
+    "gfn2-xtb": (0.50, 2.0, 4.0),
+}
 
 
 def stda_parameters(functional=None, ax=None, alpha=None, beta=None, material_name=None):
     """
     sTDA parameters (a_x, alpha_K, beta_J, source).
 
-    A range-separated functional (STDA_RSH_PARAMS) gives all three; otherwise a_x comes from
+    A fitted set (STDA_RSH_PARAMS, STDA_XTB_PARAMS) gives all three; otherwise a_x comes from
     ``ax`` or the functional (``stda_ax``) and alpha, beta from the global-hybrid formulas.
     Explicit ``ax``, ``alpha`` or ``beta`` override the preset.
     """
     key = str(functional).lower() if functional else None
-    if key in STDA_RSH_PARAMS:
-        ax0, alpha0, beta0 = STDA_RSH_PARAMS[key]
-        source = f"{functional} (range-separated set)"
+    if key in STDA_RSH_PARAMS or key in STDA_XTB_PARAMS:
+        if key in STDA_RSH_PARAMS:
+            ax0, alpha0, beta0 = STDA_RSH_PARAMS[key]
+            source = f"{functional} (range-separated set)"
+        else:
+            ax0, alpha0, beta0 = STDA_XTB_PARAMS[key]
+            source = f"{functional} (sTDA-xTB set)"
+            if key != "stda-xtb":
+                logger.warning(f"  [sTDA] '{functional}': no sTDA parameters exist for GFN2-xTB orbitals; using the "
+                               "sTDA-xTB set (a_x 0.50, alpha 2.0, beta 4.0), fitted for xtb4stda orbitals.")
         if ax is not None and str(ax).strip() != "":
             ax0, _ = stda_ax(None, ax, material_name)
             source += ", explicit a_x"

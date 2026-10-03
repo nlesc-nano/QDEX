@@ -101,6 +101,18 @@ values of the ``stda`` program (``main.f``):
      - 0.38
      - 0.90
      - 1.86
+   * - ``stda-xtb``; ``gfn2`` / ``gfn2-xtb`` (borrowed, see below)
+     - 0.50
+     - 2.0
+     - 4.0
+
+The ``stda-xtb`` set is the one the ``stda`` program uses for sTDA-xTB wavefunctions (flag ``-xtb``;
+Grimme and Bannwarth, J. Chem. Phys. 145, 054103 (2016)). It was fitted together with the sTDA-xTB
+Hamiltonian, whose orbitals carry a +3.1 eV shift of the virtual levels, and with a diagonal K\ :sub:`ia`
+shift (up to 0.5 eV) that QDEX does not apply. No sTDA parameters have been published for GFN2-xTB
+orbitals; the usual practice is GFN2 geometries with the sTDA-xTB Hamiltonian for the excitations.
+``functional: gfn2`` therefore takes the sTDA-xTB set as the closest xTB values, and QDEX prints a
+warning: with GFN2 orbitals it is a heuristic, to be tested against a reference.
 
 The formulas for γ\ :sup:`J` and γ\ :sup:`K` are unchanged; only the parameters differ. With β = 8 the
 direct interaction is damped at short range (on-site a_x η) and switches sharply to the bare 1/R. The
