@@ -23,6 +23,13 @@ class StdaParameterTests(unittest.TestCase):
             self.assertEqual((ax, a, b), (0.51, 4.51, 8.0))
         self.assertEqual(stda_parameters("cam-b3lyp")[:3], (0.38, 0.90, 1.86))
 
+    def test_xtb_set(self):
+        # stda main.f, -xtb: a_x 0.50, alpha 2.0, beta 4.0; 'gfn2' borrows it (no GFN2 set exists)
+        for name in ("stda-xtb", "gfn2", "GFN2-xTB"):
+            ax, a, b, src = stda_parameters(name)
+            self.assertEqual((ax, a, b), (0.50, 2.0, 4.0))
+            self.assertIn("sTDA-xTB set", src)
+
     def test_global_hybrid_formulas(self):
         ax, a, b, _ = stda_parameters("pbe0")
         self.assertAlmostEqual(ax, 0.25)
