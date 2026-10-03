@@ -41,6 +41,7 @@ SECTIONS = {
     },
     "quasiparticles": {
         "model": "qp_gap",
+        "reference": "qp_reference",
         "bulk_vertex": "bulk_vertex",
         "bulk_vertex_factor": "bulk_vertex_factor",
         "z": "qp_z",
@@ -98,6 +99,8 @@ SECTIONS = {
         "selection_shift": "selection_shift",
         "functional": "stda_functional",
         "ax": "stda_ax",
+        "stda_alpha": "stda_alpha",
+        "stda_beta": "stda_beta",
     },
     "soc": {
         "enabled": "soc_flag",

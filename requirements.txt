@@ -17,3 +17,6 @@ plotly>=5.14.0
 # Hardware Acceleration
 torch>=2.0.0
 
+
+# Optional: g-xTB molecular dynamics (qdex.xtb.md)
+# ase>=3.23

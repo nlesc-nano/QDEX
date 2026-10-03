@@ -35,12 +35,26 @@ transition, no mixing), so that the same transitions can be followed along the t
      - ``bulk`` (PBE orbitals + bulk GW correction, one constant for all frames), ``none``, ``brus``,
        ``gw`` or a gap in eV. Models that need a QP step per frame (``sgw-*``, ``evgw-*``, ``qsgw-*``)
        are rejected.
+   * - ``quasiparticles.reference``
+     - ``pbe``
+     - orbitals the ``bulk`` shift corrects: ``pbe`` (bulk QSGW − bulk PBE) or ``gxtb`` (spin-free
+       experimental gap − g-xTB bulk gap; :doc:`gxtb`). ``gw`` and ``brus`` are rejected with ``gxtb``.
    * - ``excitations.mode``
      - ``diagonal_sbse``
-     - ``diagonal_sbse`` / ``diagonal_bse`` (same solver), ``independent_qp``, ``independent_dft``
+     - ``diagonal_sbse`` / ``diagonal_bse`` (same solver), ``diagonal_stda`` (Grimme's sTDA on the
+       diagonal), ``independent_qp``, ``independent_dft``
    * - ``excitations.kernel``
      - ``resta``
-     - ``resta`` (bulk Resta W), ``dim`` or ``bse``; rebuilt from every frame's geometry
+     - ``resta`` (bulk Resta W), ``dim`` or ``bse``; rebuilt from every frame's geometry. Not used by
+       ``diagonal_stda``.
+   * - ``excitations.functional``, ``ax``, ``stda_alpha``, ``stda_beta``
+     - —
+     - ``diagonal_stda`` only: functional of the orbitals (``gxtb``, ``wb97m-v``, ``pbe0``, …) or explicit
+       sTDA parameters (:doc:`/excitons/stda`)
+   * - ``namd.trajectory.basis_file``
+     - —
+     - per-frame basis file (``BASIS_GXTB`` for g-xTB frames, :doc:`gxtb`); replaces ``system.basis_txt``
+       and ``basis_name``
    * - ``excitations.include_exchange``, ``include_direct_eh``
      - true
      - K\ :sup:`x` and K\ :sup:`d`
@@ -59,6 +73,17 @@ for all frames, and the energy fluctuations along the trajectory come only from 
 interaction terms. The ``integrals`` keys (``mnok_exponent``, ``mnok_exponent_exchange``,
 ``mnok_onsite``) apply as in a single-point run, and the precompute prints the same
 ``--- Two-electron integrals ---`` block (:doc:`/integrals/representation`) after its header.
+
+With ``diagonal_stda`` the transition energy is Grimme's diagonal sTDA element,
+
+.. math::
+
+   E_{ia}(t) = \varepsilon_a(t) - \varepsilon_i(t) + 2\,(ia|ia)_K - (ii|aa)_J ,
+
+with Löwdin charges and the interactions γ\ :sup:`K` and γ\ :sup:`J` of :doc:`/excitons/stda`, rebuilt
+from every frame's geometry (k\ :sub:`x` = 1 for spinors). The orbital energies are used as they are
+(``quasiparticles.model: none``); this is the setting for orbitals of a hybrid functional or of g-xTB
+(``functional: gxtb``, :doc:`gxtb`). A QP shift is accepted with a warning.
 
 ``gw`` with the bulk kernel is accepted for old runs with a warning: its QP gap contains the surface
 polarization but the kernel lacks the matching electron–hole image, which places the excitons too high
@@ -133,6 +158,7 @@ YAML Configuration Example
        frame_pattern: "frame_*"
        mo_file: "MOs.mbse"               # per frame: .mbse, text, or TREXIO HDF5 (orbitals.h5)
        xyz_file: "frame.xyz"             # per frame; not needed when mo_file is .h5 (geometry read from it)
+       # basis_file: "BASIS_GXTB"        # per-frame basis (g-xTB frames); otherwise system.basis_txt/basis_name
        dt_nuc_fs: 2.0                    # Nuclear MD time step in femtoseconds
        start_frame: 1
        end_frame: 500

@@ -110,16 +110,23 @@ def align_spinor_phases_and_crossings(S_mat, U_list, track_crossings=True, lock_
     return S_mat, U_list, perm
 
 
-DIAGONAL_MODES = ("diagonal_bse", "diagonal_sbse")
+DIAGONAL_MODES = ("diagonal_bse", "diagonal_sbse", "diagonal_stda")
 INDEPENDENT_MODES = ("independent_qp", "independent_dft")
 
 
-def frame_kernels(syms, coords, kernel="resta", material=None, alpha=1.0, eps_out=2.0):
-    """Direct kernel W and bare exchange interaction gamma for one frame (atom resolution, eV)."""
+def frame_kernels(syms, coords, kernel="resta", material=None, alpha=1.0, eps_out=2.0, stda=None):
+    """Direct kernel W and bare exchange interaction gamma for one frame (atom resolution, eV).
+
+    kernel 'stda': Grimme's gamma^J (direct) and gamma^K (exchange) with ``stda`` = dict(ax, alpha, beta).
+    """
     import qdex.hardness as _hardness
     from qdex.hardness import build_gamma
     k = str(kernel).lower()
     coords = np.asarray(coords, dtype=float)
+    if k == "stda":
+        from qdex.hardness import build_stda_gammas
+        gam_j, gam_k, _ = build_stda_gammas(syms, coords, stda["ax"], alpha=stda["alpha"], beta=stda["beta"])
+        return gam_j, gam_k
     gamma = build_gamma(atom_symbols=syms, coords=coords, alpha=1.0, beta=0.0, exponent=_hardness.MNOK_EXPONENT_K)
     if k == "resta":
         from qdex.hardness import build_resta_mnok
@@ -132,6 +139,25 @@ def frame_kernels(syms, coords, kernel="resta", material=None, alpha=1.0, eps_ou
     else:
         raise ValueError(f"NAMD precompute: kernel '{kernel}' is not supported (use resta, dim or bse).")
     return w, gamma
+
+
+def _charge_factors(S, C, lowdin=False, S_half=None):
+    """Factors (L, R) of the atomic charges q^A_pq = sum_{mu in A} L_mu,p R_mu,q.
+
+    Mulliken: (C, S C). Loewdin (sTDA): (S^1/2 C, S^1/2 C); pass ``S_half`` to reuse S^1/2.
+    """
+    if not lowdin:
+        return C, S @ C
+    if S_half is None:
+        S_half = _sqrt_overlap(S)
+    X = S_half @ C
+    return X, X
+
+
+def _sqrt_overlap(S):
+    """S^1/2 of a symmetric positive-definite overlap matrix."""
+    w, V = np.linalg.eigh(S)
+    return (V * np.sqrt(np.clip(w, 0.0, None))) @ V.T
 
 
 def _diag_exchange(C_occ_list, C_virt_list, SC_occ_list, SC_virt_list, atom_ao_ranges, gamma, chunk_elems=4e7):
@@ -183,7 +209,9 @@ def compute_frame_diagonal_bse(
     soc=False,
     gth_file=None,
     device="numpy",
-    verbose_soc=False
+    verbose_soc=False,
+    frame_basis_path=None,
+    stda=None
 ):
     """
     Computes single-particle QP energies, diagonal BSE exciton energies,
@@ -193,15 +221,30 @@ def compute_frame_diagonal_bse(
     Diagonal modes: E_ia = e_a^QP - e_i^QP + k_x K^x_ia,ia - K^d_ia,ia with k_x = 2 (spin-free
     singlet) or 1 (spinors). With ``kernel`` given, W and the bare gamma are rebuilt from this
     frame's geometry; otherwise ``w_resta`` (fixed) is used for K^d and K^x is skipped.
+
+    ``frame_basis_path``: per-atom basis file of this frame (g-xTB, see qdex.xtb.molden); it
+    replaces ``basis_dict``.
+
+    ``diagonal_stda``: Grimme's sTDA on the diagonal, gamma^J for K^d and gamma^K for K^x with Loewdin
+    charges; ``stda`` = dict(ax, alpha, beta) (qdex.hardness.stda_parameters).
     """
     syms, coords = read_xyz(xyz_path)
-    shells = build_shell_dicts(syms, coords, basis_dict)
+    if frame_basis_path:
+        from qdex.xtb.molden import build_frame_shells
+        shells = build_frame_shells(frame_basis_path, syms, coords)
+    else:
+        shells = build_shell_dicts(syms, coords, basis_dict)
     n_atoms = len(atom_ao_ranges)
     mode = str(excitation_mode).lower()
     use_kernel = mode in DIAGONAL_MODES
+    lowdin = mode == "diagonal_stda"
+    if lowdin:
+        if stda is None:
+            raise ValueError("diagonal_stda needs the sTDA parameters (stda=dict(ax, alpha, beta)).")
+        kernel = "stda"
     gamma_bare = None
     if use_kernel and kernel is not None:
-        w_resta, gamma_bare = frame_kernels(syms, coords, kernel, material, alpha, eps_out)
+        w_resta, gamma_bare = frame_kernels(syms, coords, kernel, material, alpha, eps_out, stda=stda)
     do_kd = use_kernel and include_direct_eh and w_resta is not None
     do_kx = use_kernel and include_exchange and gamma_bare is not None
 
@@ -240,18 +283,19 @@ def compute_frame_diagonal_bse(
         E_diag = E_sp.copy()
         if do_kd or do_kx:
             S_ao_intra = compute_cross_overlap_ao(shells, shells, nthreads=nthreads)
-            SC_occ = S_ao_intra @ C_occ
-            SC_virt = S_ao_intra @ C_virt
+            S_half = _sqrt_overlap(S_ao_intra) if lowdin else None
+            Cq_occ, SC_occ = _charge_factors(S_ao_intra, C_occ, lowdin, S_half)
+            Cq_virt, SC_virt = _charge_factors(S_ao_intra, C_virt, lowdin, S_half)
         if do_kx:
-            Kx_mat = _diag_exchange([C_occ], [C_virt], [SC_occ], [SC_virt], atom_ao_ranges, gamma_bare)
+            Kx_mat = _diag_exchange([Cq_occ], [Cq_virt], [SC_occ], [SC_virt], atom_ao_ranges, gamma_bare)
             E_diag = E_diag + 2.0 * Kx_mat[i_indices, a_indices]
         if do_kd:
 
             q_occ_diag = np.zeros((n_occ_act, n_atoms), dtype=np.float64)
             q_virt_diag = np.zeros((n_virt_act, n_atoms), dtype=np.float64)
             for A, (a0, a1) in enumerate(atom_ao_ranges):
-                q_occ_diag[:, A] = np.sum(C_occ[a0:a1, :] * SC_occ[a0:a1, :], axis=0)
-                q_virt_diag[:, A] = np.sum(C_virt[a0:a1, :] * SC_virt[a0:a1, :], axis=0)
+                q_occ_diag[:, A] = np.sum(Cq_occ[a0:a1, :] * SC_occ[a0:a1, :], axis=0)
+                q_virt_diag[:, A] = np.sum(Cq_virt[a0:a1, :] * SC_virt[a0:a1, :], axis=0)
 
             W_virt_diag = q_virt_diag @ w_resta.T
             Kd_mat = q_occ_diag @ W_virt_diag.T
@@ -357,10 +401,10 @@ def compute_frame_diagonal_bse(
         Kx_mat = None
         E_diag = E_sp.copy()
         if do_kd or do_kx:
-            SC_act = S_ao_intra @ C_act
+            Cq_act, SC_act = _charge_factors(S_ao_intra, C_act, lowdin)
             if do_kx:
-                C_sp_a = C_act @ U_alpha
-                C_sp_b = C_act @ U_beta
+                C_sp_a = Cq_act @ U_alpha
+                C_sp_b = Cq_act @ U_beta
                 SC_sp_a = SC_act @ U_alpha
                 SC_sp_b = SC_act @ U_beta
 
@@ -376,17 +420,17 @@ def compute_frame_diagonal_bse(
             else:
                 # Optimized low-memory path when exchange is disabled:
                 # Transform occupied and virtual subspaces separately to compute diagonal densities.
-                C_occ_sp_a = C_act @ U_occ_alpha
+                C_occ_sp_a = Cq_act @ U_occ_alpha
                 SC_occ_sp_a = SC_act @ U_occ_alpha
-                C_occ_sp_b = C_act @ U_occ_beta
+                C_occ_sp_b = Cq_act @ U_occ_beta
                 SC_occ_sp_b = SC_act @ U_occ_beta
 
                 dens_occ = np.real(C_occ_sp_a.conj() * SC_occ_sp_a + C_occ_sp_b.conj() * SC_occ_sp_b)
                 del C_occ_sp_a, SC_occ_sp_a, C_occ_sp_b, SC_occ_sp_b
 
-                C_virt_sp_a = C_act @ U_virt_alpha
+                C_virt_sp_a = Cq_act @ U_virt_alpha
                 SC_virt_sp_a = SC_act @ U_virt_alpha
-                C_virt_sp_b = C_act @ U_virt_beta
+                C_virt_sp_b = Cq_act @ U_virt_beta
                 SC_virt_sp_b = SC_act @ U_virt_beta
 
                 dens_virt = np.real(C_virt_sp_a.conj() * SC_virt_sp_a + C_virt_sp_b.conj() * SC_virt_sp_b)
@@ -513,8 +557,21 @@ def precompute_namd_data(config):
 
     qp_key = qp_model.lower()
     if excitation_mode not in DIAGONAL_MODES + INDEPENDENT_MODES:
-        raise ValueError(f"NAMD precompute supports diagonal_sbse, diagonal_bse, independent_qp and "
-                         f"independent_dft, not '{excitation_mode}'.")
+        raise ValueError(f"NAMD precompute supports diagonal_sbse, diagonal_bse, diagonal_stda, independent_qp "
+                         f"and independent_dft, not '{excitation_mode}'.")
+    stda = None
+    if excitation_mode == "diagonal_stda":
+        from qdex.hardness import stda_parameters
+        if phys_cfg.get("kernel") not in (None, "stda"):
+            raise ValueError("diagonal_stda uses Grimme's sTDA interactions; leave excitations.kernel unset.")
+        ax_s, alpha_s, beta_s, src_s = stda_parameters(
+            phys_cfg.get("stda_functional"), phys_cfg.get("stda_ax"), phys_cfg.get("stda_alpha"),
+            phys_cfg.get("stda_beta"), material)
+        stda = dict(ax=ax_s, alpha=alpha_s, beta=beta_s, source=src_s)
+        kernel = "stda"
+        if qp_key not in ("none", "pbe", "dft"):
+            logger.warning("  [NAMD Warning] sTDA takes the orbital energies of the functional as they are; "
+                           "quasiparticles.model: none is the faithful setting.")
     if qp_key not in ("bulk", "none", "pbe", "dft", "brus", "gw"):
         try:
             float(qp_model)
@@ -529,6 +586,13 @@ def precompute_namd_data(config):
         raise ValueError("NAMD precompute: the resta-sphere kernel is not available; use qp_gap: bulk.")
     if excitation_mode == "independent_dft":
         qp_model, qp_key = "none", "none"
+    # Orbitals the bulk QP shift corrects: PBE (default) or g-xTB frames (qdex.xtb)
+    qp_reference = str(phys_cfg.get("qp_reference", "pbe") or "pbe").lower()
+    if qp_reference not in ("pbe", "gxtb"):
+        raise ValueError(f"quasiparticles.reference must be 'pbe' or 'gxtb', not '{qp_reference}'.")
+    if qp_reference == "gxtb" and qp_key in ("gw", "brus"):
+        raise ValueError(f"NAMD precompute: qp_gap '{qp_model}' assumes PBE orbitals; with g-xTB frames use "
+                         "bulk, none or a gap in eV.")
 
     precompute_dir = storage_cfg.get("precompute_dir", "namd_precomputed")
     energy_window = storage_cfg.get("active_energy_window_ev", None)
@@ -572,8 +636,16 @@ def precompute_namd_data(config):
                                   f"core hull radius {size0['hull_radius_ang']:.3f} A ('{qp_model}')") + "  [frame 0]")
     except Exception as exc:
         logger.info(f"  [Size] Could not evaluate the cluster size: {exc}")
-    basis_dict = parse_basis(basis_txt, basis_name, required_elements=set(syms0))
-    shells0 = build_shell_dicts(syms0, coords0, basis_dict)
+    # Basis: one CP2K basis for all frames, or a per-frame basis file (g-xTB charge-dependent basis)
+    frame_basis = traj_cfg.get("basis_file")
+    if frame_basis:
+        from qdex.xtb.molden import build_frame_shells
+        basis_dict = None
+        shells0 = build_frame_shells(os.path.join(frame_dirs[0], frame_basis), syms0, coords0)
+        logger.info(f"  [Basis] per-frame basis file '{frame_basis}'")
+    else:
+        basis_dict = parse_basis(basis_txt, basis_name, required_elements=set(syms0))
+        shells0 = build_shell_dicts(syms0, coords0, basis_dict)
     n_ao = count_ao_from_shells(shells0)
     atom_ao_ranges = build_atom_ao_ranges(shells0)
 
@@ -603,6 +675,11 @@ def precompute_namd_data(config):
             raise ValueError(f"Brus QP estimation failed for material '{material}'.")
     elif str(qp_model).lower() in ("pbe", "none", "dft"):
         scissor = 0.0
+    elif str(qp_model).lower() == "bulk" and qp_reference == "gxtb":
+        from qdex.hardness import gxtb_bulk_shift
+        if phys_cfg.get("bulk_vertex", "none") != "none":
+            logger.warning("  [NAMD Warning] bulk_vertex applies to the PBE/QSGW shift; it is ignored for g-xTB.")
+        scissor, _ = gxtb_bulk_shift(material)
     elif str(qp_model).lower() == "bulk":
         from qdex.hardness import bulk_qp_shift
         dft_gap0 = None
@@ -649,7 +726,9 @@ def precompute_namd_data(config):
     logger.info(f"  Frames to process    : {n_frames} (dt = {dt_nuc_fs:.2f} fs)")
     logger.info(f"  Precompute output    : {precompute_dir}")
     logger.info(f"  Active Space         : nhomos={nhomos}, nlumos={nlumos}")
-    logger.info(f"  QP Model             : {qp_model}" + ("  (PBE orbitals + bulk GW correction)" if qp_key == "bulk" else ""))
+    bulk_label = ("  (g-xTB orbitals + g-xTB bulk shift, provisional)" if qp_reference == "gxtb"
+                  else "  (PBE orbitals + bulk GW correction)")
+    logger.info(f"  QP Model             : {qp_model}" + (bulk_label if qp_key == "bulk" else ""))
     logger.info(f"  Excitation Framework : {excitation_mode.upper()} (kernel: {kernel}, per frame; "
           f"K^x: {include_exchange}, K^d: {include_direct_eh})")
     if energy_window:
@@ -662,8 +741,10 @@ def precompute_namd_data(config):
     logger.info("=" * 65)
     if excitation_mode in DIAGONAL_MODES:
         from qdex.hardness import format_integrals_block
-        logger.info(format_integrals_block("mnok", "mulliken", kernel, syms0, include_direct=include_direct_eh,
-                                     include_exchange=include_exchange)
+        stda_info = dict(ax=stda["ax"], alpha_K=stda["alpha"], beta_J=stda["beta"]) if stda else None
+        logger.info(format_integrals_block("mnok", "lowdin" if stda else "mulliken", kernel, syms0,
+                                     stda_info=stda_info, stda_ax_source=stda["source"] if stda else None,
+                                     include_direct=include_direct_eh, include_exchange=include_exchange)
               + "\n  (diagonal elements K_ia,ia only; rebuilt from each frame's geometry)")
     logger.info("")
 
@@ -708,7 +789,9 @@ def precompute_namd_data(config):
             nthreads=nthreads,
             soc=soc,
             gth_file=gth_file,
-            verbose_soc=(k == 0)
+            verbose_soc=(k == 0),
+            frame_basis_path=os.path.join(fdir, frame_basis) if frame_basis else None,
+            stda=stda
         )
 
         dft_gaps.append(curr_data["dft_gap"])

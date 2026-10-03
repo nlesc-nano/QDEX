@@ -115,6 +115,30 @@ qdex.namd.transient_absorption
    :undoc-members:
    :show-inheritance:
 
+qdex.xtb.calculator
+-------------------
+
+.. automodule:: qdex.xtb.calculator
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.xtb.md
+-----------
+
+.. automodule:: qdex.xtb.md
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+qdex.xtb.molden
+---------------
+
+.. automodule:: qdex.xtb.molden
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 qdex.io_utils
 -------------
 
