@@ -30,6 +30,14 @@ class ClusterSizeTests(unittest.TestCase):
         d2 = cluster_size(np.vstack([core, shell]), syms, "CDSE", inorganic_elements=["Cd", "Se", "C"])
         self.assertGreater(d2["d_saxs_nm"], 2.5)
 
+    def test_native_light_elements_are_visible(self):
+        # P in the InP lattice scatters; P in an organic ligand would not
+        x = _sphere(1000, 10.0, 3)
+        d = cluster_size(x, ["In", "P"] * 500, "INP")
+        self.assertEqual(d["n_inorganic"], 1000)
+        self.assertEqual(d["inorganic_elements"], ["In", "P"])
+        self.assertEqual(cluster_size(x, ["Cd", "P"] * 500, "CDSE")["inorganic_elements"], ["Cd"])
+
 
 if __name__ == "__main__":
     unittest.main()
