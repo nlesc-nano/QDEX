@@ -2428,6 +2428,10 @@ def _cubes_and_fuzzy(args, *,
             use_cpp=not getattr(args, 'disable_cpp_cube', False)
         )
 
+    # coarse MO cubes before the fuzzy dashboards, which embed the cube files they find
+    if getattr(args, "mo_cubes", False) and not getattr(args, "cube", False):
+        _write_mo_cubes(args, C_dense, homo_index, shells, syms, coords_ang, tracker)
+
     # -----------------------------------------------------------------
     # MODULE DELEGATION: FUZZY BANDS & PDOS (Large Window)
     # -----------------------------------------------------------------
@@ -2508,7 +2512,7 @@ def _store_electronic_and_mo_cubes(args, *,
         C_dense, bse_soc_E, bse_soc_U, bse_soc_midgap_ev, bse_spinor_homo_idx, calculated_soc_gap, confinement_energy, coords_ang,
         dft_gap, e_fermi_raw, eps, eps_dft_shifted, eps_qp_active, homo_index, occ, pops_sf, pops_soc_act,
         qp_homo, qp_lumo, qp_provenance, scissor, shells, syms, target_qp_gap, tracker):
-    """Spin-free MOs and SOC spinors into qdex_electronic.h5 (output.h5); coarse MO cubes (output.mo_cubes)."""
+    """Spin-free MOs and SOC spinors into qdex_electronic.h5 (output.h5)."""
     store = getattr(args, "qdex_store", None)
     if store is not None:
         from qdex.pdos_coop import _ao_metadata
@@ -2563,20 +2567,22 @@ def _store_electronic_and_mo_cubes(args, *,
                        soc_qp_homo_ev=float(e_qp[h]), soc_qp_lumo_ev=float(e_qp[h + 1]))
             store.cache["soc_spinor_atom_pops"] = _atom_pops(Ps, build_atom_ao_ranges(shells))
 
-    if getattr(args, "mo_cubes", False):
-        tracker.start_stage("MO Cubes")
-        from qdex.exciton_cube import generate_cubes
-        n_h, n_l = getattr(args, "cube_nhomos", 2), getattr(args, "cube_nlumos", 2)
-        mo_list = [homo_index - i for i in range(n_h) if homo_index - i >= 0]
-        mo_list += [homo_index + 1 + i for i in range(n_l) if homo_index + 1 + i < C_dense.shape[1]]
-
-        from types import SimpleNamespace
-        _MOs = SimpleNamespace(C=C_dense, homo_index=homo_index)
-        logger.info(f"\n--- MO cubes ({len(mo_list)} spin-free MOs, {args.mo_cube_spacing} A grid) ---")
-        generate_cubes(solver=_MOs, bse_states_dict={}, mo_list=mo_list, spinor_list=[], soc_U=None,
-                       shells=shells, symbols=syms, coords=coords_ang, spacing_ang=args.mo_cube_spacing,
-                       nthreads=args.nthreads, use_cpp=not getattr(args, "disable_cpp_cube", False))
     return {}
+
+
+def _write_mo_cubes(args, C_dense, homo_index, shells, syms, coords_ang, tracker):
+    """Spin-free HOMO-1..LUMO+1 (cube_nhomos / cube_nlumos) on a coarse grid (output.mo_cubes)."""
+    tracker.start_stage("MO Cubes")
+    from qdex.exciton_cube import generate_cubes
+    from types import SimpleNamespace
+    n_h, n_l = getattr(args, "cube_nhomos", 2), getattr(args, "cube_nlumos", 2)
+    mo_list = [homo_index - i for i in range(n_h) if homo_index - i >= 0]
+    mo_list += [homo_index + 1 + i for i in range(n_l) if homo_index + 1 + i < C_dense.shape[1]]
+    logger.info(f"\n--- MO cubes ({len(mo_list)} spin-free MOs, {args.mo_cube_spacing} A grid) ---")
+    generate_cubes(solver=SimpleNamespace(C=C_dense, homo_index=homo_index), bse_states_dict={}, mo_list=mo_list,
+                   spinor_list=[], soc_U=None, shells=shells, symbols=syms, coords=coords_ang,
+                   spacing_ang=args.mo_cube_spacing, nthreads=args.nthreads,
+                   use_cpp=not getattr(args, "disable_cpp_cube", False))
 
 
 def _write_store(args):
@@ -2774,6 +2780,9 @@ def _run_stage(stage, args, state):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "dashboards":       # qdex dashboards <run dir>
+        from qdex.dashboards import main as dashboards_main
+        return dashboards_main(sys.argv[2:])
     parser = _build_parser()
     loaded = _load_arguments(parser)
     if loaded is None:

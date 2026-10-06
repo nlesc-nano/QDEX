@@ -304,6 +304,17 @@ people), ``output`` has:
   cubes of ``cube``.
 * ``verbosity: quiet`` keeps the console to warnings; the log file keeps everything.
 
+The HTML pages of a database run can be made later from its two HDF5 files,
+without recomputing anything::
+
+   qdex dashboards <run dir> [-o <out dir>] [--no-cubes] [--keep-data]
+
+This writes ``fuzzy_dashboard_sf/soc.html`` (with the MO cubes of the run
+directory in a 3D panel, several MB; ``--no-cubes`` leaves it out),
+``exciton_analysis_sf/soc.html`` (the stored excitons, at most 100) and the
+spectrum plots. The data drawn are those of a direct run with ``html: true`` to
+float32 rounding.
+
 .. code-block:: yaml
 
    output:
