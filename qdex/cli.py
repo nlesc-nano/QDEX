@@ -944,6 +944,10 @@ def _build_parser():
                         help="Store excitons up to this energy (eV, after the BSE); 4.5 eV is about 275 nm.")
     parser.add_argument("--excitations-min-states", dest="excitations_min_states", type=int, default=20,
                         help="Store at least this many excitons (small dots with few states below the cutoff).")
+    parser.add_argument("--spectrum-grid", dest="spectrum_grid", type=float, nargs=3, default=[0.5, 6.0, 0.005],
+                        help="Stored absorption spectrum: first, last energy and step (eV).")
+    parser.add_argument("--spectrum-sigmas", dest="spectrum_sigmas", type=float, nargs="+", default=[0.03, 0.10],
+                        help="Gaussian broadenings (eV) of the stored spectrum, one curve each.")
     parser.add_argument("--mo-cubes", dest="mo_cubes", action="store_true",
                         help="Write spin-free MO cubes (cube_nhomos below and cube_nlumos above the gap) on a "
                              "coarse grid, without the spinor and exciton cubes of --cube.")

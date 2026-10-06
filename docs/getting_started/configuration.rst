@@ -291,7 +291,9 @@ people), ``output`` has:
     energy) and at least ``excitations_min_states`` (default 20): energy,
     oscillator strength, transition dipole, hole and electron orbital (MO or
     spinor index), D / Kx / −Kd, d_eh, d_CT, σ_h, σ_e, CT character, type,
-    singlet fraction (SOC), and the broadened spectrum. In the diagonal modes
+    singlet fraction (SOC); and the absorption spectrum of every computed state on
+    a fixed grid (``spectrum_grid``, default 0.5-6.0 eV in 5 meV steps) for each of
+    ``spectrum_sigmas`` (default 0.03 and 0.10 eV). In the diagonal modes
     every transition is kept whatever ``nroots`` is, at no extra cost; the
     eigenvectors are not stored (one hole-electron pair per state).
 

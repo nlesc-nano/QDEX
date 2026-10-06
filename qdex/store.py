@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 FILES = {"electronic": "qdex_electronic.h5", "excitations": "qdex_excitations.h5"}
 L_LABELS = "spdfghi"
+SPECTRUM_GRID = (0.5, 6.0, 0.005)      # eV: first, last, step
+SPECTRUM_SIGMAS = (0.03, 0.10)         # eV: line shape, and an ensemble-like broadening
 
 
 class ResultStore:
@@ -235,6 +237,25 @@ def _atom_pops(P, atom_ao_ranges):
     return np.stack([P[a:b].sum(axis=0) for a, b in atom_ao_ranges], axis=0)
 
 
+def broadened_spectrum(energies, f, grid, sigma, fine=0.001):
+    """sum_n f_n G(E - E_n, sigma) on `grid`, for any number of states: f is deposited on a
+    fine axis (`fine` eV, linear sharing between neighbouring bins) and convolved once
+    with the Gaussian (relative error ~1e-4 at sigma = 0.03 eV)."""
+    energies, f = np.asarray(energies, float), np.asarray(f, float)
+    lo, hi = grid[0] - 6 * sigma, grid[-1] + 6 * sigma
+    keep = (energies >= lo) & (energies <= hi)
+    axis = np.arange(lo, hi + fine, fine)
+    u = (energies[keep] - lo) / fine                 # each stick shared linearly by its two bins
+    i0 = np.clip(np.floor(u).astype(int), 0, len(axis) - 2)
+    w1 = np.clip(u - i0, 0.0, 1.0)
+    sticks = (np.bincount(i0, weights=f[keep] * (1 - w1), minlength=len(axis))
+              + np.bincount(i0 + 1, weights=f[keep] * w1, minlength=len(axis)))[:len(axis)]
+    half = int(np.ceil(6 * sigma / fine))
+    x = np.arange(-half, half + 1) * fine
+    kernel = np.exp(-0.5 * (x / sigma) ** 2) / (sigma * np.sqrt(2 * np.pi))
+    return np.interp(grid, axis, np.convolve(sticks, kernel, mode="same"))
+
+
 def put_excitations(store, solver, energies_ev, vectors, f_strengths, mu_ia, analyzer, analysis_results,
                     args, suffix, soc_U=None):
     """Every state up to excitations_emax (at least excitations_min_states) of one solver run."""
@@ -313,13 +334,18 @@ def put_excitations(store, solver, energies_ev, vectors, f_strengths, mu_ia, ana
         out["type"] = np.where(ct > 0.6, "CT", np.where((deh < 3.0) & (ct < 0.2), "Frenkel", "Wannier"))
     for k, v in out.items():
         store.put("excitations", f"{group}/{k}", v)
-    # spectrum of the stored states, on a fixed grid up to emax + 0.5 eV
-    from qdex.spectrum import generate_spectrum
-    x, yv = generate_spectrum(E, out["f_osc"], e_min=0.0, e_max=max(emax, E.max() if n else emax) + 0.5,
-                              sigma=args.sigma, profile=args.broadening if args.broadening != "none" else "gaussian")
-    store.put("excitations", f"{group}/spectrum/energy_ev", x)
-    store.put("excitations", f"{group}/spectrum/intensity", yv)
-    store.attr("excitations", f"{group}/spectrum", sigma_ev=float(args.sigma), profile=str(args.broadening))
+    # absorption spectrum from every computed state (not only the stored ones), on a fixed grid
+    lo, hi, step = (float(v) for v in getattr(args, "spectrum_grid", SPECTRUM_GRID))
+    grid = np.round(np.arange(lo, hi + 0.5 * step, step), 6)
+    store.put("excitations", f"{group}/spectrum/energy_ev", grid)
+    for sig in getattr(args, "spectrum_sigmas", SPECTRUM_SIGMAS):
+        store.put("excitations", f"{group}/spectrum/sigma_{float(sig):.3f}",
+                  broadened_spectrum(energies_ev, f_strengths, grid, float(sig)).astype(np.float32))
+    store.attr("excitations", f"{group}/spectrum", profile="gaussian", n_states=int(n_all),
+               sigmas_ev=[float(x) for x in getattr(args, "spectrum_sigmas", SPECTRUM_SIGMAS)],
+               units="sum_n f_n G(E - E_n, sigma), G normalised to 1 (1/eV)",
+               note="every computed state" + (" (all transitions, diagonal mode)" if diagonal else
+                                               f" ({n_all} roots; raise nroots to converge the high-energy side)"))
     store.attr("excitations", group, n_states_stored=int(n), n_states_computed=int(n_all),
                n_transitions=int(ham.dim), excitations_emax_ev=emax, mode=str(args.excitation_mode),
                kernel=str(args.kernel),

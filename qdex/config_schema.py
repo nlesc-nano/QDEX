@@ -114,7 +114,7 @@ SECTIONS = {
         "broadening", "sigma", "plot", "show", "cube", "cube_spacing", "disable_cpp_cube", "cube_nhomos",
         "cube_nlumos", "nbse", "bse_states", "write_csv", "csv_roots", "time", "save_xia", "nto",
         "nto_states", "nto_top", "nto_csv", "verbosity", "h5", "html", "excitations_emax",
-        "excitations_min_states", "mo_cubes", "mo_cube_spacing")},
+        "excitations_min_states", "mo_cubes", "mo_cube_spacing", "spectrum_grid", "spectrum_sigmas")},
 }
 
 # Accepted spellings of a few dest names.
