@@ -162,31 +162,35 @@ std::vector<Matrix> dipole(const std::vector<libint2::Shell>& shells,
 
 /* =======================================================================
  * HGH PROJECTOR OVERLAPS VIA DERIVATIVES
+ *
+ * HGH projector (Hartwigsen, Goedecker, Hutter, PRB 58, 3641 (1998)):
+ *   p_i^l(r) Y_lm(rhat),  p_i^l(r) = sqrt2 r^{l+2(i-1)} exp(-r^2/(2 r_l^2))
+ *                                    / (r_l^{l+(4i-1)/2} sqrt(Gamma(l+(4i-1)/2)))
+ * with Y_lm unit-normalized real spherical harmonics (libint order).
+ *
+ * Libint returns <chi| N(a) S_lm exp(-a r^2)> for a unit-normalized primitive,
+ * S_lm the real solid harmonic in libint's convention, S_lm = sqrt(4pi/(2l+1)) r^l Y_lm.
+ * With I(a) = <chi| S_lm exp(-a r^2)> = block(a) / N(a), the higher projectors are
+ * <chi| r^{2k} S_lm exp(-a r^2)> = (-d/da)^k I(a); N(a) must be divided out before
+ * differentiating, since it depends on a.
  * ======================================================================= */
 
+// Radial HGH normalization (includes the sqrt(2)), divided by sqrt(4pi/(2l+1)) to turn
+// libint's solid harmonic S_lm into r^l Y_lm.
 double hgh_norm_prefactor(int l, int i, double r_l) {
     if (i < 1) throw std::runtime_error("Projector index 'i' must be 1-based.");
-    double num = 1.0; 
-    double gamma_arg = l + (4.0 * i - 1.0) * 0.5;
-    double rl_pow    = std::pow(r_l, gamma_arg);
-    double den       = rl_pow * std::sqrt(std::tgamma(gamma_arg));
-    return num / den;
+    const double gamma_arg = l + (4.0 * i - 1.0) * 0.5;
+    const double radial = std::sqrt(2.0) / (std::pow(r_l, gamma_arg) * std::sqrt(std::tgamma(gamma_arg)));
+    return radial / std::sqrt(4.0 * M_PI / (2.0 * l + 1.0));
 }
 
+// Libint's normalization of a single primitive: x^l exp(-a r^2) has unit norm.
 double libint_primitive_norm(int l, double alpha) {
     double res = std::pow(2.0 * alpha / M_PI, 0.75);
     double num = std::pow(4.0 * alpha, static_cast<double>(l) / 2.0);
-    double den = 0.0;
-    if (l > 0) {
-        double dfact = 1.0;
-        for (int i = 2*l-1; i > 0; i -= 2) {
-            dfact *= i;
-        }
-        den = std::sqrt(dfact);
-    } else {
-        den = 1.0;
-    }
-    return res * (num / den);
+    double dfact = 1.0;
+    for (int i = 2*l-1; i > 0; i -= 2) dfact *= i;
+    return res * (num / std::sqrt(dfact));
 }
 
 Matrix compute_hgh_projector_overlaps(
@@ -218,8 +222,8 @@ Matrix compute_hgh_projector_overlaps(
         const int k = i - 1;
         const double alpha = 0.5 / (r_l * r_l);
 
-        Matrix block = Matrix::Zero(n_ao, n_funcs);
-        auto compute_block = [&](double a)->Matrix {
+        // I(a) = <chi | S_lm exp(-a r^2)>
+        auto I_of = [&](double a)->Matrix {
             libint2::Shell proj_shell{{a}, {{l, true, {1.0}}}, p.center};
             Matrix tmp(n_ao, n_funcs); tmp.setZero();
             for (size_t s1 = 0; s1 < ao_shells.size(); ++s1) {
@@ -229,27 +233,18 @@ Matrix compute_hgh_projector_overlaps(
                     computed_block(buf[0], ao_shells[s1].size(), n_funcs);
                 tmp.block(ao_s2bf[s1], 0, ao_shells[s1].size(), n_funcs) = computed_block;
             }
-            return tmp;
+            return tmp / libint_primitive_norm(l, a);
         };
 
-        if      (k == 0) block = compute_block(alpha);
-        else if (k == 1) {
-            const double delta = 1e-6;
-            block = - (compute_block(alpha + delta) - compute_block(alpha - delta)) / (2.0 * delta);
-        }
-        else if (k == 2) {
-            const double delta = 1e-4;
-            block = (compute_block(alpha + delta)
-                   - 2.0 * compute_block(alpha)
-                   + compute_block(alpha - delta)) / (delta * delta);
-        }
-        else
-            throw std::runtime_error("HGH projector: k > 2 not implemented");
+        // (-d/da)^k I(a) by central differences (relative step; error ~1e-8)
+        const double delta = 1e-4 * alpha;
+        Matrix block;
+        if      (k == 0) block = I_of(alpha);
+        else if (k == 1) block = -(I_of(alpha + delta) - I_of(alpha - delta)) / (2.0 * delta);
+        else if (k == 2) block = (I_of(alpha + delta) - 2.0 * I_of(alpha) + I_of(alpha - delta)) / (delta * delta);
+        else throw std::runtime_error("HGH projector: k > 2 not implemented");
 
-        double norm_fac = hgh_norm_prefactor(l, i, r_l) / libint_primitive_norm(l, alpha);
-        block *= norm_fac;
-
-        B.block(0, proj_col_offset, n_ao, n_funcs) = block;
+        B.block(0, proj_col_offset, n_ao, n_funcs) = block * hgh_norm_prefactor(l, i, r_l);
         proj_col_offset += n_funcs;
     }
     return B;

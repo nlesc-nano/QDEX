@@ -208,6 +208,7 @@ def compute_frame_diagonal_bse(
     nthreads=1,
     soc=False,
     gth_file=None,
+    gth_functional="PBE",
     device="numpy",
     verbose_soc=False,
     frame_basis_path=None,
@@ -368,6 +369,7 @@ def compute_frame_diagonal_bse(
             S_AO=S_ao_intra,
             active_indices=act_idx,
             gth_file=gth_file,
+            gth_functional=gth_functional,
             nthreads=nthreads,
             assume_orthonormal=True,
             device=device,
@@ -602,6 +604,7 @@ def precompute_namd_data(config):
 
     soc = bool(phys_cfg.get("soc_flag", False) or phys_cfg.get("soc") is True or namd_cfg.get("soc", False))
     gth_file = sys_cfg.get("gth_file", None)
+    gth_functional = phys_cfg.get("gth_functional", sys_cfg.get("gth_functional", "PBE")) or "PBE"
     if soc:
         if not gth_file:
             raise ValueError("system.gth_file must be specified in the configuration when SOC is enabled.")
@@ -789,6 +792,7 @@ def precompute_namd_data(config):
             nthreads=nthreads,
             soc=soc,
             gth_file=gth_file,
+            gth_functional=gth_functional,
             verbose_soc=(k == 0),
             frame_basis_path=os.path.join(fdir, frame_basis) if frame_basis else None,
             stda=stda

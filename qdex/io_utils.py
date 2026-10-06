@@ -778,10 +778,21 @@ def read_mos_txt_cc(path, n_ao_total, verbose=False):
 
 import collections
 
-def parse_gth_soc_potentials(path, elements_to_parse):
-    """Parses GTH potentials for SOC parameters."""
+def parse_gth_soc_potentials(path, elements_to_parse, functional="PBE"):
+    """Parses GTH potentials for SOC parameters.
+
+    elements_to_parse maps element -> valence charge q. For each element the entry named
+    GTH-<functional>-q<q> is used (e.g. GTH-PBE-q6); the SOC constants k_ij differ between
+    functionals. If the file has no entry for that functional, the first q<q> entry is used
+    with a warning.
+    """
     ecp_dict = collections.defaultdict(lambda: {'so': []})
-    needed_elements = set(elements_to_parse.keys())
+    try:
+        with open(path, "r") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        logger.warning(f"Warning: Potential file not found at {path}. SOC will be zero.")
+        return ecp_dict
 
     def _collect_coeffs(line_iter, n, init):
         coeffs = list(init)
@@ -791,38 +802,50 @@ def parse_gth_soc_potentials(path, elements_to_parse):
                 coeffs.extend([float(x) for x in line.split()])
         return coeffs
 
-    try:
-        with open(path, "r") as f:
-            line_iter = iter(f.readlines())
-    except FileNotFoundError:
-        logger.warning(f"Warning: Potential file not found at {path}. SOC will be zero.")
-        return ecp_dict
-
-    for line in line_iter:
-        if not needed_elements: break
-        parts = line.strip().split()
-        if not parts or parts[0] not in needed_elements: continue
-        
-        sym, q = parts[0], elements_to_parse.get(parts[0])
-        if q is None or not any(f"q{q}" in p for p in parts): continue
-        
-        try:
-            next(line_iter); next(line_iter) # Skip header
-            n_soc_sets = int(next(line_iter).strip().split()[0])
-            for l in range(n_soc_sets):
+    def _parse_entry(start):
+        line_iter = iter(lines[start + 1:])
+        next(line_iter); next(line_iter)  # electron counts, local part
+        n_soc_sets = int(next(line_iter).strip().split()[0])
+        so = []
+        for l in range(n_soc_sets):
+            proj_line = next(line_iter)
+            while not proj_line.strip() or proj_line.strip().startswith('#'):
                 proj_line = next(line_iter)
-                while not proj_line.strip() or proj_line.strip().startswith('#'):
-                    proj_line = next(line_iter)
-                proj_parts = proj_line.split()
-                r, nprj = float(proj_parts[0]), int(proj_parts[1])
-                n_coeffs = nprj * (nprj + 1) // 2
-                h = _collect_coeffs(line_iter, n_coeffs, proj_parts[2:])
-                k = _collect_coeffs(line_iter, n_coeffs, []) if l > 0 else []
-                ecp_dict[sym]['so'].append({'l': l, 'r': r, 'nprj': nprj, 'h_coeffs': h, 'k_coeffs': k})
-            needed_elements.remove(sym)
-        except Exception as e:
+            proj_parts = proj_line.split()
+            r, nprj = float(proj_parts[0]), int(proj_parts[1])
+            n_coeffs = nprj * (nprj + 1) // 2
+            h = _collect_coeffs(line_iter, n_coeffs, proj_parts[2:])
+            k = _collect_coeffs(line_iter, n_coeffs, []) if l > 0 else []
+            so.append({'l': l, 'r': r, 'nprj': nprj, 'h_coeffs': h, 'k_coeffs': k})
+        return so
+
+    wanted_func = None if functional is None else str(functional).upper()
+    for sym, q in elements_to_parse.items():
+        if q is None:
             continue
-            
+        candidates = []
+        for n, line in enumerate(lines):
+            parts = line.split()
+            if parts and parts[0] == sym and any(p.endswith(f"-q{q}") for p in parts[1:]):
+                candidates.append((n, parts[1:]))
+        if not candidates:
+            continue
+        chosen = None
+        if wanted_func is not None:
+            for n, names in candidates:
+                if f"GTH-{wanted_func}-Q{q}" in (x.upper() for x in names):
+                    chosen = (n, names)
+                    break
+        if chosen is None:
+            chosen = candidates[0]
+            logger.warning(f"  [SOC] No GTH-{functional}-q{q} entry for {sym} in {path}; using {chosen[1][0]}.")
+        try:
+            ecp_dict[sym]['so'] = _parse_entry(chosen[0])
+            ecp_dict[sym]['name'] = chosen[1][0]
+        except Exception as exc:
+            logger.warning(f"  [SOC] Could not parse the {chosen[1][0]} entry for {sym}: {exc}")
+    logger.info("  [SOC] GTH SOC parameters: " + ", ".join(
+        f"{sym} {ecp_dict[sym]['name']}" for sym in sorted(ecp_dict) if 'name' in ecp_dict[sym]))
     return ecp_dict
 
 def get_vxc_ao_matrix(txt_path, n_ao):

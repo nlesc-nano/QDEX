@@ -25,10 +25,10 @@ For large nanocrystals containing :math:`> 10,000` AOs and thousands of molecula
 ``QDEX`` achieves **sub-second spinor diagonalization** through three architectural optimizations:
 
 1. **Global Sparse CSR Projector Representation**:
-   All atom-centered angular projector matrices :math:`k_{ij}^{Il} (L_\kappa)_{mm'}` are pre-assembled once into global sparse Compressed Sparse Row (CSR) matrices :math:`\mathbf{K}_x, \tilde{\mathbf{K}}_y, \mathbf{K}_z`. These sparse structures remain invariant across MD steps and are cached in memory.
+   All atom-centered angular projector matrices :math:`k_{ij}^{Il} (L_\kappa)_{mm'}` are pre-assembled once into global sparse Compressed Sparse Row (CSR) matrices :math:`\mathbf{A}_x, \mathbf{A}_y, \mathbf{A}_z` with :math:`\mathbf{k} \otimes \mathbf{L}_\kappa = i\mathbf{A}_\kappa` (:math:`\mathbf{L}_\kappa` is purely imaginary in the real-harmonic basis of the projectors). These sparse structures remain invariant across MD steps and are cached in memory.
 
 2. **Purely Real BLAS DGEMM**:
-   Although the spin-orbit Hamiltonian is complex Hermitian, the Cartesian building blocks :math:`\mathbf{B}_{\mathrm{mo}}`, :math:`\mathbf{K}_x`, :math:`\tilde{\mathbf{K}}_y`, and :math:`\mathbf{K}_z` are **strictly real-valued** (`float64`). ``QDEX`` executes all intermediate tensor contractions using highly optimized real BLAS Level-3 DGEMM routines, completely bypassing expensive complex matrix multiplications.
+   Although the spin-orbit Hamiltonian is complex Hermitian, the Cartesian building blocks :math:`\mathbf{B}_{\mathrm{mo}}`, :math:`\mathbf{A}_x`, :math:`\mathbf{A}_y`, and :math:`\mathbf{A}_z` are **strictly real-valued** (`float64`). ``QDEX`` executes all intermediate tensor contractions using highly optimized real BLAS Level-3 DGEMM routines, completely bypassing expensive complex matrix multiplications.
 
 3. **In-Place Contiguous Memory Allocation**:
    The four blocks of :math:`\mathbf{H}_{\mathrm{total}}` are populated directly into a single contiguous :math:`(2N_{\mathrm{act}} \times 2N_{\mathrm{act}})` complex array, eliminating auxiliary memory copies before LAPACK ``zheevd`` eigensolving.

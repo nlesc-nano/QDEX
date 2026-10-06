@@ -15,24 +15,33 @@ _L_CACHE = {}
 
 
 def get_angular_momentum_matrices(l):
-    """Returns Lx, Ly, Lz matrices in the complex spherical harmonic basis."""
+    """Lx, Ly, Lz in the basis of real spherical harmonics, libint order (m = -l..l).
+
+    <R_m|L_k|R_m'> with R_m the real harmonics libint uses for pure shells (and for the
+    HGH projectors): m > 0 ~ cos(m phi), m < 0 ~ sin(|m| phi), e.g. (y, z, x) for l = 1.
+    The matrices are purely imaginary and antisymmetric (L is odd under time reversal).
+    """
     if l in _L_CACHE:
         return _L_CACHE[l]
 
     m = np.arange(-l, l + 1)
-    Lz = np.diag(m).astype(complex)
-    if l == 0:
-        mats = (
-            np.zeros((1, 1), dtype=complex),
-            np.zeros((1, 1), dtype=complex),
-            np.zeros((1, 1), dtype=complex),
-        )
-    else:
-        Lp = np.diag(np.sqrt(l * (l + 1) - m[:-1] * (m[:-1] + 1)), 1).astype(complex)
-        Lm = np.diag(np.sqrt(l * (l + 1) - m[1:] * (m[1:] - 1)), -1).astype(complex)
-        Lx = 0.5 * (Lp + Lm)
-        Ly = -0.5j * (Lp - Lm)
-        mats = (Lx, Ly, Lz)
+    # complex basis |l m> (Condon-Shortley): L+|m> = sqrt(l(l+1) - m(m+1)) |m+1>
+    Lp = np.diag(np.sqrt(l * (l + 1) - m[:-1] * (m[:-1] + 1.0)), -1).astype(complex)
+    Lm = Lp.T.copy()
+    L_complex = (0.5 * (Lp + Lm), -0.5j * (Lp - Lm), np.diag(m).astype(complex))
+    # R_m = sum_m' U[m, m'] Y_m'
+    U = np.zeros((2 * l + 1, 2 * l + 1), dtype=complex)
+    for i, mm in enumerate(m):
+        a = abs(int(mm))
+        if mm == 0:
+            U[i, l] = 1.0
+        elif mm > 0:
+            U[i, l - a] = 1.0 / np.sqrt(2.0)
+            U[i, l + a] = (-1) ** a / np.sqrt(2.0)
+        else:
+            U[i, l - a] = 1j / np.sqrt(2.0)
+            U[i, l + a] = -1j * (-1) ** a / np.sqrt(2.0)
+    mats = tuple(U.conj() @ L @ U.T for L in L_complex)
 
     _L_CACHE[l] = mats
     return mats
@@ -116,6 +125,8 @@ _SPARSE_K_CACHE = {}
 
 
 def _get_sparse_soc_projector_matrices(proj_groups):
+    """Block-diagonal A_k = Im kron(k_ij, L_k) over all projector groups (real, antisymmetric):
+    kron(k_ij, L_k) = i A_k, since L_k is purely imaginary in the real-harmonic basis."""
     cache_key = tuple(
         (k, grp['l'], grp['nprj'], tuple(grp['k_coeffs']))
         for k, grp in sorted(proj_groups.items())
@@ -135,9 +146,9 @@ def _get_sparse_soc_projector_matrices(proj_groups):
         nprj = grp['nprj']
         h_soc = _build_h_soc(grp['k_coeffs'], nprj)
         Lx, Ly, Lz = get_angular_momentum_matrices(l)
-        Kx_blocks.append(csr_matrix(np.kron(h_soc, Lx).real))
-        Ky_blocks.append(csr_matrix(np.kron(h_soc, Ly).imag))  # Ly is purely imaginary (-0.5j*(Lp-Lm))
-        Kz_blocks.append(csr_matrix(np.kron(h_soc, Lz).real))
+        Kx_blocks.append(csr_matrix(np.kron(h_soc, Lx).imag))
+        Ky_blocks.append(csr_matrix(np.kron(h_soc, Ly).imag))
+        Kz_blocks.append(csr_matrix(np.kron(h_soc, Lz).imag))
 
     if not Kx_blocks:
         empty = csr_matrix((0, 0))
@@ -155,26 +166,14 @@ def _get_sparse_soc_projector_matrices(proj_groups):
 
 
 def _assemble_rks_soc_blocks(B_mo, proj_groups, device="numpy"):
-    Kx_sparse, Ky_sparse, Kz_sparse = _get_sparse_soc_projector_matrices(proj_groups)
+    """H_k = 1/2 B kron(k_ij, L_k) B^dagger, so that V_SO = sum_k sigma_k (x) H_k (L.S, S = sigma/2)."""
+    Ax_sparse, Ay_sparse, Az_sparse = _get_sparse_soc_projector_matrices(proj_groups)
 
-    # Fast sparse projection: B_mo is real (n_mo, n_cols_total)
-    is_real = not np.iscomplexobj(B_mo)
-    if is_real:
-        Mx = Kx_sparse.T.dot(B_mo.T).T
-        My_imag = Ky_sparse.T.dot(B_mo.T).T
-        Mz = Kz_sparse.T.dot(B_mo.T).T
-
-        Hx = 0.5 * (Mx @ B_mo.T)
-        Hy = 0.5j * (My_imag @ B_mo.T)
-        Hz = 0.5 * (Mz @ B_mo.T)
-    else:
-        Mx = Kx_sparse.T.dot(B_mo.T).T
-        My_imag = Ky_sparse.T.dot(B_mo.T).T
-        Mz = Kz_sparse.T.dot(B_mo.T).T
-        B_dag = B_mo.conj().T
-        Hx = 0.5 * (Mx @ B_dag)
-        Hy = 0.5j * (My_imag @ B_dag)
-        Hz = 0.5 * (Mz @ B_dag)
+    # B_mo (n_mo, n_cols_total); kron(k, L_k) = i A_k with A_k real
+    B_dag = B_mo.T if not np.iscomplexobj(B_mo) else B_mo.conj().T
+    Hx = 0.5j * (Ax_sparse.T.dot(B_mo.T).T @ B_dag)
+    Hy = 0.5j * (Ay_sparse.T.dot(B_mo.T).T @ B_dag)
+    Hz = 0.5j * (Az_sparse.T.dot(B_mo.T).T @ B_dag)
 
     Hx = 0.5 * (Hx + Hx.conj().T)
     Hy = 0.5 * (Hy + Hy.conj().T)
@@ -284,10 +283,10 @@ def _assemble_uks_soc_blocks(B_alpha, B_beta, proj_groups, device="numpy"):
     return Hx_aa, Hy_aa, Hz_aa, Hx_ab, Hy_ab, Hz_ab, Hx_ba, Hy_ba, Hz_ba, Hx_bb, Hy_bb, Hz_bb
 
 
-def prepare_soc_overlap_cache(atom_symbols, coords_ang, shells, gth_file, nthreads=1):
+def prepare_soc_overlap_cache(atom_symbols, coords_ang, shells, gth_file, nthreads=1, gth_functional="PBE"):
     """Compute and cache AO-projector overlaps shared across SOC active windows."""
     elements = {sym: valence_electrons.get(sym) for sym in set(atom_symbols)}
-    soc_tbl = parse_gth_soc_potentials(gth_file, elements)
+    soc_tbl = parse_gth_soc_potentials(gth_file, elements, functional=gth_functional)
     projectors, proj_groups = _build_soc_projectors(atom_symbols, coords_ang, soc_tbl)
     B_raw = libint_cpp.compute_hgh_overlaps(shells, projectors, nthreads)
     return {
@@ -301,7 +300,7 @@ def prepare_soc_overlap_cache(atom_symbols, coords_ang, shells, gth_file, nthrea
 def compute_spinor_subspace(
     atom_symbols, coords_ang, shells, C_AO, eps_Ha, S_AO, active_indices, gth_file,
     nthreads=1, soc_cache=None, assume_orthonormal=False, SC_AO=None, device="numpy",
-    verbose=True,
+    verbose=True, gth_functional="PBE",
 ):
     if verbose:
         logger.info("\n" + "=" * 60)
@@ -313,7 +312,7 @@ def compute_spinor_subspace(
             logger.info(f"  -> Reading GTH Potentials from: {gth_file}")
         t0 = time.time()
         soc_cache = prepare_soc_overlap_cache(
-            atom_symbols, coords_ang, shells, gth_file, nthreads=nthreads
+            atom_symbols, coords_ang, shells, gth_file, nthreads=nthreads, gth_functional=gth_functional
         )
         if verbose:
             logger.debug(f"  -> Parsed potentials and overlaps in {time.time() - t0:.2f}s")
@@ -352,14 +351,15 @@ def compute_spinor_subspace(
         logger.info(f"  -> Diagonalizing Single-Particle Spinor Hamiltonian (Active Space = {n_mo} MOs)...")
     t0 = time.time()
 
+    # Spinor basis (phi_i alpha, phi_i beta): H = eps + sigma_z Hz + sigma_x Hx + sigma_y Hy
     eps_act = eps_Ha[active_indices]
     H_total = np.empty((2 * n_mo, 2 * n_mo), dtype=complex)
-    H_total[:n_mo, :n_mo] = -0.5 * Hz_mo
-    H_total[n_mo:, n_mo:] = 0.5 * Hz_mo
-    np.fill_diagonal(H_total[:n_mo, :n_mo], eps_act - 0.5 * np.diag(Hz_mo))
-    np.fill_diagonal(H_total[n_mo:, n_mo:], eps_act + 0.5 * np.diag(Hz_mo))
+    H_total[:n_mo, :n_mo] = Hz_mo
+    H_total[n_mo:, n_mo:] = -Hz_mo
+    np.fill_diagonal(H_total[:n_mo, :n_mo], eps_act + np.diag(Hz_mo))
+    np.fill_diagonal(H_total[n_mo:, n_mo:], eps_act - np.diag(Hz_mo))
 
-    Hab = -0.5 * (Hx_mo - 1j * Hy_mo)
+    Hab = Hx_mo - 1j * Hy_mo
     H_total[:n_mo, n_mo:] = Hab
     H_total[n_mo:, :n_mo] = Hab.conj().T
 
@@ -380,6 +380,7 @@ def compute_spinor_subspace_uks(
     atom_symbols, coords_ang, shells, C_alpha_AO, eps_alpha_Ha, active_alpha_indices,
     C_beta_AO, eps_beta_Ha, active_beta_indices, S_AO, gth_file, nthreads=1,
     soc_cache=None, assume_orthonormal=False, SC_alpha_AO=None, SC_beta_AO=None, device="numpy",
+    gth_functional="PBE",
 ):
     logger.info("\n" + "=" * 60)
     logger.info(" [SOC-UKS] Spin-Orbit Coupling Module Initialized")
@@ -389,7 +390,7 @@ def compute_spinor_subspace_uks(
         logger.info(f"  -> Reading GTH Potentials from: {gth_file}")
         t0 = time.time()
         soc_cache = prepare_soc_overlap_cache(
-            atom_symbols, coords_ang, shells, gth_file, nthreads=nthreads
+            atom_symbols, coords_ang, shells, gth_file, nthreads=nthreads, gth_functional=gth_functional
         )
         logger.debug(f"  -> Parsed potentials and overlaps in {time.time() - t0:.2f}s")
     else:
@@ -438,11 +439,12 @@ def compute_spinor_subspace_uks(
         [np.zeros((n_beta, n_alpha)), np.diag(eps_beta_Ha[active_beta_indices])],
     ]).astype(complex)
 
+    # V_SO = sum_k sigma_k (x) H_k with H_k = 1/2 B kron(k_ij, L_k) B^dagger
     H_SO = np.block([
-        [0.5 * Hz_aa, 0.5 * (Hx_ab - 1j * Hy_ab)],
-        [0.5 * (Hx_ba + 1j * Hy_ba), -0.5 * Hz_bb],
+        [Hz_aa, Hx_ab - 1j * Hy_ab],
+        [Hx_ba + 1j * Hy_ba, -Hz_bb],
     ])
-    H_total = H0 - H_SO
+    H_total = H0 + H_SO
     soc_E, soc_U = eigh(H_total)
 
     logger.debug(f"  -> UKS spinor diagonalization completed in {time.time() - t0:.2f}s")

@@ -108,6 +108,7 @@ SECTIONS = {
         "enabled": "soc_flag",
         "window": "soc_window",
         "gth_file": "gth_file",
+        "gth_functional": "gth_functional",
     },
     "analysis": {k: k for k in (
         "run_fuzzy", "cif", "pdos_atoms", "coop_pairs", "population_print_range", "fuzzy_sigma",

@@ -37,6 +37,9 @@ Command-Line Arguments
    * - ``--gth_file <path>``
      - Built-in table
      - Path to custom GTH SOC pseudopotential parameter file (overriding internal database).
+   * - ``--gth_functional <name>``
+     - ``PBE``
+     - Functional of the SOC constants read from the GTH file (entry ``GTH-<name>-q<n>``). Use the functional of the DFT calculation; the constants differ between functionals.
    * - ``--soc_window <float>``
      - ``10.0``
      - Energy window (in eV) centered at the Fermi level for selecting MOs in the SOC active space.
@@ -56,6 +59,7 @@ YAML Configuration Example
    soc:
      enabled: true
      window: 8.0
+     gth_functional: PBE
 
    system:
      mo_file: "CsPbI3_MOs.mbse"

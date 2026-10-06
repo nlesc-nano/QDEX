@@ -834,6 +834,9 @@ def _build_parser():
     parser.add_argument("--soc", type=float, default=0.0)
     parser.add_argument("--soc_flag", action="store_true")
     parser.add_argument("--gth_file", type=str, default=None)
+    parser.add_argument("--gth_functional", type=str, default="PBE",
+                        help="Functional of the GTH SOC parameters to read from gth_file (entry GTH-<functional>-q<n>); "
+                             "use the functional of the DFT calculation. YAML: soc.gth_functional")
 
     parser.add_argument("--kernel", choices=["qp", "stda", "resta-sphere", "bse", "resta", "mnok", "xs", "xs-resta", "xs-qdex", "xs-rpa", "rpa", "dim", "xs-dim", "dipole", "xs-dipole", "sbse", "sbse-atom", "sbse-ao", "xs-sbse"], default=None,
                         help="Exciton interaction kernel. 'qp': the screened W built by the QP model (default and only allowed choice for "
@@ -2229,7 +2232,7 @@ def _active_space_and_soc(args, *,
                 atom_symbols=syms, coords_ang=coords_ang, shells=shells,
                 C_alpha_AO=C_dense, eps_alpha_Ha=eps / HA_TO_EV, active_alpha_indices=bse_active_indices,
                 C_beta_AO=C_dense_beta, eps_beta_Ha=eps_beta / HA_TO_EV, active_beta_indices=bse_active_indices_beta,
-                S_AO=S, gth_file=args.gth_file, nthreads=args.nthreads,
+                S_AO=S, gth_file=args.gth_file, gth_functional=getattr(args, "gth_functional", "PBE"), nthreads=args.nthreads,
                 assume_orthonormal=soc_assume_orthonormal,
                 SC_alpha_AO=SC_dense, SC_beta_AO=SC_dense_beta_pop,
                 device=args.device,
@@ -2240,7 +2243,7 @@ def _active_space_and_soc(args, *,
             bse_soc_E, bse_soc_U, soc_overlap_cache = compute_spinor_subspace(
                 atom_symbols=syms, coords_ang=coords_ang, shells=shells, 
                 C_AO=C_dense, eps_Ha=(eps_qp_active if eps_qp_active is not None else eps) / HA_TO_EV, S_AO=S, 
-                active_indices=bse_active_indices, gth_file=args.gth_file,
+                active_indices=bse_active_indices, gth_file=args.gth_file, gth_functional=getattr(args, "gth_functional", "PBE"),
                 nthreads=args.nthreads, assume_orthonormal=soc_assume_orthonormal,
                 SC_AO=SC_dense, device=args.device,
             )
@@ -2541,7 +2544,7 @@ def _cubes_and_fuzzy(args, *,
                     atom_symbols=syms, coords_ang=coords_ang, shells=shells,
                     C_alpha_AO=C_dense, eps_alpha_Ha=eps / HA_TO_EV, active_alpha_indices=fuzzy_active_indices,
                     C_beta_AO=C_dense_beta, eps_beta_Ha=eps_beta / HA_TO_EV, active_beta_indices=fuzzy_active_indices_beta,
-                    S_AO=S, gth_file=args.gth_file, nthreads=args.nthreads,
+                    S_AO=S, gth_file=args.gth_file, gth_functional=getattr(args, "gth_functional", "PBE"), nthreads=args.nthreads,
                     soc_cache=soc_overlap_cache, assume_orthonormal=soc_assume_orthonormal,
                     SC_alpha_AO=SC_dense, SC_beta_AO=SC_dense_beta_pop,
                     device=args.device,
@@ -2554,7 +2557,7 @@ def _cubes_and_fuzzy(args, *,
                 fuzzy_soc_E, fuzzy_soc_U, _ = compute_spinor_subspace(
                     atom_symbols=syms, coords_ang=coords_ang, shells=shells,
                     C_AO=C_dense, eps_Ha=eps / HA_TO_EV, S_AO=S,
-                    active_indices=fuzzy_active_indices, gth_file=args.gth_file, nthreads=args.nthreads,
+                    active_indices=fuzzy_active_indices, gth_file=args.gth_file, gth_functional=getattr(args, "gth_functional", "PBE"), nthreads=args.nthreads,
                     soc_cache=soc_overlap_cache, assume_orthonormal=soc_assume_orthonormal,
                     SC_AO=SC_dense, device=args.device,
                 )
