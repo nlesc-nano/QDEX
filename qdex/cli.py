@@ -1039,8 +1039,12 @@ def _build_parser():
     parser.add_argument("--fuzzy_sigma", type=float, default=0.03)
     parser.add_argument("--pdos_sigma", type=float, default=0.10)
     parser.add_argument("--ewin", type=float, nargs=2, default=[-5.0, 5.0])
-    parser.add_argument("--fold_to_bz", action="store_true", help="Fold fuzzy-band weights into the first Brillouin zone by summing reciprocal replicas.")
-    parser.add_argument("--g_shell", type=int, default=0, help="Reciprocal-vector shell for folded fuzzy-band weights; 0, 1, and 2 use 1, 27, and 125 replicas.")
+    parser.add_argument("--fold_to_bz", action="store_true", default=True,
+                        help="Fold fuzzy-band weights into the first Brillouin zone by summing reciprocal replicas (default).")
+    parser.add_argument("--no-fold-to-bz", dest="fold_to_bz", action="store_false",
+                        help="Project on plane waves at k only (G = 0); p-like band edges then lose their weight at Gamma.")
+    parser.add_argument("--g_shell", type=int, default=2,
+                        help="Reciprocal-vector shell for folded fuzzy-band weights; 0, 1, 2 (default) and 3 use 1, 27, 125 and 343 replicas.")
     parser.add_argument("--dashboard_energy_mode", choices=["dft", "qp", "both"], default="dft", help="Generate fuzzy dashboards on DFT, QP-corrected, or both energy axes.")
     parser.add_argument("--qp_energy_reference", choices=["vacuum", "fermi"], default="vacuum", help="Energy reference for QP fuzzy dashboards.")
 

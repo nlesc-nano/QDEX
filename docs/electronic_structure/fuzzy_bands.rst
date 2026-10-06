@@ -89,7 +89,7 @@ replicas; the map is the energy-smeared spin-free fuzzy map):
      - 97-99 %
      - 99.5 %
 
-``fold_to_bz: true`` with ``g_shell: 2`` is the recommended setting. The cost grows
+``fold_to_bz: true`` with ``g_shell: 2`` is the default. The cost grows
 linearly with the number of replicas and stays small next to the rest of a run
 (two seconds more than ``g_shell: 1`` on Cd68). The plane-wave transforms are
 computed one replica at a time, so memory does not grow with ``g_shell``.

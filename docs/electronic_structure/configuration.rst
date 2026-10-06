@@ -54,12 +54,12 @@ Command-Line Arguments
    * - ``--fuzzy_sigma <float>``
      - ``0.03``
      - Gaussian smearing standard deviation (in eV) along the energy axis for fuzzy band plots.
-   * - ``--fold_to_bz``
-     - ``False``
+   * - ``--fold_to_bz`` / ``--no-fold-to-bz``
+     - ``True``
      - Fold plane-wave projections into the first Brillouin zone using reciprocal replicas.
    * - ``--g_shell <int>``
-     - ``0``
-     - Reciprocal lattice vector shell for BZ folding (0 = 1 replica, 1 = 27 replicas, 2 = 125 replicas).
+     - ``2``
+     - Reciprocal lattice vector shell for BZ folding (0 = 1 replica, 1 = 27, 2 = 125, 3 = 343 replicas).
    * - ``--cube``
      - ``False``
      - Export 3D volumetric Gaussian ``.cube`` files for frontier orbitals.
@@ -97,7 +97,7 @@ YAML Configuration Example
      pdos_sigma: 0.08
      fuzzy_sigma: 0.03
      fold_to_bz: true
-     g_shell: 1
+     g_shell: 2
 
    cube:
      export: true

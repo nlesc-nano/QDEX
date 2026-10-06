@@ -307,8 +307,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
     logger.info(" [ FUZZY BANDS & PDOS ]")
     logger.info("===================================================")
     
-    fold_to_bz = bool(getattr(args, 'fold_to_bz', False))
-    g_shell = int(getattr(args, 'g_shell', 0))
+    fold_to_bz = bool(getattr(args, 'fold_to_bz', True))
+    g_shell = int(getattr(args, 'g_shell', 2))
     kpath_result = generate_automated_kpath(args.cif, np.array(coords_ang), line_density=50, return_reciprocal=fold_to_bz)
     if fold_to_bz:
         kpts_cart, labels, reciprocal_matrix = kpath_result

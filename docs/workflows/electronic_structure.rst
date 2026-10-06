@@ -52,7 +52,7 @@ Configuration File (``tutorial1_ground_state.yaml``)
      pdos_sigma: 0.08
      fuzzy_sigma: 0.03
      fold_to_bz: true
-     g_shell: 1
+     g_shell: 2
 
    cube:
      export: true
