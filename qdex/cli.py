@@ -270,8 +270,13 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     logger.info(f"===================================================")
 
     start_solve = time.time()
+    store = getattr(args, "qdex_store", None)
+    # Diagonal (independent-transition) modes keep every transition at no cost, so the
+    # stored excitations reach excitations_emax whatever nroots is.
+    keep_all = store is not None and str(args.excitation_mode).lower() != "bse" and \
+        str(args.excitation_mode).lower() not in ("sbse", "stda")
     energies_ev, vectors = solver.solve(
-        nroots=args.nroots, full_diag=args.full_diag, tol=args.tol,
+        nroots=args.nroots, full_diag=(args.full_diag or keep_all), tol=args.tol,
         excitation_mode=args.excitation_mode,
     )
     
@@ -533,6 +538,11 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
         )
         logger.info(f"  Saved X_ia coefficients to {npz_filename}")
 
+    if store is not None:
+        from qdex.store import put_excitations
+        put_excitations(store, solver, energies_ev, vectors, f_strengths, mu_ia, analyzer, analysis_results,
+                        args, suffix, soc_U=soc_U if solver.soc_flag else None)
+
     if args.broadening != "none":
         from qdex.spectrum import generate_spectrum, plot_spectrum
         e_min, e_max = max(0.0, np.min(energies_ev) - 2.5), np.max(energies_ev) + 2.5
@@ -551,7 +561,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             "first_exc_energy": energies_ev[0] if len(energies_ev) > 0 else 0.0, "is_soc": solver.soc_flag
         }
         if solver.soc_flag and soc_gap is not None: metrics["soc_gap"] = soc_gap
-        plot_file = f"exciton_analysis{suffix}.html" if args.plot else None
+        plot_file = f"exciton_analysis{suffix}.html" if (args.plot and getattr(args, "html", True)) else None
         plot_analysis_summary(analysis_results, physics_metrics=metrics, filename=plot_file, show=args.show, broadening=args.broadening, sigma=args.sigma)
 
     if getattr(args, "auger", False):
@@ -924,6 +934,21 @@ def _build_parser():
     # ----------------------
     
     parser.add_argument("--write-csv", action="store_true")
+    # --- Database output (qdex.store) ---
+    parser.add_argument("--h5", action="store_true",
+                        help="Write qdex_electronic.h5 and qdex_excitations.h5 (orbitals, projections, PDOS/COOP, "
+                             "fuzzy weights; every exciton up to --excitations-emax).")
+    parser.add_argument("--no-html", dest="html", action="store_false",
+                        help="Skip the HTML dashboards (fuzzy bands, exciton analysis) and the files they read.")
+    parser.add_argument("--excitations-emax", dest="excitations_emax", type=float, default=4.5,
+                        help="Store excitons up to this energy (eV, after the BSE); 4.5 eV is about 275 nm.")
+    parser.add_argument("--excitations-min-states", dest="excitations_min_states", type=int, default=20,
+                        help="Store at least this many excitons (small dots with few states below the cutoff).")
+    parser.add_argument("--mo-cubes", dest="mo_cubes", action="store_true",
+                        help="Write spin-free MO cubes (cube_nhomos below and cube_nlumos above the gap) on a "
+                             "coarse grid, without the spinor and exciton cubes of --cube.")
+    parser.add_argument("--mo-cube-spacing", dest="mo_cube_spacing", type=float, default=0.8,
+                        help="Grid spacing of --mo-cubes (Angstrom).")
     parser.add_argument("--csv-roots", type=int, default=10)
     parser.add_argument("--time", type=float, default=0.0)
     parser.add_argument("--save-xia", action="store_true")
@@ -1165,6 +1190,9 @@ def _prepare_run(args, *, config_path, parser):
     """Logging, argument validation, MNOK/radius settings and the compute device."""
     setup_run_logging(getattr(args, "log_file", "minibse.log"), getattr(args, "verbosity", "full"))
     validate_args(args, parser)
+    if getattr(args, "h5", False):
+        from qdex.store import ResultStore
+        args.qdex_store = ResultStore()
     import qdex.hardness as _hardness
     _hardness.RADIUS_DEFINITION = str(getattr(args, "qp_radius", "saxs") or "saxs").lower()
     _hardness.set_bulk_vertex(getattr(args, "bulk_vertex", "none"), getattr(args, "bulk_vertex_factor", 0.8))
@@ -2203,6 +2231,7 @@ def _active_space_and_soc(args, *,
             )
             bse_spinor_homo_idx = (bse_n_occ * 2) - 1
         bse_soc_E = (bse_soc_E * HA_TO_EV) - e_fermi_raw
+        bse_soc_midgap_ev = e_fermi_raw + (bse_soc_E[bse_spinor_homo_idx] + bse_soc_E[bse_spinor_homo_idx + 1]) / 2.0
         bse_soc_E -= (bse_soc_E[bse_spinor_homo_idx] + bse_soc_E[bse_spinor_homo_idx + 1]) / 2.0
 
     qp_breakdown_alpha = None
@@ -2332,7 +2361,8 @@ def _active_space_and_soc(args, *,
     return _export(locals(), (
         "C_dense_beta", "bse_n_occ", "bse_n_occ_beta", "bse_n_virt", "bse_n_virt_beta", "bse_soc_E",
         "bse_soc_U", "bse_spinor_homo_idx", "calculated_soc_gap", "compute_spinor_subspace",
-        "compute_spinor_subspace_uks", "confinement_energy", "db_gap", "is_uks_sp", "soc_overlap_cache"
+        "compute_spinor_subspace_uks", "confinement_energy", "db_gap", "is_uks_sp", "soc_overlap_cache",
+        "pops_soc_act", "bse_soc_midgap_ev"
     ))
 
 
@@ -2464,6 +2494,87 @@ def _cubes_and_fuzzy(args, *,
     return _export(locals(), (
         "C_dense_beta",
     ))
+
+
+def _store_electronic_and_mo_cubes(args, *,
+        C_dense, bse_soc_E, bse_soc_U, bse_soc_midgap_ev, bse_spinor_homo_idx, calculated_soc_gap, confinement_energy, coords_ang,
+        dft_gap, e_fermi_raw, eps, eps_dft_shifted, eps_qp_active, homo_index, occ, pops_sf, pops_soc_act,
+        qp_homo, qp_lumo, qp_provenance, scissor, shells, syms, target_qp_gap, tracker):
+    """Spin-free MOs and SOC spinors into qdex_electronic.h5 (output.h5); coarse MO cubes (output.mo_cubes)."""
+    store = getattr(args, "qdex_store", None)
+    if store is not None:
+        from qdex.pdos_coop import _ao_metadata
+        from qdex.store import _atom_pops, put_orbitals
+        from qdex.io_utils import build_atom_ao_ranges
+        _s, _a, _syms, surface_mask = _ao_metadata(shells)
+        ewin = list(getattr(args, "ewin", [-5.0, 5.0]))
+        pdos_sigma = getattr(args, "pdos_sigma", 0.10)
+        store.put("electronic", "structure/symbols", list(syms))
+        store.put("electronic", "structure/coords_ang", np.asarray(coords_ang, float))
+        store.attr("electronic", "structure", material=str(args.material),
+                   cluster_size=getattr(args, "cluster_size_info", None) or {})
+        if eps_qp_active is not None:
+            qp_abs = np.asarray(eps_qp_active, float)
+        else:
+            qp_abs = build_qp_energies_vacuum(eps, homo_index, occ_shift=qp_homo - eps[homo_index],
+                                              virt_shift=qp_lumo - eps[homo_index + 1])
+        attrs = {"dft_gap_ev": dft_gap, "qp_gap_ev": target_qp_gap, "scissor_ev": scissor,
+                 "qp_homo_ev": qp_homo, "qp_lumo_ev": qp_lumo, "dft_midgap_ev": e_fermi_raw,
+                 "confinement_energy_ev": confinement_energy, "qp_model": str(getattr(args, "qp_model", "")),
+                 "provenance": qp_provenance or {}}
+        if calculated_soc_gap is not None:
+            attrs.update(soc_dft_gap_ev=calculated_soc_gap, soc_qp_gap_ev=calculated_soc_gap + scissor)
+        store.attr("electronic", "qp", **attrs)
+        P = np.asarray(pops_sf)
+        put_orbitals(store, "sf/mo", eps_dft_shifted, occ,
+                     {"P_weights": P, "surface_ao_mask": surface_mask, "IPR": np.sum(P ** 2, axis=0),
+                      "coop_results": {}},
+                     shells, [], ewin, pdos_sigma, spin_factor=2.0, indices=np.arange(len(eps)),
+                     extra={"energy_dft_abs_ev": np.asarray(eps, float), "energy_qp_abs_ev": qp_abs})
+        store.attr("electronic", "sf/mo", homo_index=int(homo_index),
+                   energy_reference="energy_ev: DFT, relative to the DFT mid-gap; *_abs_ev: vs vacuum as in CP2K")
+        if bse_soc_E is not None and pops_soc_act is not None:
+            n_sp = len(bse_soc_E)
+            h = int(bse_spinor_homo_idx)
+            Ps = np.asarray(pops_soc_act)
+            occ_sp = np.zeros(n_sp)
+            occ_sp[:h + 1] = 1.0
+            e_abs = np.asarray(bse_soc_E, float) + bse_soc_midgap_ev
+            # QP: the spin-free occupied / virtual shifts, as the SOC QP gap = SOC gap + scissor
+            occ_shift, virt_shift = qp_homo - eps[homo_index], qp_lumo - eps[homo_index + 1]
+            e_qp = e_abs + np.where(occ_sp > 0, occ_shift, virt_shift)
+            put_orbitals(store, "soc/bse_spinor", bse_soc_E, occ_sp,
+                         {"P_weights": Ps, "surface_ao_mask": surface_mask, "IPR": np.sum(Ps ** 2, axis=0),
+                          "coop_results": {}},
+                         shells, [], ewin, pdos_sigma, spin_factor=1.0,
+                         extra={"energy_dft_abs_ev": e_abs, "energy_qp_abs_ev": e_qp})
+            store.attr("electronic", "soc/bse_spinor", homo_index=h, midgap_abs_ev=float(bse_soc_midgap_ev),
+                       energy_reference="energy_ev: relative to the SOC spinor mid-gap (DFT); *_abs_ev: vs vacuum",
+                       note="the spinors of the exciton active space; hole/electron_spinor index these")
+            store.attr("electronic", "qp", soc_dft_homo_ev=float(e_abs[h]), soc_dft_lumo_ev=float(e_abs[h + 1]),
+                       soc_qp_homo_ev=float(e_qp[h]), soc_qp_lumo_ev=float(e_qp[h + 1]))
+            store.cache["soc_spinor_atom_pops"] = _atom_pops(Ps, build_atom_ao_ranges(shells))
+
+    if getattr(args, "mo_cubes", False):
+        tracker.start_stage("MO Cubes")
+        from qdex.exciton_cube import generate_cubes
+        n_h, n_l = getattr(args, "cube_nhomos", 2), getattr(args, "cube_nlumos", 2)
+        mo_list = [homo_index - i for i in range(n_h) if homo_index - i >= 0]
+        mo_list += [homo_index + 1 + i for i in range(n_l) if homo_index + 1 + i < C_dense.shape[1]]
+
+        from types import SimpleNamespace
+        _MOs = SimpleNamespace(C=C_dense, homo_index=homo_index)
+        logger.info(f"\n--- MO cubes ({len(mo_list)} spin-free MOs, {args.mo_cube_spacing} A grid) ---")
+        generate_cubes(solver=_MOs, bse_states_dict={}, mo_list=mo_list, spinor_list=[], soc_U=None,
+                       shells=shells, symbols=syms, coords=coords_ang, spacing_ang=args.mo_cube_spacing,
+                       nthreads=args.nthreads, use_cpp=not getattr(args, "disable_cpp_cube", False))
+    return {}
+
+
+def _write_store(args):
+    store = getattr(args, "qdex_store", None)
+    if store is not None:
+        store.write(args)
 
 
 def _transition_dipoles(args, *,
@@ -2663,7 +2774,7 @@ def main():
     state = {"parser": parser, "config_path": loaded["config_path"]}
     for stage in (_prepare_run, _read_geometry_and_basis, _read_molecular_orbitals, _quasiparticle_correction,
                   _qp_levels_and_kernel, _ip_ea_and_energy_axis, _orbital_populations, _active_space_and_soc,
-                  _cubes_and_fuzzy):
+                  _cubes_and_fuzzy, _store_electronic_and_mo_cubes):
         _run_stage(stage, args, state)
 
     tracker = state["tracker"]
@@ -2675,11 +2786,13 @@ def main():
         tracker.end_stage()
         tracker.print_summary(device=args.device, nthreads=args.nthreads)
         logger.info("\n--- BSE Calculation Skipped (run_bse: false) ---")
+        _write_store(args)
         logger.info("\nAll requested tasks finished successfully.")
         return
 
     for stage in (_transition_dipoles, _solve_excitons):
         _run_stage(stage, args, state)
+    _write_store(args)
 
 
 if __name__ == "__main__":

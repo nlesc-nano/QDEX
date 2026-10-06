@@ -88,6 +88,7 @@ class ExcitonAnalyzer:
         # STRICT NORMALIZATION: Fixes the Covariance scaling bug
         q_occ  /= (np.sum(q_occ,  axis=0, keepdims=True) + 1e-12)
         q_virt /= (np.sum(q_virt, axis=0, keepdims=True) + 1e-12)
+        self.q_occ, self.q_virt = q_occ, q_virt      # (n_atoms, n_occ_act / n_virt_act)
         
         # Calculate strict center of mass for each MO
         self.r_occ  = q_occ.T  @ self.coords  # Shape: (n_occ_act, 3)

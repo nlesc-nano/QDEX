@@ -205,7 +205,9 @@ def build_smeared_fuzzy(intensity, eps_plot, ewin, sigma_ev):
     return centres, Z
 
 
-def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="sf"):
+def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="sf", export=True):
+    if not export:
+        return
     t0 = time.time()
     centres, Z = build_smeared_fuzzy(intensity, eps_plot, ewin, sigma_ev)
 
@@ -326,6 +328,9 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
 
     sigma_use = getattr(args, 'fuzzy_sigma', 0.03)
     pdos_sigma_use = getattr(args, 'pdos_sigma', 0.10)
+    # Files for the HTML dashboards (which read them back) or for csv output
+    export_files = bool(getattr(args, 'html', True) or getattr(args, 'write_csv', False))
+    store = getattr(args, 'qdex_store', None)
     dashboard_energy_mode = str(getattr(args, 'dashboard_energy_mode', 'dft')).lower()
     if dashboard_energy_mode not in ("dft", "qp", "both"):
         raise ValueError("dashboard_energy_mode must be one of: dft, qp, both")
@@ -364,7 +369,10 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             f"max |dA|={np.max(np.abs(Z_fold - Z_ref)):.3e}"
         )
     
-    smear_and_export_fuzzy(intensity_sf, eps_fuzzy, labels, dft_ewin, sigma_use, prefix="sf")
+    smear_and_export_fuzzy(intensity_sf, eps_fuzzy, labels, dft_ewin, sigma_use, prefix="sf", export=export_files)
+    if store is not None:
+        from qdex.store import put_fuzzy
+        put_fuzzy(store, "sf", kpts_cart, labels, eps_fuzzy, intensity_sf, sigma_use, dft_ewin, indices=fuzzy_indices)
     
     pdos_analysis_sf = None
     if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
@@ -373,8 +381,13 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             C_dense, S_dense, eps_shifted, shells, args.pdos_atoms, args.coop_pairs, dft_ewin,
             sigma=pdos_sigma_use, is_soc=False, prefix="sf", pops=pops_sf,
             population_bars=getattr(args, "population_bars", None),
-            device=getattr(args, "device", "numpy")
+            device=getattr(args, "device", "numpy"), export=export_files
         )
+        if store is not None:
+            pairs = [p for p in args.coop_pairs if p in pdos_analysis_sf["coop_results"]]
+            if pairs:
+                store.put("electronic", "sf/mo/coop_pairs", pairs)
+                store.put("electronic", "sf/mo/coop", np.stack([pdos_analysis_sf["coop_results"][p] for p in pairs], axis=1))
 
     if dashboard_energy_mode in ("qp", "both"):
         if qp_plot_energies is None:
@@ -524,7 +537,10 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         logger.info(f"  [Fuzzy-SOC] Spinor LUMO (Idx {global_spinor_homo_idx + 1}): {eps_soc[global_spinor_homo_idx + 1]:8.4f} eV")
         logger.info(f"  [Fuzzy-SOC] ----------------------------------") 
         
-        smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc")
+        smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc", export=export_files)
+        if store is not None:
+            from qdex.store import put_fuzzy
+            put_fuzzy(store, "soc", kpts_cart, labels, eps_soc, intensity_soc, sigma_use, soc_ewin)
 
         eps_soc_qp = None
         sort_idx_qp = None
@@ -654,12 +670,18 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                             np.real(C_spinor_ao[n_ao:, :].conj() * SC_spinor_ao[n_ao:, :])
             logger.debug(f"  [PDOS/COOP] Pre-computed populations in {time.time() - t_pop:.2f}s")
             
-            compute_pdos_and_coop(
+            pdos_analysis_soc = compute_pdos_and_coop(
                 C_spinor_ao, S_dense, eps_soc, shells, args.pdos_atoms, args.coop_pairs, soc_ewin,
                 sigma=pdos_sigma_use, is_soc=True, prefix="soc", pops=pops_soc_full,
                 population_bars=getattr(args, "population_bars", None),
-                device=device
+                device=device, export=export_files
             )
+            if store is not None:
+                from qdex.store import put_orbitals
+                put_orbitals(store, "soc/spinor", eps_soc, (eps_soc <= 0.0).astype(float), pdos_analysis_soc, shells,
+                             args.coop_pairs, soc_ewin, pdos_sigma_use, spin_factor=1.0)
+                store.attr("electronic", "soc/spinor", energy_reference="QDEX fuzzy axis: mid-gap at 0 (DFT, eV)",
+                           window="spinors plotted in the fuzzy window (ewin)")
 
             if dashboard_energy_mode in ("qp", "both") and eps_soc_qp is not None and sort_idx_qp is not None:
                 C_spinor_ao_qp = C_spinor_ao_plot[:, sort_idx_qp]
@@ -674,7 +696,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 )
 
     # --- 3. Generate Multi-Row Interactive Plotly HTML ---
-    if getattr(args, 'plot', True) or getattr(args, 'plot_fuzzy', True):
+    if getattr(args, 'html', True):
         from qdex.plot_fuzzy import generate_interactive_plot
         ef_dict = {"sf": 0.0}; homo_dict = {"sf": e_homo}; lumo_dict = {"sf": e_lumo}
         

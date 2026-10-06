@@ -269,6 +269,49 @@ analysis and output
   ``time``, ``cube``, ``cube_spacing``, ``cube_nhomos``, ``cube_nlumos``, ``nbse``, ``bse_states``,
   ``nto``, ``nto_states``, ``nto_top``, ``nto_csv`` (:doc:`/exciton_analysis/index`), ``verbosity``.
 
+Database output
+^^^^^^^^^^^^^^^
+
+For runs that feed a database (many dots, results read by programs rather than
+people), ``output`` has:
+
+* ``h5: true`` writes two HDF5 files (energies in eV, lengths in Å, transition
+  dipoles in e·bohr; the QDEX commit and all settings as file attributes):
+
+  - ``qdex_electronic.h5``: ``structure``; ``qp`` (DFT and QP gaps, HOMO/LUMO
+    vs vacuum, spin-free and SOC); ``sf/mo`` (every MO of the orbital file:
+    DFT and QP energies, occupation, element / element(l) / surface fractions,
+    IPR, COOP per pair, PDOS on a grid); ``soc/bse_spinor`` (the exciton active
+    space spinors, same projections, absolute and QP energies) and
+    ``soc/spinor`` (the fuzzy-window spinors); ``sf/fuzzy`` and ``soc/fuzzy``
+    (raw weights :math:`|\langle\phi_n|k\rangle|^2` along the k-path, to be
+    smeared with the stored ``sigma_ev``).
+  - ``qdex_excitations.h5``: ``sf`` and ``soc``, every exciton up to
+    ``excitations_emax`` (default 4.5 eV, about 275 nm, measured on the exciton
+    energy) and at least ``excitations_min_states`` (default 20): energy,
+    oscillator strength, transition dipole, hole and electron orbital (MO or
+    spinor index), D / Kx / −Kd, d_eh, d_CT, σ_h, σ_e, CT character, type,
+    singlet fraction (SOC), and the broadened spectrum. In the diagonal modes
+    every transition is kept whatever ``nroots`` is, at no extra cost; the
+    eigenvectors are not stored (one hole-electron pair per state).
+
+* ``html: false`` skips the HTML dashboards and the CSV / NPZ files they read.
+* ``mo_cubes: true`` writes the spin-free ``cube_nhomos`` + ``cube_nlumos`` MOs
+  around the gap (HOMO-1, HOMO, LUMO, LUMO+1 by default) on a coarse
+  ``mo_cube_spacing`` grid (default 0.8 Å), without the spinor and exciton
+  cubes of ``cube``.
+* ``verbosity: quiet`` keeps the console to warnings; the log file keeps everything.
+
+.. code-block:: yaml
+
+   output:
+     h5: true
+     html: false
+     plot: false
+     write_csv: false
+     mo_cubes: true
+     verbosity: quiet
+
 **Output verbosity.** ``output.verbosity`` (``--verbosity``) sets what reaches the console:
 ``full`` (default, everything), ``normal`` (without iteration traces, timings and diagnostics) or
 ``quiet`` (warnings and errors only). The log file (``system.log_file``, default ``minibse.log``)

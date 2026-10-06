@@ -278,7 +278,7 @@ def export_population_bar_plot(analysis, eps_eV, pdos_atoms, ewin, prefix="sf", 
             w.writerow([en] + list(row))
 
 
-def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix="sf", pops=None, population_bars=None, device="numpy"):
+def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, sigma=0.03, is_soc=False, prefix="sf", pops=None, population_bars=None, device="numpy", export=True):
     t0 = time.time()
     logger.info(f"  [PDOS/COOP] Analyzing {len(pdos_atoms)} elements, {len(coop_pairs)} bonds, IPR, and Surface/Core...")
     
@@ -400,7 +400,8 @@ def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, si
         "coop_results": coop_results,
     }
 
-    export_pdos_coop_data(analysis, eps_eV, pdos_atoms, coop_pairs, ewin, sigma=sigma, is_soc=is_soc, prefix=prefix, population_bars=population_bars)
+    if export:
+        export_pdos_coop_data(analysis, eps_eV, pdos_atoms, coop_pairs, ewin, sigma=sigma, is_soc=is_soc, prefix=prefix, population_bars=population_bars)
                 
     logger.debug(f"  [PDOS/COOP] Exported {prefix} data in {time.time() - t0:.2f} s")
     return analysis
