@@ -15,11 +15,17 @@ class ExcitonHamiltonian:
                  vxc_ao_path=None, nthreads=1, spin='singlet', C_beta=None, eps_beta=None, homo_index_beta=None,
                  n_occ_beta=None, n_virt_beta=None, excitation_mode="bse", kernel_type="mnok",
                  include_direct_eh=True, eps_dft=None, selection=None, selection_energy=7.0,
-                 selection_pt=1e-4, selection_shift=True):
+                 selection_pt=1e-4, selection_shift=True,
+                 hole_trap_mask=None, elec_trap_mask=None,
+                 hole_trap_mask_soc=None, elec_trap_mask_soc=None):
         self.selection_shift = bool(selection_shift)
         self.selection = (str(selection).lower() if selection not in (None, False) else "none")
         self.selection_energy = float(selection_energy if selection_energy is not None else 7.0)
         self.selection_pt = float(selection_pt if selection_pt is not None else 1e-4)
+        self.hole_trap_mask = hole_trap_mask
+        self.elec_trap_mask = elec_trap_mask
+        self.hole_trap_mask_soc = hole_trap_mask_soc
+        self.elec_trap_mask_soc = elec_trap_mask_soc
         
         self.excitation_mode = str(excitation_mode).lower()
         if self.excitation_mode in ("diagonal_sbse", "diagonal_stda"):
@@ -64,7 +70,8 @@ class ExcitonHamiltonian:
                 overlap=overlap, atom_ao_ranges=atom_ao_ranges, scissor_ev=scissor_ev,
                 e_thresh=e_thresh, f_thresh=f_thresh, mu_ia_x=mu_ia_x, mu_ia_y=mu_ia_y, mu_ia_z=mu_ia_z,
                 charge_type=charge_type, device=device, soc_U=soc_U, soc_E=soc_E,
-                excitation_mode=excitation_mode, kernel_type=self.kernel_type
+                excitation_mode=excitation_mode, kernel_type=self.kernel_type,
+                hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask
             )
             return
         
@@ -403,6 +410,14 @@ class ExcitonHamiltonian:
             mask_f = np.ones_like(dft_gap_matrix, dtype=bool)
 
         self.valid_mask = mask_e & mask_f
+        if self.hole_trap_mask is not None:
+            self.valid_mask &= ~self.hole_trap_mask.reshape(-1, 1)
+        if self.elec_trap_mask is not None:
+            self.valid_mask &= ~self.elec_trap_mask.reshape(1, -1)
+        if self.hole_trap_mask is not None or self.elec_trap_mask is not None:
+            n_traps_filtered = int((mask_e & mask_f).sum() - self.valid_mask.sum())
+            if n_traps_filtered > 0:
+                logger.info(f"    [Trap Filter] Excluded {n_traps_filtered} transitions involving [Surf/Trap] states.")
         pt_shift = None
         if self.selection == "perturbative":
             if self.diagonal_mode or self.soc_flag or not hasattr(self, "q_ov"):
@@ -581,7 +596,8 @@ class ExcitonHamiltonian:
                                    C_beta, eps_beta, homo_index_beta, n_occ_beta, n_virt_beta,
                                    overlap, atom_ao_ranges, scissor_ev, e_thresh, f_thresh,
                                    mu_ia_x, mu_ia_y, mu_ia_z, charge_type, device, soc_U=None, soc_E=None,
-                                   excitation_mode="bse", kernel_type=None):
+                                   excitation_mode="bse", kernel_type=None,
+                                   hole_trap_mask=None, elec_trap_mask=None):
         """
         Manifold B: Coupled spin-preserving excitations for an open-shell UKS reference.
         Alpha transitions (alpha_occ -> alpha_virt) and beta transitions (beta_occ -> beta_virt)
@@ -670,6 +686,10 @@ class ExcitonHamiltonian:
 
         valid_mask_a = mask_e_a & mask_f_a
         valid_mask_b = mask_e_b & mask_f_b
+        if hole_trap_mask is not None:
+            valid_mask_a &= ~hole_trap_mask.reshape(-1, 1)
+        if elec_trap_mask is not None:
+            valid_mask_a &= ~elec_trap_mask.reshape(1, -1)
         vi_a, va_a = np.where(valid_mask_a)
         vi_b, va_b = np.where(valid_mask_b)
         dim_a, dim_b = len(vi_a), len(vi_b)
@@ -1043,6 +1063,19 @@ class ExcitonHamiltonian:
         else:
             self.valid_spinor_mask = np.ones_like(raw_D_spinor, dtype=bool)
 
+        n_sp_before_trap = int(self.valid_spinor_mask.sum())
+        if self.hole_trap_mask_soc is not None:
+            I_full = np.arange(len(raw_D_spinor)) // self.n_virt_spinor
+            self.valid_spinor_mask &= ~self.hole_trap_mask_soc[I_full]
+        if self.elec_trap_mask_soc is not None:
+            A_full = np.arange(len(raw_D_spinor)) % self.n_virt_spinor
+            self.valid_spinor_mask &= ~self.elec_trap_mask_soc[A_full]
+
+        if self.hole_trap_mask_soc is not None or self.elec_trap_mask_soc is not None:
+            n_sp_traps_filtered = n_sp_before_trap - int(self.valid_spinor_mask.sum())
+            if n_sp_traps_filtered > 0:
+                logger.info(f"  [Trap Filter-SOC] Excluded {n_sp_traps_filtered} spinor transitions involving [Surf/Trap] states.")
+
         self.valid_spinor_idx = np.where(self.valid_spinor_mask)[0]
         self.D_spinor = raw_D_spinor[self.valid_spinor_mask]
         self.D = self.D_spinor
@@ -1197,6 +1230,19 @@ class ExcitonHamiltonian:
             self.valid_spinor_mask = raw_gap_spinor_dft <= e_thresh
         else:
             self.valid_spinor_mask = np.ones_like(raw_D_spinor, dtype=bool)
+
+        n_sp_before_trap = int(self.valid_spinor_mask.sum())
+        if self.hole_trap_mask_soc is not None:
+            I_full = np.arange(len(raw_D_spinor)) // self.n_virt_spinor
+            self.valid_spinor_mask &= ~self.hole_trap_mask_soc[I_full]
+        if self.elec_trap_mask_soc is not None:
+            A_full = np.arange(len(raw_D_spinor)) % self.n_virt_spinor
+            self.valid_spinor_mask &= ~self.elec_trap_mask_soc[A_full]
+
+        if self.hole_trap_mask_soc is not None or self.elec_trap_mask_soc is not None:
+            n_sp_traps_filtered = n_sp_before_trap - int(self.valid_spinor_mask.sum())
+            if n_sp_traps_filtered > 0:
+                logger.info(f"  [Trap Filter-SOC UKS] Excluded {n_sp_traps_filtered} spinor transitions involving [Surf/Trap] states.")
 
         self.valid_spinor_idx = np.where(self.valid_spinor_mask)[0]
         self.D_spinor = raw_D_spinor[self.valid_spinor_mask]

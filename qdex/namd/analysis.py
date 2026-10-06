@@ -440,26 +440,30 @@ def analyze_and_plot_namd_results(
     logger.info(f"  [Output] Carrier cooling curve exported to: {csv_file}")
 
     # 2. Export Populations & Dynamics NPZ
-    np.savez_compressed(
-        npz_file,
-        times_fs=times_fs,
-        mean_energies_ev=mean_energies_ev,
-        excess_total=excess_total,
-        mean_excess_e=mean_excess_e,
-        mean_excess_h=mean_excess_h,
-        std_energies_ev=std_energies_ev if std_energies_ev is not None else np.array([]),
-        std_excess_e=std_excess_e if std_excess_e is not None else np.array([]),
-        std_excess_h=std_excess_h if std_excess_h is not None else np.array([]),
-        n_origins=int(n_origins),
-        populations=populations,
-        pop_se=pop_se if pop_se is not None else np.array([]),
-        pop_sh=pop_sh if pop_sh is not None else np.array([]),
-        pop_1s=pop_1s if pop_1s is not None else np.array([]),
-        trajectory_energies=trajectory_energies if trajectory_energies is not None else np.array([]),
-        qp_gap_ev=qp_gap_ev,
-        pump_energy_ev=pump_energy_ev
-    )
-    logger.info(f"  [Output] State populations saved to: {npz_file}")
+    save_pops = bool(out_cfg.get("save_populations", True)) and bool(npz_file)
+    if save_pops:
+        np.savez_compressed(
+            npz_file,
+            times_fs=times_fs,
+            mean_energies_ev=mean_energies_ev,
+            excess_total=excess_total,
+            mean_excess_e=mean_excess_e,
+            mean_excess_h=mean_excess_h,
+            std_energies_ev=std_energies_ev if std_energies_ev is not None else np.array([]),
+            std_excess_e=std_excess_e if std_excess_e is not None else np.array([]),
+            std_excess_h=std_excess_h if std_excess_h is not None else np.array([]),
+            n_origins=int(n_origins),
+            populations=populations,
+            pop_se=pop_se if pop_se is not None else np.array([]),
+            pop_sh=pop_sh if pop_sh is not None else np.array([]),
+            pop_1s=pop_1s if pop_1s is not None else np.array([]),
+            trajectory_energies=trajectory_energies if trajectory_energies is not None else np.array([]),
+            qp_gap_ev=qp_gap_ev,
+            pump_energy_ev=pump_energy_ev
+        )
+        logger.info(f"  [Output] State populations saved to: {npz_file}")
+    else:
+        logger.info("  [Output] Skipping large populations NPZ export (save_populations: false).")
 
     # 3. Fit Lifetimes & Band Edge Arrival Times
     tau_total = fit_exponential_lifetime(times_fs, excess_total)

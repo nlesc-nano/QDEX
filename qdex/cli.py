@@ -403,14 +403,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             )
             spin_str = format_uks_soc_spin_free_character(character)
         elif solver.soc_flag:
-            soc_mask = None
-            if args.e_thresh is not None and soc_E is not None:
-                n_occ_sp = solver.ham.n_occ_spinor
-                n_virt_sp = solver.ham.n_virt_spinor
-                soc_occ_E = soc_E[:n_occ_sp]
-                soc_virt_E = soc_E[n_occ_sp:n_occ_sp + n_virt_sp]
-                soc_mask = (soc_virt_E.reshape(1, -1) - soc_occ_E.reshape(-1, 1)) <= args.e_thresh
-                
+            soc_mask = getattr(solver.ham, 'valid_spinor_mask', None)
             s_pct, t_pct = compute_spin_character(vec, soc_U, solver.ham.n_occ_spinor, solver.ham.n_virt_spinor, valid_mask=soc_mask)
             spin_str = f"{s_pct:5.1f}% S / {t_pct:5.1f}% T"
         elif getattr(solver.ham, 'spin', 'singlet') == 'uks_spin_preserving':
@@ -1047,6 +1040,20 @@ def _build_parser():
                         help="Reciprocal-vector shell for folded fuzzy-band weights; 0, 1, 2 (default) and 3 use 1, 27, 125 and 343 replicas.")
     parser.add_argument("--dashboard_energy_mode", choices=["dft", "qp", "both"], default="dft", help="Generate fuzzy dashboards on DFT, QP-corrected, or both energy axes.")
     parser.add_argument("--qp_energy_reference", choices=["vacuum", "fermi"], default="vacuum", help="Energy reference for QP fuzzy dashboards.")
+
+    # Centroid and trap analysis / filtering arguments
+    parser.add_argument("--trap-filter", "--filter-traps", dest="trap_filter", action="store_true", default=False,
+                        help="Filter out surface trap states (ξ > xi_trap or core fraction < f_core_trap) when selecting active space.")
+    parser.add_argument("--xi-core", dest="xi_core_threshold", type=float, default=0.35,
+                        help="Normalized centroid displacement threshold ξ <= xi_core for quantum-confined core envelope states (default: 0.35).")
+    parser.add_argument("--xi-trap", dest="xi_trap_threshold", type=float, default=0.55,
+                        help="Normalized centroid displacement threshold ξ >= xi_trap for surface trap states (default: 0.55).")
+    parser.add_argument("--centroid-core-elements", dest="centroid_core_elements", nargs="+", default=None,
+                        help="Explicit element symbols to treat as QD core atoms for centroid analysis (default: auto-detected).")
+    parser.add_argument("--f-core-min", dest="f_core_min", type=float, default=0.60,
+                        help="Minimum core population fraction for [Core] classification (default: 0.60).")
+    parser.add_argument("--f-core-trap", dest="f_core_trap", type=float, default=0.40,
+                        help="Core population fraction below which an orbital is classified as [Surf/Trap] (default: 0.40).")
 
     # Periodic/Gamma-only arguments. YAML is the preferred interface.
     parser.add_argument("--periodic", action="store_true", dest="periodic_enabled", help="Use Gamma-only periodic AO overlap.")
@@ -2285,18 +2292,83 @@ def _active_space_and_soc(args, *,
             "s_r": r_scale,
         }
 
+    centroid_core_els = getattr(args, "centroid_core_elements", None)
+    xi_core_thr = float(getattr(args, "xi_core_threshold", 0.35))
+    xi_trap_thr = float(getattr(args, "xi_trap_threshold", 0.55))
+    f_core_min_thr = float(getattr(args, "f_core_min", 0.60))
+    f_core_trap_thr = float(getattr(args, "f_core_trap", 0.40))
+
+    centroid_info_alpha = None
     if C_beta is not None:
         pop_range = max(0, int(getattr(args, "population_print_range", 15)))
         pop_tags = getattr(args, "population_bars", None)
         logger.info("\n--- Spin-Free Alpha MO Population Analysis ---")
-        print_orbital_summary(eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha)
+        centroid_info_alpha = print_orbital_summary(
+            eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False,
+            print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha,
+            coords_ang=coords_ang, core_elements=centroid_core_els,
+            xi_core=xi_core_thr, xi_trap=xi_trap_thr, f_core_min=f_core_min_thr, f_core_trap=f_core_trap_thr
+        )
         logger.info("\n--- Spin-Free Beta MO Population Analysis ---")
-        print_orbital_summary(eps_beta_shifted, occ_beta, homo_index_beta, pops_beta, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags)
+        print_orbital_summary(
+            eps_beta_shifted, occ_beta, homo_index_beta, pops_beta, syms, shells, is_soc=False,
+            print_range=pop_range, population_bars=pop_tags, coords_ang=coords_ang,
+            core_elements=centroid_core_els, xi_core=xi_core_thr, xi_trap=xi_trap_thr,
+            f_core_min=f_core_min_thr, f_core_trap=f_core_trap_thr
+        )
     else:
         logger.info("\n--- Spin-Free MO Population Analysis ---")
         pop_range = max(0, int(getattr(args, "population_print_range", 15)))
         pop_tags = getattr(args, "population_bars", None)
-        print_orbital_summary(eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False, print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha)
+        centroid_info_alpha = print_orbital_summary(
+            eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False,
+            print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha,
+            coords_ang=coords_ang, core_elements=centroid_core_els,
+            xi_core=xi_core_thr, xi_trap=xi_trap_thr, f_core_min=f_core_min_thr, f_core_trap=f_core_trap_thr
+        )
+
+    # Frontier Orbital Localization Diagnostic
+    if centroid_info_alpha is not None:
+        loc_labels = centroid_info_alpha["labels"]
+        xi_vals = centroid_info_alpha["xi"]
+        d_com_vals = centroid_info_alpha["d_com"]
+        r_c = centroid_info_alpha["r_core"]
+        
+        core_vbm_idx = None
+        for i in range(homo_index, -1, -1):
+            if loc_labels[i] == "[Core]":
+                core_vbm_idx = i
+                break
+                
+        core_cbm_idx = None
+        for i in range(homo_index + 1, len(eps)):
+            if loc_labels[i] == "[Core]":
+                core_cbm_idx = i
+                break
+
+        logger.info(f"\n--- Frontier Orbital Localization Diagnostic (Core Radius: {r_c:.2f} Å) ---")
+        homo_loc = loc_labels[homo_index]
+        logger.info(f"  Nominal HOMO  (MO {homo_index:4d}, {eps[homo_index]:7.3f} eV): {homo_loc:>11} | ξ = {xi_vals[homo_index]:.2f}, d_COM = {d_com_vals[homo_index]:.2f} Å")
+        
+        if core_vbm_idx is not None and core_vbm_idx != homo_index:
+            vbm_offset = eps[homo_index] - eps[core_vbm_idx]
+            rel_vbm = core_vbm_idx - homo_index
+            logger.info(f"  True Core VBM (MO {core_vbm_idx:4d}, {eps[core_vbm_idx]:7.3f} eV): {'[Core]':>11} | ξ = {xi_vals[core_vbm_idx]:.2f}, d_COM = {d_com_vals[core_vbm_idx]:.2f} Å (offset: {vbm_offset:+.3f} eV, HOMO{rel_vbm})")
+        elif core_vbm_idx == homo_index:
+            logger.info("  True Core VBM coincides with Nominal HOMO (no surface hole traps detected).")
+            
+        if core_cbm_idx is not None:
+            lumo_idx = homo_index + 1
+            lumo_loc = loc_labels[lumo_idx]
+            logger.info(f"  Nominal LUMO  (MO {lumo_idx:4d}, {eps[lumo_idx]:7.3f} eV): {lumo_loc:>11} | ξ = {xi_vals[lumo_idx]:.2f}, d_COM = {d_com_vals[lumo_idx]:.2f} Å")
+            if core_cbm_idx != lumo_idx:
+                cbm_offset = eps[core_cbm_idx] - eps[lumo_idx]
+                rel_cbm = core_cbm_idx - lumo_idx
+                logger.info(f"  True Core CBM (MO {core_cbm_idx:4d}, {eps[core_cbm_idx]:7.3f} eV): {'[Core]':>11} | ξ = {xi_vals[core_cbm_idx]:.2f}, d_COM = {d_com_vals[core_cbm_idx]:.2f} Å (offset: {cbm_offset:+.3f} eV, LUMO+{rel_cbm})")
+            
+            if core_vbm_idx is not None:
+                core_core_gap = eps[core_cbm_idx] - eps[core_vbm_idx]
+                logger.info(f"  Core-to-Core DFT Gap: {core_core_gap:7.3f} eV  (Nominal DFT Gap: {dft_gap:7.3f} eV)")
 
     if args.soc_flag:
         if args.gth_file is None: sys.exit("ERROR: --gth_file is required when --soc_flag is enabled.")
@@ -2333,10 +2405,13 @@ def _active_space_and_soc(args, *,
         soc_occ = np.zeros_like(bse_soc_E)
         soc_occ[:bse_spinor_homo_idx + 1] = 1.0
         soc_offset = (homo_index - bse_n_occ + 1) * 2 
-        print_orbital_summary(
+        centroid_info_soc = print_orbital_summary(
             bse_soc_E, soc_occ, bse_spinor_homo_idx, pops_soc_act, syms, shells,
-            is_soc=True, offset=soc_offset, print_range=pop_range, population_bars=pop_tags
+            is_soc=True, offset=soc_offset, print_range=pop_range, population_bars=pop_tags,
+            coords_ang=coords_ang, core_elements=centroid_core_els,
+            xi_core=xi_core_thr, xi_trap=xi_trap_thr, f_core_min=f_core_min_thr, f_core_trap=f_core_trap_thr
         )
+
         calculated_soc_gap = bse_soc_E[bse_spinor_homo_idx + 1] - bse_soc_E[bse_spinor_homo_idx]
         if eps_qp_active is not None:
             # Spinors were built from QP energies (qsgw-*), so their gap already
@@ -2370,7 +2445,7 @@ def _active_space_and_soc(args, *,
         "C_dense_beta", "bse_n_occ", "bse_n_occ_beta", "bse_n_virt", "bse_n_virt_beta", "bse_soc_E",
         "bse_soc_U", "bse_spinor_homo_idx", "calculated_soc_gap", "compute_spinor_subspace",
         "compute_spinor_subspace_uks", "confinement_energy", "db_gap", "is_uks_sp", "soc_overlap_cache",
-        "pops_soc_act", "bse_soc_midgap_ev"
+        "pops_soc_act", "bse_soc_midgap_ev", "centroid_info_alpha", "centroid_info_soc"
     ))
 
 
@@ -2511,7 +2586,8 @@ def _cubes_and_fuzzy(args, *,
 def _store_electronic_and_mo_cubes(args, *,
         C_dense, bse_soc_E, bse_soc_U, bse_soc_midgap_ev, bse_spinor_homo_idx, calculated_soc_gap, confinement_energy, coords_ang,
         dft_gap, e_fermi_raw, eps, eps_dft_shifted, eps_qp_active, homo_index, occ, pops_sf, pops_soc_act,
-        qp_homo, qp_lumo, qp_provenance, scissor, shells, syms, target_qp_gap, tracker):
+        qp_homo, qp_lumo, qp_provenance, scissor, shells, syms, target_qp_gap, tracker,
+        centroid_info_alpha=None, centroid_info_soc=None):
     """Spin-free MOs and SOC spinors into qdex_electronic.h5 (output.h5)."""
     store = getattr(args, "qdex_store", None)
     if store is not None:
@@ -2538,13 +2614,27 @@ def _store_electronic_and_mo_cubes(args, *,
             attrs.update(soc_dft_gap_ev=calculated_soc_gap, soc_qp_gap_ev=calculated_soc_gap + scissor)
         store.attr("electronic", "qp", **attrs)
         P = np.asarray(pops_sf)
+        extra_sf = {"energy_dft_abs_ev": np.asarray(eps, float), "energy_qp_abs_ev": qp_abs}
+        if centroid_info_alpha is not None:
+            extra_sf.update({
+                "centroid/d_com_ang": np.asarray(centroid_info_alpha["d_com"], float),
+                "centroid/xi": np.asarray(centroid_info_alpha["xi"], float),
+                "centroid/sigma_ang": np.asarray(centroid_info_alpha["sigma"], float),
+                "centroid/sigma_tilde": np.asarray(centroid_info_alpha["sigma_tilde"], float),
+                "centroid/f_core": np.asarray(centroid_info_alpha["f_core"], float),
+                "centroid/labels": list(centroid_info_alpha["labels"]),
+            })
         put_orbitals(store, "sf/mo", eps_dft_shifted, occ,
                      {"P_weights": P, "surface_ao_mask": surface_mask, "IPR": np.sum(P ** 2, axis=0),
                       "coop_results": {}},
                      shells, [], ewin, pdos_sigma, spin_factor=2.0, indices=np.arange(len(eps)),
-                     extra={"energy_dft_abs_ev": np.asarray(eps, float), "energy_qp_abs_ev": qp_abs})
+                     extra=extra_sf)
         store.attr("electronic", "sf/mo", homo_index=int(homo_index),
                    energy_reference="energy_ev: DFT, relative to the DFT mid-gap; *_abs_ev: vs vacuum as in CP2K")
+        if centroid_info_alpha is not None:
+            store.attr("electronic", "sf/mo/centroid",
+                       r_core_ang=float(centroid_info_alpha["r_core"]),
+                       com_core_ang=list(map(float, centroid_info_alpha["com_core"])))
         if bse_soc_E is not None and pops_soc_act is not None:
             n_sp = len(bse_soc_E)
             h = int(bse_spinor_homo_idx)
@@ -2555,14 +2645,28 @@ def _store_electronic_and_mo_cubes(args, *,
             # QP: the spin-free occupied / virtual shifts, as the SOC QP gap = SOC gap + scissor
             occ_shift, virt_shift = qp_homo - eps[homo_index], qp_lumo - eps[homo_index + 1]
             e_qp = e_abs + np.where(occ_sp > 0, occ_shift, virt_shift)
+            extra_soc = {"energy_dft_abs_ev": e_abs, "energy_qp_abs_ev": e_qp}
+            if centroid_info_soc is not None:
+                extra_soc.update({
+                    "centroid/d_com_ang": np.asarray(centroid_info_soc["d_com"], float),
+                    "centroid/xi": np.asarray(centroid_info_soc["xi"], float),
+                    "centroid/sigma_ang": np.asarray(centroid_info_soc["sigma"], float),
+                    "centroid/sigma_tilde": np.asarray(centroid_info_soc["sigma_tilde"], float),
+                    "centroid/f_core": np.asarray(centroid_info_soc["f_core"], float),
+                    "centroid/labels": list(centroid_info_soc["labels"]),
+                })
             put_orbitals(store, "soc/bse_spinor", bse_soc_E, occ_sp,
                          {"P_weights": Ps, "surface_ao_mask": surface_mask, "IPR": np.sum(Ps ** 2, axis=0),
                           "coop_results": {}},
                          shells, [], ewin, pdos_sigma, spin_factor=1.0,
-                         extra={"energy_dft_abs_ev": e_abs, "energy_qp_abs_ev": e_qp})
+                         extra=extra_soc)
             store.attr("electronic", "soc/bse_spinor", homo_index=h, midgap_abs_ev=float(bse_soc_midgap_ev),
                        energy_reference="energy_ev: relative to the SOC spinor mid-gap (DFT); *_abs_ev: vs vacuum",
                        note="the spinors of the exciton active space; hole/electron_spinor index these")
+            if centroid_info_soc is not None:
+                store.attr("electronic", "soc/bse_spinor/centroid",
+                           r_core_ang=float(centroid_info_soc["r_core"]),
+                           com_core_ang=list(map(float, centroid_info_soc["com_core"])))
             store.attr("electronic", "qp", soc_dft_homo_ev=float(e_abs[h]), soc_dft_lumo_ev=float(e_abs[h + 1]),
                        soc_qp_homo_ev=float(e_qp[h]), soc_qp_lumo_ev=float(e_qp[h + 1]))
             store.cache["soc_spinor_atom_pops"] = _atom_pops(Ps, build_atom_ao_ranges(shells))
@@ -2676,10 +2780,39 @@ def _solve_excitons(args, *,
         bse_soc_U, calculated_soc_gap, compute_device, confinement_energy, coords_ang, db_gap, dft_gap,
         eps_beta_shifted, eps_dft_shifted, eps_qp_active, eps_shifted, homo_index, homo_index_beta, mu_ia_x,
         mu_ia_y, mu_ia_z, occ, qp_w, scissor, shared_gamma_ao, shells, spin_mode, stda_gamma_j, stda_gamma_k,
-        syms, target_qp_gap, tracker):
+        syms, target_qp_gap, tracker, centroid_info_alpha=None, centroid_info_soc=None):
     """Spin-free (and SOC) exciton solvers and their analysis."""
     # Store this for the analysis printouts later
     args.qp_gap_num = target_qp_gap
+
+    # ---------------------------------------------------------------
+    # Trap state masking: exclude transitions involving [Surf/Trap] states
+    # ---------------------------------------------------------------
+    hole_trap_mask = None
+    elec_trap_mask = None
+    hole_trap_mask_soc = None
+    elec_trap_mask_soc = None
+
+    if getattr(args, "trap_filter", False):
+        if centroid_info_alpha is not None and "labels" in centroid_info_alpha:
+            labels_sf = centroid_info_alpha["labels"]
+            occ_idx = np.arange(homo_index - bse_n_occ + 1, homo_index + 1)
+            virt_idx = np.arange(homo_index + 1, homo_index + 1 + bse_n_virt)
+            hole_trap_mask = np.array([labels_sf[i] == "[Surf/Trap]" for i in occ_idx], dtype=bool)
+            elec_trap_mask = np.array([labels_sf[a] == "[Surf/Trap]" for a in virt_idx], dtype=bool)
+            logger.info(f"\n  [Trap Filter] Flagged transitions with [Surf/Trap] character:")
+            logger.info(f"    - Active hole states   : {int(np.sum(hole_trap_mask))}/{bse_n_occ} classified as traps")
+            logger.info(f"    - Active electron states: {int(np.sum(elec_trap_mask))}/{bse_n_virt} classified as traps")
+
+        if getattr(args, "soc_flag", False) and centroid_info_soc is not None and "labels" in centroid_info_soc:
+            labels_soc = centroid_info_soc["labels"]
+            n_occ_sp = 2 * bse_n_occ
+            n_virt_sp = 2 * bse_n_virt
+            hole_trap_mask_soc = np.array([labels_soc[I] == "[Surf/Trap]" for I in range(n_occ_sp)], dtype=bool)
+            elec_trap_mask_soc = np.array([labels_soc[n_occ_sp + A] == "[Surf/Trap]" for A in range(n_virt_sp)], dtype=bool)
+            logger.info(f"  [Trap Filter-SOC] Flagged spinor transitions with [Surf/Trap] character:")
+            logger.info(f"    - Active hole spinors   : {int(np.sum(hole_trap_mask_soc))}/{n_occ_sp} classified as traps")
+            logger.info(f"    - Active electron spinors: {int(np.sum(elec_trap_mask_soc))}/{n_virt_sp} classified as traps")
 
     tracker.start_stage("BSE Exciton Solver (Spin-Free)")
     scissor_solver = 0.0 if eps_qp_active is not None else scissor
@@ -2708,7 +2841,8 @@ def _solve_excitons(args, *,
         selection=args.selection, selection_energy=args.selection_energy, selection_pt=args.selection_pt,
         selection_shift=(str(args.selection_shift).lower() != "off"),
         shells=shells,
-        eps_dft=eps_dft_solver
+        eps_dft=eps_dft_solver,
+        hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
     )
 
     if args.estimate_qp:
@@ -2756,7 +2890,9 @@ def _solve_excitons(args, *,
             shared_W=(stda_gamma_j if stda_gamma_j is not None else (qp_w[0] if qp_w is not None else None)),
             shared_gamma_bare=(stda_gamma_k if stda_gamma_k is not None else shared_gamma_ao),
             shells=shells,
-            eps_dft=eps_dft_solver
+            eps_dft=eps_dft_solver,
+            hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
+            hole_trap_mask_soc=hole_trap_mask_soc, elec_trap_mask_soc=elec_trap_mask_soc,
         )
  
         run_solver_and_analysis(solver_soc, np.array(coords_ang), syms, shells, mu_ia_x, mu_ia_y, mu_ia_z, 

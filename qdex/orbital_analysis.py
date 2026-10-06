@@ -10,7 +10,10 @@ def compute_spin_character(vec, soc_U, n_occ_sp, n_virt_sp, valid_mask=None):
     """
     X_IA = np.zeros((n_occ_sp, n_virt_sp), dtype=vec.dtype)
     if valid_mask is not None:
-        X_IA[valid_mask] = vec
+        if valid_mask.ndim == 1:
+            X_IA.reshape(-1)[valid_mask] = vec
+        else:
+            X_IA[valid_mask] = vec
     else:
         X_IA = vec.reshape((n_occ_sp, n_virt_sp))
     
@@ -321,23 +324,170 @@ def _normalize_population_tags(population_bars, n_atoms):
     return normalized
 
 
+def compute_orbital_centroids(
+    pops, shells, coords_ang, syms,
+    core_elements=None,
+    xi_core=0.35,
+    xi_trap=0.55,
+    f_core_min=0.60,
+    f_core_trap=0.40,
+):
+    """
+    Computes spatial centroid <r> = sum_A p_A R_A, distance from QD core center d_COM,
+    normalized centroid displacement xi = d_COM / R_core, radius of gyration sigma,
+    and localization classification ([Core], [Mixed], [Surf/Trap]) for each orbital.
+
+    Parameters:
+        pops: np.ndarray, shape (n_ao, n_states)
+            Mulliken populations on AOs.
+        shells: list of dict
+            Shell metadata with 'l' and 'atom_idx'.
+        coords_ang: np.ndarray or list of shape (n_atoms, 3)
+            Cartesian coordinates of atoms in Angstrom.
+        syms: list of str
+            Element symbols of all atoms.
+        core_elements: list or set of str, optional
+            Core elements (e.g. ['Cd', 'Se']). If None, auto-detected by excluding
+            typical ligand/capping elements (Cl, Br, I, F, H, C, N, O, P).
+        xi_core: float
+            Maximum xi for delocalized core envelope states (default 0.35).
+        xi_trap: float
+            Minimum xi for surface-localized / trap states (default 0.55).
+        f_core_min: float
+            Minimum core population fraction for [Core] classification (default 0.60).
+        f_core_trap: float
+            Maximum core population fraction below which state is [Surf/Trap] (default 0.40).
+
+    Returns:
+        dict containing:
+            'r_cent': (n_states, 3), centroid coordinates
+            'd_com': (n_states,), distance from core center in Angstrom
+            'xi': (n_states,), normalized centroid displacement d_com / R_core
+            'sigma': (n_states,), RMS orbital spread in Angstrom
+            'sigma_tilde': (n_states,), normalized spread sigma / R_core
+            'f_core': (n_states,), core population fraction
+            'labels': list of str, '[Core]', '[Mixed]', or '[Surf/Trap]'
+            'com_core': (3,), core center of mass coordinates
+            'r_core': float, core radius in Angstrom
+            'core_mask': (n_atoms,) boolean array
+    """
+    coords_ang = np.asarray(coords_ang, dtype=np.float64)
+    n_atoms = len(syms)
+    n_states = pops.shape[1]
+
+    # Map AOs to atoms
+    ao_atom_indices = []
+    for sh in shells:
+        l_int = int(sh['l'])
+        atom_idx = int(sh.get("atom_idx", 0))
+        nbf = 2 * l_int + 1
+        ao_atom_indices.extend([atom_idx] * nbf)
+
+    atom_pops = np.zeros((n_atoms, n_states), dtype=np.float64)
+    np.add.at(atom_pops, ao_atom_indices, pops)
+    tot_pop = np.sum(atom_pops, axis=0)
+    tot_pop_safe = np.where(tot_pop == 0.0, 1.0, tot_pop)
+
+    # Core elements detection
+    if core_elements is not None:
+        core_set = {str(e).strip().capitalize() for e in core_elements}
+    else:
+        # Common organic ligands & passivating halides
+        passivants = {"H", "C", "N", "O", "F", "Cl", "Br", "I", "P"}
+        candidate_core = {str(s).strip().capitalize() for s in syms if str(s).strip().capitalize() not in passivants}
+        if candidate_core:
+            core_set = candidate_core
+        else:
+            core_set = {str(s).strip().capitalize() for s in syms}
+
+    syms_cap = [str(s).strip().capitalize() for s in syms]
+    core_mask = np.array([s in core_set for s in syms_cap], dtype=bool)
+    if not np.any(core_mask):
+        core_mask = np.ones(n_atoms, dtype=bool)
+
+    coords_core = coords_ang[core_mask]
+    com_core = np.mean(coords_core, axis=0)
+    dists_core = np.linalg.norm(coords_core - com_core, axis=1)
+    r_core = float(np.max(dists_core)) if len(dists_core) > 0 else 1.0
+    if r_core < 1e-3:
+        r_core = 1.0
+
+    # Electronic centroids
+    r_cent = (atom_pops.T @ coords_ang) / tot_pop_safe[:, None]
+    d_com = np.linalg.norm(r_cent - com_core, axis=1)
+    xi = d_com / r_core
+
+    # Orbital spread (radius of gyration)
+    d2 = np.sum((coords_ang[None, :, :] - r_cent[:, None, :]) ** 2, axis=2)
+    var_r = np.sum((atom_pops.T / tot_pop_safe[:, None]) * d2, axis=1)
+    sigma = np.sqrt(np.maximum(0.0, var_r))
+    sigma_tilde = sigma / r_core
+
+    # Core fraction
+    f_core = np.sum(atom_pops[core_mask, :], axis=0) / tot_pop_safe
+
+    # Classification
+    labels = []
+    for k in range(n_states):
+        if xi[k] <= xi_core and f_core[k] >= f_core_min:
+            labels.append("[Core]")
+        elif xi[k] >= xi_trap or f_core[k] < f_core_trap:
+            labels.append("[Surf/Trap]")
+        else:
+            labels.append("[Mixed]")
+
+    return {
+        "r_cent": r_cent,
+        "d_com": d_com,
+        "xi": xi,
+        "sigma": sigma,
+        "sigma_tilde": sigma_tilde,
+        "f_core": f_core,
+        "labels": labels,
+        "com_core": com_core,
+        "r_core": r_core,
+        "core_mask": core_mask,
+    }
+
+
 def print_orbital_summary(
     energies_eV, occ, homo_idx, pops, syms, shells, is_soc=False, offset=0,
-    print_range=15, population_bars=None, qp_breakdown=None
+    print_range=15, population_bars=None, qp_breakdown=None, coords_ang=None,
+    core_elements=None, xi_core=0.35, xi_trap=0.55, f_core_min=0.60, f_core_trap=0.40
 ):
     """
     Fast Mulliken population analysis broken down by Element and Angular Momentum (s, p, d).
     Expects precomputed 'pops' matrix to avoid duplicating S @ C multiplications.
     If qp_breakdown is provided, also displays the microscopic breakdown of each orbital's QP shift.
+    If coords_ang is provided, computes electronic centroids <r>, displacement xi = d_COM / R_core,
+    orbital spread sigma/R, and core/trap classification.
     """
     has_qp = (qp_breakdown is not None) and (not is_soc)
-    table_width = 166 if has_qp else 115
+    has_coords = coords_ang is not None
+
+    centroid_info = None
+    if has_coords:
+        centroid_info = compute_orbital_centroids(
+            pops, shells, coords_ang, syms, core_elements=core_elements,
+            xi_core=xi_core, xi_trap=xi_trap, f_core_min=f_core_min, f_core_trap=f_core_trap
+        )
+
+    if has_coords:
+        table_width = 145 if has_qp else 136
+    else:
+        table_width = 115 if has_qp else 115
 
     logger.info("\n" + "=" * table_width)
     if has_qp:
-        logger.info(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'Bulk (eV)':>10} | {'Zn':>6} | {'dSigma (eV)':>11} | {'r_HL (eV)':>10} | {'s(R)':>6} | {'Shift (eV)':>11} | {'QP (eV)':>10} | {'Occ':>5} | {'Main Contributions':>45}")
+        if has_coords:
+            logger.info(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'QP (eV)':>10} | {'Occ':>5} | {'d_COM (Å)':>9} | {'ξ':>6} | {'σ/R':>5} | {'Loc':>11} | {'Main Contributions':>40}")
+        else:
+            logger.info(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'QP (eV)':>10} | {'Occ':>5} | {'Main Contributions':>45}")
     else:
-        logger.info(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'Main Contributions':>45}")
+        if has_coords:
+            logger.info(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'d_COM (Å)':>9} | {'ξ':>6} | {'σ/R':>5} | {'Loc':>11} | {'Main Contributions':>40}")
+        else:
+            logger.info(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'Main Contributions':>45}")
     logger.info("-" * table_width)
     
     n_states = pops.shape[1]
@@ -396,20 +546,36 @@ def print_orbital_summary(
         
         if has_qp:
             e_dft = float(qp_breakdown["eps_dft"][idx])
-            b_shift = float(qp_breakdown["bulk_shift"][idx])
-            zn = float(qp_breakdown["zn"][idx])
-            d_sig = float(qp_breakdown["delta_sigma"][idx])
-            r_hl = float(qp_breakdown["r_hl"][idx])
-            s_r = float(qp_breakdown["s_r"][idx]) if hasattr(qp_breakdown["s_r"], "__len__") else float(qp_breakdown["s_r"])
-            tot_shift = b_shift + zn * d_sig + r_hl * s_r
             e_qp = float(qp_breakdown["eps_qp"][idx])
-            logger.info(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {b_shift:+10.4f} | {zn:6.3f} | {d_sig:+11.4f} | {r_hl:+10.4f} | {s_r:6.3f} | {tot_shift:+11.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {contrib_str}")
+            if has_coords:
+                d_c = centroid_info["d_com"][idx]
+                x_c = centroid_info["xi"][idx]
+                s_c = centroid_info["sigma_tilde"][idx]
+                loc_c = centroid_info["labels"][idx]
+                logger.info(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {d_c:9.2f} | {x_c:6.2f} | {s_c:5.2f} | {loc_c:>11} | {contrib_str}")
+            else:
+                logger.info(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {contrib_str}")
         else:
-            logger.info(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {contrib_str}")
+            if has_coords:
+                d_c = centroid_info["d_com"][idx]
+                x_c = centroid_info["xi"][idx]
+                s_c = centroid_info["sigma_tilde"][idx]
+                loc_c = centroid_info["labels"][idx]
+                logger.info(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {d_c:9.2f} | {x_c:6.2f} | {s_c:5.2f} | {loc_c:>11} | {contrib_str}")
+            else:
+                logger.info(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {contrib_str}")
         
         if idx == homo_idx + 1:
             if has_qp:
-                logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'------':>6} | {'-----------':>11} | {'----------':>10} | {'------':>6} | {'-----------':>11} | {'----------':>10} | {'-----':>5} | {'-'*45}")
+                if has_coords:
+                    logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'-----':>5} | {'---------':>9} | {'------':>6} | {'-----':>5} | {'-----------':>11} | {'-'*40}")
+                else:
+                    logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'-----':>5} | {'-'*45}")
             else:
-                logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'-'*45}")
+                if has_coords:
+                    logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'---------':>9} | {'------':>6} | {'-----':>5} | {'-----------':>11} | {'-'*40}")
+                else:
+                    logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'-'*45}")
     logger.info("=" * table_width + "\n")
+    return centroid_info
+

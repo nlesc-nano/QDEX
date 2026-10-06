@@ -154,7 +154,7 @@ def parse_cube(filepath):
     atoms_ang = [(z, ax*BOHR_TO_ANG, ay*BOHR_TO_ANG, az*BOHR_TO_ANG) for z, charge, ax, ay, az in atoms]
     return X.flatten(), Y.flatten(), Z.flatten(), V.flatten(), atoms_ang
 
-def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=None, e_lumo=None, normalize_coop=False, energy_label="Energy (eV)", output_html=None, fuzzy_display_mode="raw"):
+def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=None, e_lumo=None, normalize_coop=False, energy_label="Energy (eV)", output_html=None, fuzzy_display_mode="raw", bulk_bs_path=None, bulk_alignment="core_level"):
     if prefix.startswith("soc"):
         lbl = "SOC"
     elif prefix.startswith("uks"):
@@ -227,6 +227,43 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
             ),
             row=1, col=1
         )
+
+    # Bulk bands overlay (CP2K reference band structure)
+    try:
+        from qdex.bulk_bands import get_aligned_bulk_bands
+        h5_cand = "qdex_electronic.h5" if os.path.exists("qdex_electronic.h5") else None
+        bulk_data = get_aligned_bulk_bands(
+            material=material,
+            bs_path=bulk_bs_path,
+            alignment_mode=bulk_alignment,
+            ewin=(float(ewin[0]), float(ewin[1])),
+            qd_homo_rel=e_homo,
+            qd_lumo_rel=e_lumo,
+            qd_h5_path=h5_cand,
+        )
+        if bulk_data is not None:
+            n_k_bulk = bulk_data["n_k"]
+            kx_bulk = np.linspace(kx[0], kx[-1], n_k_bulk)
+            n_b = bulk_data["bands_aligned"].shape[1]
+            for b_i in range(n_b):
+                b_e = bulk_data["bands_aligned"][:, b_i]
+                show_leg = (b_i == 0)
+                fig.add_trace(
+                    go.Scatter(
+                        x=kx_bulk,
+                        y=b_e,
+                        mode="lines",
+                        line=dict(color="rgba(0, 240, 255, 0.85)", width=2.0),
+                        name="Bulk PBE Bands",
+                        legendgroup="bulk_bands",
+                        showlegend=show_leg,
+                        hovertemplate="Bulk PBE: E = %{y:.3f} eV<extra></extra>",
+                    ),
+                    row=1, col=1
+                )
+            logger.info(f"  [Plotter] Overlaid {n_b} bulk PBE bands from {os.path.basename(bulk_data['source_file'])} onto fuzzy bands.")
+    except Exception as exc:
+        logger.debug(f"  [Plotter] Bulk band overlay skipped: {exc}")
    
     if fuzzy["tick_positions"].size:
         # FIX: Scale ticks based on the original physical width, not the downsampled pixel count
