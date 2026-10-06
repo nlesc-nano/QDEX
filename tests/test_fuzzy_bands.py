@@ -71,3 +71,37 @@ def test_bulk_bands_land_on_the_fuzzy_path():
     assert x0[0] == pytest.approx(0.0)
     assert labels[int(round(x0[-1]))] == "X"
     assert bs["n_k"] == sum(len(s["kfrac"]) for s in bs["segments"]) - (len(bs["segments"]) - 2)
+
+
+def test_soc_bulk_bands_of_cdse():
+    """PBE+SOC bulk CdSe (qdex.bulk_soc): Gamma8/Gamma7 split by Delta_so, VBM up by Delta/3, same Cd 4d mean."""
+    from qdex.bulk_bands import find_bulk_bs, parse_cp2k_bs, bulk_semicore_level
+    sf = parse_cp2k_bs(find_bulk_bs("CdSe"))
+    so = parse_cp2k_bs(find_bulk_bs("CdSe", soc=True))
+    G = so["bands"][0]
+    n_occ = sf["vbm_band"] + 1
+    assert np.allclose(G[0::2], G[1::2], atol=1e-6)                    # Kramers pairs at Gamma
+    d_so = G[2 * n_occ - 1] - G[2 * n_occ - 6]
+    assert 0.33 < d_so < 0.40
+    assert so["vbm"] - sf["vbm"] == pytest.approx(d_so / 3, abs=0.005)
+    assert so["cbm"] == pytest.approx(sf["cbm"], abs=0.005)
+    assert bulk_semicore_level("CdSe", so, spinor=True) == pytest.approx(bulk_semicore_level("CdSe", sf), abs=0.01)
+
+
+def test_soc_page_uses_soc_bulk_bands():
+    from qdex.bulk_bands import get_aligned_bulk_bands
+    sf = get_aligned_bulk_bands("CdSe", qd_semicore_rel=-8.0)
+    so = get_aligned_bulk_bands("CdSe", qd_semicore_rel=-8.0, soc=True)
+    assert not sf["soc"] and so["soc"]
+    assert 0.10 < so["vbm_aligned"] - sf["vbm_aligned"] < 0.14
+
+
+def test_write_bs_round_trip(tmp_path):
+    from qdex.bulk_soc import write_bs
+    from qdex.bulk_bands import parse_cp2k_bs
+    kf = [np.linspace([0, 0, 0], [0.5, 0, 0.5], 5), np.linspace([0.5, 0, 0.5], [0.5, 0.25, 0.75], 3)]
+    bands = [np.sort(np.random.default_rng(i).normal(size=(len(k), 6)), axis=1) for i, k in enumerate(kf)]
+    write_bs(tmp_path / "x.bs", kf, bands, n_occupied=2)
+    d = parse_cp2k_bs(tmp_path / "x.bs")
+    assert d["n_k"] == 7 and d["n_bands"] == 6 and d["vbm_band"] == 1
+    assert np.allclose(d["segments"][1]["bands"], bands[1]) and np.allclose(d["segments"][0]["kfrac"], kf[0])

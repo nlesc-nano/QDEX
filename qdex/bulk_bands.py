@@ -120,9 +120,10 @@ def parse_cp2k_bs(filepath):
     }
 
 
-def find_bulk_bs(material="CdSe", custom_path=None):
+def find_bulk_bs(material="CdSe", custom_path=None, soc=False):
     """
     Finds CP2K .bs file for a given material in data/bulk_bands or custom path.
+    With soc=True the spin-orbit bands (<material>_bulk_soc.bs, from qdex.bulk_soc) are looked for.
     """
     if custom_path and os.path.exists(custom_path):
         return custom_path
@@ -131,12 +132,13 @@ def find_bulk_bs(material="CdSe", custom_path=None):
         return None
 
     mat_clean = str(material).strip().upper()
+    tag = "_soc" if soc else ""
     candidates = [
-        f"{mat_clean}_bulk.bs",
-        f"{mat_clean}.bs",
-        f"{mat_clean.lower()}_bulk.bs",
-        f"{mat_clean.lower()}.bs",
-        f"CdSe_bulk.bs" if "CDSE" in mat_clean else None,
+        f"{mat_clean}_bulk{tag}.bs",
+        f"{mat_clean}{tag}.bs",
+        f"{mat_clean.lower()}_bulk{tag}.bs",
+        f"{mat_clean.lower()}{tag}.bs",
+        f"CdSe_bulk{tag}.bs" if "CDSE" in mat_clean else None,
     ]
 
     for cand in candidates:
@@ -149,13 +151,15 @@ def find_bulk_bs(material="CdSe", custom_path=None):
     return None
 
 
-def bulk_semicore_level(material, bs_data):
-    """Mean energy of the bulk semicore bands along the k-path (bulk eV scale), or None."""
+def bulk_semicore_level(material, bs_data, spinor=False):
+    """Mean energy of the bulk semicore bands along the k-path (bulk eV scale), or None.
+    spinor: the bands are spin-orbit bands (two per spin-free band)."""
     key = _material_key(material)
     if key is None:
         return None
     lo, hi = SEMICORE[key]["bands"]
-    return float(np.mean(bs_data["bands"][:, lo:hi]))
+    f = 2 if spinor else 1
+    return float(np.mean(bs_data["bands"][:, f * lo:f * hi]))
 
 
 def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_index,
@@ -281,6 +285,7 @@ def get_aligned_bulk_bands(
     core_vbm_rel=None,
     qd_semicore_rel=None,
     path_frac=None,
+    soc=False,
 ):
     """
     Loads bulk bands and aligns them to the QD energy axis for overlay.
@@ -307,13 +312,19 @@ def get_aligned_bulk_bands(
             Semicore level of the dot's interior atoms on the plot axis.
         path_frac: (n_k, 3) array, optional
             Fractional k-points of the fuzzy path; bulk segments are then placed by coordinates.
+        soc: bool
+            Use the spin-orbit bulk bands (<material>_bulk_soc.bs) when available; 'soc' in the
+            returned dict says whether they were found (otherwise the spin-free bands are used).
 
     Returns:
         dict with 'bands_aligned' (n_k, n_selected), 'segments' [(x, bands_selected)] or None,
         'band_indices', 'vbm_aligned', 'cbm_aligned', 'gap', 'n_k', 'shift', 'source_file',
         'alignment_mode' (the mode actually used), 'anchor_detail'.
     """
-    path = find_bulk_bs(material=material, custom_path=bs_path)
+    path = find_bulk_bs(material=material, soc=True) if soc else None
+    soc_bands = path is not None
+    if not soc_bands:
+        path = find_bulk_bs(material=material, custom_path=bs_path)
     if not path:
         return None
 
@@ -327,7 +338,7 @@ def get_aligned_bulk_bands(
     mode_used = alignment_mode
 
     if alignment_mode in ("core_level", "semicore", "auto"):
-        bulk_level = bulk_semicore_level(material, data)
+        bulk_level = bulk_semicore_level(material, data, spinor=soc_bands)
         if bulk_level is not None and qd_semicore_rel is not None:
             shift = float(qd_semicore_rel) - bulk_level
             mode_used = "core_level"
@@ -382,4 +393,5 @@ def get_aligned_bulk_bands(
         "source_file": path,
         "alignment_mode": mode_used,
         "anchor_detail": anchor_detail,
+        "soc": soc_bands,
     }

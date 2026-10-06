@@ -95,12 +95,65 @@ linearly with the number of replicas and stays small next to the rest of a run
 computed one replica at a time, so memory does not grow with ``g_shell``.
 
 
-Automated High-Symmetry Paths & PCA Alignment
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Automated High-Symmetry Paths & Lattice Orientation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Given a reference crystal structure (``.cif`` file), ``QDEX``:
 
-1. Determines the space group and high-symmetry :math:`k`-path using ``pymatgen`` (e.g., :math:`\Gamma \to X \to M \to \Gamma \to R`).
-2. Scales the reciprocal lattice to match the core bond distances of the relaxed quantum dot.
-3. Performs Principal Component Analysis (PCA) on the inertia tensors of the CIF and cluster geometries to automatically align rotational coordinate axes.
+1. Determines the space group and high-symmetry :math:`k`-path using ``pymatgen`` (e.g., :math:`\Gamma \to X \to W \to K \to \Gamma \to L`).
+2. Fits the orientation of the dot's lattice: the nearest-neighbour bond directions of the interior atoms are matched to the bond star of the crystal (Kabsch fit, started from every pair of crystal bonds whose angle matches two bonds of the most central atom). The rotation is fixed up to the symmetry of the bond star, which leaves the fuzzy weights unchanged (crystal point group plus :math:`\mathbf{k} \to -\mathbf{k}`). The log reports the mean cosine of the fit; below 0.95 the dot has no well-ordered core of the CIF structure and the k-directions are uncertain.
+3. Scales the reciprocal lattice to the median interior bond length of the dot.
 
+The k-path and the :math:`\mathbf{G}` replicas are expressed in the dot's frame, so the
+folding uses the reciprocal lattice of the dot itself.
+
+
+Bulk Band Overlay
+~~~~~~~~~~~~~~~~~
+
+The dashboards draw the bulk band structure of the material (``qdex/data/bulk_bands``,
+CP2K PBE with the same basis and pseudopotentials) over the fuzzy map. The bulk segments
+are placed on the fuzzy path by their k-coordinates.
+
+The bulk bands are put on the dot's energy axis with a semicore level: the Cd 4d level of
+the dot is the Mulliken-weighted 4d energy of its *interior, bulk-like* Cd atoms (four Se
+neighbours, no ligand, inner half by radius), and the bulk Cd 4d bands are placed there.
+Cd bonded to Cl has its 4d level about 0.4 eV deeper, so averaging over all Cd atoms would
+put the bulk bands too low. With the anchor in place the remaining offsets are physical:
+confinement pushes the dot states away from the band extrema (down at the valence band
+maximum, up at a valence band minimum such as the bottom of the p band at L).
+
+The SOC dashboard uses spin-orbit bulk bands (``<material>_bulk_soc.bs``) when they exist,
+so that the :math:`\Gamma_8/\Gamma_7` splitting and the split bands at :math:`L` are in
+the overlay as well. They are computed with the same GTH-SOC operator as the dots, from a
+CP2K k-point run that prints the real-space Kohn-Sham and overlap matrices:
+
+.. code-block:: text
+
+   &PRINT
+     &KS_CSR_WRITE
+       REAL_SPACE .TRUE.
+       UPPER_TRIANGULAR .FALSE.
+     &END KS_CSR_WRITE
+     &S_CSR_WRITE
+       REAL_SPACE .TRUE.
+       UPPER_TRIANGULAR .FALSE.
+     &END S_CSR_WRITE
+     &TREXIO
+     &END TREXIO
+     &BAND_STRUCTURE
+       ...                      # the k-path of the fuzzy bands
+     &END BAND_STRUCTURE
+   &END PRINT
+
+.. code-block:: bash
+
+   python -m qdex.bulk_soc RUN_DIR --basis BASIS_MOLOPT_UZH --gth GTH_SOC_POTENTIALS \
+       --n-bands 29 -o qdex/data/bulk_bands/CdSe_bulk_soc.bs
+
+:math:`H(\mathbf{k}) = \sum_\mathbf{R} e^{i\mathbf{k}\cdot\mathbf{R}} \langle\chi_\mu(0)|H|\chi_\nu(\mathbf{R})\rangle`
+and :math:`S(\mathbf{k})` are built at every point of the path, the SOC operator from
+Bloch sums of the projector overlaps, and the two-component problem is solved in the full
+AO basis. The run checks the AO basis against CP2K's overlap and the spin-free bands
+against CP2K's band structure. For zinc-blende CdSe (PBE, DZVP-MOLOPT-PBE-GTH): the
+spin-free bands agree with CP2K to 0.06 meV and :math:`\Delta_{so}(\Gamma) = 0.36` eV.

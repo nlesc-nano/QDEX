@@ -242,6 +242,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                 qd_lumo_rel=e_lumo,
                 qd_semicore_rel=bulk_semicore_rel,
                 path_frac=fuzzy["kpath_frac"],
+                soc=(lbl == "SOC"),
             )
             if bulk_data is not None:
                 if bulk_data["segments"] is not None:
@@ -249,7 +250,10 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                 else:   # unknown path: stretch the bulk k-points over the fuzzy axis
                     segments = [(np.linspace(fuzzy["extent"][0], fuzzy["extent"][1], bulk_data["n_k"]),
                                  bulk_data["bands_aligned"])]
-                bulk_name = "Bulk PBE bands (no SOC)" if lbl == "SOC" else "Bulk PBE bands"
+                if bulk_data.get("soc"):
+                    bulk_name = "Bulk PBE+SOC bands"
+                else:
+                    bulk_name = "Bulk PBE bands (no SOC)" if lbl == "SOC" else "Bulk PBE bands"
                 first = True
                 for x_seg, b_seg in segments:
                     for b_i in range(b_seg.shape[1]):
@@ -262,7 +266,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                                 name=bulk_name,
                                 legendgroup="bulk_bands",
                                 showlegend=first,
-                                hovertemplate="Bulk PBE: E = %{y:.3f} eV<extra></extra>",
+                                hovertemplate=f"{bulk_name}: E = %{{y:.3f}} eV<extra></extra>",
                             ),
                             row=1, col=1
                         )
