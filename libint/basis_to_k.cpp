@@ -28,8 +28,20 @@ inline void parallel_do_k(Lambda&& body, int nthreads) {
 }
 
 /* -----------------------------------------------------------------------
- * Real spherical harmonics Y_l^m  in Libint SO order, up to l = 3.
+ * Real solid harmonics in Libint SO order (m = -l..l), up to l = 3, on the
+ * unit sphere. Libint normalizes a contracted shell so that x^l exp(-a r^2)
+ * has unit norm; the prefactors below make every m component unit-normalized
+ * with those coefficients, as in libint's own integrals:
+ *   l=2: sqrt3 xy, sqrt3 yz, (3z^2-r^2)/2, sqrt3 zx, sqrt3/2 (x^2-y^2)
+ *   l=3: sqrt(5/8) y(3x^2-y^2), sqrt15 xyz, sqrt(3/8) y(5z^2-r^2),
+ *        z(5z^2-3r^2)/2, sqrt(3/8) x(5z^2-r^2), sqrt15/2 z(x^2-y^2),
+ *        sqrt(5/8) x(x^2-3y^2)
  * --------------------------------------------------------------------- */
+constexpr double kSqrt3 = 1.7320508075688772;
+constexpr double kSqrt15 = 3.872983346207417;
+constexpr double kSqrt5_8 = 0.7905694150420949;
+constexpr double kSqrt3_8 = 0.6123724356957945;
+
 inline void rsh_array_l0(double, double, double, double* o) { o[0] = 1.0; }
 
 inline void rsh_array_l1(double x,double y,double z,double* o) {
@@ -38,22 +50,21 @@ inline void rsh_array_l1(double x,double y,double z,double* o) {
 
 inline void rsh_array_l2(double x,double y,double z,double* o) {
   const double r2 = 1.0;
-  o[0]=x*y;             // m=-2
-  o[1]=y*z;             // m=-1
-  o[2]=3.0*z*z-r2;      // m= 0
-  o[3]=z*x;             // m=+1
-  o[4]=x*x-y*y;         // m=+2
+  o[0]=kSqrt3*x*y;                // m=-2
+  o[1]=kSqrt3*y*z;                // m=-1
+  o[2]=0.5*(3.0*z*z-r2);          // m= 0
+  o[3]=kSqrt3*z*x;                // m=+1
+  o[4]=0.5*kSqrt3*(x*x-y*y);      // m=+2
 }
 
 inline void rsh_array_l3(double x,double y,double z,double* o) {
-  const double r2 = 1.0;
-  o[0] = y*(3.0*x*x - y*y);                // m = -3
-  o[1] = 2.0*x*y*z;                         // m = -2
-  o[2] = y*(5.0*z*z - 1.0);                 // m = -1   (since r^2=1 on unit sphere)
-  o[3] = z*(5.0*z*z - 3.0);                 // m =  0
-  o[4] = x*(5.0*z*z - 1.0);                 // m = +1
-  o[5] = z*(x*x - y*y);                     // m = +2
-  o[6] = x*(x*x - 3.0*y*y);                 // m = +3
+  o[0] = kSqrt5_8*y*(3.0*x*x - y*y);        // m = -3
+  o[1] = kSqrt15*x*y*z;                     // m = -2
+  o[2] = kSqrt3_8*y*(5.0*z*z - 1.0);        // m = -1   (since r^2=1 on unit sphere)
+  o[3] = 0.5*z*(5.0*z*z - 3.0);             // m =  0
+  o[4] = kSqrt3_8*x*(5.0*z*z - 1.0);        // m = +1
+  o[5] = 0.5*kSqrt15*z*(x*x - y*y);         // m = +2
+  o[6] = kSqrt5_8*x*(x*x - 3.0*y*y);        // m = +3
 }
 
 inline void rsh_array(int l,double x,double y,double z,double* o){
@@ -188,6 +199,7 @@ Eigen::MatrixXd ao_values_at_points(
       radial += c * (-a * r2).exp();
     }
 
+    // Same normalized solid harmonics as rsh_array (libint conventions)
     Eigen::MatrixXd block(nfunc, npts);
     if (l == 0) {
       block.row(0) = radial.matrix();
@@ -196,20 +208,19 @@ Eigen::MatrixXd ao_values_at_points(
       block.row(1) = (radial * z).matrix();
       block.row(2) = (radial * x).matrix();
     } else if (l == 2) {
-      block.row(0) = (radial * (x*y)).matrix();
-      block.row(1) = (radial * (y*z)).matrix();
-      block.row(2) = (radial * (3.0*zz - (xx+yy+zz))).matrix();
-      block.row(3) = (radial * (z*x)).matrix();
-      block.row(4) = (radial * (xx - yy)).matrix();
+      block.row(0) = (radial * (kSqrt3*x*y)).matrix();
+      block.row(1) = (radial * (kSqrt3*y*z)).matrix();
+      block.row(2) = (radial * (0.5*(3.0*zz - r2))).matrix();
+      block.row(3) = (radial * (kSqrt3*z*x)).matrix();
+      block.row(4) = (radial * (0.5*kSqrt3*(xx - yy))).matrix();
     } else if (l == 3) {
-      Eigen::ArrayXd r2 = (xx + yy + zz);
-      block.row(0) = (radial * (y * (3.0*xx - yy))).matrix();
-      block.row(1) = (radial * (2.0*x*y*z)).matrix();
-      block.row(2) = (radial * (y * (5.0*zz - r2))).matrix();
-      block.row(3) = (radial * (z * (5.0*zz - 3.0*r2))).matrix();
-      block.row(4) = (radial * (x * (5.0*zz - r2))).matrix();
-      block.row(5) = (radial * (z * (xx - yy))).matrix();
-      block.row(6) = (radial * (x * (xx - 3.0*yy))).matrix();
+      block.row(0) = (radial * (kSqrt5_8 * y * (3.0*xx - yy))).matrix();
+      block.row(1) = (radial * (kSqrt15*x*y*z)).matrix();
+      block.row(2) = (radial * (kSqrt3_8 * y * (5.0*zz - r2))).matrix();
+      block.row(3) = (radial * (0.5 * z * (5.0*zz - 3.0*r2))).matrix();
+      block.row(4) = (radial * (kSqrt3_8 * x * (5.0*zz - r2))).matrix();
+      block.row(5) = (radial * (0.5*kSqrt15 * z * (xx - yy))).matrix();
+      block.row(6) = (radial * (kSqrt5_8 * x * (xx - 3.0*yy))).matrix();
     } else {
       continue;
     }

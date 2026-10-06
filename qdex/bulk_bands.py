@@ -7,11 +7,28 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BULK_DIR = os.path.join(os.path.dirname(__file__), "data", "bulk_bands")
 
+# Semicore manifold used to put the bulk bands on the dot's energy axis:
+# element, angular momentum and the 0-based slice of bulk bands it occupies.
+SEMICORE = {
+    "CDSE": dict(element="Cd", l=2, bands=(1, 6)),
+}
+
+
+def _material_key(material):
+    mat = str(material).strip().upper()
+    for key in SEMICORE:
+        if key in mat:
+            return key
+    return None
+
 
 def parse_cp2k_bs(filepath):
     """
     Parses a CP2K band structure (.bs) output file.
-    Stitches multiple k-point branches seamlessly into a single array (n_k, n_bands).
+
+    Returns every k-point set as a segment (fractional k-points and bands), and the sets
+    stitched into one array (n_k, n_bands). A set's first point is dropped from the stitched
+    array only when it repeats the previous set's last point (not across a path break).
     """
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"CP2K band structure file not found: {filepath}")
@@ -51,14 +68,17 @@ def parse_cp2k_bs(filepath):
     if not sets:
         raise ValueError(f"No band data found in {filepath}")
 
-    all_bands = []
-    all_k = []
-    all_occ = []
-    for s_idx, s in enumerate(sets):
+    segments = []
+    all_bands, all_k, all_occ = [], [], []
+    for s in sets:
         pts = s["points"]
-        # Skip the first point of subsequent branches because CP2K duplicates the boundary k-point
-        pts_to_add = pts if s_idx == 0 else pts[1:]
-        for p in pts_to_add:
+        kfrac = np.array([p["k"] for p in pts], dtype=np.float64)
+        segments.append({
+            "kfrac": kfrac,
+            "bands": np.array([p["energies"] for p in pts], dtype=np.float64),
+        })
+        skip_first = bool(all_k) and np.allclose(kfrac[0], all_k[-1], atol=1e-6)
+        for p in (pts[1:] if skip_first else pts):
             all_bands.append(p["energies"])
             all_k.append(p["k"])
             all_occ.append(p["occ"])
@@ -67,8 +87,7 @@ def parse_cp2k_bs(filepath):
     occ = np.array(all_occ, dtype=np.float64)
     n_k, n_bands = bands.shape
 
-    # Determine VBM, CBM, and band gap
-    # Find occupied vs unoccupied bands from occupations
+    # Occupied vs unoccupied bands from occupations
     mean_occ = np.mean(occ, axis=0)
     occ_band_indices = np.where(mean_occ > 0.5)[0]
     virt_band_indices = np.where(mean_occ <= 0.5)[0]
@@ -76,24 +95,19 @@ def parse_cp2k_bs(filepath):
     if len(occ_band_indices) > 0 and len(virt_band_indices) > 0:
         vbm_band = occ_band_indices[-1]
         cbm_band = virt_band_indices[0]
-        vbm = float(np.max(bands[:, vbm_band]))
-        cbm = float(np.min(bands[:, cbm_band]))
-        direct_gap_gamma = float(bands[0, cbm_band] - bands[0, vbm_band])
-        gap = float(cbm - vbm)
     else:
         vbm_band = n_bands // 2 - 1
         cbm_band = n_bands // 2
-        vbm = float(np.max(bands[:, vbm_band]))
-        cbm = float(np.min(bands[:, cbm_band]))
-        direct_gap_gamma = float(bands[0, cbm_band] - bands[0, vbm_band])
-        gap = float(cbm - vbm)
-
-    midgap = 0.5 * (vbm + cbm)
+    vbm = float(np.max(bands[:, vbm_band]))
+    cbm = float(np.min(bands[:, cbm_band]))
+    direct_gap_gamma = float(bands[0, cbm_band] - bands[0, vbm_band])
+    gap = float(cbm - vbm)
 
     return {
         "bands": bands,
         "occ": occ,
         "k_points": all_k,
+        "segments": segments,
         "n_k": n_k,
         "n_bands": n_bands,
         "vbm_band": int(vbm_band),
@@ -102,7 +116,7 @@ def parse_cp2k_bs(filepath):
         "cbm": cbm,
         "gap": gap,
         "direct_gap_gamma": direct_gap_gamma,
-        "midgap": midgap,
+        "midgap": 0.5 * (vbm + cbm),
     }
 
 
@@ -135,6 +149,128 @@ def find_bulk_bs(material="CdSe", custom_path=None):
     return None
 
 
+def bulk_semicore_level(material, bs_data):
+    """Mean energy of the bulk semicore bands along the k-path (bulk eV scale), or None."""
+    key = _material_key(material)
+    if key is None:
+        return None
+    lo, hi = SEMICORE[key]["bands"]
+    return float(np.mean(bs_data["bands"][:, lo:hi]))
+
+
+def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_index,
+                      coordination, bond_ang, bs_path=None, window_ev=2.5):
+    """
+    Semicore (e.g. Cd 4d) level of the dot's bulk-like interior atoms, on the axis of `energies`.
+
+    For each atom of the semicore element, the level is the Mulliken-weighted mean energy of its
+    semicore-l population over the orbitals near the expected semicore energy (bulk VBM - semicore
+    separation below the HOMO, +- window_ev). Atoms bonded to ligands carry a chemical shift
+    (Cd 4d of Cd-Cl lies ~0.4 eV deeper than in Cd-Se), so only bulk-like atoms are used: full
+    crystal coordination by the crystal's own elements, and among those the inner half by radius.
+
+    Returns a dict (level_ev, n_atoms, spread_ev, all_atoms_level_ev, n_bulk_like) or None.
+    """
+    key = _material_key(material)
+    path = find_bulk_bs(material=material, custom_path=bs_path)
+    if key is None or path is None:
+        return None
+    cfg = SEMICORE[key]
+    bs = parse_cp2k_bs(path)
+    separation = bs["vbm"] - bulk_semicore_level(material, bs)
+
+    syms = list(syms)
+    coords = np.asarray(coords_ang, dtype=float)
+    energies = np.asarray(energies, dtype=float)
+    target = energies[homo_index] - separation
+    sel = np.where(np.abs(energies - target) <= window_ev)[0]
+    elem = cfg["element"]
+    atoms = np.array([i for i, s in enumerate(syms) if s == elem])
+    if sel.size == 0 or atoms.size == 0:
+        return None
+
+    # semicore-l AO rows of every atom of the element
+    rows = {int(a): [] for a in atoms}
+    ao = 0
+    for sh in shells:
+        n = 2 * int(sh["l"]) + 1
+        if int(sh["l"]) == cfg["l"] and int(sh["atom_idx"]) in rows:
+            rows[int(sh["atom_idx"])].extend(range(ao, ao + n))
+        ao += n
+
+    C_sel = np.asarray(C[:, sel])
+    P = C_sel * (S @ C_sel)                      # Mulliken AO populations (n_ao, n_sel)
+    levels = np.full(len(atoms), np.nan)
+    for i, a in enumerate(atoms):
+        w = P[rows[int(a)]].sum(axis=0)
+        if w.sum() > 1e-8:
+            levels[i] = float(w @ energies[sel] / w.sum())
+
+    # bulk-like: fully coordinated, only by the crystal's own elements
+    from scipy.spatial import cKDTree
+    crystal = set(coordination)
+    tree = cKDTree(coords)
+    n_full = coordination.get(elem, 4)
+    bulk_like = []
+    for i, a in enumerate(atoms):
+        nbrs = [j for j in tree.query_ball_point(coords[a], 1.25 * bond_ang) if j != a]
+        if len(nbrs) == n_full and all(syms[j] in crystal for j in nbrs) and np.isfinite(levels[i]):
+            bulk_like.append(i)
+    bulk_like = np.array(bulk_like, dtype=int)
+
+    finite = np.isfinite(levels)
+    result = dict(all_atoms_level_ev=float(np.mean(levels[finite])), n_bulk_like=int(bulk_like.size))
+    if bulk_like.size == 0:
+        logger.warning(f"  [Bulk Bands] No bulk-like {elem} atoms: semicore anchor uses every {elem} atom.")
+        use = np.where(finite)[0]
+    else:
+        r = np.linalg.norm(coords[atoms[bulk_like]] - coords[atoms].mean(axis=0), axis=1)
+        inner = bulk_like[r <= np.median(r)]
+        use = inner if inner.size >= 4 else bulk_like
+    result.update(level_ev=float(np.mean(levels[use])), spread_ev=float(np.std(levels[use])),
+                  n_atoms=int(use.size), element=elem)
+    logger.info(f"  [Bulk Bands] {elem} semicore level: {result['level_ev']:.3f} eV from {use.size} interior bulk-like "
+                f"atoms (spread {result['spread_ev']:.3f} eV); all {finite.sum()} {elem} atoms: "
+                f"{result['all_atoms_level_ev']:.3f} eV.")
+    return result
+
+
+def map_bulk_to_path(segments, path_frac, atol=1e-4):
+    """
+    Positions of the bulk k-points on the fuzzy path axis (k-point index).
+
+    Each bulk segment is matched by its end points to the straight stretch of the fuzzy path
+    that joins them; points in between are placed by their fractional position along it.
+    Returns a list of (x, bands) per matched segment.
+    """
+    path_frac = np.asarray(path_frac, dtype=float)
+    mapped = []
+    for seg in segments:
+        ks, ke = seg["kfrac"][0], seg["kfrac"][-1]
+        length = np.linalg.norm(ke - ks)
+        if length < atol:
+            continue
+        starts = np.where(np.linalg.norm(path_frac - ks, axis=1) < atol)[0]
+        ends = np.where(np.linalg.norm(path_frac - ke, axis=1) < atol)[0]
+        best = None
+        for i in starts:
+            for j in ends:
+                lo, hi = min(i, j), max(i, j)
+                if hi - lo < 1 or (best is not None and hi - lo >= abs(best[1] - best[0])):
+                    continue
+                inner = path_frac[lo:hi + 1]
+                t = (inner - ks) @ (ke - ks) / length ** 2
+                off = np.linalg.norm(inner - (ks + np.outer(t, ke - ks)), axis=1)
+                if np.all(off < 1e-3) and np.all(np.abs(np.diff(t)) > 0):
+                    best = (i, j)
+        if best is None:
+            continue
+        i, j = best
+        t = (seg["kfrac"] - ks) @ (ke - ks) / length ** 2
+        mapped.append((i + t * (j - i), seg["bands"]))
+    return mapped
+
+
 def get_aligned_bulk_bands(
     material="CdSe",
     bs_path=None,
@@ -143,12 +279,8 @@ def get_aligned_bulk_bands(
     qd_homo_rel=None,
     qd_lumo_rel=None,
     core_vbm_rel=None,
-    core_cbm_rel=None,
-    qd_mo_abs_ev=None,
-    qd_mo_rel_ev=None,
-    qd_elem_fraction=None,
-    elements=None,
-    qd_h5_path=None,
+    qd_semicore_rel=None,
+    path_frac=None,
 ):
     """
     Loads bulk bands and aligns them to the QD energy axis for overlay.
@@ -159,47 +291,27 @@ def get_aligned_bulk_bands(
         bs_path: str, optional
             Path to CP2K .bs file.
         alignment_mode: str
-            'core_level' (default): Align bulk band edges to the nanocrystal using
-                the chemically inert, deep semicore manifold (e.g. Cd 4d for CdSe).
-                This core-level anchor is immune to surface traps, quantum confinement,
-                and asymmetric band shifts.
-            'core_vbm': Align bulk VBM with the QD's True Core VBM.
+            'core_level' (default): the bulk semicore bands (e.g. Cd 4d) are placed on the
+                semicore level of the dot's interior bulk-like atoms (qd_semicore_rel, from
+                qd_semicore_level). Falls back to 'midgap' when that level is not available.
+            'core_vbm': Align bulk VBM with the QD's True Core VBM (core_vbm_rel).
             'vbm': Align bulk VBM with nominal QD HOMO.
             'midgap': Align bulk midgap with QD midgap (E = 0).
         ewin: tuple of (float, float)
             Energy window in eV to retain bands.
-        qd_homo_rel: float, optional
-            Nominal QD HOMO energy relative to midgap.
-        qd_lumo_rel: float, optional
-            Nominal QD LUMO energy relative to midgap.
+        qd_homo_rel, qd_lumo_rel: float, optional
+            Nominal QD HOMO / LUMO energies on the plot axis.
         core_vbm_rel: float, optional
-            True Core VBM energy relative to midgap.
-        core_cbm_rel: float, optional
-            True Core CBM energy relative to midgap.
-        qd_mo_abs_ev: array-like, optional
-            Absolute DFT MO eigenvalues (eV) of the nanocrystal.
-        qd_mo_rel_ev: array-like, optional
-            Relative DFT MO eigenvalues (eV) of the nanocrystal (midgap at 0).
-        qd_elem_fraction: ndarray, optional
-            (n_mo, n_elements) element fraction per MO.
-        elements: list of str, optional
-            Element symbols corresponding to qd_elem_fraction columns.
-        qd_h5_path: str, optional
-            Path to qdex_electronic.h5 to load MO eigenvalues and element fractions
-            if not directly provided.
+            True Core VBM energy on the plot axis.
+        qd_semicore_rel: float, optional
+            Semicore level of the dot's interior atoms on the plot axis.
+        path_frac: (n_k, 3) array, optional
+            Fractional k-points of the fuzzy path; bulk segments are then placed by coordinates.
 
     Returns:
-        dict with:
-            'bands_aligned': (n_k, n_selected_bands)
-            'band_indices': list of original band indices
-            'vbm_aligned': float
-            'cbm_aligned': float
-            'gap': float
-            'n_k': int
-            'shift': float, energy shift applied to bulk eigenvalues
-            'source_file': str
-            'alignment_mode': str
-            'anchor_detail': dict or str
+        dict with 'bands_aligned' (n_k, n_selected), 'segments' [(x, bands_selected)] or None,
+        'band_indices', 'vbm_aligned', 'cbm_aligned', 'gap', 'n_k', 'shift', 'source_file',
+        'alignment_mode' (the mode actually used), 'anchor_detail'.
     """
     path = find_bulk_bs(material=material, custom_path=bs_path)
     if not path:
@@ -209,175 +321,65 @@ def get_aligned_bulk_bands(
     bands_raw = data["bands"]
     vbm_raw = data["vbm"]
     cbm_raw = data["cbm"]
-    mid_raw = data["midgap"]
 
     anchor_detail = {}
     shift = None
+    mode_used = alignment_mode
 
-    # Attempt core_level (semicore) alignment
     if alignment_mode in ("core_level", "semicore", "auto"):
-        # Load from HDF5 if arrays not explicitly provided
-        if qd_mo_abs_ev is None and qd_h5_path and os.path.exists(qd_h5_path):
-            try:
-                import h5py
-                with h5py.File(qd_h5_path, "r") as f:
-                    if "sf/mo/energy_dft_abs_ev" in f:
-                        qd_mo_abs_ev = f["sf/mo/energy_dft_abs_ev"][:]
-                    if "sf/mo/energy_ev" in f:
-                        qd_mo_rel_ev = f["sf/mo/energy_ev"][:]
-                    if "sf/mo/element_fraction" in f:
-                        qd_elem_fraction = f["sf/mo/element_fraction"][:]
-                    if "sf/mo/elements" in f:
-                        elements = [e.decode() if isinstance(e, bytes) else str(e) for e in f["sf/mo/elements"][:]]
-            except Exception as e_h5:
-                logger.debug(f"Failed to read MO data for core_level alignment from HDF5: {e_h5}")
+        bulk_level = bulk_semicore_level(material, data)
+        if bulk_level is not None and qd_semicore_rel is not None:
+            shift = float(qd_semicore_rel) - bulk_level
+            mode_used = "core_level"
+            anchor_detail = {
+                "anchor_type": "semicore level of interior bulk-like atoms",
+                "bulk_semicore_ev": bulk_level,
+                "qd_semicore_rel_ev": float(qd_semicore_rel),
+                "vbm_aligned_rel_ev": vbm_raw + shift,
+            }
+            logger.info(f"  [Bulk Bands] Semicore anchor: bulk VBM at {vbm_raw + shift:.3f} eV, "
+                        f"CBM at {cbm_raw + shift:.3f} eV on the plot axis.")
+        else:
+            logger.info("  [Bulk Bands] No semicore level for this material/run: bulk midgap aligned to E = 0.")
 
-        # Core-level anchoring for CdSe: Cd 4d semicore manifold (bulk bands 2-6)
-        mat_upper = str(material).strip().upper()
-        if "CDSE" in mat_upper and qd_mo_abs_ev is not None and qd_mo_rel_ev is not None:
-            # 1. Bulk Cd 4d reference (bands 2 through 6 in CdSe CP2K calculation, 0-indexed: 1..5)
-            # Bands 1..5 are the narrow 4d manifold
-            bulk_d_bands = bands_raw[:, 1:6]
-            bulk_d_mean = float(np.mean(bulk_d_bands))
-            bulk_vbm_to_d = vbm_raw - bulk_d_mean  # invariant separation: ~7.587 eV
-
-            # 2. Nanocrystal Cd 4d semicore identification
-            # Cd 4d states lie between -16.0 eV and -13.0 eV in absolute energy scale
-            if qd_elem_fraction is not None and elements and "Cd" in elements:
-                cd_idx = elements.index("Cd")
-                mask_d = (
-                    (qd_mo_abs_ev >= -16.5)
-                    & (qd_mo_abs_ev <= -13.0)
-                    & (qd_elem_fraction[:, cd_idx] > 0.85)
-                )
-            else:
-                mask_d = (qd_mo_abs_ev >= -16.0) & (qd_mo_abs_ev <= -13.5)
-
-            if np.sum(mask_d) >= 10:
-                qd_d_mean = float(np.mean(qd_mo_abs_ev[mask_d]))
-                # Predicted bulk VBM from Cd 4d semicore core level
-                pred_bulk_vbm_abs = qd_d_mean + bulk_vbm_to_d
-                midgap_offset = float(qd_mo_abs_ev[0] - qd_mo_rel_ev[0])
-                pred_bulk_vbm_rel_semicore = pred_bulk_vbm_abs - midgap_offset
-
-                # 3. Dense DOS Cross-Correlation (Deep Valence Manifold)
-                # Compute continuous DOS of bulk valence bands (Bands 2-9) vs QD core-occupied MOs
-                dos_corr_delta = 0.0
-                dos_corr_r = None
-                try:
-                    all_bulk_vals = bands_raw[:, 1:9].flatten() - bulk_d_mean
-                    sigma_dos = 0.15
-                    dE_dos = 0.02
-                    grid_dos = np.arange(-1.5, 6.5, dE_dos)
-                    bulk_dos = np.sum(np.exp(-0.5 * ((grid_dos[:, None] - all_bulk_vals[None, :]) / sigma_dos) ** 2), axis=1)
-                    b_sub = bulk_dos - np.mean(bulk_dos)
-
-                    # QD core weights
-                    if qd_elem_fraction is not None and elements:
-                        cd_idx = elements.index("Cd") if "Cd" in elements else None
-                        se_idx = elements.index("Se") if "Se" in elements else None
-                        core_w = np.zeros(len(qd_mo_abs_ev))
-                        if cd_idx is not None:
-                            core_w += qd_elem_fraction[:, cd_idx]
-                        if se_idx is not None:
-                            core_w += qd_elem_fraction[:, se_idx]
-                    else:
-                        core_w = np.ones(len(qd_mo_abs_ev))
-
-                    mask_deep = (qd_mo_abs_ev >= -16.5) & (qd_mo_abs_ev <= -6.0)
-                    qd_vals_shifted = qd_mo_abs_ev[mask_deep] - qd_d_mean
-                    qd_w_deep = core_w[mask_deep]
-
-                    offsets = np.arange(-0.35, 0.35, 0.005)
-                    corrs = []
-                    norm_b = np.linalg.norm(b_sub)
-                    for off in offsets:
-                        q_dos = np.sum(qd_w_deep[None, :] * np.exp(-0.5 * ((grid_dos[:, None] - (qd_vals_shifted[None, :] + off)) / sigma_dos) ** 2), axis=1)
-                        q_dos_sub = q_dos - np.mean(q_dos)
-                        norm_q = np.linalg.norm(q_dos_sub)
-                        c = np.dot(b_sub, q_dos_sub) / (norm_b * norm_q) if norm_q > 1e-12 else 0.0
-                        corrs.append(c)
-
-                    best_idx = int(np.argmax(corrs))
-                    dos_corr_delta = float(offsets[best_idx])
-                    dos_corr_r = float(corrs[best_idx])
-                except Exception as e_dos:
-                    logger.debug(f"DOS cross-correlation refinement skipped: {e_dos}")
-
-                # Both anchors computed:
-                # Semicore anchor:
-                #   pred_bulk_vbm_rel_semicore
-                # DOS-refined anchor:
-                #   pred_bulk_vbm_rel_dos = pred_bulk_vbm_rel_semicore + dos_corr_delta
-                # Hybrid consensus: weight 50% semicore + 50% DOS correlation (or select via alignment_mode)
-                if alignment_mode == "semicore":
-                    final_vbm_rel = pred_bulk_vbm_rel_semicore
-                elif alignment_mode == "dos_anchor":
-                    final_vbm_rel = pred_bulk_vbm_rel_semicore + dos_corr_delta
-                else:
-                    # Consensus dual anchor: average of semicore and deep DOS cross-correlation
-                    final_vbm_rel = pred_bulk_vbm_rel_semicore + 0.5 * dos_corr_delta
-
-                shift = final_vbm_rel - vbm_raw
-
-                anchor_detail = {
-                    "anchor_type": "Dual (Cd 4d semicore + deep valence DOS correlation)",
-                    "n_semicore_mos": int(np.sum(mask_d)),
-                    "qd_cd_4d_mean_ev": qd_d_mean,
-                    "bulk_cd_4d_mean_ev": bulk_d_mean,
-                    "vbm_semicore_rel_ev": pred_bulk_vbm_rel_semicore,
-                    "vbm_dos_rel_ev": pred_bulk_vbm_rel_semicore + dos_corr_delta,
-                    "dos_corr_delta_ev": dos_corr_delta,
-                    "dos_corr_pearson_r": dos_corr_r,
-                    "final_anchored_vbm_rel_ev": final_vbm_rel,
-                }
-                logger.info(
-                    f"  [Bulk Bands] Dual Anchoring Consensus: "
-                    f"Semicore VBM = {pred_bulk_vbm_rel_semicore:.3f} eV, "
-                    f"DOS-Correlation VBM = {pred_bulk_vbm_rel_semicore + dos_corr_delta:.3f} eV (r={dos_corr_r:.3f}) "
-                    f"-> Final Anchored Bulk VBM = {final_vbm_rel:.3f} eV relative to midgap."
-                )
-
-    # Fallback options
     if shift is None:
         if alignment_mode == "core_vbm" and core_vbm_rel is not None:
             shift = core_vbm_rel - vbm_raw
         elif alignment_mode == "vbm" and qd_homo_rel is not None:
             shift = qd_homo_rel - vbm_raw
         else:
-            # Default fallback: midgap alignment (bulk midgap = 0.0)
-            shift = -mid_raw
+            shift = -data["midgap"]
+            mode_used = "midgap"
 
     bands_shifted = bands_raw + shift
-    vbm_aligned = vbm_raw + shift
-    cbm_aligned = cbm_raw + shift
 
-    # Filter bands that cross or lie within ewin
+    # Bands that cross or lie within ewin
     e_lo, e_hi = ewin[0] - 0.5, ewin[1] + 0.5
-    selected_bands = []
-    selected_indices = []
-
-    for b in range(data["n_bands"]):
-        b_min = np.min(bands_shifted[:, b])
-        b_max = np.max(bands_shifted[:, b])
-        if b_max >= e_lo and b_min <= e_hi:
-            selected_bands.append(bands_shifted[:, b])
-            selected_indices.append(b)
-
-    if not selected_bands:
+    selected_indices = [b for b in range(data["n_bands"])
+                        if np.max(bands_shifted[:, b]) >= e_lo and np.min(bands_shifted[:, b]) <= e_hi]
+    if not selected_indices:
         return None
 
-    bands_aligned = np.column_stack(selected_bands)
+    segments = None
+    if path_frac is not None:
+        mapped = map_bulk_to_path(data["segments"], path_frac)
+        if mapped:
+            segments = [(x, b[:, selected_indices] + shift) for x, b in mapped]
+            if len(mapped) < len(data["segments"]):
+                logger.info(f"  [Bulk Bands] {len(mapped)}/{len(data['segments'])} bulk k-segments lie on the fuzzy path.")
+        else:
+            logger.warning("  [Bulk Bands] Bulk k-path does not match the fuzzy path: bulk bands stretched by index.")
 
     return {
-        "bands_aligned": bands_aligned,
+        "bands_aligned": bands_shifted[:, selected_indices],
+        "segments": segments,
         "band_indices": selected_indices,
-        "vbm_aligned": vbm_aligned,
-        "cbm_aligned": cbm_aligned,
+        "vbm_aligned": vbm_raw + shift,
+        "cbm_aligned": cbm_raw + shift,
         "gap": data["gap"],
         "n_k": data["n_k"],
         "shift": shift,
         "source_file": path,
-        "alignment_mode": alignment_mode,
+        "alignment_mode": mode_used,
         "anchor_detail": anchor_detail,
     }

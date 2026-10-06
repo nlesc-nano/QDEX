@@ -3,78 +3,141 @@ import time
 from pymatgen.core import Structure
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from pymatgen.symmetry.bandstructure import HighSymmKpath
-from scipy.spatial.distance import pdist
+from scipy.spatial import cKDTree
 import logging
 
 logger = logging.getLogger(__name__)
 
-def generate_automated_kpath(cif_path, coords_ang, line_density=50, return_reciprocal=False):
+
+def _kabsch(ref, target):
+    """Proper rotation R minimizing sum |R ref_i - target_i|^2 (rows are vectors)."""
+    H = ref.T @ target
+    U, _, Vt = np.linalg.svd(H)
+    d = np.sign(np.linalg.det(Vt.T @ U.T)) or 1.0
+    return Vt.T @ np.diag([1.0, 1.0, d]) @ U.T
+
+
+def _bond_match(units, R, cif_dirs):
+    """Mean cosine between each QD bond direction and its closest rotated CIF bond direction."""
+    return float(np.mean(np.max(units @ (cif_dirs @ R.T).T, axis=1)))
+
+
+def _refine_rotation(units, R, cif_dirs, n_iter=8):
+    for _ in range(n_iter):
+        assign = np.argmax(units @ (cif_dirs @ R.T).T, axis=1)
+        R = _kabsch(cif_dirs[assign], units)
+    return R
+
+
+def cif_bond_star(prim_struct):
+    """Nearest-neighbour bond directions of the crystal (both directions of every bond),
+    the bond length and the coordination of each element."""
+    dmin = min(n.nn_distance for site in prim_struct for n in prim_struct.get_neighbors(site, 6.0))
+    dirs, coordination = [], {}
+    for site in prim_struct:
+        nbrs = prim_struct.get_neighbors(site, 1.15 * dmin)
+        coordination[site.specie.symbol] = len(nbrs)
+        for n in nbrs:
+            v = n.coords - site.coords
+            dirs.append(v / np.linalg.norm(v))
+    dirs = np.unique(np.round(np.array(dirs), 6), axis=0)
+    return dirs, float(dmin), coordination
+
+
+def fit_lattice_orientation(prim_struct, coords_ang, syms=None, interior_fraction=0.7):
+    """Rotation R (crystal frame -> dot frame) and isotropic scale of the dot's lattice.
+
+    The interior nearest-neighbour bond directions of the dot are matched to the crystal's
+    bond star (Kabsch fit with re-assignment, started from every pair of crystal bonds whose
+    angle matches a pair of dot bonds). R is fixed up to the symmetry of the bond star, which
+    leaves the fuzzy weights |<phi|k>|^2 unchanged (crystal point group plus k -> -k).
+    """
+    coords = np.asarray(coords_ang, dtype=float)
+    cif_dirs, cif_bond, coordination = cif_bond_star(prim_struct)
+    elements = set(coordination)
+    mask = np.ones(len(coords), bool) if syms is None else np.array([s in elements for s in syms])
+    X = coords[mask]
+    info = dict(rotation=np.eye(3), scale=1.0, match=float("nan"), n_bonds=0, cif_bond_ang=cif_bond,
+                qd_bond_ang=float("nan"), coordination=coordination, elements=sorted(elements))
+    if len(X) < 2:
+        logger.warning("  [Fuzzy] No atoms of the crystal's elements in the dot: k-path left in the CIF frame.")
+        return info
+
+    r = np.linalg.norm(X - X.mean(axis=0), axis=1)
+    interior = np.where(r <= interior_fraction * r.max())[0]
+    if len(interior) < 4:
+        interior = np.arange(len(X))
+    tree = cKDTree(X)
+    vecs, ref_atom = [], None
+    for i in interior[np.argsort(r[interior])]:
+        nbrs = [j for j in tree.query_ball_point(X[i], 1.3 * cif_bond) if j != i]
+        if ref_atom is None and len(nbrs) >= 2:
+            ref_atom = len(vecs)
+        vecs.extend(X[j] - X[i] for j in nbrs)
+    if len(vecs) < 2 or ref_atom is None:
+        logger.warning("  [Fuzzy] No interior bonds found: k-path left in the CIF frame.")
+        return info
+    vecs = np.array(vecs)
+    dists = np.linalg.norm(vecs, axis=1)
+    units = vecs / dists[:, None]
+    qd_bond = float(np.median(dists))
+
+    # Seeds: map every pair of crystal bonds onto two bonds of the most central atom
+    b1, b2 = units[ref_atom], units[ref_atom + 1]
+    ang_b = np.arccos(np.clip(b1 @ b2, -1, 1))
+    seeds = [np.eye(3)]
+    for i, c1 in enumerate(cif_dirs):
+        for j, c2 in enumerate(cif_dirs):
+            if i != j and abs(np.arccos(np.clip(c1 @ c2, -1, 1)) - ang_b) < np.radians(15):
+                seeds.append(_kabsch(np.array([c1, c2]), np.array([b1, b2])))
+    best_R, best = np.eye(3), -np.inf
+    for R0 in seeds:
+        R = _refine_rotation(units, R0, cif_dirs)
+        m = _bond_match(units, R, cif_dirs)
+        if m > best + 1e-9:
+            best_R, best = R, m
+
+    info.update(rotation=best_R, scale=qd_bond / cif_bond, match=best, n_bonds=len(units), qd_bond_ang=qd_bond)
+    angle = np.degrees(np.arccos(np.clip((np.trace(best_R) - 1) / 2, -1, 1)))
+    logger.info(f"  [Fuzzy] Lattice orientation: {len(units)} interior bonds fitted to the crystal bond star "
+                f"(mean cos {best:.4f}, rotation {angle:.1f} deg from the CIF frame).")
+    logger.info(f"  [Fuzzy] Lattice scale: median bond {qd_bond:.4f} A vs CIF {cif_bond:.4f} A "
+                f"-> k-points scaled by 1/{qd_bond / cif_bond:.4f}.")
+    if best < 0.95:
+        logger.warning(f"  [Fuzzy] Weak lattice match (mean cos {best:.3f}): the dot has no well-ordered core "
+                       f"of the CIF structure, so the k-path directions are uncertain.")
+    return info
+
+
+def generate_automated_kpath(cif_path, coords_ang, line_density=50, return_reciprocal=False, syms=None,
+                             return_info=False):
+    """High-symmetry k-path of the CIF crystal, expressed in the dot's Cartesian frame (1/A).
+
+    The path and the reciprocal lattice are rotated onto the dot's lattice orientation and scaled
+    to its bond length (fit_lattice_orientation). With return_info the fit and the fractional
+    k-points (in the primitive reciprocal basis) are returned as well.
+    """
     logger.info(f"  [Fuzzy] Loading CIF: {cif_path}")
     struct = Structure.from_file(cif_path)
     sga = SpacegroupAnalyzer(struct)
     prim_struct = sga.get_primitive_standard_structure()
     kpath = HighSymmKpath(prim_struct)
     kpts_frac, labels = kpath.get_kpoints(line_density=line_density, coords_are_cartesian=False)
-    
-    # Standard reciprocal mapping
-    reciprocal_matrix = prim_struct.lattice.reciprocal_lattice.matrix
-    kpts_cart = np.dot(kpts_frac, reciprocal_matrix)
-    
-    # ====================================================================
-    # SCIENTIFIC FIX: LATTICE SCALING & PCA ROTATIONAL ALIGNMENT
-    # ====================================================================
-    center_of_mass = np.mean(coords_ang, axis=0)
-    xyz_centered = coords_ang - center_of_mass
-    
-    # 1. SCALING: Compare CIF nearest-neighbor to XYZ core nearest-neighbor
-    cif_dists = np.unique(np.round(struct.distance_matrix.flatten(), 3))
-    cif_bond = cif_dists[cif_dists > 0.5][0] if len(cif_dists[cif_dists > 0.5]) > 0 else 1.0
-    
-    dists_to_center = np.linalg.norm(xyz_centered, axis=1)
-    core_indices = np.argsort(dists_to_center)[:min(40, len(coords_ang))]
-    xyz_dists = pdist(xyz_centered[core_indices])
-    xyz_dists = xyz_dists[(xyz_dists > 0.5) & (xyz_dists < cif_bond * 1.5)]
-    
-    if len(xyz_dists) > 0:
-        xyz_bond = np.percentile(xyz_dists, 5) 
-        scale_factor = xyz_bond / cif_bond
-        logger.info(f"  [Fuzzy] Phase correction: Scaling k-points by 1/({scale_factor:.4f}) to match XYZ bonds.")
-        kpts_cart = kpts_cart / scale_factor
-        reciprocal_matrix = reciprocal_matrix / scale_factor
+    kpts_frac = np.asarray(kpts_frac, dtype=float)
 
-    # 2. ROTATION: Align Principal Axes (Inertia Tensors)
-    try:
-        # Build a sphere from the CIF to match the XYZ cluster size
-        max_radius = np.max(dists_to_center)
-        sphere_sites = struct.get_sites_in_sphere(prim_struct[0].coords, max_radius)
-        cif_coords = np.array([site.coords for site in sphere_sites])
-        cif_centered = cif_coords - np.mean(cif_coords, axis=0)
-        
-        # Compute Covariance (Inertia) Matrices
-        cov_xyz = np.cov(xyz_centered.T)
-        cov_cif = np.cov(cif_centered.T)
-        
-        # Get Principal Axes
-        _, vecs_xyz = np.linalg.eigh(cov_xyz)
-        _, vecs_cif = np.linalg.eigh(cov_cif)
-        
-        # Ensure right-handed coordinate systems
-        if np.linalg.det(vecs_xyz) < 0: vecs_xyz[:, 2] *= -1
-        if np.linalg.det(vecs_cif) < 0: vecs_cif[:, 2] *= -1
-        
-        # Compute Rotation Matrix connecting CIF orientation to XYZ orientation
-        R = vecs_xyz @ vecs_cif.T
-        
-        logger.info(f"  [Fuzzy] Applying PCA rotation to k-path to correct optimizer drift.")
-        kpts_cart = (R @ kpts_cart.T).T
-        reciprocal_matrix = (R @ reciprocal_matrix.T).T
-    except Exception as e:
-        logger.warning(f"  [Fuzzy] Warning: PCA Rotational alignment failed: {e}")
+    info = fit_lattice_orientation(prim_struct, coords_ang, syms=syms)
+    R, scale = info["rotation"], info["scale"]
+    reciprocal_matrix = prim_struct.lattice.reciprocal_lattice.matrix @ R.T / scale
+    kpts_cart = kpts_frac @ reciprocal_matrix
+    info["kpts_frac"] = kpts_frac
 
     logger.info(f"  [Fuzzy] Generated {len(kpts_cart)} k-points for spacegroup {sga.get_space_group_symbol()}.")
+    out = (kpts_cart, labels)
     if return_reciprocal:
-        return kpts_cart, labels, reciprocal_matrix
-    return kpts_cart, labels
+        out += (reciprocal_matrix,)
+    if return_info:
+        out += (info,)
+    return out
 
 
 def make_reciprocal_replicas(reciprocal_matrix, g_shell):
@@ -205,7 +268,7 @@ def build_smeared_fuzzy(intensity, eps_plot, ewin, sigma_ev):
     return centres, Z
 
 
-def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="sf", export=True):
+def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="sf", export=True, kpts_frac=None):
     if not export:
         return
     t0 = time.time()
@@ -232,8 +295,10 @@ def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="
                 valid_labels.append(clean_lbl)
 
     out_name = f"fuzzy_data_{prefix}.npz"
+    extra = {} if kpts_frac is None else {"kpath_frac": np.asarray(kpts_frac, dtype=np.float64)}
     np.savez_compressed(
         out_name,
+        **extra,
         centres=centres.astype(np.float32),
         intensity=Z.astype(np.float32),
         tick_positions=np.array(valid_idx, dtype=np.float32),
@@ -244,7 +309,7 @@ def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="
     logger.debug(f"  [Fuzzy] Exported {out_name} in {time.time()-t0:.2f} s")
 
 
-def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_beta, labels, ewin, sigma_ev, prefix="uks"):
+def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_beta, labels, ewin, sigma_ev, prefix="uks", kpts_frac=None):
     t0 = time.time()
     centres, Z_a = build_smeared_fuzzy(intensity_alpha, eps_alpha, ewin, sigma_ev)
     _, Z_b = build_smeared_fuzzy(intensity_beta, eps_beta, ewin, sigma_ev)
@@ -271,6 +336,8 @@ def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_
         ewin=np.array(ewin, dtype=np.float32),
         extent=np.array([0.0, float(Z_total.shape[1] - 1), float(ewin[0]), float(ewin[1])])
     )
+    if kpts_frac is not None:
+        common["kpath_frac"] = np.asarray(kpts_frac, dtype=np.float64)
     np.savez_compressed(f"fuzzy_data_{prefix}.npz", intensity=Z_total.astype(np.float32), spinpol=spinpol.astype(np.float32), **common)
     np.savez_compressed(f"fuzzy_data_{prefix}_alpha.npz", intensity=Z_a.astype(np.float32), **common)
     np.savez_compressed(f"fuzzy_data_{prefix}_beta.npz", intensity=Z_b.astype(np.float32), **common)
@@ -309,11 +376,10 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
     
     fold_to_bz = bool(getattr(args, 'fold_to_bz', True))
     g_shell = int(getattr(args, 'g_shell', 2))
-    kpath_result = generate_automated_kpath(args.cif, np.array(coords_ang), line_density=50, return_reciprocal=fold_to_bz)
-    if fold_to_bz:
-        kpts_cart, labels, reciprocal_matrix = kpath_result
-    else:
-        kpts_cart, labels = kpath_result
+    kpts_cart, labels, reciprocal_matrix, kpath_info = generate_automated_kpath(
+        args.cif, np.array(coords_ang), line_density=50, return_reciprocal=True, syms=syms, return_info=True)
+    kpts_frac = kpath_info["kpts_frac"]
+    if not fold_to_bz:
         reciprocal_matrix = None
     
     # --- 1. SPIN-FREE CALCULATION ---
@@ -369,11 +435,30 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             f"max |dA|={np.max(np.abs(Z_fold - Z_ref)):.3e}"
         )
     
-    smear_and_export_fuzzy(intensity_sf, eps_fuzzy, labels, dft_ewin, sigma_use, prefix="sf", export=export_files)
+    smear_and_export_fuzzy(intensity_sf, eps_fuzzy, labels, dft_ewin, sigma_use, prefix="sf", export=export_files, kpts_frac=kpts_frac)
     if store is not None:
         from qdex.store import put_fuzzy
-        put_fuzzy(store, "sf", kpts_cart, labels, eps_fuzzy, intensity_sf, sigma_use, dft_ewin, indices=fuzzy_indices)
-    
+        put_fuzzy(store, "sf", kpts_cart, labels, eps_fuzzy, intensity_sf, sigma_use, dft_ewin, indices=fuzzy_indices,
+                  kpts_frac=kpts_frac)
+
+    # Semicore level of the interior atoms: places the bulk bands on this energy axis
+    semicore = None
+    try:
+        from qdex.bulk_bands import qd_semicore_level
+        if np.isfinite(kpath_info["qd_bond_ang"]):
+            semicore = qd_semicore_level(
+                args.material, C_dense, S_dense, shells, syms, coords_ang, eps_shifted, homo_index,
+                coordination=kpath_info["coordination"], bond_ang=kpath_info["qd_bond_ang"],
+                bs_path=getattr(args, "bulk_bs", None))
+    except Exception as exc:
+        logger.warning(f"  [Bulk Bands] Semicore level of the dot not computed: {exc}")
+    semicore_rel = {"sf": semicore["level_ev"]} if semicore is not None else {}
+    if store is not None and semicore is not None:
+        store.put("electronic", "sf/bulk_anchor/semicore_level_ev", semicore["level_ev"])
+        store.attr("electronic", "sf/bulk_anchor", element=semicore["element"], n_atoms=semicore["n_atoms"],
+                   spread_ev=semicore["spread_ev"], all_atoms_level_ev=semicore["all_atoms_level_ev"],
+                   note="semicore level of the interior bulk-like atoms on the fuzzy energy axis")
+
     pdos_analysis_sf = None
     if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
         logger.info("  [PDOS/COOP] Computing Spin-Free population analysis...")
@@ -396,7 +481,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 raise ValueError(msg)
             logger.warning(f"  [Warning] {msg} Skipping QP dashboard.")
         else:
-            smear_and_export_fuzzy(intensity_sf, qp_fuzzy, labels, qp_ewin, sigma_use, prefix="sf_qp")
+            smear_and_export_fuzzy(intensity_sf, qp_fuzzy, labels, qp_ewin, sigma_use, prefix="sf_qp", kpts_frac=kpts_frac)
             if pdos_analysis_sf is not None:
                 export_pdos_coop_data(
                     pdos_analysis_sf, qp_plot_energies, args.pdos_atoms, args.coop_pairs, qp_ewin,
@@ -420,13 +505,13 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             fold_to_bz=fold_to_bz, g_shell=g_shell, reciprocal_matrix=reciprocal_matrix,
             mo_indices=fuzzy_indices_b
         )
-        smear_and_export_spin_fuzzy(intensity_a, eps_fuzzy, intensity_b, eps_fuzzy_b, labels, dft_uks_ewin, sigma_use, prefix="uks")
+        smear_and_export_spin_fuzzy(intensity_a, eps_fuzzy, intensity_b, eps_fuzzy_b, labels, dft_uks_ewin, sigma_use, prefix="uks", kpts_frac=kpts_frac)
 
         if dashboard_energy_mode in ("qp", "both") and qp_plot_energies is not None and qp_plot_energies_beta is not None:
             smear_and_export_spin_fuzzy(
                 intensity_a, qp_plot_energies[fuzzy_indices],
                 intensity_b, qp_plot_energies_beta[fuzzy_indices_b],
-                labels, qp_uks_ewin, sigma_use, prefix="uks_qp"
+                labels, qp_uks_ewin, sigma_use, prefix="uks_qp", kpts_frac=kpts_frac
             )
 
     # --- 2. SOC CALCULATION ---
@@ -508,6 +593,19 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             else:
                 soc_E_qp_act = E_core_qp = E_virt_qp = None
 
+        # soc_E_act is centred on the spinor mid-gap; put the spin-free core and virtual
+        # states of this map (and the bulk anchor) on that same axis
+        soc_axis_offset = 0.0
+        if soc_E_abs_act is not None:
+            soc_axis_offset = float(np.mean(np.asarray(soc_E_act) - (np.asarray(soc_E_abs_act) - e_fermi_raw)))
+            E_core = E_core + soc_axis_offset
+            E_virt = E_virt + soc_axis_offset
+        logger.info(f"  [Fuzzy-SOC] Spinor mid-gap is {-soc_axis_offset:+.4f} eV from the spin-free mid-gap.")
+        if semicore is not None:
+            semicore_rel["soc"] = semicore["level_ev"] + soc_axis_offset
+            if store is not None:
+                store.put("electronic", "soc/bulk_anchor/semicore_level_ev", semicore_rel["soc"])
+
         eps_soc_unsorted = np.concatenate([E_core, soc_E_act, E_virt])
 
         plot_keep = fuzzy_energy_mask(eps_soc_unsorted, dft_ewin, sigma_use)
@@ -535,10 +633,10 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         logger.info(f"  [Fuzzy-SOC] Spinor LUMO (Idx {global_spinor_homo_idx + 1}): {eps_soc[global_spinor_homo_idx + 1]:8.4f} eV")
         logger.info(f"  [Fuzzy-SOC] ----------------------------------") 
         
-        smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc", export=export_files)
+        smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc", export=export_files, kpts_frac=kpts_frac)
         if store is not None:
             from qdex.store import put_fuzzy
-            put_fuzzy(store, "soc", kpts_cart, labels, eps_soc, intensity_soc, sigma_use, soc_ewin)
+            put_fuzzy(store, "soc", kpts_cart, labels, eps_soc, intensity_soc, sigma_use, soc_ewin, kpts_frac=kpts_frac)
 
         eps_soc_qp = None
         sort_idx_qp = None
@@ -556,7 +654,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             sort_idx_qp = np.argsort(eps_soc_qp_unsorted)
             eps_soc_qp = eps_soc_qp_unsorted[sort_idx_qp]
             intensity_soc_qp = I_plot_unsorted[sort_idx_qp, :]
-            smear_and_export_fuzzy(intensity_soc_qp, eps_soc_qp, labels, soc_qp_ewin, sigma_use, prefix="soc_qp")
+            smear_and_export_fuzzy(intensity_soc_qp, eps_soc_qp, labels, soc_qp_ewin, sigma_use, prefix="soc_qp", kpts_frac=kpts_frac)
         
         if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
             logger.info("  [PDOS/COOP] Computing SOC Spinor population analysis...")
@@ -708,7 +806,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 e_lumo=lumo_dict.get("sf"),
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
-                output_html="fuzzy_dashboard_sf.html"
+                output_html="fuzzy_dashboard_sf.html",
+                bulk_semicore_rel=semicore_rel.get("sf")
             )
 
         if dashboard_energy_mode in ("qp", "both") and qp_plot_energies is not None:
@@ -720,7 +819,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 e_lumo=qp_plot_energies[homo_index + 1],
                 normalize_coop=False,
                 energy_label="QP energy vs vacuum (eV)" if qp_energy_reference == "vacuum" else "QP-corrected energy relative to Fermi (eV)",
-                output_html="fuzzy_dashboard_sf_qp.html"
+                output_html="fuzzy_dashboard_sf_qp.html",
+                bulk_overlay=False  # the bulk bands are DFT; no QP axis for them
             )
 
         if is_uks and dashboard_energy_mode in ("dft", "both"):
@@ -732,7 +832,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 e_lumo=min(eps_shifted[homo_index + 1], eps_beta_shifted[homo_index_beta + 1]),
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
-                output_html="fuzzy_dashboard_uks.html"
+                output_html="fuzzy_dashboard_uks.html",
+                bulk_semicore_rel=semicore_rel.get("sf")
             )
 
         if is_uks and dashboard_energy_mode in ("qp", "both") and qp_plot_energies is not None and qp_plot_energies_beta is not None:
@@ -744,7 +845,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 e_lumo=min(qp_plot_energies[homo_index + 1], qp_plot_energies_beta[homo_index_beta + 1]),
                 normalize_coop=False,
                 energy_label="QP energy vs vacuum (eV)" if qp_energy_reference == "vacuum" else "QP-corrected energy relative to Fermi (eV)",
-                output_html="fuzzy_dashboard_uks_qp.html"
+                output_html="fuzzy_dashboard_uks_qp.html",
+                bulk_overlay=False  # the bulk bands are DFT; no QP axis for them
             )
     
         # Generate SOC Dashboard (if requested)
@@ -757,7 +859,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 e_lumo=lumo_dict.get("soc"), 
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
-                output_html="fuzzy_dashboard_soc.html"
+                output_html="fuzzy_dashboard_soc.html",
+                bulk_semicore_rel=semicore_rel.get("soc")
             )
 
         if args.soc_flag and dashboard_energy_mode in ("qp", "both") and eps_soc_qp is not None:
@@ -769,5 +872,6 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 e_lumo=eps_soc_qp[global_spinor_homo_idx + 1],
                 normalize_coop=False,
                 energy_label="QP+SOC energy vs vacuum (eV)" if qp_energy_reference == "vacuum" else "QP+SOC energy relative to Fermi (eV)",
-                output_html="fuzzy_dashboard_soc_qp.html"
+                output_html="fuzzy_dashboard_soc_qp.html",
+                bulk_overlay=False  # the bulk bands are DFT; no QP axis for them
             )

@@ -83,7 +83,8 @@ def _fuzzy_file(fz, prefix):
     ewin = [float(x) for x in (a["ewin_ev"] if not isinstance(a["ewin_ev"], str) else
                                a["ewin_ev"].strip("[]").split())]
     smear_and_export_fuzzy(fz["intensity"][:].astype(float), fz["energy_ev"][:], labels, ewin,
-                           float(a["sigma_ev"]), prefix=prefix)
+                           float(a["sigma_ev"]), prefix=prefix,
+                           kpts_frac=fz["kpoints_frac"][:] if "kpoints_frac" in fz else None)
     return ewin
 
 
@@ -114,8 +115,11 @@ def fuzzy_dashboards(el, run_dir: Path, out: Path, cubes: bool = True):
         else:
             e_homo, e_lumo = _edges(E)
         html = out / f"fuzzy_dashboard_{prefix}.html"
+        anchor = f"{prefix}/bulk_anchor/semicore_level_ev"
+        semicore = float(el[anchor][()]) if anchor in el else None
         generate_interactive_plot(prefix=prefix, material=material, ef=0.0, e_homo=e_homo, e_lumo=e_lumo,
-                                  normalize_coop=False, energy_label="DFT MO energy (eV)", output_html=str(html))
+                                  normalize_coop=False, energy_label="DFT MO energy (eV)", output_html=str(html),
+                                  bulk_semicore_rel=semicore)
         made.append(html)
     return made
 
