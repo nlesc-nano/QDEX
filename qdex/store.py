@@ -120,6 +120,9 @@ def run_header(args) -> dict:
                                     capture_output=True, text=True, timeout=5).stdout.strip())
     except Exception:
         commit, dirty = "unknown", False
+    rev = here.parent / "REVISION"              # source exports without .git carry their commit here
+    if commit == "unknown" and rev.is_file():
+        commit = rev.read_text().strip() or "unknown"
     settings = {k: v for k, v in vars(args).items()
                 if not k.startswith("_") and isinstance(v, (str, int, float, bool, list, type(None)))}
     return {"program": "QDEX", "commit": commit, "dirty": dirty,
