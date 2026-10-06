@@ -7,6 +7,7 @@ Topics in nonadiabatic dynamics pair each derivation with the QDEX callable, CLI
    :maxdepth: 1
 
    pipeline
+   gxtb
    timesteps_cpa
    nacs_tracking
    fssh_edc

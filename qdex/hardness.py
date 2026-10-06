@@ -881,11 +881,15 @@ def format_integrals_block(representation, charges, kernel, symbols, stda_info=N
     if kern == "stda":
         ax = stda_info["ax"]
         src = f" ({stda_ax_source})" if stda_ax_source else ""
+        a_rule = (" = 1.42 + 0.48 a_x" if abs(stda_info["alpha_K"] - (STDA_ALPHA1 + STDA_ALPHA2 * ax)) < 1e-12
+                  else " (set)")
+        b_rule = (" = 0.20 + 1.83 a_x" if abs(stda_info["beta_J"] - (STDA_BETA1 + STDA_BETA2 * ax)) < 1e-12
+                  else " (set)")
         lines += [
             "  Representation : sTDA (Grimme, J. Chem. Phys. 138, 244104 (2013)), Loewdin transition charges",
-            "  Exchange  K^x  : gamma^K_AB = (R^a + eta_AB^-a)^(-1/a),        a = 1.42 + 0.48 a_x"
+            f"  Exchange  K^x  : gamma^K_AB = (R^a + eta_AB^-a)^(-1/a),        a{a_rule}"
             f" = {stda_info['alpha_K']:.3f}",
-            "  Direct    K^d  : gamma^J_AB = (R^b + (a_x eta_AB)^-b)^(-1/b),  b = 0.20 + 1.83 a_x"
+            f"  Direct    K^d  : gamma^J_AB = (R^b + (a_x eta_AB)^-b)^(-1/b),  b{b_rule}"
             f" = {stda_info['beta_J']:.3f}",
             f"  a_x            : {ax:.3f}{src}",
             "  eta_AB         : (eta_A + eta_B)/2 with eta = IP - EA (R, eta in atomic units)",
@@ -979,6 +983,45 @@ def bulk_qp_shift(material_name, dft_gap=None):
     return float(shift), info
 
 
+# g-xTB route (qdex.xtb): bulk QP shift for g-xTB orbitals on g-xTB-relaxed geometries.
+#
+#   Delta_bulk^gxtb = E_g^ref,SF - E_g^gxtb,bulk
+#   E_g^ref,SF      = gap_exp + Delta_so / 3                     (spin-free experimental gap)
+#   E_g^gxtb,bulk  ~= gap_pbe_bulk + <E_g^gxtb(dot_i; g-xTB geometry) - E_g^PBE(dot_i; PBE geometry)>_i
+#
+# so that Delta_bulk^gxtb = (E_g^ref,SF - gap_pbe_bulk) - delta: on average over the dots the g-xTB
+# route reproduces the PBE route with the same experimental reference. PROVISIONAL (2026-10-02): periodic
+# g-xTB (xtb-bleed, macOS arm64) did not converge reliably, so delta comes from the CdSe dot series
+# 1.2-3.4 nm (CP2K PBE gaps; g-xTB gaps with the Cd-Se bonds rescaled to the g-xTB value 2.60 A).
+# Replace it by a periodic g-xTB bulk gap when one is available (key 'gap_gxtb_bulk').
+GXTB_BULK = {
+    # delta (eV), sample std over the dots (eV), number of dots, Delta_so (eV)
+    "CDSE": dict(delta=3.731, delta_std=0.520, n_dots=6, delta_so=0.42),
+}
+
+
+def gxtb_bulk_shift(material_name):
+    """Bulk QP shift for g-xTB orbitals (negative: g-xTB overestimates the gap). Returns (shift_ev, info)."""
+    m_name = str(material_name).upper() if material_name else "DEFAULT"
+    data, entry = GXTB_BULK.get(m_name), MATERIAL_DB.get(m_name)
+    if data is None or entry is None:
+        raise ValueError(f"quasiparticles.reference: gxtb has no g-xTB bulk data for material '{material_name}'. "
+                         f"Available: {', '.join(sorted(GXTB_BULK))}")
+    gap_exp, gap_pbe_bulk = float(entry[3]), float(entry[7])
+    gap_ref_sf = gap_exp + data["delta_so"] / 3.0
+    if "gap_gxtb_bulk" in data:
+        gap_gxtb_bulk, source = float(data["gap_gxtb_bulk"]), "periodic g-xTB"
+    else:
+        gap_gxtb_bulk, source = gap_pbe_bulk + data["delta"], "PBE bulk + dot-averaged g-xTB/PBE offset"
+    shift = gap_ref_sf - gap_gxtb_bulk
+    info = dict(qp_reference="gxtb", gap_ref_spin_free_ev=gap_ref_sf, gap_gxtb_bulk_ev=gap_gxtb_bulk,
+                gxtb_bulk_source=source, gxtb_pbe_offset_ev=data.get("delta"),
+                gxtb_pbe_offset_std_ev=data.get("delta_std"), bulk_shift_ev=shift)
+    logger.info(f"  [QP] g-xTB bulk shift: E_ref(SF) {gap_ref_sf:.3f} - E_gxtb(bulk) {gap_gxtb_bulk:.3f} "
+                f"= {shift:+.3f} eV ({source})")
+    return float(shift), info
+
+
 def _mnok_denom(r_mat_au, damp_mat_au, exponent=None):
     """MNOK denominator (r^beta + damp^beta)^(1/beta). Default beta = MNOK_EXPONENT (2, Ohno-Klopman)."""
     beta = float(MNOK_EXPONENT if exponent is None else exponent)
@@ -1001,6 +1044,60 @@ STDA_FUNCTIONAL_AX = {
 # Global parameters of sTDA (std2 source, stda.f): beta = b1 + b2 a_x, alpha = a1 + a2 a_x.
 STDA_BETA1, STDA_BETA2 = 0.20, 1.83
 STDA_ALPHA1, STDA_ALPHA2 = 1.42, 0.48
+# Range-separated hybrids: fitted (a_x, alpha, beta) of Risthaus, Hansen, Grimme, PCCP 16, 14408 (2014),
+# as in the stda source (main.f: -CAMB3LYP, -wB97XD2, -wB97XD3, -wB97MV). The XsTD range-separation
+# terms of that program are not part of plain sTDA. g-xTB is fitted to omegaB97M-V and uses its set.
+STDA_RSH_PARAMS = {
+    "cam-b3lyp": (0.38, 0.90, 1.86),
+    "wb97x-d2": (0.51, 4.51, 8.0),
+    "wb97x-d": (0.51, 4.51, 8.0),
+    "wb97x-d3": (0.51, 4.51, 8.0),
+    "wb97m-v": (0.51, 4.51, 8.0),
+    "gxtb": (0.51, 4.51, 8.0),
+    "g-xtb": (0.51, 4.51, 8.0),
+}
+# sTDA-xTB set of the stda program (main.f, -xtb): a_x 0.50, alpha 2.0, beta 4.0 (Grimme, Bannwarth,
+# J. Chem. Phys. 145, 054103 (2016)). It was fitted for the sTDA-xTB Hamiltonian (xtb4stda orbitals,
+# with a +3.1 eV shift of the virtual levels and a K_ia diagonal shift, neither applied here). No sTDA
+# set has been published for GFN2-xTB orbitals; 'gfn2' takes this one as the closest xTB values.
+STDA_XTB_PARAMS = {
+    "stda-xtb": (0.50, 2.0, 4.0),
+    "gfn2": (0.50, 2.0, 4.0),
+    "gfn2-xtb": (0.50, 2.0, 4.0),
+}
+
+
+def stda_parameters(functional=None, ax=None, alpha=None, beta=None, material_name=None):
+    """
+    sTDA parameters (a_x, alpha_K, beta_J, source).
+
+    A fitted set (STDA_RSH_PARAMS, STDA_XTB_PARAMS) gives all three; otherwise a_x comes from
+    ``ax`` or the functional (``stda_ax``) and alpha, beta from the global-hybrid formulas.
+    Explicit ``ax``, ``alpha`` or ``beta`` override the preset.
+    """
+    key = str(functional).lower() if functional else None
+    if key in STDA_RSH_PARAMS or key in STDA_XTB_PARAMS:
+        if key in STDA_RSH_PARAMS:
+            ax0, alpha0, beta0 = STDA_RSH_PARAMS[key]
+            source = f"{functional} (range-separated set)"
+        else:
+            ax0, alpha0, beta0 = STDA_XTB_PARAMS[key]
+            source = f"{functional} (sTDA-xTB set)"
+            if key != "stda-xtb":
+                logger.warning(f"  [sTDA] '{functional}': no sTDA parameters exist for GFN2-xTB orbitals; using the "
+                               "sTDA-xTB set (a_x 0.50, alpha 2.0, beta 4.0), fitted for xtb4stda orbitals.")
+        if ax is not None and str(ax).strip() != "":
+            ax0, _ = stda_ax(None, ax, material_name)
+            source += ", explicit a_x"
+    else:
+        ax0, source = stda_ax(functional, ax, material_name)
+        alpha0 = STDA_ALPHA1 + STDA_ALPHA2 * ax0
+        beta0 = STDA_BETA1 + STDA_BETA2 * ax0
+    if alpha is not None:
+        alpha0, source = float(alpha), source + ", explicit alpha"
+    if beta is not None:
+        beta0, source = float(beta), source + ", explicit beta"
+    return float(ax0), float(alpha0), float(beta0), source
 
 
 def stda_ax(functional=None, ax=None, material_name=None):
@@ -1021,7 +1118,7 @@ def stda_ax(functional=None, ax=None, material_name=None):
     return STDA_FUNCTIONAL_AX[key], str(functional)
 
 
-def build_stda_gammas(atom_symbols, coords, ax, eta_dict=HARDNESS_DICT):
+def build_stda_gammas(atom_symbols, coords, ax, eta_dict=HARDNESS_DICT, alpha=None, beta=None):
     """Coulomb (J) and exchange (K) interaction matrices of sTDA, in eV.
 
     gamma^J_AB = (R^beta  + (a_x eta_AB)^-beta)^(-1/beta),   beta  = 0.20 + 1.83 a_x
@@ -1029,10 +1126,11 @@ def build_stda_gammas(atom_symbols, coords, ax, eta_dict=HARDNESS_DICT):
     with R in bohr and eta_AB = (eta_A + eta_B)/2 in hartree.  Grimme's hardness is twice the
     Ghosh-Islam value stored in HARDNESS_DICT ((ii|ii) = IP - EA).  gamma^J enters the direct term
     without a further a_x prefactor (std2, rtdamat); for a_x = 0 it vanishes.
+    ``alpha`` and ``beta`` replace the global-hybrid formulas (range-separated sets, stda_parameters).
     """
     ax = float(ax)
-    beta = STDA_BETA1 + STDA_BETA2 * ax
-    alpha = STDA_ALPHA1 + STDA_ALPHA2 * ax
+    beta = STDA_BETA1 + STDA_BETA2 * ax if beta is None else float(beta)
+    alpha = STDA_ALPHA1 + STDA_ALPHA2 * ax if alpha is None else float(alpha)
     r = squareform(pdist(np.asarray(coords, dtype=float) / ANG_PER_BOHR))
     eta = 2.0 * np.array([eta_dict.get(s.lower(), 5.0) for s in atom_symbols]) / HA_TO_EV
     eta_ab = 0.5 * (eta[:, None] + eta[None, :])

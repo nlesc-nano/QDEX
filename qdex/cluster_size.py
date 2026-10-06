@@ -13,7 +13,8 @@ The formula-unit volume diameter and the convex-hull radius of the core are repo
 import numpy as np
 from scipy.optimize import least_squares
 
-# Atoms treated as organic (invisible to SAXS) unless system.inorganic_elements says otherwise.
+# Atoms treated as organic (invisible to SAXS) unless they belong to the material (P in InP, not in a
+# phosphonate) or system.inorganic_elements says otherwise.
 ORGANIC_ELEMENTS = {"H", "C", "N", "O", "P", "B", "SI", "F"}
 
 _Z = {
@@ -61,7 +62,8 @@ def cluster_size(coords, symbols, material=None, inorganic_elements=None):
         inorg_set = {str(e).upper() for e in inorganic_elements}
         inorg = np.array([s in inorg_set for s in up])
     else:
-        inorg = np.array([s not in ORGANIC_ELEMENTS for s in up])
+        native = {e.upper() for e in MATERIAL_ELEMENTS.get(str(material).upper(), [])} if material else set()
+        inorg = np.array([s in native or s not in ORGANIC_ELEMENTS for s in up])
     counts = {}
     for s in syms:
         counts[s] = counts.get(s, 0) + 1

@@ -85,7 +85,8 @@ system
    * - ``xyz``
      - geometry; optional with an ``.h5`` MO file, whose ``nucleus`` group is read instead
    * - ``basis_txt``, ``basis_name``
-     - basis-set file and basis name
+     - basis-set file and basis name; ``basis_name: per-atom`` reads a per-atom basis file written by
+       ``qdex.xtb.molden`` (g-xTB orbitals, :doc:`/dynamics/gxtb`)
    * - ``material`` [``--material``]
      - ``MATERIAL_DB`` entry (bulk gaps, ε∞, effective masses), e.g. ``CDSE``, ``CSPBBR3``
    * - ``gth_file``
@@ -129,6 +130,10 @@ quasiparticles
        (DFT energies as they are; also ``pbe``, ``dft``), ``bulk`` (PBE energies + bulk GW correction,
        PBE orbitals only; with a bulk kernel this is the sBSE), ``brus``, or a gap
        in eV (:doc:`/quasiparticles/models`)
+   * - ``reference`` [``--qp-reference``]
+     - ``pbe``
+     - orbitals the ``bulk`` shift corrects: ``pbe``, or ``gxtb`` for g-xTB frames in the NAMD
+       precompute (:doc:`/dynamics/gxtb`)
    * - ``bulk_vertex`` [``--bulk-vertex``]
      - ``none``
      - vertex correction of the bulk QSGW opening: ``none`` (pure QSGW), ``full`` (bulk factor at every
@@ -207,8 +212,12 @@ excitations
        (:doc:`/excitons/index`)
    * - ``functional`` [``--stda-functional``], ``ax`` [``--stda-ax``]
      - —
-     - sTDA only: functional of the MO file (sets a_x), or a_x as a number or ``dielectric``
-       (1/ε∞) (:doc:`/excitons/stda`)
+     - sTDA only: functional of the MO file (sets a_x; a range-separated one such as ``wb97m-v`` or
+       ``gxtb`` sets a_x, α and β), or a_x as a number or ``dielectric`` (1/ε∞) (:doc:`/excitons/stda`)
+   * - ``stda_alpha`` [``--stda-alpha``], ``stda_beta`` [``--stda-beta``]
+     - —
+     - sTDA only: explicit exponents of γ\ :sup:`K` and γ\ :sup:`J`; override the preset or the
+       global-hybrid formulas
    * - ``kernel`` [``--kernel``]
      - model default
      - W of K\ :sup:`d`. Set by the QP model (``qp`` for Resta and DIM). Models without W (``none``, ``bulk``,
