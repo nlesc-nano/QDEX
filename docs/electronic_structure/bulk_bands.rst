@@ -31,7 +31,13 @@ rebuilds the spin-free bands (they agree with CP2K's own band structure to 0.3 m
 better) and adds the QDEX GTH-SOC operator in the full AO basis, as for the dots
 (:doc:`fuzzy_bands`). The SOC constants are those of GTH_SOC_POTENTIALS (PBE). For Pb the
 scalar part of the q4 pseudopotential in POTENTIAL_UZH differs from the one the SOC constants
-were fitted with (the same approximation as in the dot calculations).
+were fitted with (the same approximation as in the dot calculations); with the GTH_SOC_POTENTIALS
+scalar part instead, the PBE+SOC gap of CsPbBr3 is 0.620 instead of 0.602 eV.
+
+Validation against CP2K's own spin-orbit band structure (``&PROPERTIES &BANDSTRUCTURE &SOC``,
+CP2K 2026.2): on the same SCF (GTH_SOC_POTENTIALS), the QDEX operator reproduces every spinor
+band at 81 k-points of the path within 0.5 meV (CP2K prints 1 meV) for zinc-blende CdSe (76
+bands, PBE+SOC gap 0.425 eV) and cubic CsPbBr3 (132 bands, 0.620 eV).
 
 The spin-free gaps are the bulk PBE gaps of ``MATERIAL_DB`` (index 7). For the zinc-blende
 semimetals of PBE (HgS, HgSe, HgTe, InAs, InSb) the gap is zero and the table and the database
