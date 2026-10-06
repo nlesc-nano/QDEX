@@ -696,6 +696,20 @@ def _apply_config(args, config_data, explicit_cli_args=None):
                 raise ValueError(f"Unknown YAML key '{section}'")
 
 
+def _soc_window_ev(args):
+    """SOC active window (eV from mid-gap): soc.window, or the largest |ewin| + 2 eV."""
+    w = getattr(args, "soc_window", None)
+    if w is None:
+        ewin = getattr(args, "ewin", None) or [-5.0, 5.0]
+        w = max(abs(float(e)) for e in ewin) + 2.0
+    return float(w)
+
+
+def _bse_soc_window_ev(args):
+    w = getattr(args, "soc_bse_window", None)
+    return _soc_window_ev(args) if w is None else float(w)
+
+
 def _select_soc_window_indices(eps_shifted, homo_index, soc_window):
     eps_shifted = np.asarray(eps_shifted)
     if soc_window is None or soc_window <= 0:
@@ -1028,7 +1042,13 @@ def _build_parser():
     # Fuzzy arguments
     parser.add_argument("--run_fuzzy", action="store_true")
     parser.add_argument("--cif", type=str)
-    parser.add_argument("--soc_window", type=float, default=10.0)
+    parser.add_argument("--soc_window", type=float, default=None,
+                        help="SOC active space of the fuzzy bands: MOs within this many eV of mid-gap "
+                             "(default: largest |ewin| + 2 eV). YAML: soc.window")
+    parser.add_argument("--soc_bse_window", type=float, default=None,
+                        help="SOC is diagonalized for the MOs within this many eV of mid-gap and the BSE spinors are "
+                             "taken from it (des Cloizeaux projection onto the BSE window); 0 uses the BSE window "
+                             "alone (default: the soc_window value). YAML: soc.bse_window")
     parser.add_argument("--pdos_atoms", type=str, nargs='+')
     parser.add_argument("--coop_pairs", type=str, nargs='+')
     parser.add_argument("--population_print_range", type=int, default=15)
@@ -2224,30 +2244,64 @@ def _active_space_and_soc(args, *,
     
     if args.soc_flag:
         tracker.start_stage("SOC Active Space (BSE)")
-        logger.info(f"\n--- Computing SOC Spinor Subspace for BSE (Small Window) ---")
+        # SOC is diagonalized in a larger window W around the BSE window P; the BSE spinors are the
+        # W spinors living in P (des Cloizeaux projection), so their energies include the SOC
+        # coupling to the MOs outside P.
+        bse_window_ev = _bse_soc_window_ev(args)
+        soc_W = bse_active_indices
+        soc_W_beta = bse_active_indices_beta
+        if bse_window_ev > 0:
+            soc_W = np.union1d(bse_active_indices, _select_soc_window_indices(eps_shifted, homo_index, bse_window_ev))
+            if is_uks_sp:
+                soc_W_beta = np.union1d(bse_active_indices_beta,
+                                        _select_soc_window_indices(eps_beta_shifted, homo_index_beta, bse_window_ev))
+        use_W = len(soc_W) > len(bse_active_indices) or (is_uks_sp and len(soc_W_beta) > len(bse_active_indices_beta))
+        if use_W:
+            logger.info(f"\n--- Computing SOC Spinor Subspace for BSE (|E-Ef| <= {bse_window_ev:.3f} eV, "
+                        f"projected onto the {len(bse_active_indices)}-MO BSE window) ---")
+        else:
+            logger.info(f"\n--- Computing SOC Spinor Subspace for BSE (Small Window) ---")
         if is_uks_sp:
             from qdex.soc_utils import compute_spinor_subspace_uks
             C_dense_beta = C_beta.toarray() if hasattr(C_beta, 'toarray') else np.asarray(C_beta)
             bse_soc_E, bse_soc_U, soc_overlap_cache = compute_spinor_subspace_uks(
                 atom_symbols=syms, coords_ang=coords_ang, shells=shells,
-                C_alpha_AO=C_dense, eps_alpha_Ha=eps / HA_TO_EV, active_alpha_indices=bse_active_indices,
-                C_beta_AO=C_dense_beta, eps_beta_Ha=eps_beta / HA_TO_EV, active_beta_indices=bse_active_indices_beta,
+                C_alpha_AO=C_dense, eps_alpha_Ha=eps / HA_TO_EV, active_alpha_indices=soc_W,
+                C_beta_AO=C_dense_beta, eps_beta_Ha=eps_beta / HA_TO_EV, active_beta_indices=soc_W_beta,
                 S_AO=S, gth_file=args.gth_file, gth_functional=getattr(args, "gth_functional", "PBE"), nthreads=args.nthreads,
                 assume_orthonormal=soc_assume_orthonormal,
                 SC_alpha_AO=SC_dense, SC_beta_AO=SC_dense_beta_pop,
                 device=args.device,
             )
             bse_spinor_homo_idx = bse_n_occ + bse_n_occ_beta - 1
+            pos_a = np.searchsorted(soc_W, bse_active_indices)
+            pos_b = np.searchsorted(soc_W_beta, bse_active_indices_beta)
+            rows_P = np.concatenate([pos_a, len(soc_W) + pos_b])
+            n_sel = (bse_n_occ + bse_n_occ_beta, bse_n_virt + bse_n_virt_beta)
+            n_occ_W = int(np.sum(soc_W <= homo_index) + np.sum(soc_W_beta <= homo_index_beta))
         else:
             from qdex.soc_utils import compute_spinor_subspace
             bse_soc_E, bse_soc_U, soc_overlap_cache = compute_spinor_subspace(
                 atom_symbols=syms, coords_ang=coords_ang, shells=shells, 
                 C_AO=C_dense, eps_Ha=(eps_qp_active if eps_qp_active is not None else eps) / HA_TO_EV, S_AO=S, 
-                active_indices=bse_active_indices, gth_file=args.gth_file, gth_functional=getattr(args, "gth_functional", "PBE"),
+                active_indices=soc_W, gth_file=args.gth_file, gth_functional=getattr(args, "gth_functional", "PBE"),
                 nthreads=args.nthreads, assume_orthonormal=soc_assume_orthonormal,
                 SC_AO=SC_dense, device=args.device,
             )
             bse_spinor_homo_idx = (bse_n_occ * 2) - 1
+            pos = np.searchsorted(soc_W, bse_active_indices)
+            rows_P = np.concatenate([pos, len(soc_W) + pos])
+            n_sel = (2 * bse_n_occ, 2 * bse_n_virt)
+            n_occ_W = int(2 * np.sum(soc_W <= homo_index))
+        if use_W:
+            from qdex.soc_utils import project_spinors_to_subspace
+            bse_soc_E, bse_soc_U, min_w = project_spinors_to_subspace(
+                bse_soc_E, bse_soc_U, rows_P, n_sel[0], n_sel[1], n_occ_W, kramers=not is_uks_sp)
+            logger.info(f"  -> BSE spinors: {bse_soc_U.shape[1]} of {2 * len(soc_W) if not is_uks_sp else len(soc_W) + len(soc_W_beta)} "
+                        f"window spinors, smallest weight on the BSE MOs {min_w:.3f} (window-edge states)")
+            if min_w < 0.25:
+                logger.warning(f"  [SOC] A BSE spinor has only {min_w:.2f} of its weight on the BSE MOs: the BSE "
+                               "window edge cuts through strongly SOC-mixed states (widen nhomos/nlumos).")
         bse_soc_E = (bse_soc_E * HA_TO_EV) - e_fermi_raw
         bse_soc_midgap_ev = e_fermi_raw + (bse_soc_E[bse_spinor_homo_idx] + bse_soc_E[bse_spinor_homo_idx + 1]) / 2.0
         bse_soc_E -= (bse_soc_E[bse_spinor_homo_idx] + bse_soc_E[bse_spinor_homo_idx + 1]) / 2.0
@@ -2515,8 +2569,9 @@ def _cubes_and_fuzzy(args, *,
     # -----------------------------------------------------------------
     if getattr(args, 'run_fuzzy', False):
         tracker.start_stage("Fuzzy Bands & PDOS/COOP")
-        fuzzy_active_indices = _select_soc_window_indices(eps_shifted, homo_index, args.soc_window)
-        fuzzy_active_indices_beta = _select_soc_window_indices(eps_beta_shifted, homo_index_beta, args.soc_window)
+        soc_window_ev = _soc_window_ev(args)
+        fuzzy_active_indices = _select_soc_window_indices(eps_shifted, homo_index, soc_window_ev)
+        fuzzy_active_indices_beta = _select_soc_window_indices(eps_beta_shifted, homo_index_beta, soc_window_ev)
 
         if eps_qp_active is not None:
             qp_energies_abs = eps_qp_active
@@ -2533,7 +2588,7 @@ def _cubes_and_fuzzy(args, *,
         
         fuzzy_soc_E, fuzzy_soc_E_abs, fuzzy_soc_U, fuzzy_spinor_homo_idx = None, None, None, None
         if args.soc_flag:
-            logger.info(f"\n--- Computing SOC Spinor Subspace for Fuzzy Bands (|E-Ef| <= {args.soc_window:.3f} eV) ---")
+            logger.info(f"\n--- Computing SOC Spinor Subspace for Fuzzy Bands (|E-Ef| <= {soc_window_ev:.3f} eV) ---")
             logger.info(f"  -> Alpha fuzzy SOC active MOs: {len(fuzzy_active_indices)} / {len(eps)}")
             if is_uks_sp:
                 logger.info(f"  -> Beta fuzzy SOC active MOs : {len(fuzzy_active_indices_beta)} / {len(eps_beta)}")

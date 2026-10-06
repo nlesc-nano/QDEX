@@ -148,3 +148,44 @@ def test_spinor_fuzzy_weights_add_the_two_spin_components():
     G = np.zeros((1, 3))
     W, W_spin = folded_plane_wave_weights(shells, k, G, 1, [C], [(0, range(4), U[:4]), (0, range(4), U[4:])])
     assert np.allclose(W_spin[0], 0.5 * (W[0][0] + W[0][2]))
+
+
+def test_spinor_shifts_follow_spinor_composition():
+    """Spinor p takes the shifts of the MOs it is made of, not the shift of MO p."""
+    from qdex.soc_utils import spinor_weighted_shifts
+    sigma = np.array([0.0, 1.0, 2.0])
+    # spinors (energy order): MO 2 alpha, MO 2 beta, MO 0 alpha/beta mixed with MO 1
+    U_a = np.array([[0, 0, 0.6], [0, 0, 0.0], [1, 0, 0]], complex)
+    U_b = np.array([[0, 0, 0.0], [0, 0, 0.8], [0, 1, 0]], complex)
+    shifts = spinor_weighted_shifts([(U_a, sigma), (U_b, sigma)])
+    assert np.allclose(shifts, [2.0, 2.0, 0.36 * 0.0 + 0.64 * 1.0])
+
+
+def test_bse_spinors_from_a_larger_window(gth_file):
+    """Spinors of a large window projected onto a sub-window: exact window energies, unitary
+    P-space eigenvectors, Kramers pairs kept."""
+    from qdex.soc_utils import project_spinors_to_subspace
+    shells = [_shell(0, 0.5), _shell(1, 0.4), _shell(2, 0.5),
+              _shell(1, 0.3, (2.1, -1.3, 3.0)), _shell(2, 0.7, (2.1, -1.3, 3.0))]
+    for sh, a in zip(shells, [0, 0, 0, 1, 1]):
+        sh["atom_idx"] = a
+    coords_ang = np.array([[0.0, 0.0, 0.0], [2.1, -1.3, 3.0]]) / 1.8897259886
+    S = libint_cpp.overlap(shells, 1)
+    w, V = np.linalg.eigh(S)
+    C = V @ np.diag(w ** -0.5) @ V.T
+    n = C.shape[1]
+    eps = np.sort(np.random.default_rng(3).uniform(-0.3, 0.3, n))
+    homo = n // 2 - 1
+    E_W, U_W, _ = compute_spinor_subspace(["Se", "Se"], coords_ang, shells, C, eps, S, np.arange(n),
+                                          gth_file, verbose=False)
+    P = np.arange(homo - 2, homo + 4)                    # 3 occupied + 3 virtual MOs
+    rows_P = np.concatenate([P, n + P])
+    E_P, U_P, min_w = project_spinors_to_subspace(E_W, U_W, rows_P, 6, 6, 2 * (homo + 1))
+    assert np.allclose(U_P.conj().T @ U_P, np.eye(12), atol=1e-10)
+    assert np.all(np.min(np.abs(E_P[:, None] - E_W[None, :]), axis=1) < 1e-12)
+    assert np.allclose(E_P[0::2], E_P[1::2], atol=1e-10)
+    assert 0.5 < min_w <= 1.0
+    # P = W reproduces the window spinors
+    E_all, U_all, _ = project_spinors_to_subspace(E_W, U_W, np.arange(2 * n), 2 * (homo + 1),
+                                                  2 * (n - homo - 1), 2 * (homo + 1))
+    assert np.allclose(E_all, E_W) and np.allclose(np.abs(U_all), np.abs(U_W), atol=1e-8)

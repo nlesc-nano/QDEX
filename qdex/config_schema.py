@@ -107,6 +107,7 @@ SECTIONS = {
     "soc": {
         "enabled": "soc_flag",
         "window": "soc_window",
+        "bse_window": "soc_bse_window",
         "gth_file": "gth_file",
         "gth_functional": "gth_functional",
     },

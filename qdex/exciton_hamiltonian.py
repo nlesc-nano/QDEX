@@ -1018,9 +1018,11 @@ class ExcitonHamiltonian:
         # Calculate RAW DFT gap for threshold filtering
         raw_gap_spinor_dft = (eps_virt_sp.reshape(1, -1) - eps_occ_sp.reshape(-1, 1)).flatten()
 
-        # Carry the QP OR Scissor corrections over to the Spinor subspace automatically
-        sigma_occ_sp = np.concatenate([self.sigma_occ, self.sigma_occ])
-        sigma_virt_sp = np.concatenate([self.sigma_virt, self.sigma_virt])
+        # Carry the QP OR Scissor corrections over to the Spinor subspace: each spinor takes the
+        # shifts of its MOs weighted by |U|^2 (spinors are energy-sorted Kramers pairs, not MOs)
+        from qdex.soc_utils import spinor_weighted_shifts
+        sigma_occ_sp = spinor_weighted_shifts([(U_occ_a, self.sigma_occ), (U_occ_b, self.sigma_occ)])
+        sigma_virt_sp = spinor_weighted_shifts([(U_virt_a, self.sigma_virt), (U_virt_b, self.sigma_virt)])
         
         if self.estimate_qp:
             logger.info("  [QP-SOC] Mapped spatial Quasiparticle shifts onto Spinor energies.")
@@ -1217,8 +1219,9 @@ class ExcitonHamiltonian:
         eps_virt_sp = soc_E[self.n_occ_spinor:self.n_occ_spinor + self.n_virt_spinor].copy()
         raw_gap_spinor_dft = (eps_virt_sp.reshape(1, -1) - eps_occ_sp.reshape(-1, 1)).flatten()
 
-        sigma_occ_sp = np.concatenate([self.sigma_occ_a, self.sigma_occ_b])
-        sigma_virt_sp = np.concatenate([self.sigma_virt_a, self.sigma_virt_b])
+        from qdex.soc_utils import spinor_weighted_shifts
+        sigma_occ_sp = spinor_weighted_shifts([(U_occ_a, self.sigma_occ_a), (U_occ_b, self.sigma_occ_b)])
+        sigma_virt_sp = spinor_weighted_shifts([(U_virt_a, self.sigma_virt_a), (U_virt_b, self.sigma_virt_b)])
 
         eps_occ_sp += sigma_occ_sp
         eps_virt_sp += sigma_virt_sp

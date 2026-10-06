@@ -283,6 +283,63 @@ def _assemble_uks_soc_blocks(B_alpha, B_beta, proj_groups, device="numpy"):
     return Hx_aa, Hy_aa, Hz_aa, Hx_ab, Hy_ab, Hz_ab, Hx_ba, Hy_ba, Hz_ba, Hx_bb, Hy_bb, Hz_bb
 
 
+def _spinor_cache_key(*parts):
+    """Key of a spinor diagonalization: coefficient arrays (identity), active MOs and energies."""
+    import hashlib
+    h = hashlib.sha1()
+    for C, idx, eps in parts:
+        idx = np.asarray(idx, dtype=np.int64)
+        h.update(str(id(C)).encode())
+        h.update(idx.tobytes())
+        h.update(np.ascontiguousarray(np.asarray(eps, dtype=float)[idx]).tobytes())
+    return h.hexdigest()
+
+
+def spinor_weighted_shifts(parts):
+    """Energy shift of each spinor: the shifts of its MOs averaged with weights |U|^2.
+
+    parts: [(U_block (n_mo, n_spinor), sigma (n_mo,))], one entry per spin block of the
+    spinors. Spinors are sorted by energy and come in Kramers pairs, so spinor p is not MO p.
+    """
+    num = sum((np.abs(U) ** 2).T @ np.asarray(sigma, dtype=float) for U, sigma in parts)
+    den = sum((np.abs(U) ** 2).sum(axis=0) for U, _ in parts)
+    return num / np.where(den > 0, den, 1.0)
+
+
+def project_spinors_to_subspace(E_W, U_W, rows_P, n_sel_occ, n_sel_virt, n_occ_W, kramers=True):
+    """Spinors of a large SOC window W, restricted to a smaller MO space P (the BSE window).
+
+    The spinors with the largest weight on P are selected separately among the occupied (the
+    n_occ_W lowest) and the virtual spinors of W (whole Kramers pairs when kramers=True), and
+    their projections onto P are Löwdin-orthonormalized:
+        Y = U_W[rows_P, sel],   U_P = Y (Y^dagger Y)^{-1/2},   E_P = E_W[sel].
+    U_P diag(E_P) U_P^dagger is the des Cloizeaux effective Hamiltonian of P: its energies
+    include the SOC coupling to the MOs of W outside P to all orders, and the spinors stay in
+    the P basis the exciton kernel is built on.
+
+    rows_P: rows of U_W spanning P, in the order the caller wants for U_P.
+    Returns (E_P, U_P, smallest P weight of a selected spinor).
+    """
+    rows_P = np.asarray(rows_P, dtype=int)
+
+    def _select(cols, n_sel):
+        w = np.sum(np.abs(U_W[np.ix_(rows_P, cols)]) ** 2, axis=0)
+        if kramers:
+            keep = np.sort(np.argsort(-(w[0::2] + w[1::2]), kind="stable")[: n_sel // 2])
+            idx = np.stack([2 * keep, 2 * keep + 1], axis=1).ravel()
+        else:
+            idx = np.sort(np.argsort(-w, kind="stable")[:n_sel])
+        return cols[idx], w[idx]
+
+    sel_o, w_o = _select(np.arange(n_occ_W), n_sel_occ)
+    sel_v, w_v = _select(np.arange(n_occ_W, U_W.shape[1]), n_sel_virt)
+    sel = np.concatenate([sel_o, sel_v])
+    Y = U_W[np.ix_(rows_P, sel)]
+    s, V = np.linalg.eigh(Y.conj().T @ Y)
+    U_P = Y @ (V * s ** -0.5) @ V.conj().T
+    return np.asarray(E_W)[sel], U_P, float(min(w_o.min(), w_v.min()))
+
+
 def prepare_soc_overlap_cache(atom_symbols, coords_ang, shells, gth_file, nthreads=1, gth_functional="PBE"):
     """Compute and cache AO-projector overlaps shared across SOC active windows."""
     elements = {sym: valence_electrons.get(sym) for sym in set(atom_symbols)}
@@ -319,6 +376,15 @@ def compute_spinor_subspace(
     else:
         if verbose:
             logger.info("  -> Reusing cached AO-projector overlaps")
+
+    # The same window may be diagonalized for the BSE and for the fuzzy bands
+    memo = soc_cache.setdefault('spinor_results', {})
+    key = _spinor_cache_key((C_AO, active_indices, eps_Ha)) + f"|{bool(assume_orthonormal)}"
+    if key in memo:
+        if verbose:
+            logger.info(f"  -> Reusing the spinors of this {len(active_indices)}-MO window")
+        soc_E, soc_U = memo[key]
+        return soc_E.copy(), soc_U.copy(), soc_cache
 
     proj_groups = soc_cache['proj_groups']
     B_raw = soc_cache['B_raw']
@@ -364,6 +430,7 @@ def compute_spinor_subspace(
     H_total[n_mo:, :n_mo] = Hab.conj().T
 
     soc_E, soc_U = eigh(H_total)
+    memo[key] = (soc_E.copy(), soc_U.copy())
 
     if verbose:
         logger.debug(f"  -> Spinor diagonalization completed in {time.time() - t0:.2f}s")
@@ -395,6 +462,14 @@ def compute_spinor_subspace_uks(
         logger.debug(f"  -> Parsed potentials and overlaps in {time.time() - t0:.2f}s")
     else:
         logger.info("  -> Reusing cached AO-projector overlaps")
+
+    memo = soc_cache.setdefault('spinor_results', {})
+    key = _spinor_cache_key((C_alpha_AO, active_alpha_indices, eps_alpha_Ha),
+                            (C_beta_AO, active_beta_indices, eps_beta_Ha)) + f"|{bool(assume_orthonormal)}"
+    if key in memo:
+        logger.info(f"  -> Reusing the spinors of this window")
+        soc_E, soc_U = memo[key]
+        return soc_E.copy(), soc_U.copy(), soc_cache
 
     proj_groups = soc_cache['proj_groups']
     B_raw = soc_cache['B_raw']
@@ -446,6 +521,7 @@ def compute_spinor_subspace_uks(
     ])
     H_total = H0 + H_SO
     soc_E, soc_U = eigh(H_total)
+    memo[key] = (soc_E.copy(), soc_U.copy())
 
     logger.debug(f"  -> UKS spinor diagonalization completed in {time.time() - t0:.2f}s")
     H0_diag = np.sort(np.diag(H0).real)
