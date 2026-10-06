@@ -7,19 +7,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_BULK_DIR = os.path.join(os.path.dirname(__file__), "data", "bulk_bands")
 
-# Semicore manifold used to put the bulk bands on the dot's energy axis:
-# element, angular momentum and the 0-based slice of bulk bands it occupies.
-SEMICORE = {
-    "CDSE": dict(element="Cd", l=2, bands=(1, 6)),
-}
-
-
-def _material_key(material):
-    mat = str(material).strip().upper()
-    for key in SEMICORE:
-        if key in mat:
-            return key
-    return None
+# Each material in data/bulk_bands has <name>.bs (spin-free), <name>_soc.bs (spin-orbit) and
+# <name>.json (band edges, gaps, Gamma band characters and the semicore manifold), written by
+# qdex.bulk_soc; <name> is the stem of the CIF the fuzzy bands are computed with (e.g. CdSe_zb).
+STRUCTURE_PREFERENCE = ("zb", "rs", "cubic", "wz")
 
 
 def parse_cp2k_bs(filepath):
@@ -33,8 +24,13 @@ def parse_cp2k_bs(filepath):
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"CP2K band structure file not found: {filepath}")
 
-    with open(filepath, "r", encoding="utf-8") as f:
-        lines = f.readlines()
+    if str(filepath).endswith(".gz"):
+        import gzip
+        with gzip.open(filepath, "rt", encoding="utf-8") as f:
+            lines = f.readlines()
+    else:
+        with open(filepath, "r", encoding="utf-8") as f:
+            lines = f.readlines()
 
     sets = []
     current_set = None
@@ -120,50 +116,80 @@ def parse_cp2k_bs(filepath):
     }
 
 
-def find_bulk_bs(material="CdSe", custom_path=None, soc=False):
-    """
-    Finds CP2K .bs file for a given material in data/bulk_bands or custom path.
-    With soc=True the spin-orbit bands (<material>_bulk_soc.bs, from qdex.bulk_soc) are looked for.
-    """
-    if custom_path and os.path.exists(custom_path):
-        return custom_path
+def _stem(path):
+    return os.path.splitext(os.path.basename(str(path)))[0]
 
+
+def find_bulk_bs(material="CdSe", custom_path=None, soc=False, cif=None):
+    """
+    Bulk band file for a run: the bands of its CIF (data/bulk_bands/<cif stem>[_soc].bs) or, failing
+    that, of the material (<Material>_<structure>[_soc].bs, preferring zb, rs, cubic, wz).
+    custom_path: an explicit spin-free .bs file.
+    """
+    tag = "_soc" if soc else ""
+    if custom_path and not soc and os.path.exists(custom_path):
+        return custom_path
+    if cif:
+        for ext in (".bs", ".bs.gz"):
+            p = os.path.join(DEFAULT_BULK_DIR, f"{_stem(cif)}{tag}{ext}")
+            if os.path.exists(p):
+                return p
     if not material:
         return None
-
-    mat_clean = str(material).strip().upper()
-    tag = "_soc" if soc else ""
-    candidates = [
-        f"{mat_clean}_bulk{tag}.bs",
-        f"{mat_clean}{tag}.bs",
-        f"{mat_clean.lower()}_bulk{tag}.bs",
-        f"{mat_clean.lower()}{tag}.bs",
-        f"CdSe_bulk{tag}.bs" if "CDSE" in mat_clean else None,
-    ]
-
-    for cand in candidates:
-        if not cand:
+    mat = str(material).strip().upper()
+    found = {}
+    for f in os.listdir(DEFAULT_BULK_DIR):
+        g = f[:-3] if f.endswith(".gz") else f
+        if not g.endswith(f"{tag}.bs") or (not soc and g.endswith("_soc.bs")):
             continue
-        p = os.path.join(DEFAULT_BULK_DIR, cand)
-        if os.path.exists(p):
-            return p
+        name = g[: -len(f"{tag}.bs")]
+        parts = name.split("_")
+        if parts[0].upper() == mat:
+            found[parts[1].lower() if len(parts) > 1 else ""] = os.path.join(DEFAULT_BULK_DIR, f)
+    for key in STRUCTURE_PREFERENCE:
+        if key in found:
+            return found[key]
+    return next(iter(sorted(found.values())), None)
 
-    return None
 
-
-def bulk_semicore_level(material, bs_data, spinor=False):
-    """Mean energy of the bulk semicore bands along the k-path (bulk eV scale), or None.
-    spinor: the bands are spin-orbit bands (two per spin-free band)."""
-    key = _material_key(material)
-    if key is None:
+def load_bulk_meta(bs_path):
+    """The <name>.json written by qdex.bulk_soc next to a band file, or None."""
+    import json
+    if not bs_path:
         return None
-    lo, hi = SEMICORE[key]["bands"]
-    f = 2 if spinor else 1
-    return float(np.mean(bs_data["bands"][:, f * lo:f * hi]))
+    base = str(bs_path)
+    base = base[:-3] if base.endswith(".gz") else base
+    base = base[:-3]
+    base = base[:-4] if base.endswith("_soc") else base
+    path = base + ".json"
+    if not os.path.exists(path):
+        return None
+    with open(path) as f:
+        return json.load(f)
+
+
+def _semicore_candidates(meta):
+    meta = meta or {}
+    cands = meta.get("semicore_candidates")
+    if cands is None:
+        cands = [meta["semicore"]] if meta.get("semicore") else []
+    return cands
+
+
+def bulk_semicore_level(meta, bs_data, spinor=False, label=None):
+    """Mean energy of the bulk semicore bands along the k-path (bulk eV scale), or None.
+    spinor: the bands are spin-orbit bands (two per spin-free band); label: the manifold
+    (e.g. 'Cd-d'), by default the preferred one."""
+    cands = _semicore_candidates(meta)
+    semi = next((c for c in cands if label is None or c["label"] == label), None)
+    if not semi:
+        return None
+    lo, hi = semi["bands_soc" if spinor else "bands_sf"]
+    return float(np.mean(bs_data["bands"][:, lo:hi]))
 
 
 def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_index,
-                      coordination, bond_ang, bs_path=None, window_ev=2.5):
+                      coordination, bond_ang, bs_path=None, window_ev=2.5, cif=None):
     """
     Semicore (e.g. Cd 4d) level of the dot's bulk-like interior atoms, on the axis of `energies`.
 
@@ -173,20 +199,33 @@ def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_i
     (Cd 4d of Cd-Cl lies ~0.4 eV deeper than in Cd-Se), so only bulk-like atoms are used: full
     crystal coordination by the crystal's own elements, and among those the inner half by radius.
 
-    Returns a dict (level_ev, n_atoms, spread_ev, all_atoms_level_ev, n_bulk_like) or None.
+    The manifolds of the material's metadata are tried in order of preference (cation d, Cs 5p,
+    anion s); the first one whose energy range is covered by the orbitals is used (MO files often
+    hold only the orbitals near the gap).
+
+    Returns a dict (level_ev, label, n_atoms, spread_ev, all_atoms_level_ev, n_bulk_like) or None.
     """
-    key = _material_key(material)
-    path = find_bulk_bs(material=material, custom_path=bs_path)
-    if key is None or path is None:
+    path = find_bulk_bs(material=material, custom_path=bs_path, cif=cif)
+    meta = load_bulk_meta(path)
+    cands = _semicore_candidates(meta)
+    if path is None or not cands:
         return None
-    cfg = SEMICORE[key]
     bs = parse_cp2k_bs(path)
-    separation = bs["vbm"] - bulk_semicore_level(material, bs)
+    energies = np.asarray(energies, dtype=float)
+    cfg = None
+    for c in cands:
+        separation = bs["vbm"] - bulk_semicore_level(meta, bs, label=c["label"])
+        target = energies[homo_index] - separation
+        if energies.min() <= target - 1.0:
+            cfg = c
+            break
+        logger.info(f"  [Bulk Bands] {c['label']} manifold ({separation:.1f} eV below the VBM) is below the "
+                    f"lowest orbital ({energies[homo_index] - energies.min():.1f} eV below the HOMO).")
+    if cfg is None:
+        return None
 
     syms = list(syms)
     coords = np.asarray(coords_ang, dtype=float)
-    energies = np.asarray(energies, dtype=float)
-    target = energies[homo_index] - separation
     sel = np.where(np.abs(energies - target) <= window_ev)[0]
     elem = cfg["element"]
     atoms = np.array([i for i, s in enumerate(syms) if s == elem])
@@ -198,7 +237,7 @@ def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_i
     ao = 0
     for sh in shells:
         n = 2 * int(sh["l"]) + 1
-        if int(sh["l"]) == cfg["l"] and int(sh["atom_idx"]) in rows:
+        if int(sh["l"]) == int(cfg["l"]) and int(sh["atom_idx"]) in rows:
             rows[int(sh["atom_idx"])].extend(range(ao, ao + n))
         ao += n
 
@@ -231,9 +270,16 @@ def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_i
         r = np.linalg.norm(coords[atoms[bulk_like]] - coords[atoms].mean(axis=0), axis=1)
         inner = bulk_like[r <= np.median(r)]
         use = inner if inner.size >= 4 else bulk_like
+    bulk_vbm_rel = float(np.mean(levels[use])) + separation
+    if bulk_vbm_rel < energies[homo_index] - 0.2:
+        logger.warning(f"  [Bulk Bands] The anchored bulk VBM ({bulk_vbm_rel:.2f} eV) lies "
+                       f"{energies[homo_index] - bulk_vbm_rel:.2f} eV below the dot's HOMO; a confined hole lies "
+                       f"below the bulk VBM. Was the dot computed at another level of theory (functional, basis, "
+                       f"pseudopotential) than the bulk bands (PBE, DZVP-MOLOPT-PBE-GTH)?")
+    result["bulk_vbm_rel_ev"] = bulk_vbm_rel
     result.update(level_ev=float(np.mean(levels[use])), spread_ev=float(np.std(levels[use])),
-                  n_atoms=int(use.size), element=elem)
-    logger.info(f"  [Bulk Bands] {elem} semicore level: {result['level_ev']:.3f} eV from {use.size} interior bulk-like "
+                  n_atoms=int(use.size), element=elem, label=cfg.get("label", elem), bulk_file=os.path.basename(path))
+    logger.info(f"  [Bulk Bands] {cfg.get('label', elem)} semicore level: {result['level_ev']:.3f} eV from {use.size} interior bulk-like "
                 f"atoms (spread {result['spread_ev']:.3f} eV); all {finite.sum()} {elem} atoms: "
                 f"{result['all_atoms_level_ev']:.3f} eV.")
     return result
@@ -260,7 +306,8 @@ def map_bulk_to_path(segments, path_frac, atol=1e-4):
         for i in starts:
             for j in ends:
                 lo, hi = min(i, j), max(i, j)
-                if hi - lo < 1 or (best is not None and hi - lo >= abs(best[1] - best[0])):
+                # a stretch needs interior points: two adjacent path points are a path break (X|M)
+                if hi - lo < 2 or (best is not None and hi - lo >= abs(best[1] - best[0])):
                     continue
                 inner = path_frac[lo:hi + 1]
                 t = (inner - ks) @ (ke - ks) / length ** 2
@@ -286,6 +333,8 @@ def get_aligned_bulk_bands(
     qd_semicore_rel=None,
     path_frac=None,
     soc=False,
+    cif=None,
+    qd_semicore_label=None,
 ):
     """
     Loads bulk bands and aligns them to the QD energy axis for overlay.
@@ -313,18 +362,22 @@ def get_aligned_bulk_bands(
         path_frac: (n_k, 3) array, optional
             Fractional k-points of the fuzzy path; bulk segments are then placed by coordinates.
         soc: bool
-            Use the spin-orbit bulk bands (<material>_bulk_soc.bs) when available; 'soc' in the
-            returned dict says whether they were found (otherwise the spin-free bands are used).
+            Use the spin-orbit bulk bands (<name>_soc.bs) when available; 'soc' in the returned
+            dict says whether they were found (otherwise the spin-free bands are used).
+        cif: str, optional
+            CIF of the run; its stem selects the band files (e.g. CdSe_wz.cif -> CdSe_wz.bs).
+        qd_semicore_label: str, optional
+            Manifold qd_semicore_rel was measured on (e.g. 'Cd-d'; default: the preferred one).
 
     Returns:
         dict with 'bands_aligned' (n_k, n_selected), 'segments' [(x, bands_selected)] or None,
         'band_indices', 'vbm_aligned', 'cbm_aligned', 'gap', 'n_k', 'shift', 'source_file',
         'alignment_mode' (the mode actually used), 'anchor_detail'.
     """
-    path = find_bulk_bs(material=material, soc=True) if soc else None
+    path = find_bulk_bs(material=material, soc=True, cif=cif) if soc else None
     soc_bands = path is not None
     if not soc_bands:
-        path = find_bulk_bs(material=material, custom_path=bs_path)
+        path = find_bulk_bs(material=material, custom_path=bs_path, cif=cif)
     if not path:
         return None
 
@@ -338,7 +391,7 @@ def get_aligned_bulk_bands(
     mode_used = alignment_mode
 
     if alignment_mode in ("core_level", "semicore", "auto"):
-        bulk_level = bulk_semicore_level(material, data, spinor=soc_bands)
+        bulk_level = bulk_semicore_level(load_bulk_meta(path), data, spinor=soc_bands, label=qd_semicore_label)
         if bulk_level is not None and qd_semicore_rel is not None:
             shift = float(qd_semicore_rel) - bulk_level
             mode_used = "core_level"

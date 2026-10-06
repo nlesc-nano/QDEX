@@ -1,0 +1,211 @@
+{
+ "sf": {
+  "vbm": 4.188198743199886,
+  "cbm": 4.5048679833833285,
+  "gap": 0.3166692401834421,
+  "vbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "cbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "vbm_label": "L",
+  "cbm_label": "L"
+ },
+ "soc": {
+  "vbm": 4.188420099087537,
+  "cbm": 4.216603569548356,
+  "gap": 0.028183470460819038,
+  "vbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "cbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "vbm_label": "L",
+  "cbm_label": "L"
+ },
+ "atoms": {
+  "Pb": 1,
+  "S": 1
+ },
+ "gamma_characters_sf": [
+  {
+   "band": 0,
+   "energy": -9.3882,
+   "character": {
+    "S-s": 0.734,
+    "Pb-s": 0.266
+   }
+  },
+  {
+   "band": 1,
+   "energy": -1.9175,
+   "character": {
+    "Pb-s": 0.75,
+    "S-s": 0.25
+   }
+  },
+  {
+   "band": 2,
+   "energy": 2.0246,
+   "character": {
+    "S-p": 0.903,
+    "Pb-p": 0.097
+   }
+  },
+  {
+   "band": 3,
+   "energy": 2.0254,
+   "character": {
+    "S-p": 0.903,
+    "Pb-p": 0.097
+   }
+  },
+  {
+   "band": 4,
+   "energy": 2.0254,
+   "character": {
+    "S-p": 0.903,
+    "Pb-p": 0.097
+   }
+  },
+  {
+   "band": 5,
+   "energy": 9.5196,
+   "character": {
+    "Pb-p": 0.922,
+    "S-p": 0.078
+   }
+  },
+  {
+   "band": 6,
+   "energy": 9.5196,
+   "character": {
+    "Pb-p": 0.922,
+    "S-p": 0.078
+   }
+  },
+  {
+   "band": 7,
+   "energy": 9.5202,
+   "character": {
+    "Pb-p": 0.922,
+    "S-p": 0.078
+   }
+  },
+  {
+   "band": 8,
+   "energy": 11.3463,
+   "character": {
+    "Pb-d": 0.702,
+    "S-d": 0.298
+   }
+  },
+  {
+   "band": 9,
+   "energy": 11.3465,
+   "character": {
+    "Pb-d": 0.702,
+    "S-d": 0.298
+   }
+  },
+  {
+   "band": 10,
+   "energy": 11.3465,
+   "character": {
+    "Pb-d": 0.702,
+    "S-d": 0.298
+   }
+  },
+  {
+   "band": 11,
+   "energy": 13.8073,
+   "character": {
+    "Pb-d": 0.555,
+    "S-d": 0.445
+   }
+  },
+  {
+   "band": 12,
+   "energy": 13.8073,
+   "character": {
+    "Pb-d": 0.555,
+    "S-d": 0.445
+   }
+  }
+ ],
+ "semicore": {
+  "element": "S",
+  "l": 0,
+  "label": "S-s",
+  "bands_sf": [
+   0,
+   1
+  ],
+  "min_fraction": 0.7335923746995345,
+  "bands_soc": [
+   0,
+   2
+  ],
+  "level_sf": -8.305155798627725,
+  "level_soc": -8.306091506402435,
+  "depth_below_vbm_sf": 12.49335454182761
+ },
+ "semicore_candidates": [
+  {
+   "element": "S",
+   "l": 0,
+   "label": "S-s",
+   "bands_sf": [
+    0,
+    1
+   ],
+   "min_fraction": 0.7335923746995345,
+   "bands_soc": [
+    0,
+    2
+   ],
+   "level_sf": -8.305155798627725,
+   "level_soc": -8.306091506402435,
+   "depth_below_vbm_sf": 12.49335454182761
+  }
+ ],
+ "sf_vs_cp2k_max_dev_ev": 1.085352520391325e-05,
+ "name": "PbS_rs",
+ "functional": "PBE",
+ "basis": "DZVP-MOLOPT-PBE-GTH",
+ "potentials": {
+  "Pb": "GTH-PBE-q4",
+  "S": "GTH-PBE-q6"
+ },
+ "cell_ang": [
+  [
+   -0.0,
+   2.988087,
+   2.988087
+  ],
+  [
+   2.988087,
+   0.0,
+   2.988087
+  ],
+  [
+   2.988087,
+   2.988087,
+   0.0
+  ]
+ ],
+ "n_bands_sf": 25,
+ "spacegroup": "Fm-3m",
+ "formula": "PbS",
+ "cif": "PbS_rs.cif"
+}

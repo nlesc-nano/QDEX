@@ -1,0 +1,277 @@
+{
+ "sf": {
+  "vbm": 3.827799002886261,
+  "cbm": 3.938216511043338,
+  "gap": 0.11041750815707685,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "soc": {
+  "vbm": 3.9355471454409634,
+  "cbm": 3.938277049730466,
+  "gap": 0.002729904289502816,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "atoms": {
+  "Ga": 1,
+  "As": 1
+ },
+ "gamma_characters_sf": [
+  {
+   "band": 0,
+   "energy": -10.9353,
+   "character": {
+    "Ga-d": 0.993
+   }
+  },
+  {
+   "band": 1,
+   "energy": -10.9353,
+   "character": {
+    "Ga-d": 0.993
+   }
+  },
+  {
+   "band": 2,
+   "energy": -10.9352,
+   "character": {
+    "Ga-d": 0.993
+   }
+  },
+  {
+   "band": 3,
+   "energy": -10.8678,
+   "character": {
+    "Ga-d": 0.998
+   }
+  },
+  {
+   "band": 4,
+   "energy": -10.8678,
+   "character": {
+    "Ga-d": 0.998
+   }
+  },
+  {
+   "band": 5,
+   "energy": -8.5592,
+   "character": {
+    "As-s": 0.69,
+    "Ga-s": 0.306
+   }
+  },
+  {
+   "band": 6,
+   "energy": 3.8277,
+   "character": {
+    "As-p": 0.815,
+    "Ga-p": 0.11,
+    "Ga-d": 0.059
+   }
+  },
+  {
+   "band": 7,
+   "energy": 3.8277,
+   "character": {
+    "As-p": 0.815,
+    "Ga-p": 0.11,
+    "Ga-d": 0.059
+   }
+  },
+  {
+   "band": 8,
+   "energy": 3.8278,
+   "character": {
+    "As-p": 0.815,
+    "Ga-p": 0.11,
+    "Ga-d": 0.059
+   }
+  },
+  {
+   "band": 9,
+   "energy": 3.9382,
+   "character": {
+    "Ga-s": 0.817,
+    "As-s": 0.168
+   }
+  },
+  {
+   "band": 10,
+   "energy": 7.5493,
+   "character": {
+    "Ga-p": 0.701,
+    "As-d": 0.17,
+    "As-p": 0.108
+   }
+  },
+  {
+   "band": 11,
+   "energy": 7.5493,
+   "character": {
+    "Ga-p": 0.701,
+    "As-d": 0.17,
+    "As-p": 0.108
+   }
+  },
+  {
+   "band": 12,
+   "energy": 7.5504,
+   "character": {
+    "Ga-p": 0.701,
+    "As-d": 0.17,
+    "As-p": 0.108
+   }
+  },
+  {
+   "band": 13,
+   "energy": 14.6995,
+   "character": {
+    "As-d": 0.667,
+    "Ga-d": 0.333
+   }
+  },
+  {
+   "band": 14,
+   "energy": 14.6995,
+   "character": {
+    "As-d": 0.667,
+    "Ga-d": 0.333
+   }
+  },
+  {
+   "band": 15,
+   "energy": 19.7432,
+   "character": {
+    "As-d": 0.313,
+    "Ga-f": 0.216,
+    "As-p": 0.191
+   }
+  },
+  {
+   "band": 16,
+   "energy": 19.7432,
+   "character": {
+    "As-d": 0.313,
+    "Ga-f": 0.216,
+    "As-p": 0.191
+   }
+  }
+ ],
+ "semicore": {
+  "element": "Ga",
+  "l": 2,
+  "label": "Ga-d",
+  "bands_sf": [
+   0,
+   5
+  ],
+  "min_fraction": 0.9929359055427708,
+  "bands_soc": [
+   0,
+   10
+  ],
+  "level_sf": -10.911255078078758,
+  "level_soc": -10.911606092542986,
+  "depth_below_vbm_sf": 14.739054080965019
+ },
+ "semicore_candidates": [
+  {
+   "element": "Ga",
+   "l": 2,
+   "label": "Ga-d",
+   "bands_sf": [
+    0,
+    5
+   ],
+   "min_fraction": 0.9929359055427708,
+   "bands_soc": [
+    0,
+    10
+   ],
+   "level_sf": -10.911255078078758,
+   "level_soc": -10.911606092542986,
+   "depth_below_vbm_sf": 14.739054080965019
+  },
+  {
+   "element": "As",
+   "l": 0,
+   "label": "As-s",
+   "bands_sf": [
+    5,
+    6
+   ],
+   "min_fraction": 0.689926289255609,
+   "bands_soc": [
+    10,
+    12
+   ],
+   "level_sf": -7.001861414329589,
+   "level_soc": -7.0014912128936215,
+   "depth_below_vbm_sf": 10.82966041721585
+  }
+ ],
+ "gamma_vb_triplet": {
+  "sf": 3.827734456747137,
+  "delta_so": 0.325211713715313,
+  "soc_lower": 3.610332675645396,
+  "soc_upper": 3.935544389360709,
+  "filled": true
+ },
+ "gamma_band_order": {
+  "sf": 0.11048205429619351,
+  "soc": 0.0027326603697672702,
+  "inverted": false,
+  "s_character_sf": 0.9849478478863077,
+  "s_character_soc": 0.9624047894256668
+ },
+ "sf_vs_cp2k_max_dev_ev": 3.775060420707632e-06,
+ "name": "GaAs_zb",
+ "functional": "PBE",
+ "basis": "DZVP-MOLOPT-PBE-GTH",
+ "potentials": {
+  "As": "GTH-PBE-q5",
+  "Ga": "GTH-PBE-q13"
+ },
+ "cell_ang": [
+  [
+   -0.0,
+   2.875091,
+   2.875091
+  ],
+  [
+   2.875091,
+   0.0,
+   2.875091
+  ],
+  [
+   2.875091,
+   2.875091,
+   0.0
+  ]
+ ],
+ "n_bands_sf": 29,
+ "spacegroup": "F-43m",
+ "formula": "GaAs",
+ "cif": "GaAs_zb.cif"
+}

@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 
@@ -73,27 +75,67 @@ def test_bulk_bands_land_on_the_fuzzy_path():
     assert bs["n_k"] == sum(len(s["kfrac"]) for s in bs["segments"]) - (len(bs["segments"]) - 2)
 
 
+def test_bulk_segments_skip_path_breaks():
+    """CsPbBr3 path G-X-M-G-R-X|M-R: the X->M segment is the stretch 27..55, not the X|M jump."""
+    from pymatgen.core import Lattice, Structure
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from pymatgen.symmetry.bandstructure import HighSymmKpath
+    from qdex.bulk_bands import find_bulk_bs, parse_cp2k_bs, map_bulk_to_path
+    st = Structure.from_spacegroup("Pm-3m", Lattice.cubic(5.95), ["Cs", "Pb", "Br"],
+                                   [[0.5, 0.5, 0.5], [0, 0, 0], [0.5, 0, 0]])
+    prim = SpacegroupAnalyzer(st).get_primitive_standard_structure()
+    kf, labels = HighSymmKpath(prim).get_kpoints(line_density=50, coords_are_cartesian=False)
+    bs = parse_cp2k_bs(find_bulk_bs("CsPbBr3"))
+    mapped = map_bulk_to_path(bs["segments"], np.asarray(kf))
+    assert len(mapped) == len(bs["segments"])
+    assert all(x[-1] - x[0] > 2 for x, _ in mapped)
+
+
 def test_soc_bulk_bands_of_cdse():
     """PBE+SOC bulk CdSe (qdex.bulk_soc): Gamma8/Gamma7 split by Delta_so, VBM up by Delta/3, same Cd 4d mean."""
-    from qdex.bulk_bands import find_bulk_bs, parse_cp2k_bs, bulk_semicore_level
-    sf = parse_cp2k_bs(find_bulk_bs("CdSe"))
+    from qdex.bulk_bands import find_bulk_bs, parse_cp2k_bs, bulk_semicore_level, load_bulk_meta
+    sf_path = find_bulk_bs("CdSe")
+    assert os.path.basename(sf_path).startswith("CdSe_zb")          # zinc blende preferred
+    sf = parse_cp2k_bs(sf_path)
     so = parse_cp2k_bs(find_bulk_bs("CdSe", soc=True))
+    meta = load_bulk_meta(sf_path)
     G = so["bands"][0]
-    n_occ = sf["vbm_band"] + 1
+    n_occ = 9
     assert np.allclose(G[0::2], G[1::2], atol=1e-6)                    # Kramers pairs at Gamma
     d_so = G[2 * n_occ - 1] - G[2 * n_occ - 6]
     assert 0.33 < d_so < 0.40
+    assert meta["gamma_vb_triplet"]["delta_so"] == pytest.approx(d_so, abs=0.002)
     assert so["vbm"] - sf["vbm"] == pytest.approx(d_so / 3, abs=0.005)
     assert so["cbm"] == pytest.approx(sf["cbm"], abs=0.005)
-    assert bulk_semicore_level("CdSe", so, spinor=True) == pytest.approx(bulk_semicore_level("CdSe", sf), abs=0.01)
+    assert meta["semicore"]["label"] == "Cd-d" and meta["semicore"]["bands_sf"] == [1, 6]
+    assert bulk_semicore_level(meta, so, spinor=True) == pytest.approx(bulk_semicore_level(meta, sf), abs=0.01)
 
 
-def test_soc_page_uses_soc_bulk_bands():
-    from qdex.bulk_bands import get_aligned_bulk_bands
-    sf = get_aligned_bulk_bands("CdSe", qd_semicore_rel=-8.0)
-    so = get_aligned_bulk_bands("CdSe", qd_semicore_rel=-8.0, soc=True)
-    assert not sf["soc"] and so["soc"]
-    assert 0.10 < so["vbm_aligned"] - sf["vbm_aligned"] < 0.14
+def test_bulk_band_files_by_cif_and_material():
+    from qdex.bulk_bands import find_bulk_bs, load_bulk_meta
+    assert os.path.basename(find_bulk_bs("CdSe", cif="/any/where/CdSe_wz.cif")).startswith("CdSe_wz")
+    assert os.path.basename(find_bulk_bs("CdSe", cif="CdSe_wz.cif", soc=True)).startswith("CdSe_wz_soc")
+    assert os.path.basename(find_bulk_bs("PbSe")).startswith("PbSe_rs")
+    assert os.path.basename(find_bulk_bs("CsPbBr3")).startswith("CsPbBr3_cubic")
+    assert find_bulk_bs("Unobtainium") is None
+    # every material has spin-free and SOC bands and a semicore anchor
+    from qdex.bulk_bands import DEFAULT_BULK_DIR
+    for f in os.listdir(DEFAULT_BULK_DIR):
+        if f.endswith(".json"):
+            name = f[:-5]
+            meta = load_bulk_meta(find_bulk_bs(None, cif=name + ".cif"))
+            assert meta["name"] == name and meta["semicore"] is not None
+            assert find_bulk_bs(None, cif=name + ".cif", soc=True) is not None
+
+
+@pytest.mark.parametrize("name", ["HgS_zb", "HgSe_zb", "HgTe_zb", "InAs_zb"])
+def test_inverted_zincblende_band_order(name):
+    """PBE puts Gamma1 (s) below Gamma15 (p) in these semimetals: negative s-p order, Gamma15 partly filled."""
+    from qdex.bulk_bands import find_bulk_bs, load_bulk_meta
+    meta = load_bulk_meta(find_bulk_bs(None, cif=name + ".cif"))
+    assert meta["gamma_band_order"]["inverted"] and meta["gamma_band_order"]["sf"] < -0.2
+    assert not meta["gamma_vb_triplet"]["filled"]
+    assert meta["gamma_vb_triplet"]["delta_so"] > 0.0
 
 
 def test_write_bs_round_trip(tmp_path):

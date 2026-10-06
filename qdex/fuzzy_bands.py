@@ -570,7 +570,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
     if store is not None:
         from qdex.store import put_fuzzy
         put_fuzzy(store, "sf", kpts_cart, labels, eps_fuzzy, intensity_sf, sigma_use, dft_ewin, indices=fuzzy_indices,
-                  kpts_frac=kpts_frac)
+                  kpts_frac=kpts_frac, cif=args.cif)
 
     # Semicore level of the interior atoms: places the bulk bands on this energy axis
     semicore = None
@@ -580,13 +580,17 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             semicore = qd_semicore_level(
                 args.material, C_dense, S_dense, shells, syms, coords_ang, eps_shifted, homo_index,
                 coordination=kpath_info["coordination"], bond_ang=kpath_info["qd_bond_ang"],
-                bs_path=getattr(args, "bulk_bs", None))
+                bs_path=getattr(args, "bulk_bs", None), cif=args.cif)
     except Exception as exc:
         logger.warning(f"  [Bulk Bands] Semicore level of the dot not computed: {exc}")
     semicore_rel = {"sf": semicore["level_ev"]} if semicore is not None else {}
+    semicore_label = semicore.get("label") if semicore is not None else None
+    if semicore is None:
+        logger.info("  [Bulk Bands] No semicore level measurable for this dot: bulk bands aligned at mid-gap.")
     if store is not None and semicore is not None:
         store.put("electronic", "sf/bulk_anchor/semicore_level_ev", semicore["level_ev"])
-        store.attr("electronic", "sf/bulk_anchor", element=semicore["element"], n_atoms=semicore["n_atoms"],
+        store.attr("electronic", "sf/bulk_anchor", element=semicore["element"], label=semicore_label,
+                   n_atoms=semicore["n_atoms"],
                    spread_ev=semicore["spread_ev"], all_atoms_level_ev=semicore["all_atoms_level_ev"],
                    note="semicore level of the interior bulk-like atoms on the fuzzy energy axis")
 
@@ -672,7 +676,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc", export=export_files, kpts_frac=kpts_frac)
         if store is not None:
             from qdex.store import put_fuzzy
-            put_fuzzy(store, "soc", kpts_cart, labels, eps_soc, intensity_soc, sigma_use, soc_ewin, kpts_frac=kpts_frac)
+            put_fuzzy(store, "soc", kpts_cart, labels, eps_soc, intensity_soc, sigma_use, soc_ewin, kpts_frac=kpts_frac,
+                      cif=args.cif)
 
         eps_soc_qp = None
         sort_idx_qp = None
@@ -843,7 +848,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
                 output_html="fuzzy_dashboard_sf.html",
-                bulk_semicore_rel=semicore_rel.get("sf")
+                bulk_semicore_rel=semicore_rel.get("sf"), bulk_cif=args.cif, bulk_semicore_label=semicore_label
             )
 
         if dashboard_energy_mode in ("qp", "both") and qp_plot_energies is not None:
@@ -869,7 +874,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
                 output_html="fuzzy_dashboard_uks.html",
-                bulk_semicore_rel=semicore_rel.get("sf")
+                bulk_semicore_rel=semicore_rel.get("sf"), bulk_cif=args.cif, bulk_semicore_label=semicore_label
             )
 
         if is_uks and dashboard_energy_mode in ("qp", "both") and qp_plot_energies is not None and qp_plot_energies_beta is not None:
@@ -896,7 +901,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
                 output_html="fuzzy_dashboard_soc.html",
-                bulk_semicore_rel=semicore_rel.get("soc")
+                bulk_semicore_rel=semicore_rel.get("soc"), bulk_cif=args.cif, bulk_semicore_label=semicore_label
             )
 
         if args.soc_flag and dashboard_energy_mode in ("qp", "both") and eps_soc_qp is not None:

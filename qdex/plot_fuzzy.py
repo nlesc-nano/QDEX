@@ -155,7 +155,7 @@ def parse_cube(filepath):
     atoms_ang = [(z, ax*BOHR_TO_ANG, ay*BOHR_TO_ANG, az*BOHR_TO_ANG) for z, charge, ax, ay, az in atoms]
     return X.flatten(), Y.flatten(), Z.flatten(), V.flatten(), atoms_ang
 
-def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=None, e_lumo=None, normalize_coop=False, energy_label="Energy (eV)", output_html=None, fuzzy_display_mode="raw", bulk_bs_path=None, bulk_alignment="core_level", bulk_semicore_rel=None, bulk_overlay=True):
+def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=None, e_lumo=None, normalize_coop=False, energy_label="Energy (eV)", output_html=None, fuzzy_display_mode="raw", bulk_bs_path=None, bulk_alignment="core_level", bulk_semicore_rel=None, bulk_overlay=True, bulk_cif=None, bulk_semicore_label=None):
     if prefix.startswith("soc"):
         lbl = "SOC"
     elif prefix.startswith("uks"):
@@ -243,6 +243,8 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                 qd_semicore_rel=bulk_semicore_rel,
                 path_frac=fuzzy["kpath_frac"],
                 soc=(lbl == "SOC"),
+                cif=bulk_cif,
+                qd_semicore_label=bulk_semicore_label,
             )
             if bulk_data is not None:
                 if bulk_data["segments"] is not None:

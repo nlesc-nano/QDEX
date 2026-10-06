@@ -1,0 +1,270 @@
+{
+ "sf": {
+  "vbm": 2.848361281912767,
+  "cbm": 3.46914277315211,
+  "gap": 0.620781491239343,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "soc": {
+  "vbm": 3.1351657686780867,
+  "cbm": 3.469142774578304,
+  "gap": 0.33397700590021717,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "atoms": {
+  "Te": 1,
+  "Cd": 1
+ },
+ "gamma_characters_sf": [
+  {
+   "band": 0,
+   "energy": -8.1014,
+   "character": {
+    "Te-s": 0.833,
+    "Cd-s": 0.16
+   }
+  },
+  {
+   "band": 1,
+   "energy": -5.3502,
+   "character": {
+    "Cd-d": 0.962
+   }
+  },
+  {
+   "band": 2,
+   "energy": -5.35,
+   "character": {
+    "Cd-d": 0.962
+   }
+  },
+  {
+   "band": 3,
+   "energy": -5.35,
+   "character": {
+    "Cd-d": 0.962
+   }
+  },
+  {
+   "band": 4,
+   "energy": -5.1146,
+   "character": {
+    "Cd-d": 0.996
+   }
+  },
+  {
+   "band": 5,
+   "energy": -5.1146,
+   "character": {
+    "Cd-d": 0.996
+   }
+  },
+  {
+   "band": 6,
+   "energy": 2.8478,
+   "character": {
+    "Te-p": 0.86,
+    "Cd-d": 0.09
+   }
+  },
+  {
+   "band": 7,
+   "energy": 2.8484,
+   "character": {
+    "Te-p": 0.86,
+    "Cd-d": 0.09
+   }
+  },
+  {
+   "band": 8,
+   "energy": 2.8484,
+   "character": {
+    "Te-p": 0.86,
+    "Cd-d": 0.09
+   }
+  },
+  {
+   "band": 9,
+   "energy": 3.4691,
+   "character": {
+    "Cd-s": 1.029
+   }
+  },
+  {
+   "band": 10,
+   "energy": 7.6589,
+   "character": {
+    "Cd-p": 0.717,
+    "Te-d": 0.238
+   }
+  },
+  {
+   "band": 11,
+   "energy": 7.6592,
+   "character": {
+    "Cd-p": 0.717,
+    "Te-d": 0.238
+   }
+  },
+  {
+   "band": 12,
+   "energy": 7.6592,
+   "character": {
+    "Cd-p": 0.717,
+    "Te-d": 0.238
+   }
+  },
+  {
+   "band": 13,
+   "energy": 13.7095,
+   "character": {
+    "Te-d": 0.68,
+    "Cd-d": 0.32
+   }
+  },
+  {
+   "band": 14,
+   "energy": 13.7095,
+   "character": {
+    "Te-d": 0.68,
+    "Cd-d": 0.32
+   }
+  },
+  {
+   "band": 15,
+   "energy": 19.1248,
+   "character": {
+    "Cd-d": 0.461,
+    "Te-d": 0.278,
+    "Cd-p": 0.128
+   }
+  },
+  {
+   "band": 16,
+   "energy": 19.125,
+   "character": {
+    "Cd-d": 0.461,
+    "Te-d": 0.278,
+    "Cd-p": 0.128
+   }
+  }
+ ],
+ "semicore": {
+  "element": "Cd",
+  "l": 2,
+  "label": "Cd-d",
+  "bands_sf": [
+   1,
+   6
+  ],
+  "min_fraction": 0.9621613355178807,
+  "bands_soc": [
+   2,
+   12
+  ],
+  "level_sf": -5.124651050369708,
+  "level_soc": -5.126618642626074,
+  "depth_below_vbm_sf": 7.973012332282474
+ },
+ "semicore_candidates": [
+  {
+   "element": "Cd",
+   "l": 2,
+   "label": "Cd-d",
+   "bands_sf": [
+    1,
+    6
+   ],
+   "min_fraction": 0.9621613355178807,
+   "bands_soc": [
+    2,
+    12
+   ],
+   "level_sf": -5.124651050369708,
+   "level_soc": -5.126618642626074,
+   "depth_below_vbm_sf": 7.973012332282474
+  },
+  {
+   "element": "Te",
+   "l": 0,
+   "label": "Te-s",
+   "bands_sf": [
+    0,
+    1
+   ],
+   "min_fraction": 0.8331380336290702,
+   "bands_soc": [
+    0,
+    2
+   ],
+   "level_sf": -7.763580348428564,
+   "level_soc": -7.7677368716755355,
+   "depth_below_vbm_sf": 10.611941630341331
+  }
+ ],
+ "gamma_vb_triplet": {
+  "sf": 2.848162434852345,
+  "delta_so": 0.874869028710147,
+  "soc_lower": 2.2600990063268713,
+  "soc_upper": 3.1349680350370184,
+  "filled": true
+ },
+ "gamma_band_order": {
+  "sf": 0.6209803382997752,
+  "soc": 0.3341747395412935,
+  "inverted": false,
+  "s_character_sf": 0.9944173144174921,
+  "s_character_soc": 0.9944173068445789
+ },
+ "sf_vs_cp2k_max_dev_ev": 3.381001995705901e-06,
+ "name": "CdTe_zb",
+ "functional": "PBE",
+ "basis": "DZVP-MOLOPT-PBE-GTH",
+ "potentials": {
+  "Cd": "GTH-PBE-q12",
+  "Te": "GTH-PBE-q6"
+ },
+ "cell_ang": [
+  [
+   -0.0,
+   3.282114,
+   3.282114
+  ],
+  [
+   3.282114,
+   0.0,
+   3.282114
+  ],
+  [
+   3.282114,
+   3.282114,
+   0.0
+  ]
+ ],
+ "n_bands_sf": 29,
+ "spacegroup": "F-43m",
+ "formula": "CdTe",
+ "cif": "CdTe_zb.cif"
+}

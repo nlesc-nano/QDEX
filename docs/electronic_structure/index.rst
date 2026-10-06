@@ -11,6 +11,7 @@ Topics in electronic structure and orbital analysis pair each derivation with th
    localization
    bonding_coop
    fuzzy_bands
+   bulk_bands
    orbital_cubes
    qp_analysis
    configuration

@@ -1,0 +1,273 @@
+{
+ "sf": {
+  "vbm": 2.7771318546665102,
+  "cbm": 3.328030129910525,
+  "gap": 0.5508982752440148,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "soc": {
+  "vbm": 2.8986524706942784,
+  "cbm": 3.328030129966313,
+  "gap": 0.4293776592720344,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "atoms": {
+  "Cd": 1,
+  "Se": 1
+ },
+ "gamma_characters_sf": [
+  {
+   "band": 0,
+   "energy": -9.6578,
+   "character": {
+    "Se-s": 0.85,
+    "Cd-s": 0.143
+   }
+  },
+  {
+   "band": 1,
+   "energy": -5.1026,
+   "character": {
+    "Cd-d": 0.945,
+    "Se-p": 0.053
+   }
+  },
+  {
+   "band": 2,
+   "energy": -5.1024,
+   "character": {
+    "Cd-d": 0.945,
+    "Se-p": 0.053
+   }
+  },
+  {
+   "band": 3,
+   "energy": -5.1024,
+   "character": {
+    "Cd-d": 0.945,
+    "Se-p": 0.053
+   }
+  },
+  {
+   "band": 4,
+   "energy": -4.7546,
+   "character": {
+    "Cd-d": 0.995
+   }
+  },
+  {
+   "band": 5,
+   "energy": -4.7546,
+   "character": {
+    "Cd-d": 0.995
+   }
+  },
+  {
+   "band": 6,
+   "energy": 2.7765,
+   "character": {
+    "Se-p": 0.882,
+    "Cd-d": 0.084
+   }
+  },
+  {
+   "band": 7,
+   "energy": 2.7771,
+   "character": {
+    "Se-p": 0.882,
+    "Cd-d": 0.084
+   }
+  },
+  {
+   "band": 8,
+   "energy": 2.7771,
+   "character": {
+    "Se-p": 0.882,
+    "Cd-d": 0.084
+   }
+  },
+  {
+   "band": 9,
+   "energy": 3.328,
+   "character": {
+    "Cd-s": 1.12
+   }
+  },
+  {
+   "band": 10,
+   "energy": 8.9306,
+   "character": {
+    "Cd-p": 0.734,
+    "Se-d": 0.234
+   }
+  },
+  {
+   "band": 11,
+   "energy": 8.9308,
+   "character": {
+    "Cd-p": 0.734,
+    "Se-d": 0.234
+   }
+  },
+  {
+   "band": 12,
+   "energy": 8.9308,
+   "character": {
+    "Cd-p": 0.734,
+    "Se-d": 0.234
+   }
+  },
+  {
+   "band": 13,
+   "energy": 15.5065,
+   "character": {
+    "Se-d": 0.681,
+    "Cd-d": 0.319
+   }
+  },
+  {
+   "band": 14,
+   "energy": 15.5065,
+   "character": {
+    "Se-d": 0.681,
+    "Cd-d": 0.319
+   }
+  },
+  {
+   "band": 15,
+   "energy": 20.5257,
+   "character": {
+    "Cd-d": 0.419,
+    "Cd-f": 0.185,
+    "Se-d": 0.174
+   }
+  },
+  {
+   "band": 16,
+   "energy": 20.5257,
+   "character": {
+    "Cd-d": 0.419,
+    "Cd-f": 0.185,
+    "Se-d": 0.174
+   }
+  }
+ ],
+ "semicore": {
+  "element": "Cd",
+  "l": 2,
+  "label": "Cd-d",
+  "bands_sf": [
+   1,
+   6
+  ],
+  "min_fraction": 0.9447821660200775,
+  "bands_soc": [
+   2,
+   12
+  ],
+  "level_sf": -4.809998962097987,
+  "level_soc": -4.812508385701925,
+  "depth_below_vbm_sf": 7.587130816764498
+ },
+ "semicore_candidates": [
+  {
+   "element": "Cd",
+   "l": 2,
+   "label": "Cd-d",
+   "bands_sf": [
+    1,
+    6
+   ],
+   "min_fraction": 0.9447821660200775,
+   "bands_soc": [
+    2,
+    12
+   ],
+   "level_sf": -4.809998962097987,
+   "level_soc": -4.812508385701925,
+   "depth_below_vbm_sf": 7.587130816764498
+  },
+  {
+   "element": "Se",
+   "l": 0,
+   "label": "Se-s",
+   "bands_sf": [
+    0,
+    1
+   ],
+   "min_fraction": 0.8497720355455761,
+   "bands_soc": [
+    0,
+    2
+   ],
+   "level_sf": -9.329403585103025,
+   "level_soc": -9.330503842458164,
+   "depth_below_vbm_sf": 12.106535439769536
+  }
+ ],
+ "gamma_vb_triplet": {
+  "sf": 2.7769371119392665,
+  "delta_so": 0.3613116960010232,
+  "soc_lower": 2.537146764975001,
+  "soc_upper": 2.898458460976024,
+  "filled": true
+ },
+ "gamma_band_order": {
+  "sf": 0.5510930179712514,
+  "soc": 0.429571668990286,
+  "inverted": false,
+  "s_character_sf": 0.990954720664576,
+  "s_character_soc": 0.9909547203749087
+ },
+ "sf_vs_cp2k_max_dev_ev": 8.612678961128495e-06,
+ "name": "CdSe_zb",
+ "functional": "PBE",
+ "basis": "DZVP-MOLOPT-PBE-GTH",
+ "potentials": {
+  "Cd": "GTH-PBE-q12",
+  "Se": "GTH-PBE-q6"
+ },
+ "cell_ang": [
+  [
+   -0.0,
+   3.070271,
+   3.070271
+  ],
+  [
+   3.070271,
+   0.0,
+   3.070271
+  ],
+  [
+   3.070271,
+   3.070271,
+   0.0
+  ]
+ ],
+ "n_bands_sf": 29,
+ "spacegroup": "F-43m",
+ "formula": "CdSe",
+ "cif": "CdSe_zb.cif"
+}

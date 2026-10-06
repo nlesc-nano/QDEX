@@ -3,6 +3,9 @@ import unittest
 
 import qdex.hardness as h
 
+PBE, QSGW = h.MATERIAL_DB["CDSE"][7], h.MATERIAL_DB["CDSE"][8]     # bulk spin-free PBE and QSGW gaps
+D = QSGW - PBE
+
 
 class TestBulkVertex(unittest.TestCase):
     def tearDown(self):
@@ -11,21 +14,21 @@ class TestBulkVertex(unittest.TestCase):
     def test_none_is_pure_qsgw(self):
         h.set_bulk_vertex("none", verbose=False)
         shift, info = h.bulk_qp_shift("CDSE", 1.457)
-        self.assertAlmostEqual(shift, 2.19 - 0.62)
+        self.assertAlmostEqual(shift, D)
         self.assertEqual(info["bulk_vertex_fraction"], 0.0)
 
     def test_full_applies_the_bulk_factor(self):
         h.set_bulk_vertex("full", 0.8, verbose=False)
         shift, info = h.bulk_qp_shift("CDSE", 2.639)
-        self.assertAlmostEqual(shift, 0.8 * (2.19 - 0.62))
-        self.assertAlmostEqual(info["bulk_vertex_correction_ev"], -0.2 * 1.57)
+        self.assertAlmostEqual(shift, 0.8 * D)
+        self.assertAlmostEqual(info["bulk_vertex_correction_ev"], -0.2 * D)
 
     def test_scaled_follows_the_penn_screening_fraction(self):
         h.set_bulk_vertex("scaled", 0.8, verbose=False)
-        d = 2.19 - 0.62
-        bulk, _ = h.bulk_qp_shift("CDSE", 0.62)             # no confinement: full bulk correction
+        d = D
+        bulk, _ = h.bulk_qp_shift("CDSE", PBE)              # no confinement: full bulk correction
         self.assertAlmostEqual(bulk, 0.8 * d)
-        shifts = [h.bulk_qp_shift("CDSE", g)[0] for g in (0.62, 1.0, 1.457, 2.639, 6.0)]
+        shifts = [h.bulk_qp_shift("CDSE", g)[0] for g in (PBE, 1.0, 1.457, 2.639, 6.0)]
         self.assertTrue(all(a <= b for a, b in zip(shifts, shifts[1:])))   # smaller dots keep more of the QSGW shift
         s12, info = h.bulk_qp_shift("CDSE", 2.639)
         f = (info["bulk_vertex_eps_eff"] - 1.0) / (6.2 - 1.0)

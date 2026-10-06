@@ -1,0 +1,274 @@
+{
+ "sf": {
+  "vbm": 3.5745409097358825,
+  "cbm": 3.574540909735982,
+  "gap": 9.947598300641403e-14,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "soc": {
+  "vbm": 3.8477053106511954,
+  "cbm": 3.8455154036027186,
+  "gap": -0.002189907048476769,
+  "vbm_k": [
+   0.0119,
+   0.0119,
+   0.0119
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "path",
+  "cbm_label": "Gamma"
+ },
+ "atoms": {
+  "Te": 1,
+  "Hg": 1
+ },
+ "gamma_characters_sf": [
+  {
+   "band": 0,
+   "energy": -8.0529,
+   "character": {
+    "Te-s": 0.84,
+    "Hg-s": 0.158
+   }
+  },
+  {
+   "band": 1,
+   "energy": -3.486,
+   "character": {
+    "Hg-d": 0.914,
+    "Te-p": 0.083
+   }
+  },
+  {
+   "band": 2,
+   "energy": -3.4847,
+   "character": {
+    "Hg-d": 0.914,
+    "Te-p": 0.083
+   }
+  },
+  {
+   "band": 3,
+   "energy": -3.4847,
+   "character": {
+    "Hg-d": 0.914,
+    "Te-p": 0.083
+   }
+  },
+  {
+   "band": 4,
+   "energy": -3.0073,
+   "character": {
+    "Hg-d": 0.992
+   }
+  },
+  {
+   "band": 5,
+   "energy": -3.0073,
+   "character": {
+    "Hg-d": 0.992
+   }
+  },
+  {
+   "band": 6,
+   "energy": 2.7701,
+   "character": {
+    "Hg-s": 0.934,
+    "Te-s": 0.065
+   }
+  },
+  {
+   "band": 7,
+   "energy": 3.5717,
+   "character": {
+    "Te-p": 0.822,
+    "Hg-d": 0.127
+   }
+  },
+  {
+   "band": 8,
+   "energy": 3.5745,
+   "character": {
+    "Te-p": 0.822,
+    "Hg-d": 0.127
+   }
+  },
+  {
+   "band": 9,
+   "energy": 3.5745,
+   "character": {
+    "Te-p": 0.822,
+    "Hg-d": 0.127
+   }
+  },
+  {
+   "band": 10,
+   "energy": 7.9361,
+   "character": {
+    "Hg-p": 0.755,
+    "Te-d": 0.206
+   }
+  },
+  {
+   "band": 11,
+   "energy": 7.9372,
+   "character": {
+    "Hg-p": 0.755,
+    "Te-d": 0.206
+   }
+  },
+  {
+   "band": 12,
+   "energy": 7.9372,
+   "character": {
+    "Hg-p": 0.755,
+    "Te-d": 0.206
+   }
+  },
+  {
+   "band": 13,
+   "energy": 14.4745,
+   "character": {
+    "Te-d": 0.673,
+    "Hg-d": 0.327
+   }
+  },
+  {
+   "band": 14,
+   "energy": 14.4745,
+   "character": {
+    "Te-d": 0.673,
+    "Hg-d": 0.327
+   }
+  },
+  {
+   "band": 15,
+   "energy": 19.5097,
+   "character": {
+    "Hg-d": 0.592,
+    "Te-d": 0.219,
+    "Hg-p": 0.115
+   }
+  },
+  {
+   "band": 16,
+   "energy": 19.51,
+   "character": {
+    "Hg-d": 0.592,
+    "Te-d": 0.219,
+    "Hg-p": 0.114
+   }
+  }
+ ],
+ "semicore": {
+  "element": "Hg",
+  "l": 2,
+  "label": "Hg-d",
+  "bands_sf": [
+   1,
+   6
+  ],
+  "min_fraction": 0.9135226845437565,
+  "bands_soc": [
+   2,
+   12
+  ],
+  "level_sf": -3.1133591639794433,
+  "level_soc": -3.143936436475392,
+  "depth_below_vbm_sf": 6.687900073715326
+ },
+ "semicore_candidates": [
+  {
+   "element": "Hg",
+   "l": 2,
+   "label": "Hg-d",
+   "bands_sf": [
+    1,
+    6
+   ],
+   "min_fraction": 0.9135226845437565,
+   "bands_soc": [
+    2,
+    12
+   ],
+   "level_sf": -3.1133591639794433,
+   "level_soc": -3.143936436475392,
+   "depth_below_vbm_sf": 6.687900073715326
+  },
+  {
+   "element": "Te",
+   "l": 0,
+   "label": "Te-s",
+   "bands_sf": [
+    0,
+    1
+   ],
+   "min_fraction": 0.8398681129838412,
+   "bands_soc": [
+    0,
+    2
+   ],
+   "level_sf": -7.570678197641098,
+   "level_soc": -7.580356935897444,
+   "depth_below_vbm_sf": 11.145219107376981
+  }
+ ],
+ "gamma_vb_triplet": {
+  "sf": 3.5735853616766775,
+  "delta_so": 0.776189631961655,
+  "soc_lower": 3.068379952074128,
+  "soc_upper": 3.844569584035783,
+  "filled": false
+ },
+ "gamma_band_order": {
+  "sf": -0.803460547280106,
+  "soc": -1.0744447668620136,
+  "inverted": true,
+  "s_character_sf": 0.9989012235729533,
+  "s_character_soc": 0.9989012223643965
+ },
+ "sf_vs_cp2k_max_dev_ev": 3.4151684218386436e-06,
+ "name": "HgTe_zb",
+ "functional": "PBE",
+ "basis": "DZVP-MOLOPT-PBE-GTH",
+ "potentials": {
+  "Hg": "GTH-PBE-q12",
+  "Te": "GTH-PBE-q6"
+ },
+ "cell_ang": [
+  [
+   -0.0,
+   3.289984,
+   3.289984
+  ],
+  [
+   3.289984,
+   0.0,
+   3.289984
+  ],
+  [
+   3.289984,
+   3.289984,
+   0.0
+  ]
+ ],
+ "n_bands_sf": 29,
+ "spacegroup": "F-43m",
+ "formula": "HgTe",
+ "cif": "HgTe_zb.cif"
+}

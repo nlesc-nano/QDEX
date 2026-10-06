@@ -52,7 +52,7 @@ setup(
     description="QDEX: Quantum Dot Excitations & Dynamics",
     author="Ivan Infante et al.",
     packages=find_packages(),
-    package_data={"qdex": ["data/*.json", "data/bulk_bands/*.bs"]},
+    package_data={"qdex": ["data/*.json", "data/bulk_bands/*.bs", "data/bulk_bands/*.bs.gz", "data/bulk_bands/*.json"]},
     include_package_data=True,
     ext_modules=[CMakeExtension("libint_cpp", sourcedir="libint")],
     cmdclass={"build_ext": CMakeBuild},

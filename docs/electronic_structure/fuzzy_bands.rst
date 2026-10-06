@@ -115,15 +115,16 @@ The dashboards draw the bulk band structure of the material (``qdex/data/bulk_ba
 CP2K PBE with the same basis and pseudopotentials) over the fuzzy map. The bulk segments
 are placed on the fuzzy path by their k-coordinates.
 
-The bulk bands are put on the dot's energy axis with a semicore level: the Cd 4d level of
-the dot is the Mulliken-weighted 4d energy of its *interior, bulk-like* Cd atoms (four Se
-neighbours, no ligand, inner half by radius), and the bulk Cd 4d bands are placed there.
+The bulk bands are put on the dot's energy axis with a semicore level (from ``<name>.json``:
+the cation d band, Cs 5p in the perovskites, otherwise the anion s band). For CdSe the Cd 4d
+level of the dot is the Mulliken-weighted 4d energy of its *interior, bulk-like* Cd atoms (four
+Se neighbours, no ligand, inner half by radius), and the bulk Cd 4d bands are placed there.
 Cd bonded to Cl has its 4d level about 0.4 eV deeper, so averaging over all Cd atoms would
 put the bulk bands too low. With the anchor in place the remaining offsets are physical:
 confinement pushes the dot states away from the band extrema (down at the valence band
 maximum, up at a valence band minimum such as the bottom of the p band at L).
 
-The SOC dashboard uses spin-orbit bulk bands (``<material>_bulk_soc.bs``) when they exist,
+The SOC dashboard uses spin-orbit bulk bands (``<name>_soc.bs.gz``) when they exist,
 so that the :math:`\Gamma_8/\Gamma_7` splitting and the split bands at :math:`L` are in
 the overlay as well. They are computed with the same GTH-SOC operator as the dots, from a
 CP2K k-point run that prints the real-space Kohn-Sham and overlap matrices:
@@ -149,7 +150,9 @@ CP2K k-point run that prints the real-space Kohn-Sham and overlap matrices:
 .. code-block:: bash
 
    python -m qdex.bulk_soc RUN_DIR --basis BASIS_MOLOPT_UZH --gth GTH_SOC_POTENTIALS \
-       --n-bands 29 -o qdex/data/bulk_bands/CdSe_bulk_soc.bs
+       --name CdSe_zb --cif CdSe_zb.cif -d qdex/data/bulk_bands --gzip
+
+The bulk bands of all the materials of the QDSpaceWebApp are listed in :doc:`bulk_bands`.
 
 :math:`H(\mathbf{k}) = \sum_\mathbf{R} e^{i\mathbf{k}\cdot\mathbf{R}} \langle\chi_\mu(0)|H|\chi_\nu(\mathbf{R})\rangle`
 and :math:`S(\mathbf{k})` are built at every point of the path, the SOC operator from

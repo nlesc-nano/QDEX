@@ -1,0 +1,277 @@
+{
+ "sf": {
+  "vbm": 4.598528970956572,
+  "cbm": 5.181907560710191,
+  "gap": 0.583378589753619,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "soc": {
+  "vbm": 4.629327057605971,
+  "cbm": 5.1819075607455884,
+  "gap": 0.5525805031396178,
+  "vbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "cbm_k": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "vbm_label": "Gamma",
+  "cbm_label": "Gamma"
+ },
+ "atoms": {
+  "P": 1,
+  "In": 1
+ },
+ "gamma_characters_sf": [
+  {
+   "band": 0,
+   "energy": -9.6488,
+   "character": {
+    "In-d": 0.987
+   }
+  },
+  {
+   "band": 1,
+   "energy": -9.6483,
+   "character": {
+    "In-d": 0.987
+   }
+  },
+  {
+   "band": 2,
+   "energy": -9.6483,
+   "character": {
+    "In-d": 0.987
+   }
+  },
+  {
+   "band": 3,
+   "energy": -9.5033,
+   "character": {
+    "In-d": 0.998
+   }
+  },
+  {
+   "band": 4,
+   "energy": -9.5033,
+   "character": {
+    "In-d": 0.998
+   }
+  },
+  {
+   "band": 5,
+   "energy": -6.7917,
+   "character": {
+    "P-s": 0.657,
+    "In-s": 0.336
+   }
+  },
+  {
+   "band": 6,
+   "energy": 4.5976,
+   "character": {
+    "P-p": 0.828,
+    "In-d": 0.086,
+    "In-p": 0.074
+   }
+  },
+  {
+   "band": 7,
+   "energy": 4.5985,
+   "character": {
+    "P-p": 0.828,
+    "In-d": 0.086,
+    "In-p": 0.074
+   }
+  },
+  {
+   "band": 8,
+   "energy": 4.5985,
+   "character": {
+    "P-p": 0.828,
+    "In-d": 0.086,
+    "In-p": 0.074
+   }
+  },
+  {
+   "band": 9,
+   "energy": 5.1819,
+   "character": {
+    "In-s": 0.83,
+    "P-s": 0.133
+   }
+  },
+  {
+   "band": 10,
+   "energy": 8.7248,
+   "character": {
+    "In-p": 0.777,
+    "P-d": 0.148,
+    "P-p": 0.071
+   }
+  },
+  {
+   "band": 11,
+   "energy": 8.7252,
+   "character": {
+    "In-p": 0.777,
+    "P-d": 0.148,
+    "P-p": 0.071
+   }
+  },
+  {
+   "band": 12,
+   "energy": 8.7253,
+   "character": {
+    "In-p": 0.777,
+    "P-d": 0.148,
+    "P-p": 0.071
+   }
+  },
+  {
+   "band": 13,
+   "energy": 15.5792,
+   "character": {
+    "In-d": 0.517,
+    "P-d": 0.483
+   }
+  },
+  {
+   "band": 14,
+   "energy": 15.5792,
+   "character": {
+    "In-d": 0.517,
+    "P-d": 0.483
+   }
+  },
+  {
+   "band": 15,
+   "energy": 19.8053,
+   "character": {
+    "In-d": 0.52,
+    "In-f": 0.269,
+    "P-d": 0.112
+   }
+  },
+  {
+   "band": 16,
+   "energy": 19.8054,
+   "character": {
+    "In-d": 0.52,
+    "In-f": 0.269,
+    "P-d": 0.112
+   }
+  }
+ ],
+ "semicore": {
+  "element": "In",
+  "l": 2,
+  "label": "In-d",
+  "bands_sf": [
+   0,
+   5
+  ],
+  "min_fraction": 0.9866248313466017,
+  "bands_soc": [
+   0,
+   10
+  ],
+  "level_sf": -9.589995933023728,
+  "level_soc": -9.592196658735041,
+  "depth_below_vbm_sf": 14.1885249039803
+ },
+ "semicore_candidates": [
+  {
+   "element": "In",
+   "l": 2,
+   "label": "In-d",
+   "bands_sf": [
+    0,
+    5
+   ],
+   "min_fraction": 0.9866248313466017,
+   "bands_soc": [
+    0,
+    10
+   ],
+   "level_sf": -9.589995933023728,
+   "level_soc": -9.592196658735041,
+   "depth_below_vbm_sf": 14.1885249039803
+  },
+  {
+   "element": "P",
+   "l": 0,
+   "label": "P-s",
+   "bands_sf": [
+    5,
+    6
+   ],
+   "min_fraction": 0.656631240249307,
+   "bands_soc": [
+    10,
+    12
+   ],
+   "level_sf": -5.226067730904841,
+   "level_soc": -5.2241874011479155,
+   "depth_below_vbm_sf": 9.824596701861413
+  }
+ ],
+ "gamma_vb_triplet": {
+  "sf": 4.598211093991874,
+  "delta_so": 0.09723983846308037,
+  "soc_lower": 4.531770230123387,
+  "soc_upper": 4.629010068586467,
+  "filled": true
+ },
+ "gamma_band_order": {
+  "sf": 0.5836964667183029,
+  "soc": 0.5528974921591399,
+  "inverted": false,
+  "s_character_sf": 0.9627610677844204,
+  "s_character_soc": 0.9627610672463113
+ },
+ "sf_vs_cp2k_max_dev_ev": 1.1553111384898784e-05,
+ "name": "InP_zb",
+ "functional": "PBE",
+ "basis": "DZVP-MOLOPT-PBE-GTH",
+ "potentials": {
+  "In": "GTH-PBE-q13",
+  "P": "GTH-PBE-q5"
+ },
+ "cell_ang": [
+  [
+   -0.0,
+   2.951977,
+   2.951977
+  ],
+  [
+   2.951977,
+   0.0,
+   2.951977
+  ],
+  [
+   2.951977,
+   2.951977,
+   0.0
+  ]
+ ],
+ "n_bands_sf": 29,
+ "spacegroup": "F-43m",
+ "formula": "InP",
+ "cif": "InP_zb.cif"
+}

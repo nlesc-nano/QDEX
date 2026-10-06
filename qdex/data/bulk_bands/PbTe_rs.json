@@ -1,0 +1,211 @@
+{
+ "sf": {
+  "vbm": 3.6275044567010153,
+  "cbm": 4.20743510666099,
+  "gap": 0.5799306499599743,
+  "vbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "cbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "vbm_label": "L",
+  "cbm_label": "L"
+ },
+ "soc": {
+  "vbm": 3.6779796841649945,
+  "cbm": 3.7046916085330777,
+  "gap": 0.026711924368083118,
+  "vbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "cbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "vbm_label": "L",
+  "cbm_label": "L"
+ },
+ "atoms": {
+  "Te": 1,
+  "Pb": 1
+ },
+ "gamma_characters_sf": [
+  {
+   "band": 0,
+   "energy": -8.2926,
+   "character": {
+    "Te-s": 0.661,
+    "Pb-s": 0.339
+   }
+  },
+  {
+   "band": 1,
+   "energy": -2.1135,
+   "character": {
+    "Pb-s": 0.684,
+    "Te-s": 0.316
+   }
+  },
+  {
+   "band": 2,
+   "energy": 2.3055,
+   "character": {
+    "Te-p": 0.762,
+    "Pb-p": 0.238
+   }
+  },
+  {
+   "band": 3,
+   "energy": 2.3059,
+   "character": {
+    "Te-p": 0.762,
+    "Pb-p": 0.238
+   }
+  },
+  {
+   "band": 4,
+   "energy": 2.3059,
+   "character": {
+    "Te-p": 0.762,
+    "Pb-p": 0.238
+   }
+  },
+  {
+   "band": 5,
+   "energy": 7.946,
+   "character": {
+    "Pb-p": 0.754,
+    "Te-p": 0.246
+   }
+  },
+  {
+   "band": 6,
+   "energy": 7.946,
+   "character": {
+    "Pb-p": 0.754,
+    "Te-p": 0.246
+   }
+  },
+  {
+   "band": 7,
+   "energy": 7.9469,
+   "character": {
+    "Pb-p": 0.754,
+    "Te-p": 0.246
+   }
+  },
+  {
+   "band": 8,
+   "energy": 9.6624,
+   "character": {
+    "Pb-d": 0.681,
+    "Te-d": 0.319
+   }
+  },
+  {
+   "band": 9,
+   "energy": 9.6624,
+   "character": {
+    "Pb-d": 0.681,
+    "Te-d": 0.319
+   }
+  },
+  {
+   "band": 10,
+   "energy": 9.6624,
+   "character": {
+    "Pb-d": 0.681,
+    "Te-d": 0.319
+   }
+  },
+  {
+   "band": 11,
+   "energy": 11.9663,
+   "character": {
+    "Pb-d": 0.585,
+    "Te-d": 0.415
+   }
+  },
+  {
+   "band": 12,
+   "energy": 11.9663,
+   "character": {
+    "Pb-d": 0.585,
+    "Te-d": 0.415
+   }
+  }
+ ],
+ "semicore": {
+  "element": "Te",
+  "l": 0,
+  "label": "Te-s",
+  "bands_sf": [
+   0,
+   1
+  ],
+  "min_fraction": 0.6605895842822976,
+  "bands_soc": [
+   0,
+   2
+  ],
+  "level_sf": -7.11634045210974,
+  "level_soc": -7.117314644412633,
+  "depth_below_vbm_sf": 10.743844908810756
+ },
+ "semicore_candidates": [
+  {
+   "element": "Te",
+   "l": 0,
+   "label": "Te-s",
+   "bands_sf": [
+    0,
+    1
+   ],
+   "min_fraction": 0.6605895842822976,
+   "bands_soc": [
+    0,
+    2
+   ],
+   "level_sf": -7.11634045210974,
+   "level_soc": -7.117314644412633,
+   "depth_below_vbm_sf": 10.743844908810756
+  }
+ ],
+ "sf_vs_cp2k_max_dev_ev": 1.3333690930039666e-05,
+ "name": "PbTe_rs",
+ "functional": "PBE",
+ "basis": "DZVP-MOLOPT-PBE-GTH",
+ "potentials": {
+  "Pb": "GTH-PBE-q4",
+  "Te": "GTH-PBE-q6"
+ },
+ "cell_ang": [
+  [
+   -0.0,
+   3.270897,
+   3.270897
+  ],
+  [
+   3.270897,
+   0.0,
+   3.270897
+  ],
+  [
+   3.270897,
+   3.270897,
+   0.0
+  ]
+ ],
+ "n_bands_sf": 25,
+ "spacegroup": "Fm-3m",
+ "formula": "TePb",
+ "cif": "PbTe_rs.cif"
+}

@@ -1,0 +1,327 @@
+{
+ "sf": {
+  "vbm": 1.7921190046959634,
+  "cbm": 3.7474805237622126,
+  "gap": 1.9553615190662492,
+  "vbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "cbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "vbm_label": "R",
+  "cbm_label": "R"
+ },
+ "soc": {
+  "vbm": 1.793508917601724,
+  "cbm": 2.8469767431507416,
+  "gap": 1.0534678255490175,
+  "vbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "cbm_k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "vbm_label": "R",
+  "cbm_label": "R"
+ },
+ "atoms": {
+  "Cs": 1,
+  "Pb": 1,
+  "Cl": 3
+ },
+ "gamma_characters_sf": [
+  {
+   "band": 0,
+   "energy": -19.4481,
+   "character": {
+    "Cs-s": 1.0
+   }
+  },
+  {
+   "band": 1,
+   "energy": -13.1442,
+   "character": {
+    "Cl-s": 0.928,
+    "Pb-s": 0.065
+   }
+  },
+  {
+   "band": 2,
+   "energy": -12.5589,
+   "character": {
+    "Cl-s": 0.969
+   }
+  },
+  {
+   "band": 3,
+   "energy": -12.5589,
+   "character": {
+    "Cl-s": 0.969
+   }
+  },
+  {
+   "band": 4,
+   "energy": -6.2694,
+   "character": {
+    "Cs-p": 0.987
+   }
+  },
+  {
+   "band": 5,
+   "energy": -6.2694,
+   "character": {
+    "Cs-p": 0.987
+   }
+  },
+  {
+   "band": 6,
+   "energy": -6.2694,
+   "character": {
+    "Cs-p": 0.987
+   }
+  },
+  {
+   "band": 7,
+   "energy": -4.8816,
+   "character": {
+    "Pb-s": 0.925,
+    "Cl-s": 0.061
+   }
+  },
+  {
+   "band": 8,
+   "energy": -2.7112,
+   "character": {
+    "Cl-p": 0.806,
+    "Pb-p": 0.184
+   }
+  },
+  {
+   "band": 9,
+   "energy": -2.7112,
+   "character": {
+    "Cl-p": 0.806,
+    "Pb-p": 0.184
+   }
+  },
+  {
+   "band": 10,
+   "energy": -2.7112,
+   "character": {
+    "Cl-p": 0.806,
+    "Pb-p": 0.184
+   }
+  },
+  {
+   "band": 11,
+   "energy": -0.6119,
+   "character": {
+    "Cl-p": 1.0
+   }
+  },
+  {
+   "band": 12,
+   "energy": -0.6119,
+   "character": {
+    "Cl-p": 1.0
+   }
+  },
+  {
+   "band": 13,
+   "energy": -0.6119,
+   "character": {
+    "Cl-p": 1.0
+   }
+  },
+  {
+   "band": 14,
+   "energy": -0.5274,
+   "character": {
+    "Cl-p": 0.975
+   }
+  },
+  {
+   "band": 15,
+   "energy": -0.5274,
+   "character": {
+    "Cl-p": 0.975
+   }
+  },
+  {
+   "band": 16,
+   "energy": -0.5274,
+   "character": {
+    "Cl-p": 0.975
+   }
+  },
+  {
+   "band": 17,
+   "energy": 5.2539,
+   "character": {
+    "Cs-s": 1.107
+   }
+  },
+  {
+   "band": 18,
+   "energy": 6.4087,
+   "character": {
+    "Cs-d": 0.935,
+    "Cl-d": 0.05
+   }
+  },
+  {
+   "band": 19,
+   "energy": 6.4087,
+   "character": {
+    "Cs-d": 0.935,
+    "Cl-d": 0.05
+   }
+  },
+  {
+   "band": 20,
+   "energy": 7.2645,
+   "character": {
+    "Cs-d": 0.691,
+    "Pb-d": 0.209,
+    "Cl-d": 0.1
+   }
+  },
+  {
+   "band": 21,
+   "energy": 7.2645,
+   "character": {
+    "Cs-d": 0.691,
+    "Pb-d": 0.209,
+    "Cl-d": 0.1
+   }
+  },
+  {
+   "band": 22,
+   "energy": 7.2645,
+   "character": {
+    "Cs-d": 0.691,
+    "Pb-d": 0.209,
+    "Cl-d": 0.1
+   }
+  },
+  {
+   "band": 23,
+   "energy": 7.9496,
+   "character": {
+    "Pb-p": 0.919,
+    "Cl-p": 0.083
+   }
+  },
+  {
+   "band": 24,
+   "energy": 7.9496,
+   "character": {
+    "Pb-p": 0.919,
+    "Cl-p": 0.083
+   }
+  }
+ ],
+ "semicore": {
+  "element": "Cs",
+  "l": 1,
+  "label": "Cs-p",
+  "bands_sf": [
+   4,
+   7
+  ],
+  "min_fraction": 0.9874461117186437,
+  "bands_soc": [
+   8,
+   14
+  ],
+  "level_sf": -6.35302776188867,
+  "level_soc": -6.456966349730492,
+  "depth_below_vbm_sf": 8.145146766584634
+ },
+ "semicore_candidates": [
+  {
+   "element": "Cs",
+   "l": 1,
+   "label": "Cs-p",
+   "bands_sf": [
+    4,
+    7
+   ],
+   "min_fraction": 0.9874461117186437,
+   "bands_soc": [
+    8,
+    14
+   ],
+   "level_sf": -6.35302776188867,
+   "level_soc": -6.456966349730492,
+   "depth_below_vbm_sf": 8.145146766584634
+  },
+  {
+   "element": "Cl",
+   "l": 0,
+   "label": "Cl-s",
+   "bands_sf": [
+    1,
+    4
+   ],
+   "min_fraction": 0.9275167217309271,
+   "bands_soc": [
+    2,
+    8
+   ],
+   "level_sf": -12.751984536899702,
+   "level_soc": -12.752257342328848,
+   "depth_below_vbm_sf": 14.544103541595666
+  }
+ ],
+ "cbm_triplet": {
+  "k": [
+   0.5,
+   0.5,
+   0.5
+  ],
+  "sf": 3.7474805762093784,
+  "delta_so": 1.317026415089766,
+  "soc_lower": 2.8469767431507385,
+  "soc_upper": 4.164003158240504
+ },
+ "sf_vs_cp2k_max_dev_ev": 4.696879408783161e-05,
+ "name": "CsPbCl3_cubic",
+ "functional": "PBE",
+ "basis": "DZVP-MOLOPT-PBE-GTH",
+ "potentials": {
+  "Cl": "GTH-PBE-q7",
+  "Cs": "GTH-PBE-q9",
+  "Pb": "GTH-PBE-q4"
+ },
+ "cell_ang": [
+  [
+   5.679845,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   5.679845,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   5.679845
+  ]
+ ],
+ "n_bands_sf": 37,
+ "spacegroup": "Pm-3m",
+ "formula": "CsPbCl3",
+ "cif": "CsPbCl3_cubic.cif"
+}

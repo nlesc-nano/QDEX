@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import time
 from pathlib import Path
@@ -205,7 +206,7 @@ def put_orbitals(store, group, energies, occupation, analysis, shells, coop_pair
            coop="2 sum_{A-B} C_A S_AB C_B per orbital (non-zero within ewin +- 1 eV)")
 
 
-def put_fuzzy(store, group, kpts, labels, energies, intensity, sigma, ewin, indices=None, kpts_frac=None):
+def put_fuzzy(store, group, kpts, labels, energies, intensity, sigma, ewin, indices=None, kpts_frac=None, cif=None):
     """Raw fuzzy-band weights |<phi_n|k>|^2 along the k-path (smear with `sigma` to plot)."""
     ticks = [(i, str(l).replace("\\Gamma", "Γ").replace("GAMMA", "Γ").replace("$", ""))
              for i, l in enumerate(labels) if l]
@@ -219,6 +220,8 @@ def put_fuzzy(store, group, kpts, labels, energies, intensity, sigma, ewin, indi
         s.put("electronic", f"{group}/fuzzy/index", np.asarray(indices, int))
     if kpts_frac is not None:   # same path in the primitive reciprocal basis (places the bulk bands)
         s.put("electronic", f"{group}/fuzzy/kpoints_frac", np.asarray(kpts_frac, float))
+    if cif:
+        s.attr("electronic", f"{group}/fuzzy", cif=os.path.basename(str(cif)))
     s.attr("electronic", f"{group}/fuzzy", sigma_ev=float(sigma), ewin_ev=list(map(float, ewin)),
            note="intensity[state, k] = |<phi_state|k>|^2; plot sum_state intensity * Gauss(E - energy, sigma)")
 

@@ -117,9 +117,11 @@ def fuzzy_dashboards(el, run_dir: Path, out: Path, cubes: bool = True):
         html = out / f"fuzzy_dashboard_{prefix}.html"
         anchor = f"{prefix}/bulk_anchor/semicore_level_ev"
         semicore = float(el[anchor][()]) if anchor in el else None
+        cif = _str(el[f"{prefix}/fuzzy"].attrs.get("cif", "")) or None
+        label = _str(el["sf/bulk_anchor"].attrs.get("label", "")) or None if "sf/bulk_anchor" in el else None
         generate_interactive_plot(prefix=prefix, material=material, ef=0.0, e_homo=e_homo, e_lumo=e_lumo,
                                   normalize_coop=False, energy_label="DFT MO energy (eV)", output_html=str(html),
-                                  bulk_semicore_rel=semicore)
+                                  bulk_semicore_rel=semicore, bulk_cif=cif, bulk_semicore_label=label)
         made.append(html)
     return made
 
