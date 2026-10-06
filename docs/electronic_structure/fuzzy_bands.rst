@@ -58,6 +58,42 @@ where :math:`\mathcal{S}_g` denotes reciprocal shells controlled by the keyword 
 * ``g_shell: 1``: 27 reciprocal lattice replicas (:math:`h, k, l \in \{-1, 0, +1\}`).
 * ``g_shell: 2``: 125 reciprocal lattice replicas.
 
+Folding is needed whenever a band edge has little weight at :math:`\mathbf{G} = 0`.
+The CdSe valence-band maximum at :math:`\Gamma` is Se 4p-like: by symmetry its
+:math:`\mathbf{G} = 0` component vanishes, so without folding the top of the valence
+band is invisible at :math:`\Gamma`. Convergence for Cd16Se13Cl6 and
+Cd68Se55Cl26 (PBE/DZVP, zinc-blende k-path, relative to ``g_shell: 3`` = 343
+replicas; the map is the energy-smeared spin-free fuzzy map):
+
+.. list-table::
+   :header-rows: 1
+
+   * - setting
+     - map difference
+     - VBM weight
+     - VBM weight at Γ
+     - CBM weight
+   * - no folding
+     - 80-83 %
+     - 5-11 %
+     - 0
+     - 72 %
+   * - ``g_shell: 1``
+     - 7 %
+     - 79-86 %
+     - 76-83 %
+     - 94-97 %
+   * - ``g_shell: 2``
+     - 1 %
+     - 98 %
+     - 97-99 %
+     - 99.5 %
+
+``fold_to_bz: true`` with ``g_shell: 2`` is the recommended setting. The cost grows
+linearly with the number of replicas and stays small next to the rest of a run
+(two seconds more than ``g_shell: 1`` on Cd68). The plane-wave transforms are
+computed one replica at a time, so memory does not grow with ``g_shell``.
+
 
 Automated High-Symmetry Paths & PCA Alignment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

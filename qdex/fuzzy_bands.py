@@ -444,44 +444,48 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         core_idx = alpha_plot_indices[alpha_plot_indices < soc_active_indices[0]]
         virt_idx = alpha_plot_indices[alpha_plot_indices > soc_active_indices[-1]]
         
-        if fold_to_bz:
-            G_vecs = make_reciprocal_replicas(reciprocal_matrix, g_shell)
-            qpts_cart = (kpts_cart[:, None, :] + G_vecs[None, :, :]).reshape(-1, 3)
-        else:
-            G_vecs = None
-            qpts_cart = kpts_cart
-
-        qpts_bohr = qpts_cart / 1.8897259886
+        # Plane-wave transforms one G replica at a time: all k+G points at once would need
+        # n_AO x n_k x n_G complex numbers (~25 GB for 2,000 atoms at g_shell 2).
+        G_vecs = make_reciprocal_replicas(reciprocal_matrix, g_shell) if fold_to_bz else np.zeros((1, 3))
         import libint_cpp
-        F_ao = libint_cpp.ao_ft_complex(shells, qpts_bohr, args.nthreads)
-
         alpha_needed = np.unique(np.concatenate([core_idx, soc_active_indices, virt_idx])).astype(int)
-        F_mo_sf_needed = C_dense[:, alpha_needed].T.conj() @ F_ao
         alpha_pos = {int(idx): pos for pos, idx in enumerate(alpha_needed)}
-
-        def take_alpha(indices):
-            if len(indices) == 0:
-                return np.zeros((0, F_ao.shape[1]), dtype=complex)
-            return F_mo_sf_needed[[alpha_pos[int(idx)] for idx in indices], :]
-
         if is_uks and soc_active_indices_beta is not None:
             beta_plot_indices = fuzzy_energy_indices(eps_beta_shifted, dft_ewin, sigma_use, homo_index=homo_index_beta)
             core_idx_b = beta_plot_indices[beta_plot_indices < soc_active_indices_beta[0]]
             virt_idx_b = beta_plot_indices[beta_plot_indices > soc_active_indices_beta[-1]]
             beta_needed = np.unique(np.concatenate([core_idx_b, soc_active_indices_beta, virt_idx_b])).astype(int)
-            F_mo_beta_needed = C_beta_dense[:, beta_needed].T.conj() @ F_ao
             beta_pos = {int(idx): pos for pos, idx in enumerate(beta_needed)}
 
-            def take_beta(indices):
+        def spinor_ft(qpts_cart):
+            """Plane-wave amplitudes of the core, active (spinor) and virtual states at qpts."""
+            F_ao = libint_cpp.ao_ft_complex(shells, qpts_cart / 1.8897259886, args.nthreads)
+            F_mo_sf_needed = C_dense[:, alpha_needed].T.conj() @ F_ao
+
+            def take_alpha(indices):
                 if len(indices) == 0:
                     return np.zeros((0, F_ao.shape[1]), dtype=complex)
-                return F_mo_beta_needed[[beta_pos[int(idx)] for idx in indices], :]
+                return F_mo_sf_needed[[alpha_pos[int(idx)] for idx in indices], :]
 
-            F_mo_act = take_alpha(soc_active_indices)
-            F_mo_act_b = take_beta(soc_active_indices_beta)
-            F_spinor_act = soc_U_act.T.conj() @ np.vstack([F_mo_act, F_mo_act_b])
-            F_spinor_core = np.vstack([take_alpha(core_idx), take_beta(core_idx_b)])
-            F_spinor_virt = np.vstack([take_alpha(virt_idx), take_beta(virt_idx_b)])
+            if is_uks and soc_active_indices_beta is not None:
+                F_mo_beta_needed = C_beta_dense[:, beta_needed].T.conj() @ F_ao
+
+                def take_beta(indices):
+                    if len(indices) == 0:
+                        return np.zeros((0, F_ao.shape[1]), dtype=complex)
+                    return F_mo_beta_needed[[beta_pos[int(idx)] for idx in indices], :]
+
+                F_act = soc_U_act.T.conj() @ np.vstack([take_alpha(soc_active_indices), take_beta(soc_active_indices_beta)])
+                F_core = np.vstack([take_alpha(core_idx), take_beta(core_idx_b)])
+                F_virt = np.vstack([take_alpha(virt_idx), take_beta(virt_idx_b)])
+            else:
+                F_mo_act = take_alpha(soc_active_indices)
+                F_act = soc_U_act.T.conj() @ np.vstack([F_mo_act, F_mo_act])
+                F_core = np.vstack([take_alpha(core_idx), take_alpha(core_idx)])
+                F_virt = np.vstack([take_alpha(virt_idx), take_alpha(virt_idx)])
+            return np.vstack([F_core, F_act, F_virt])
+
+        if is_uks and soc_active_indices_beta is not None:
             E_core = np.concatenate([eps_shifted[core_idx], eps_beta_shifted[core_idx_b]])
             E_virt = np.concatenate([eps_shifted[virt_idx], eps_beta_shifted[virt_idx_b]])
             if eps_abs is not None and eps_beta_abs is not None and qp_energies_abs is not None and qp_energies_beta_abs is not None and soc_E_abs_act is not None:
@@ -493,10 +497,6 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             else:
                 soc_E_qp_act = E_core_qp = E_virt_qp = None
         else:
-            F_mo_act = take_alpha(soc_active_indices)
-            F_spinor_act = soc_U_act.T.conj() @ np.vstack([F_mo_act, F_mo_act])
-            F_spinor_core = np.vstack([take_alpha(core_idx), take_alpha(core_idx)])
-            F_spinor_virt = np.vstack([take_alpha(virt_idx), take_alpha(virt_idx)])
             E_core = np.concatenate([eps_shifted[core_idx], eps_shifted[core_idx]])
             E_virt = np.concatenate([eps_shifted[virt_idx], eps_shifted[virt_idx]])
             if eps_abs is not None and qp_energies_abs is not None and soc_E_abs_act is not None:
@@ -508,7 +508,6 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             else:
                 soc_E_qp_act = E_core_qp = E_virt_qp = None
 
-        F_spinor_unsorted = np.vstack([F_spinor_core, F_spinor_act, F_spinor_virt])
         eps_soc_unsorted = np.concatenate([E_core, soc_E_act, E_virt])
 
         plot_keep = fuzzy_energy_mask(eps_soc_unsorted, dft_ewin, sigma_use)
@@ -519,15 +518,14 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         if above_zero.size:
             plot_keep[above_zero[np.argmin(eps_soc_unsorted[above_zero])]] = True
 
-        F_spinor_plot_unsorted = F_spinor_unsorted[plot_keep, :]
+        # folded weights sum_G |F(k+G)|^2 of the plotted states (unsorted order)
+        I_plot_unsorted = np.zeros((int(plot_keep.sum()), len(kpts_cart)))
+        for G in G_vecs:
+            I_plot_unsorted += np.abs(spinor_ft(kpts_cart + G)[plot_keep, :]) ** 2
         eps_soc_plot_unsorted = eps_soc_unsorted[plot_keep]
         sort_idx = np.argsort(eps_soc_plot_unsorted)
         eps_soc = eps_soc_plot_unsorted[sort_idx]
-        F_spinor = F_spinor_plot_unsorted[sort_idx, :]
-        if fold_to_bz:
-            intensity_soc = np.sum(np.abs(F_spinor.reshape(F_spinor.shape[0], len(kpts_cart), len(G_vecs)))**2, axis=2)
-        else:
-            intensity_soc = np.abs(F_spinor)**2
+        intensity_soc = I_plot_unsorted[sort_idx, :]
         soc_ewin = dft_ewin
         occupied_plot = np.where(eps_soc <= 0.0)[0]
         global_spinor_homo_idx = int(occupied_plot[-1]) if occupied_plot.size else 0
@@ -557,11 +555,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 soc_qp_ewin = auto_energy_window(eps_soc_qp_unsorted, sigma_ev=sigma_use)
             sort_idx_qp = np.argsort(eps_soc_qp_unsorted)
             eps_soc_qp = eps_soc_qp_unsorted[sort_idx_qp]
-            F_spinor_qp = F_spinor_plot_unsorted[sort_idx_qp, :]
-            if fold_to_bz:
-                intensity_soc_qp = np.sum(np.abs(F_spinor_qp.reshape(F_spinor_qp.shape[0], len(kpts_cart), len(G_vecs)))**2, axis=2)
-            else:
-                intensity_soc_qp = np.abs(F_spinor_qp)**2
+            intensity_soc_qp = I_plot_unsorted[sort_idx_qp, :]
             smear_and_export_fuzzy(intensity_soc_qp, eps_soc_qp, labels, soc_qp_ewin, sigma_use, prefix="soc_qp")
         
         if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
