@@ -32,15 +32,17 @@ def _trivial_crossing_permutation(S_mat, lock_above=0.5):
     in the adiabatic basis. States with a collapsed diagonal are free to
     match the partner that actually carries their character.
     """
-    cost = 1.0 - np.abs(S_mat) ** 2
     diag_mag = np.abs(np.diag(S_mat))
     locked = diag_mag >= lock_above
-    if np.any(locked):
-        cost = np.array(cost, copy=True)
-        cost[locked, :] = 1.0e6
-        idx = np.where(locked)[0]
-        cost[idx, idx] = 0.0
-    _rows, col_ind = linear_sum_assignment(cost)
+    col_ind = np.arange(S_mat.shape[0])
+    # A locked state keeps its own column, so no other state can take it: the assignment is the
+    # identity on the locked states and a Hungarian problem on the unlocked block only (a few per
+    # cent of the states; the full 2600 x 2600 problem of the SOC spinors takes seconds).
+    free = np.where(~locked)[0]
+    if free.size > 1:
+        cost = 1.0 - np.abs(S_mat[np.ix_(free, free)]) ** 2
+        _rows, sub = linear_sum_assignment(cost)
+        col_ind[free] = free[sub]
     return col_ind
 
 
@@ -141,14 +143,16 @@ def align_degenerate_blocks(S_mat, U_list, eps_next, tol=1.0e-5):
     Returns (S_aligned, U_list_aligned, n_groups).
     """
     groups = _degenerate_groups(eps_next, tol)
+    if not groups:
+        return S_mat, U_list, 0
     S_mat = np.array(S_mat, copy=True)
+    U_list = [np.array(U, copy=True) for U in U_list]
     for G in groups:
         W, _, Vh = np.linalg.svd(S_mat[np.ix_(G, G)])
         R = Vh.conj().T @ W.conj().T
         S_mat[:, G] = S_mat[:, G] @ R
-        for idx in range(len(U_list)):
-            U_list[idx] = np.array(U_list[idx], copy=True)
-            U_list[idx][:, G] = U_list[idx][:, G] @ R
+        for U in U_list:
+            U[:, G] = U[:, G] @ R
     return S_mat, U_list, len(groups)
 
 
