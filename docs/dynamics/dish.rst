@@ -1,129 +1,72 @@
-Dish
-====
+Decoherence-induced surface hopping (DISH)
+==========================================
 
 Part of :doc:`/dynamics/index`.
 
 .. rubric:: QDEX implementation
 
-Implementation entry point:
-
-* Module: ``qdex.namd.integrator``
 * Callable: ``qdex.namd.integrator.step_dish_batch``
-* CLI: ``--namd``
-* YAML: ``namd.engine, namd.dt_fs``
+* CLI: ``--namd-run`` (``--namd-method dish``)
+* YAML: ``namd.dynamics.method: dish`` (needs ``decoherence_times.npz``, :doc:`decoherence`)
 
-.. code-block:: python
+Idea
+----
 
-   step_dish_batch(C, active_surfaces, E_batch, dt_fs, tau_mat=None, beta=None, detailed_balance=True, min_tau_fs=1.0)
+In DISH (Jaeger, Fischer & Prezhdo, J. Chem. Phys. 137, 22A545 (2012)) the hops are not driven by the
+coupling flux but by decoherence. The amplitudes evolve with the time-dependent Schrödinger equation,
+without damping; at random times, set by the dephasing time of each pair, a state decoheres from the
+active one. At that moment the wavefunction is measured: it collapses onto that state with probability
+:math:`|c_J|^2` (a hop), or that state is removed from the superposition. In a dense manifold with fast
+dephasing, this is the regime of carrier cooling in dots.
 
+One nuclear step
+----------------
 
-3. Decoherence-Induced Surface Hopping (DISH)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. **Propagation** of both channels over the step (:doc:`propagation`), with no damping and no flux.
 
-While CPA-FSSH with EDC uses Tully's derivative coupling flux to drive transitions and applies decoherence as an extrinsic damping correction, **Decoherence-Induced Surface Hopping (DISH)** (Jaeger, Fischer, & Prezhdo, *J. Chem. Phys.* 137, 22A545, 2012; Akimov & Prezhdo, *J. Chem. Phys.* 138, 124102, 2013) introduces a fundamentally different physical paradigm.
+2. **Decoherence events.** For every inactive state :math:`J` of each channel an event occurs with
+   probability
 
-Physical Foundations of DISH
-""""""""""""""""""""""""""""
+   .. math::
 
-In condensed matter systems (colloidal quantum dots, perovskite nanocrystals, organic semiconductors), an electronic excitation couples to thousands of nuclear vibrational degrees of freedom. Thermal phonon fluctuations destroy electronic phase coherence within :math:`5 - 25\text{ fs}`.
+      P^{\mathrm{dec}}_J = 1 - e^{-\Delta t/\tau_{KJ}} ,
 
-In this fast-dephasing regime, electronic transitions are **not driven by instantaneous derivative coupling spikes**, but rather by **environment-induced decoherence (wavepacket branching into the bath)**. DISH operationalizes this insight by formulating surface hopping directly in terms of quantum measurement theory and stochastic wavepacket collapse.
+   with :math:`K` the active state and :math:`\tau_{KJ}` the pair dephasing time.
 
-Piecewise Unitary Electronic Propagation
-""""""""""""""""""""""""""""""""""""""""
+3. **Collapse or removal.** For each decohered :math:`J` the trajectory hops to :math:`J` with probability
 
-Between stochastic collapse events, the electronic wavepacket :math:`\mathbf{c}(t)` evolves **strictly unitarily** according to the Time-Dependent Schrödinger Equation:
+   .. math::
 
-.. math::
+      P^{\mathrm{hop}}_J = |c_J|^2\; B_{KJ}, \qquad B_{KJ} = \min\!\big(1, e^{-(E_J - E_K)/k_BT}\big),
 
-   \mathbf{c}(t + \Delta t) = \mathbf{U}(t, t + \Delta t) \, \mathbf{c}(t)
+   only to pairs of the stored basis. On a hop the amplitudes collapse onto :math:`J` (if several states
+   qualify, one is drawn with weights :math:`P^{\mathrm{hop}}`); otherwise :math:`c_J \leftarrow 0` and the
+   amplitudes are renormalised. The electron channel is decided first (at the current hole), then the hole
+   channel at the new electron.
 
-Crucially, **no artificial continuous exponential damping** is applied to :math:`\mathbf{c}(t)` during unitary propagation. Quantum superpositions and phase interference evolve naturally.
+Relation to the master equation
+-------------------------------
 
-Step 1: Poisson Stochastic Dephasing
-""""""""""""""""""""""""""""""""""""
-
-At each nuclear step :math:`\Delta t`, for every inactive state :math:`J \neq K` (where :math:`K` is the active surface of trajectory :math:`tr`), the occurrence of a decoherence event is governed by a Poisson arrival process:
-
-.. math::
-
-   P_{\mathrm{dec}, J} = 1 - \exp\left( -\frac{\Delta t}{\tau_{KJ}} \right)
-
-where :math:`\tau_{KJ}` is the state-pair pure-dephasing time (loaded from ``decoherence_times.npz``).
-
-For each state :math:`J \neq K`, a uniform random number :math:`R_1 \in [0, 1)` is sampled:
-
-* If :math:`R_1 \ge P_{\mathrm{dec}, J}`: State :math:`J` remains coherent with active state :math:`K`. No collapse attempt is made for state :math:`J`.
-* If :math:`R_1 < P_{\mathrm{dec}, J}`: A dephasing event has occurred. The nuclear wavepacket associated with state :math:`J` has spatially separated from the wavepacket on surface :math:`K`. The trajectory must now undergo stochastic branching!
-
-Step 2: Stochastic Branching (Collapse vs. Quenching)
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
-When state :math:`J` dephases, the trajectory reaches a quantum bifurcation point. In accordance with the Born rule, the probability that the system collapses into state :math:`J` is given by its instantaneous electronic population :math:`|c_J|^2`, scaled by detailed balance:
-
+For two states starting in :math:`K`, the amplitude in :math:`J` builds up between decoherence events,
+:math:`|c_J(s)|^2 \approx |d_{KJ}|^2 s^2/[1 + (\Delta E\, s/2\hbar)^2]` for a coherence of age :math:`s`, and
+an event converts it into a hop. Averaged over the Poisson-distributed ages
+(:math:`\langle s^2 \rangle = 2\tau^2`) the rate is
 
 .. math::
 
-   P_{\mathrm{hop}, J} = |c_J|^2 \times \min\left( 1, \, \exp\left( -\frac{\max(E_J - E_K, 0)}{k_B T} \right) \right)
+   k_{K \to J}^{\mathrm{DISH}} = \frac{2\,|d_{KJ}|^2\, \tau_{KJ}}{1 + (\Delta E_{KJ}\, \tau_{KJ}/\hbar)^2}\; B_{KJ},
 
-A second independent uniform random number :math:`R_2 \in [0, 1)` is sampled:
+the golden-rule rate with a Lorentzian of width :math:`\hbar/\tau_{KJ}` used by the PME (:doc:`pme`). Two-
+level tests of ``step_dish_batch`` reproduce it within 5–8 % (4000 trajectories, :math:`\Delta E` =
+0–0.1 eV, :math:`\tau` = 5–10 fs) and detailed balance within 1 % (:math:`p_1/p_0` = 0.310 against 0.313).
+DISH therefore gives the PME rates when both use the same :math:`\tau_{KJ}` (``pme_tau: pairs``), but
+keeps single trajectories: dwell times, branching, trapping and de-trapping events.
 
-* **Case A: Hop Accepted** (:math:`R_2 < P_{\mathrm{hop}, J}`):
-  The trajectory successfully transitions to state :math:`J`. The active surface switches :math:`K \leftarrow J`, and the wavepacket undergoes complete projective collapse onto state :math:`J`:
+Differences from the original formulation
+-----------------------------------------
 
-  .. math::
-
-     c_J \leftarrow 1.0, \qquad c_{L \neq J} \leftarrow 0.0
-
-  If multiple states simultaneously qualify for a hop in a single time step, one state is selected with probability proportional to :math:`P_{\mathrm{hop}, J}`.
-
-* **Case B: Hop Rejected** (:math:`R_2 \ge P_{\mathrm{hop}, J}`):
-  The trajectory remains on active surface :math:`K`. Because a dephasing event did occur, coherence between state :math:`J` and active state :math:`K` has been irreversibly lost to the nuclear bath. Consequently, state :math:`J` is **quenched**:
-
-  .. math::
-
-     c_J \leftarrow 0.0
-
-  The remaining surviving amplitudes are renormalized to conserve total probability:
-
-  .. math::
-
-     \mathbf{c} \leftarrow \frac{\mathbf{c}}{\sqrt{\sum_L |c_L|^2}}
-
-This stochastic quenching removes off-diagonal population without continuous damping, completely preventing overcoherence and avoiding the Quantum Zeno effect.
-
-Analytical Equivalence of DISH to the Pauli Master Equation
-""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-
-A profound theoretical property of DISH is that in the condensed-phase limit where dephasing is fast compared to electronic transitions (:math:`\tau_{KJ} \ll \tau_{\mathrm{transfer}}`), DISH **analytically converges to the Pauli Master Equation with Lorentzian line broadening**!
-
-*Proof Sketch*:
-Consider a two-level system initialized in active state :math:`K` (:math:`c_K(0) = 1`, :math:`c_J(0) = 0`). Over a short nuclear interval :math:`\Delta t`, first-order perturbation theory on the TDSE gives:
-
-.. math::
-
-   c_J(\Delta t) \approx - \frac{d_{KJ} \, \Delta t}{1 + i \frac{\Delta E_{KJ} \Delta t}{2\hbar}}
-
-The population amplitude built up in state :math:`J` during interval :math:`\Delta t` is:
-
-.. math::
-
-   |c_J(\Delta t)|^2 \approx \frac{|d_{KJ}|^2 \Delta t^2}{1 + \left( \frac{\Delta E_{KJ} \Delta t}{2\hbar} \right)^2}
-
-In DISH, the transition rate :math:`k_{K \to J}^{\mathrm{DISH}}` is the product of the dephasing frequency :math:`\Gamma_{\mathrm{dec}} = 1/\tau_{KJ}` and the branching probability :math:`P_{\mathrm{hop}, J} \approx |c_J|^2`:
-
-.. math::
-
-   k_{K \to J}^{\mathrm{DISH}} = \frac{P_{\mathrm{dec}, J} \cdot P_{\mathrm{hop}, J}}{\Delta t} \approx \frac{1}{\tau_{KJ}} \left[ \frac{|d_{KJ}|^2 \tau_{KJ}^2}{1 + \left( \frac{\Delta E_{KJ} \tau_{KJ}}{\hbar} \right)^2} \right] = |d_{KJ}|^2 \left[ \frac{\tau_{KJ}}{1 + \left( \frac{\Delta E_{KJ} \tau_{KJ}}{\hbar} \right)^2} \right]
-
-Averaged over the Poisson-distributed ages of the coherence since the last decoherence event
-(:math:`\langle s^2 \rangle = 2\tau^2`), this becomes :math:`2|d_{KJ}|^2 \tau_{KJ}/[1 + (\Delta E_{KJ}\tau_{KJ}/\hbar)^2]`,
-**identical to Fermi's Golden Rule with Lorentzian broadening** used in the Pauli Master Equation (two-level
-tests reproduce it within 5–8 %):
-
-.. math::
-
-   k_{K \to J}^{\mathrm{PME}} = 2 |d_{KJ}|^2 \left[ \frac{\tau_{\mathrm{dec}}}{1 + \left( \frac{\Delta E_{KJ} \tau_{\mathrm{dec}}}{\hbar} \right)^2} \right] \times B_{KJ}(T)
-
-**Conclusion**: DISH provides a rigorous theoretical unification of wavepacket quantum dynamics and statistical master equations. It recovers PME cooling rates in dense manifolds while retaining single-trajectory stochastic statistics, individual dwell times, and branching kinetics.
-
+* The decoherence time of state :math:`J` is the pair time :math:`\tau_{KJ}` with the active state, not
+  the amplitude-weighted :math:`1/\tau_J = \sum_k |c_k|^2/\tau_{Jk}` of Jaeger *et al.*; the two agree when
+  the active amplitude is close to 1, which frequent decoherence events ensure.
+* The active state itself does not decohere.
+* Several states can decohere in one step (each with its own probability).

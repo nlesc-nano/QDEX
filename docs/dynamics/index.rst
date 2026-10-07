@@ -1,20 +1,22 @@
 Nonadiabatic dynamics
 =====================
 
-Topics in nonadiabatic dynamics pair each derivation with the QDEX callable, CLI flags and YAML keys used by the implementation.
+Hot-carrier cooling, trapping and recombination of excitons along *ab initio* molecular dynamics
+trajectories. The pages follow the calculation in order: why and what is solved, the excited states and
+their couplings along the trajectory, how the electronic equations are integrated, decoherence, the three
+dynamical methods (FSSH, DISH, PME), how to choose and run them, the analysis, and the g-xTB route.
 
 .. toctree::
    :maxdepth: 1
 
-   pipeline
-   gxtb
-   timesteps_cpa
-   nacs_tracking
-   fssh_edc
+   introduction
+   states_couplings
+   propagation
+   decoherence
+   fssh
    dish
    pme
-   decoherence
-   comparison
-   model_selection
-   configuration
+   choosing
+   running
    analysis
+   gxtb

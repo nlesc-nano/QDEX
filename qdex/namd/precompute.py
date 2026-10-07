@@ -137,7 +137,7 @@ def align_degenerate_blocks(S_mat, U_list, eps_next, tol=1.0e-5):
 
     A degenerate pair comes out of the diagonaliser in an arbitrary SU(2) frame, different at every
     frame; a U(1) phase per spinor cannot undo that, and the rotation shows up as a spurious coupling
-    |S_12|/dt between the partners. For each group G (energies of frame t+dt within tol, eV) the
+    ``|S_12|/dt`` between the partners. For each group G (energies of frame t+dt within tol, eV) the
     columns are rotated by R = V W^+ from the SVD S_GG = W s V^+, so that S_GG R = W s W^+ is Hermitian
     positive semidefinite (Loewdin / parallel-transport gauge).
     Returns (S_aligned, U_list_aligned, n_groups).

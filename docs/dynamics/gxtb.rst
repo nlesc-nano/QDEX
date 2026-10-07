@@ -13,7 +13,7 @@ Implementation entry points:
 * YAML: ``namd.trajectory.basis_file``, ``excitations.mode: diagonal_stda``, ``excitations.functional: gxtb``,
   ``quasiparticles.reference: gxtb``, ``system.basis_name: per-atom``
 
-The standard NAMD workflow of QDEX (:doc:`pipeline`) starts from an *ab initio* MD trajectory with DFT
+The standard NAMD workflow of QDEX (:doc:`introduction`) starts from an *ab initio* MD trajectory with DFT
 orbitals at every frame. Both halves are expensive: every 2 fs step needs a converged DFT calculation
 for the forces and another one, with a good basis, for the orbitals. For a nanocrystal of a few
 hundred atoms this limits trajectories to a few picoseconds.
@@ -223,7 +223,7 @@ own:
 4. Precomputing the couplings
 -----------------------------
 
-The NAMD precompute (:doc:`configuration`) needs one extra key, the name of the per-frame basis file:
+The NAMD precompute (:doc:`running`) needs one extra key, the name of the per-frame basis file:
 
 .. code-block:: yaml
 
@@ -244,7 +244,7 @@ The NAMD precompute (:doc:`configuration`) needs one extra key, the name of the 
 
 With ``basis_file`` set, the shells of every frame are built from that frame's file, and the
 cross-frame overlap uses the bases of both frames. Phase alignment and crossing tracking are those of
-:doc:`nacs_tracking`.
+:doc:`states_couplings`.
 
 **How well consecutive frames overlap.** On the 50-frame test the change of basis between frames
 loses at most 1.7·10⁻³ of the orbital norm over the full orbital space. The band-edge orbitals

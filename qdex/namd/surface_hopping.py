@@ -524,6 +524,9 @@ def propagate_single_namd_origin(
                     total_b = np.sum(probs_b)
                     total_j = np.sum(probs_j)
                     total_hop = total_b + total_j
+                    if total_hop > 1.0:             # both channels scaled: neither one takes priority
+                        probs_b /= total_hop; probs_j /= total_hop
+                        total_b /= total_hop; total_j /= total_hop; total_hop = 1.0
 
                     zeta = np.random.rand()
                     if zeta < total_b:
