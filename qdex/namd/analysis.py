@@ -441,10 +441,15 @@ def analyze_and_plot_namd_results(
 
     # 2. Export Populations & Dynamics NPZ
     save_pops = bool(out_cfg.get("save_populations", True)) and bool(npz_file)
+    # full pair populations every populations_stride steps (10^6 pairs x 1000 steps is 8 GB); the
+    # cooling curves and band-edge populations above stay at every step
+    stride = max(1, int(out_cfg.get("populations_stride", 1)))
     if save_pops:
         np.savez_compressed(
             npz_file,
             times_fs=times_fs,
+            populations_times_fs=np.asarray(times_fs)[::stride],
+            populations_stride=stride,
             mean_energies_ev=mean_energies_ev,
             excess_total=excess_total,
             mean_excess_e=mean_excess_e,
@@ -453,7 +458,7 @@ def analyze_and_plot_namd_results(
             std_excess_e=std_excess_e if std_excess_e is not None else np.array([]),
             std_excess_h=std_excess_h if std_excess_h is not None else np.array([]),
             n_origins=int(n_origins),
-            populations=populations,
+            populations=np.asarray(populations)[::stride],
             pop_se=pop_se if pop_se is not None else np.array([]),
             pop_sh=pop_sh if pop_sh is not None else np.array([]),
             pop_1s=pop_1s if pop_1s is not None else np.array([]),
