@@ -85,5 +85,38 @@ Sub-step convergence
 --------------------
 
 Tested on the spin-free CsPbBr\ :sub:`3` cube (1300 × 800 window, 2 fs frames, logm couplings, one
-origin, 200 fs, 1000 trajectories, pump 2 E\ :sub:`g`); results from ``namd/CsPbBr3/conv`` on NHR are
-added here when the run is complete.
+origin, 200 fs, 1000 trajectories, pump 2 E\ :sub:`g`, same random seed). Change of the mean exciton
+energy (eV):
+
+.. list-table::
+   :header-rows: 1
+
+   * - :math:`N_{\mathrm{sub}}` (δt)
+     - DISH, 50 fs
+     - DISH, 200 fs
+     - FSSH, 50 fs
+     - FSSH, 200 fs
+     - wall time (FSSH, 16 threads)
+   * - 5 (0.4 fs)
+     - −0.0227
+     - −0.1895
+     - −0.0332
+     - −0.1338
+     - 1.9 min
+   * - 20 (0.1 fs)
+     - −0.0227
+     - −0.1895
+     - −0.0333
+     - −0.1324
+     - 4.0 min
+   * - 50 (0.04 fs)
+     - −0.0227
+     - −0.1895
+     - −0.0282
+     - −0.1298
+     - 8.8 min
+
+DISH does not change with the sub-steps (its hops are decided once per nuclear step from
+:math:`|c_J|^2`). FSSH changes by 3–4 meV of 130 meV at 200 fs, within the scatter of its hops (the
+amplitudes differ slightly, so the same random numbers give different hops). :math:`N_{\mathrm{sub}}` = 20
+is converged; 10 is enough for the more expensive SOC runs.
