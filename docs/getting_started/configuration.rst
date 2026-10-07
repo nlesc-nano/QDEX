@@ -275,7 +275,8 @@ analysis and output
 -------------------
 
 * ``analysis``: ``run_fuzzy``, ``cif``, ``pdos_atoms``, ``coop_pairs``, ``pdos_sigma``, ``fuzzy_sigma``,
-  ``ewin``, ``fold_to_bz``, ``g_shell``, ``population_print_range``, ``dashboard_energy_mode``
+  ``ewin``, ``fold_to_bz``, ``g_shell``, ``population_print_range``, ``dashboard_energy_mode``,
+  ``bulk_overlay``, ``bulk_alignment``, ``bulk_anchor``, ``bulk_unfolded``
   (:doc:`/electronic_structure/index`).
 * ``output``: ``plot``, ``show``, ``broadening``, ``sigma``, ``write_csv``, ``csv_roots``, ``save_xia``,
   ``time``, ``cube``, ``cube_spacing``, ``cube_nhomos``, ``cube_nlumos``, ``nbse``, ``bse_states``,

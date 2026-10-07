@@ -177,14 +177,30 @@ CP2K PBE with the same basis and pseudopotentials) over the fuzzy map. The bulk 
 are placed on the fuzzy path by their k-coordinates. A control bar above the plot shows or
 hides the overlay and sets its colour, line width and opacity (for the unfolded perovskite
 overlay the width scales the markers, whose opacity still follows the unfolding weight);
-clicking the overlay's legend entry also toggles it.
+clicking the overlay's legend entry also toggles it. In the configuration, ``fuzzy.bulk_alignment``
+(``core_level``, the default, ``midgap`` or ``vbm``) picks the energy alignment, ``fuzzy.bulk_unfolded:
+off`` replaces the unfolded orthorhombic perovskite bands by the cubic ones and ``fuzzy.bulk_overlay:
+false`` leaves the overlay out.
 
 The anchor needs the semicore band in the MO file: for CsPbX\ :sub:`3` dots print all occupied
 MOs (``MO_INDEX_RANGE 1 <HOMO + n_virtual>``); a window of the upper valence band (the Br 4p and
-Pb 6s states, about 7 eV deep) stops above Cs 5p, and the bulk bands are then aligned at mid-gap.
+Pb 6s states, about 7 eV deep) stops above the semicore bands, and the bulk bands are then aligned
+at mid-gap.
+
+**Perovskites are anchored on the halide s band, not on Cs 5p.** The Cs 5p level follows the cage
+around the A site: it lies 0.6–0.9 eV closer to the VBM in the orthorhombic bulk than in the cubic one,
+and in a 5 × 5 × 5 CsPbX\ :sub:`3` cube it drifts by 0.6 eV from the core (−8.5 eV) to the surface
+(−9.1 eV). The halide s level is flat across the dot to 0.1 eV. On the PBE-relaxed Cl/Br/I cubes
+anchored on Cs 5p, the bulk VBM ended up 0.23 eV above the CsPbCl\ :sub:`3` HOMO (a confined hole
+above the bulk band edge); on the halide s it is 0.12 eV above it, and for Br and I the holes are
+confined by 0.12 and 0.05 eV, the electrons by about 0.27 eV (spin-free). With ``bulk_anchor: auto``
+(the default) the manifolds of the A-site cation, which has no bond in the crystal bond star, are
+tried last; ``bulk_anchor: Br-s`` (or any label of the bulk data) forces a manifold. Bulk-like atoms
+are those with the crystal's number of *bonded* neighbours (two Pb for a halide), only crystal
+elements within the bond cutoff, in the inner half of the dot.
 
 The bulk bands are put on the dot's energy axis with a semicore level (from ``<name>.json``:
-the cation d band, Cs 5p in the perovskites, otherwise the anion s band). For CdSe the Cd 4d
+the cation d band, otherwise the anion s band; the perovskite A-site Cs 5p only as a last resort). For CdSe the Cd 4d
 level of the dot is the Mulliken-weighted 4d energy of its *interior, bulk-like* Cd atoms (four
 Se neighbours, no ligand, inner half by radius), and the bulk Cd 4d bands are placed there.
 Cd bonded to Cl has its 4d level about 0.4 eV deeper, so averaging over all Cd atoms would

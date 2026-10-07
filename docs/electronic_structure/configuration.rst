@@ -60,6 +60,21 @@ Command-Line Arguments
    * - ``--g_shell <int>``
      - ``2``
      - Reciprocal lattice vector shell for BZ folding (0 = 1 replica, 1 = 27, 2 = 125, 3 = 343 replicas).
+   * - ``--bulk_overlay`` / ``--no-bulk-overlay``
+     - ``True``
+     - Draw the bulk band structure over the DFT fuzzy maps.
+   * - ``--bulk_alignment <choice>``
+     - ``core_level``
+     - Energy alignment of the bulk overlay: ``core_level`` (bulk semicore band on the level of the dot's
+       interior atoms; mid-gap when the MO file does not reach it), ``midgap`` or ``vbm`` (bulk VBM on the HOMO).
+   * - ``--bulk_anchor <label>``
+     - ``auto``
+     - Semicore manifold of the ``core_level`` alignment: ``auto`` (cation d, else anion s; the
+       perovskite A-site Cs 5p last) or a label of the bulk data (``Br-s``, ``Cs-p``, ``Cd-d``).
+   * - ``--bulk_unfolded <choice>``
+     - ``auto``
+     - ``auto``: tilted perovskites get the measured orthorhombic bulk unfolded onto the cubic path;
+       ``off``: the cubic bulk bands.
    * - ``--cube``
      - ``False``
      - Export 3D volumetric Gaussian ``.cube`` files for frontier orbitals.
@@ -98,6 +113,9 @@ YAML Configuration Example
      fuzzy_sigma: 0.03
      fold_to_bz: true
      g_shell: 2
+     bulk_alignment: core_level   # or midgap, vbm
+     bulk_anchor: auto            # or a manifold label, e.g. Br-s
+     bulk_unfolded: auto          # off: cubic bulk bands
 
    cube:
      export: true

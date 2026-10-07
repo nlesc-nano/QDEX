@@ -189,7 +189,7 @@ def bulk_semicore_level(meta, bs_data, spinor=False, label=None):
 
 
 def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_index,
-                      coordination, bond_ang, bs_path=None, window_ev=2.5, cif=None):
+                      coordination, bond_ang, bs_path=None, window_ev=2.5, cif=None, anchor="auto", bond_pairs=None):
     """
     Semicore (e.g. Cd 4d) level of the dot's bulk-like interior atoms, on the axis of `energies`.
 
@@ -201,7 +201,15 @@ def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_i
 
     The manifolds of the material's metadata are tried in order of preference (cation d, Cs 5p,
     anion s); the first one whose energy range is covered by the orbitals is used (MO files often
-    hold only the orbitals near the gap).
+    hold only the orbitals near the gap). With anchor='auto', manifolds of elements outside the
+    bonded framework (coordination 0 in the crystal bond star: the perovskite A-site Cs) are tried
+    last: their level follows the size and shape of the cage, which the octahedral tilts change
+    (Cs 5p lies 0.6-0.9 eV closer to the VBM in orthorhombic than in cubic CsPbX3, and drifts by
+    0.6 eV from the core to the surface of a dot), while the halide s level is flat to 0.1 eV.
+    Any other anchor value is the label of the manifold to use (e.g. 'Br-s', 'Cs-p').
+
+    bond_pairs: element pairs bonded in the crystal; the bulk-like test then counts only bonded
+    neighbours (a Cs next to a perovskite halide does not disqualify it).
 
     Returns a dict (level_ev, label, n_atoms, spread_ev, all_atoms_level_ev, n_bulk_like) or None.
     """
@@ -210,6 +218,13 @@ def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_i
     cands = _semicore_candidates(meta)
     if path is None or not cands:
         return None
+    if anchor and anchor != "auto":
+        cands = [c for c in cands if c["label"].lower() == str(anchor).lower()]
+        if not cands:
+            logger.warning(f"  [Bulk Bands] No '{anchor}' manifold in the bulk data of {material}: no semicore anchor.")
+            return None
+    else:   # framework manifolds first, then the A-site cation (coordination 0)
+        cands = sorted(cands, key=lambda c: coordination.get(c["element"], 1) == 0)
     bs = parse_cp2k_bs(path)
     energies = np.asarray(energies, dtype=float)
     cfg = None
@@ -257,7 +272,8 @@ def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_i
     bulk_like = []
     for i, a in enumerate(atoms):
         nbrs = [j for j in tree.query_ball_point(coords[a], 1.25 * bond_ang) if j != a]
-        if len(nbrs) == n_full and all(syms[j] in crystal for j in nbrs) and np.isfinite(levels[i]):
+        bonded = nbrs if bond_pairs is None else [j for j in nbrs if (elem, syms[j]) in bond_pairs]
+        if len(bonded) == n_full and all(syms[j] in crystal for j in nbrs) and np.isfinite(levels[i]):
             bulk_like.append(i)
     bulk_like = np.array(bulk_like, dtype=int)
 
@@ -338,7 +354,7 @@ def find_unfolded(material=None, cif=None):
 
 
 def get_aligned_unfolded_bands(npz_path, ewin=(-5.0, 5.0), qd_semicore_rel=None, path_frac=None, soc=False,
-                               qd_semicore_label=None, min_weight=0.03):
+                               qd_semicore_label=None, min_weight=0.03, alignment_mode="core_level", qd_homo_rel=None):
     """Unfolded bulk bands (qdex.bulk_unfold) on the dot's energy axis, for the overlay.
 
     Same anchor as get_aligned_bulk_bands (the semicore level of the dot's interior atoms); every
@@ -352,7 +368,9 @@ def get_aligned_unfolded_bands(npz_path, ewin=(-5.0, 5.0), qd_semicore_rel=None,
     E, P = d[f"E_{tag}"], d[f"P_{tag}"]
     cands = meta.get("semicore_candidates") or []
     semi = next((c for c in cands if qd_semicore_label is None or c["label"] == qd_semicore_label), None)
-    if semi is not None and qd_semicore_rel is not None:
+    if alignment_mode == "vbm" and qd_homo_rel is not None:
+        shift, mode = float(qd_homo_rel) - meta[tag]["vbm"], "vbm"
+    elif alignment_mode in ("core_level", "semicore", "auto") and semi is not None and qd_semicore_rel is not None:
         shift, mode = float(qd_semicore_rel) - float(semi[f"level_{tag}"]), "core_level"
         logger.info(f"  [Bulk Bands] Unfolded {os.path.basename(npz_path)}: semicore anchor ({semi['label']}), "
                     f"bulk VBM at {meta[tag]['vbm'] + shift:.3f} eV, CBM at {meta[tag]['cbm'] + shift:.3f} eV.")
@@ -442,7 +460,8 @@ def get_aligned_bulk_bands(
         u = find_unfolded(material=material, cif=cif)
         if u:
             res = get_aligned_unfolded_bands(u, ewin=ewin, qd_semicore_rel=qd_semicore_rel, path_frac=path_frac,
-                                             soc=soc, qd_semicore_label=qd_semicore_label)
+                                             soc=soc, qd_semicore_label=qd_semicore_label,
+                                             alignment_mode=alignment_mode, qd_homo_rel=qd_homo_rel)
             if res is not None:
                 return res
     path = find_bulk_bs(material=material, soc=True, cif=cif) if soc else None

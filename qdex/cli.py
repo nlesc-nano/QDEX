@@ -1072,6 +1072,22 @@ def _build_parser():
     parser.add_argument("--g_shell", type=int, default=2,
                         help="Reciprocal-vector shell for folded fuzzy-band weights; 0, 1, 2 (default) and 3 use 1, 27, 125 and 343 replicas.")
     parser.add_argument("--dashboard_energy_mode", choices=["dft", "qp", "both"], default="dft", help="Generate fuzzy dashboards on DFT, QP-corrected, or both energy axes.")
+    parser.add_argument("--bulk_overlay", action="store_true", default=True,
+                        help="Draw the bulk band structure over the DFT fuzzy maps (default). YAML: fuzzy.bulk_overlay")
+    parser.add_argument("--no-bulk-overlay", dest="bulk_overlay", action="store_false",
+                        help="No bulk band overlay on the fuzzy maps.")
+    parser.add_argument("--bulk_alignment", choices=["core_level", "midgap", "vbm"], default="core_level",
+                        help="Energy alignment of the bulk overlay: 'core_level' (default) places the bulk semicore band "
+                             "(Cd 4d, Cs 5p, ...) on the level of the dot's interior atoms and falls back to 'midgap' when "
+                             "the MO file does not reach it; 'midgap' puts the bulk mid-gap on the dot's; 'vbm' puts the "
+                             "bulk VBM on the dot's HOMO. YAML: fuzzy.bulk_alignment")
+    parser.add_argument("--bulk_anchor", type=str, default="auto",
+                        help="Semicore manifold that anchors the bulk overlay (bulk_alignment core_level): 'auto' "
+                             "(default: cation d, else anion s; the perovskite A-site Cs 5p last) or a label of the "
+                             "bulk data such as 'Br-s', 'Cs-p', 'Cd-d'. YAML: fuzzy.bulk_anchor")
+    parser.add_argument("--bulk_unfolded", choices=["auto", "off"], default="auto",
+                        help="'auto' (default): for tilted perovskites overlay the measured (orthorhombic) bulk unfolded "
+                             "onto the cubic path; 'off': the cubic bulk bands. YAML: fuzzy.bulk_unfolded")
     parser.add_argument("--qp_energy_reference", choices=["vacuum", "fermi"], default="vacuum", help="Energy reference for QP fuzzy dashboards.")
 
     # Centroid and trap analysis / filtering arguments

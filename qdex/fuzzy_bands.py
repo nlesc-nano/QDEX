@@ -120,13 +120,17 @@ def fit_lattice_orientation(prim_struct, coords_ang, syms=None, interior_fractio
         sub = np.array([k for k, e in enumerate(xs) if e == el])
         if len(sub) >= 2:
             inner = sub[r[sub] <= interior_fraction * r.max()]
-            dd, _ = cKDTree(X[sub]).query(X[inner] if len(inner) else X[sub], k=2)
-            dd = dd[:, 1][dd[:, 1] < 1.3 * d_cif]
+            # every sublattice neighbour (six B-B in a perovskite), not just the nearest: in a relaxed
+            # dot the B-B distances spread by several per cent and the nearest one is biased short
+            k = min(13, len(sub))
+            dd, _ = cKDTree(X[sub]).query(X[inner] if len(inner) else X[sub], k=k)
+            dd = dd[:, 1:].ravel()
+            dd = dd[(dd > 0.7 * d_cif) & (dd < 1.25 * d_cif)]
             if len(dd) >= 1:
                 d_qd = float(np.median(dd))
                 scale, how = d_qd / d_cif, f"median {el}-{el} {d_qd:.4f} A vs CIF {d_cif:.4f} A"
                 info.update(sublattice_element=el, qd_sublattice_ang=d_qd, cif_sublattice_ang=d_cif)
-    info.update(rotation=best_R, scale=scale, match=best, n_bonds=len(units), qd_bond_ang=qd_bond)
+    info.update(rotation=best_R, scale=scale, match=best, n_bonds=len(units), qd_bond_ang=qd_bond, bond_pairs=pairs)
     angle = np.degrees(np.arccos(np.clip((np.trace(best_R) - 1) / 2, -1, 1)))
     logger.info(f"  [Fuzzy] Lattice orientation: {len(units)} interior bonds fitted to the crystal bond star "
                 f"(mean cos {best:.4f}, rotation {angle:.1f} deg from the CIF frame).")
@@ -702,7 +706,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             semicore = qd_semicore_level(
                 args.material, C_dense, S_dense, shells, syms, coords_ang, eps_shifted, homo_index,
                 coordination=kpath_info["coordination"], bond_ang=kpath_info["qd_bond_ang"],
-                bs_path=getattr(args, "bulk_bs", None), cif=args.cif)
+                bs_path=getattr(args, "bulk_bs", None), cif=args.cif,
+                anchor=getattr(args, "bulk_anchor", "auto"), bond_pairs=kpath_info.get("bond_pairs"))
     except Exception as exc:
         logger.warning(f"  [Bulk Bands] Semicore level of the dot not computed: {exc}")
     semicore_rel = {"sf": semicore["level_ev"]} if semicore is not None else {}
@@ -974,6 +979,10 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             homo_dict["soc"] = eps_soc[global_spinor_homo_idx]
             lumo_dict["soc"] = eps_soc[global_spinor_homo_idx + 1]
 
+        # bulk-band overlay of the DFT dashboards (fuzzy.bulk_overlay / bulk_alignment / bulk_unfolded)
+        bulk_opts = dict(bulk_overlay=getattr(args, "bulk_overlay", True),
+                         bulk_alignment=getattr(args, "bulk_alignment", "core_level"),
+                         bulk_unfolded=getattr(args, "bulk_unfolded", "auto"))
         if dashboard_energy_mode in ("dft", "both"):
             generate_interactive_plot(
                 prefix="sf",
@@ -984,7 +993,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
                 output_html="fuzzy_dashboard_sf.html",
-                bulk_semicore_rel=semicore_rel.get("sf"), bulk_cif=args.cif, bulk_semicore_label=semicore_label
+                bulk_semicore_rel=semicore_rel.get("sf"), bulk_cif=args.cif, bulk_semicore_label=semicore_label, **bulk_opts
             )
 
         if dashboard_energy_mode in ("qp", "both") and qp_plot_energies is not None:
@@ -1010,7 +1019,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
                 output_html="fuzzy_dashboard_uks.html",
-                bulk_semicore_rel=semicore_rel.get("sf"), bulk_cif=args.cif, bulk_semicore_label=semicore_label
+                bulk_semicore_rel=semicore_rel.get("sf"), bulk_cif=args.cif, bulk_semicore_label=semicore_label, **bulk_opts
             )
 
         if is_uks and dashboard_energy_mode in ("qp", "both") and qp_plot_energies is not None and qp_plot_energies_beta is not None:
@@ -1037,7 +1046,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                 normalize_coop=False,
                 energy_label="DFT MO energy (eV)",
                 output_html="fuzzy_dashboard_soc.html",
-                bulk_semicore_rel=semicore_rel.get("soc"), bulk_cif=args.cif, bulk_semicore_label=semicore_label
+                bulk_semicore_rel=semicore_rel.get("soc"), bulk_cif=args.cif, bulk_semicore_label=semicore_label, **bulk_opts
             )
 
         if args.soc_flag and dashboard_energy_mode in ("qp", "both") and eps_soc_qp is not None:

@@ -116,6 +116,7 @@ SECTIONS = {
     "analysis": {k: k for k in (
         "run_fuzzy", "cif", "pdos_atoms", "coop_pairs", "population_print_range", "fuzzy_sigma",
         "pdos_sigma", "ewin", "fold_to_bz", "g_shell", "dashboard_energy_mode",
+        "bulk_overlay", "bulk_alignment", "bulk_unfolded", "bulk_anchor",
         "trap_filter", "xi_core_threshold", "xi_core", "xi_trap_threshold", "xi_trap",
         "centroid_core_elements", "f_core_min", "f_core_trap")},
     "output": {k: k for k in (
