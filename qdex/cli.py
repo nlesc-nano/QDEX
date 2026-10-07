@@ -1226,7 +1226,11 @@ def _load_arguments(parser):
         dec_dir = args.namd_decoherence
         if dec_dir == "default":
             dec_dir = config_data.get("namd", {}).get("storage", {}).get("precompute_dir", "namd_precomputed")
-        compute_trajectory_decoherence_times(dec_dir)
+        dec_cfg = config_data.get("namd", {}).get("decoherence", {}) or {}
+        setup_run_logging(getattr(args, "log_file", "minibse.log"), getattr(args, "verbosity", "full"))
+        compute_trajectory_decoherence_times(dec_dir, method=dec_cfg.get("method", "cumulant"),
+                                             max_lag_fs=float(dec_cfg.get("max_lag_fs", 1000.0)),
+                                             max_tau_fs=float(dec_cfg.get("max_tau_fs", 500.0)))
         return
 
     if getattr(args, "namd_nac", None) is not None:

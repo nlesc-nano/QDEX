@@ -120,3 +120,27 @@ def test_stored_nacs_are_read_back(tmp_path):
     d_o, d_v = step_nacs(str(tmp_path), 1, z["S_occ"], z["S_virt"], 2.0, "logm")
     assert np.allclose(d_o, nac_logm(z["S_occ"], 2.0)) and np.allclose(d_v, 0.0)
     assert compute_nac_files(str(tmp_path), workers=1, threads_per_worker=1) == 0     # restartable
+
+
+def test_pair_dephasing_cumulant_limits():
+    from qdex.namd.precompute import _pair_dephasing_times
+    hbar, dt, N = 0.6582119569, 2.0, 4000
+    rng = np.random.default_rng(7)
+    t = np.arange(N) * dt
+    # state 0 fixed; state 1: slow, large fluctuation (period 2 ps, std 0.05 eV) -> short-time Gaussian
+    # state 2: fast fluctuation (white noise, std 0.03 eV) -> motional narrowing, slower dephasing
+    E = np.zeros((N, 3))
+    E[:, 1] = 0.05 * np.sqrt(2) * np.sin(2 * np.pi * t / 2000.0 + 0.3)
+    E[:, 2] = 0.03 * rng.normal(size=N)
+    t1e, sig = _pair_dephasing_times(E, dt, 1500.0, hbar)
+    tau = t1e / np.sqrt(2)
+    assert tau[0, 1] == pytest.approx(hbar / sig[0, 1], rel=0.05)            # Gaussian limit
+    assert tau[0, 2] > 3 * hbar / sig[0, 2]                                 # narrowed: much slower than hbar/sigma
+    assert np.allclose(tau, tau.T, equal_nan=True)
+    # direct single-pair cumulant
+    x = E[:, 1] - E[:, 0]; x = x - x.mean(); L = 300
+    A = np.array([np.mean(x[:N - s] * x[s:]) for s in range(L)])
+    I1 = np.concatenate([[0], np.cumsum(0.5 * (A[1:] + A[:-1]) * dt)])
+    g = np.concatenate([[0], np.cumsum(0.5 * (I1[1:] + I1[:-1]) * dt)]) / hbar ** 2
+    k = np.argmax(g >= 1.0)
+    assert t1e[0, 1] == pytest.approx((k - 1 + (1 - g[k - 1]) / (g[k] - g[k - 1])) * dt, rel=1e-6)

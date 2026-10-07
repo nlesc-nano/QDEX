@@ -1187,16 +1187,55 @@ def compact_precomputed_data(precompute_dir, keep_frames=False, verbose=True):
     return size_before_mb, size_after_mb
 
 
+def _pair_dephasing_times(E, dt_fs, max_lag_fs, hbar=0.6582119569):
+    """Second-order cumulant dephasing of every pair of states from their energy trajectories.
+
+    E: (n_frames, n) energies (eV). For each pair the gap fluctuation dE_ij = d_i - d_j (d = E - <E>)
+    has the autocovariance A_ij(s) = C_ii(s) + C_jj(s) - C_ij(s) - C_ji(s), with the lagged covariance
+    C_ij(s) = <d_i(t) d_j(t+s)>_t (one matrix product per lag). The dephasing function is
+    D_ij(t) = exp(-g_ij(t)), g_ij(t) = (1/hbar^2) int_0^t dt1 int_0^t1 A_ij(t2) dt2, accumulated lag by
+    lag (trapezoid). Returns (t_1e, sigma): the time where D_ij = 1/e (nan where it is not reached
+    within max_lag_fs) and sigma_ij = sqrt(A_ij(0))."""
+    E = np.asarray(E, dtype=np.float64)
+    N, n = E.shape
+    d = E - E.mean(axis=0)
+    L = int(min(N - 2, max(1, round(max_lag_fs / dt_fs))))
+    def A_of(lag):
+        C = d[:N - lag].T @ d[lag:] / (N - lag)
+        c = np.diag(C)
+        return c[:, None] + c[None, :] - C - C.T
+    A_prev = A_of(0)
+    sigma = np.sqrt(np.maximum(A_prev, 0.0))
+    I1 = np.zeros((n, n)); g = np.zeros((n, n))
+    t_1e = np.full((n, n), np.nan)
+    coeff = dt_fs / hbar ** 2
+    for lag in range(1, L + 1):
+        A = A_of(lag)
+        I1_new = I1 + 0.5 * (A_prev + A) * dt_fs
+        g_new = g + 0.5 * (I1 + I1_new) * coeff
+        hit = np.isnan(t_1e) & (g_new >= 1.0)
+        if np.any(hit):                         # linear interpolation of the crossing g = 1
+            frac = (1.0 - g[hit]) / np.maximum(g_new[hit] - g[hit], 1e-30)
+            t_1e[hit] = (lag - 1 + frac) * dt_fs
+        I1, g, A_prev = I1_new, g_new, A
+        if not np.isnan(t_1e).any():
+            break
+    return t_1e, sigma
+
+
 def compute_trajectory_decoherence_times(
     precompute_dir,
     out_file="decoherence_times.npz",
     min_tau_fs=1.0,
     max_tau_fs=500.0,
     update_metadata=True,
-    verbose=True
+    verbose=True,
+    method="cumulant",
+    max_lag_fs=1000.0,
 ):
     """
     Computes state-pair pure-dephasing decoherence times from MD trajectory energy gap fluctuations
+    for every pair of occupied (hole channel) and of virtual (electron channel) states
     (Prezhdo et al. JCP 111, 8366 (1999); JPCL 5, 4172 (2014); Akimov & Prezhdo, JCP 138, 124102 (2013)).
 
     The optical dephasing function between states i and j is::
@@ -1207,7 +1246,13 @@ def compute_trajectory_decoherence_times(
 
         tau_ij = hbar / sigma_ij
 
-    where ``sigma_ij^2 = var(Delta E_ij) = var(E_i) + var(E_j) - 2 * cov(E_i, E_j)``.
+    where ``sigma_ij^2 = var(Delta E_ij) = var(E_i) + var(E_j) - 2 * cov(E_i, E_j)``. That is the
+    short-time (Gaussian) limit of the second-order cumulant, valid when the gap fluctuations stay
+    correlated for longer than hbar/sigma. ``method="cumulant"`` (default) evaluates the full cumulant
+    D_ij(t) = exp(-g_ij(t)) from the gap autocorrelation of every pair (_pair_dephasing_times) and keeps
+    the same Gaussian-width convention, tau_ij = t_1/e / sqrt(2) (= hbar/sigma_ij in the short-time limit);
+    pairs whose fluctuations decorrelate faster (motional narrowing) dephase more slowly than hbar/sigma.
+    Pairs that do not reach 1/e within max_lag_fs get max_tau_fs. ``method="gaussian"``: hbar/sigma.
 
     Parameters
     ----------
@@ -1266,31 +1311,27 @@ def compute_trajectory_decoherence_times(
         logger.info(f"  Occupied States  : {occ_arr.shape[1]}")
         logger.info(f"  Virtual States   : {virt_arr.shape[1]}")
 
-    # 1. Hole channel: cov(eps_i, eps_j)
-    cov_occ = np.cov(occ_arr, rowvar=False)
-    var_occ = np.diag(cov_occ)
-    var_diff_occ = np.maximum(var_occ[:, None] + var_occ[None, :] - 2.0 * cov_occ, 0.0)
-    sigma_occ = np.sqrt(var_diff_occ)
+    dt_fs = 2.0
+    meta_path = os.path.join(precompute_dir, "namd_metadata.npz")
+    if os.path.exists(meta_path):
+        dt_fs = float(np.load(meta_path)["dt_nuc_fs"])
 
-    tau_occ = np.zeros_like(sigma_occ)
-    mask_occ = sigma_occ > 1e-6
-    tau_occ[mask_occ] = HBAR_EV_FS / sigma_occ[mask_occ]
-    tau_occ[~mask_occ] = max_tau_fs
-    tau_occ = np.clip(tau_occ, min_tau_fs, max_tau_fs)
-    np.fill_diagonal(tau_occ, max_tau_fs)
+    def channel(arr):
+        t_1e, sigma = _pair_dephasing_times(arr, dt_fs, max_lag_fs, HBAR_EV_FS)
+        tau_gauss = np.where(sigma > 1e-6, HBAR_EV_FS / np.maximum(sigma, 1e-12), max_tau_fs)
+        if str(method).lower() == "gaussian":
+            tau = tau_gauss
+        else:
+            tau = np.where(np.isnan(t_1e), max_tau_fs, t_1e / np.sqrt(2.0))
+        tau = np.clip(tau, min_tau_fs, max_tau_fs)
+        np.fill_diagonal(tau, max_tau_fs)
+        return tau, sigma, np.clip(tau_gauss, min_tau_fs, max_tau_fs)
 
-    # 2. Electron channel: cov(eps_a, eps_b)
-    cov_virt = np.cov(virt_arr, rowvar=False)
-    var_virt = np.diag(cov_virt)
-    var_diff_virt = np.maximum(var_virt[:, None] + var_virt[None, :] - 2.0 * cov_virt, 0.0)
-    sigma_virt = np.sqrt(var_diff_virt)
-
-    tau_virt = np.zeros_like(sigma_virt)
-    mask_virt = sigma_virt > 1e-6
-    tau_virt[mask_virt] = HBAR_EV_FS / sigma_virt[mask_virt]
-    tau_virt[~mask_virt] = max_tau_fs
-    tau_virt = np.clip(tau_virt, min_tau_fs, max_tau_fs)
-    np.fill_diagonal(tau_virt, max_tau_fs)
+    # 1. Hole channel (occupied pairs), 2. electron channel (virtual pairs)
+    tau_occ, sigma_occ, tau_occ_gauss = channel(occ_arr)
+    tau_virt, sigma_virt, tau_virt_gauss = channel(virt_arr)
+    if verbose:
+        logger.info(f"  Method           : {method} (max lag {max_lag_fs:.0f} fs, dt {dt_fs:.2f} fs)")
 
     # Save to dedicated npz
     out_path = os.path.join(precompute_dir, out_file)
@@ -1300,6 +1341,9 @@ def compute_trajectory_decoherence_times(
         tau_virt=tau_virt,
         sigma_occ=sigma_occ,
         sigma_virt=sigma_virt,
+        tau_occ_gaussian=tau_occ_gauss,
+        tau_virt_gaussian=tau_virt_gauss,
+        method=np.array(str(method)),
         n_frames=n_frames
     )
 
@@ -1317,6 +1361,10 @@ def compute_trajectory_decoherence_times(
         offdiag_virt = tau_virt[~np.eye(tau_virt.shape[0], dtype=bool)]
         logger.info(f"  Hole Dephasing   (tau_occ)  : min={np.min(offdiag_occ):.2f} fs, median={np.median(offdiag_occ):.2f} fs, max={np.max(offdiag_occ):.2f} fs")
         logger.info(f"  Electron Dephasing (tau_virt): min={np.min(offdiag_virt):.2f} fs, median={np.median(offdiag_virt):.2f} fs, max={np.max(offdiag_virt):.2f} fs")
+        g_o = tau_occ_gauss[~np.eye(tau_occ.shape[0], dtype=bool)]
+        g_v = tau_virt_gauss[~np.eye(tau_virt.shape[0], dtype=bool)]
+        logger.info(f"  Short-time Gaussian hbar/sigma for comparison: median hole {np.median(g_o):.2f} fs, "
+                    f"electron {np.median(g_v):.2f} fs")
         logger.info(f"  Cached to: {out_path}")
         logger.info("=" * 65 + "\n")
 
