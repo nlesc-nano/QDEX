@@ -108,6 +108,67 @@ The k-path and the :math:`\mathbf{G}` replicas are expressed in the dot's frame,
 folding uses the reciprocal lattice of the dot itself.
 
 
+Displaying the Map
+~~~~~~~~~~~~~~~~~~
+
+The k-width of a state is physical: a dot of diameter :math:`D` has
+:math:`\Delta k \approx 2\pi/D`, about a quarter of :math:`\Gamma`-X for a 2.5 nm CdSe dot, and
+a typical state carries weight on most of the path. The energy width is not (``fuzzy_sigma``,
+0.01-0.03 eV). Two things blur the map on top of that, and the dashboard removes both:
+
+* The total weight :math:`\sum_\mathbf{k} I_m(\mathbf{k})` grows with the localisation of the
+  state in real space; a cation d or surface state carries up to ten times the weight of a band
+  edge state and dominates the colours. Each state is therefore normalised along the path,
+  :math:`P_m(\mathbf{k}) = I_m(\mathbf{k}) / \langle I_m \rangle_\mathbf{k}` (1 = spread evenly),
+  before the energy smearing.
+* A logarithmic colour scale over four decades turns the low-weight tails into a haze. The map
+  is drawn on a square-root scale of the normalised weight instead (``fuzzy_display_mode``
+  ``state_norm``, the default of ``generate_interactive_plot``; ``raw`` is the earlier log scale
+  of :math:`I_m`).
+
+The buttons above the map switch between views:
+
+``Map``
+   the energy-smeared map of :math:`P_m(\mathbf{k})`.
+``Map + states`` / ``States``
+   one marker per maximum of each state's k-profile, at the state's own energy, with the
+   marker area set by the weight (maxima above 1.5 times the mean of the state and 25 % of
+   its largest peak, searched separately on each continuous piece of the path). Nothing is
+   broadened, so this is the sharp version of the map: in the effective-mass picture an
+   envelope state :math:`nl` peaks at :math:`|\mathbf{k}| \approx x_{nl}/R`, and the markers
+   trace the bulk dispersion :math:`E(\mathbf{k})`.
+``j-character`` (SOC)
+   the map coloured by the spin-orbit energy of the spinors (below).
+
+**j character of the spinors.** In the basis
+:math:`(\phi_i\alpha, \phi_i\beta)` the spinor Hamiltonian is
+:math:`\mathrm{diag}(\varepsilon) + V_{SOC}`, so the spin-orbit energy of spinor :math:`n`
+follows from its eigenvalue and coefficients alone:
+
+.. math::
+
+   \langle V_{SOC} \rangle_n = E_n - \sum_i |U_{in}|^2 \varepsilon_i .
+
+For anion p states it is :math:`+\Delta_{so}/3` for :math:`j = 3/2` (heavy and light holes)
+and :math:`-2\Delta_{so}/3` for :math:`j = 1/2` (split-off); :math:`V_{SOC}` is traceless, so
+it averages to zero over the SOC window. The SOC markers are coloured by it (red
+:math:`j = 3/2`, blue :math:`j = 1/2`, white for the spin-free states outside the window), and
+the ``j-character`` view colours the map by the weighted mean of
+:math:`\langle V_{SOC}\rangle` in each pixel, with the brightness of the map. The value
+per state is stored as ``soc/fuzzy/soc_energy_ev`` in ``qdex_electronic.h5``.
+
+In the Cd\ :sub:`156`\ Se\ :sub:`111`\ Cl\ :sub:`90` dot (2.5 nm) the top 0.5 eV of the valence
+band is :math:`j = 3/2` (:math:`\langle V_{SOC}\rangle` = +0.04 to +0.075 eV, against
+:math:`\Delta_{so}/3` = +0.12 eV for bulk CdSe), but no state comes near the split-off value
+:math:`-2\Delta_{so}/3 \approx -0.24` eV: the :math:`j = 1/2` character is spread over the
+dense valence band from about 1.5 eV below the HOMO down (-0.005 eV per state on average). In an effective-mass
+estimate confinement puts the lowest split-off envelope state about 1 eV below the valence
+band maximum, among heavy- and light-hole states about 10 meV apart. In the bulk, k
+conservation keeps the split-off band apart from the heavy- and light-hole states at the same
+energy; in a dot the surface breaks it and the spin-orbit coupling mixes them. The mixing
+weakens as the dot grows and k becomes a better quantum number.
+
+
 Bulk Band Overlay
 ~~~~~~~~~~~~~~~~~
 

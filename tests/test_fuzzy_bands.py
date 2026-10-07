@@ -159,3 +159,60 @@ def test_material_db_bulk_pbe_gaps():
         assert MATERIAL_DB[key][2] == pytest.approx(v["a_exp"], abs=1e-3)
         assert v["a_pbe"] > 0.99 * v["a_exp"]                       # PBE lattices are not smaller
     assert MATERIAL_DB_BULK_PBE["GAAS"]["gap_exp_lattice"] > MATERIAL_DB_BULK_PBE["GAAS"]["gap_pbe_lattice"] + 0.3
+
+
+def test_state_weights_and_k_peaks():
+    from qdex.fuzzy_bands import state_weights, fuzzy_state_peaks
+    k = np.arange(60)
+    I = np.vstack([5.0 * np.exp(-0.5 * ((k - 20) / 3.0) ** 2) + 0.01,                  # one peak at k = 20
+                   np.exp(-0.5 * ((k - 10) / 2.0) ** 2) + np.exp(-0.5 * ((k - 45) / 2.0) ** 2),
+                   np.ones(60)])                                                      # flat: no peak
+    P = state_weights(I)
+    assert np.allclose(P.mean(axis=1), 1.0)
+    kk, ee, ww, nn = fuzzy_state_peaks(P, np.array([-1.0, 0.5, 2.0]), (-5, 5))
+    assert sorted(zip(nn.tolist(), kk.tolist())) == [(0, 20), (1, 10), (1, 45)]
+    assert np.all(ww > 1.5) and np.allclose(ee[nn == 1], 0.5)
+    # a jump in the path (K|U) splits the smoothing: a peak at the last point of a segment stays there
+    frac = np.zeros((60, 3))
+    frac[:, 0] = np.r_[np.linspace(0, 0.3, 30), np.linspace(0.6, 0.9, 30)]
+    edge = np.where(k < 30, np.exp(-0.5 * ((k - 29) / 3.0) ** 2), np.exp(-0.5 * ((k - 30) / 3.0) ** 2))[None, :] + 0.01
+    kk, *_ = fuzzy_state_peaks(state_weights(edge), np.array([0.0]), (-5, 5), kpts_frac=frac)
+    assert sorted(kk.tolist()) == [29, 30]                       # one peak per side of the jump
+    kk, *_ = fuzzy_state_peaks(state_weights(edge), np.array([0.0]), (-5, 5))
+    assert len(kk) == 1                                          # merged when the path is taken as continuous
+
+
+def test_spinor_soc_energy_is_the_soc_expectation_value():
+    from qdex.fuzzy_bands import spinor_soc_energy
+    rng = np.random.default_rng(3)
+    n = 12
+    eps = np.sort(rng.normal(size=n))
+    A = rng.normal(size=(n, n)) + 1j * rng.normal(size=(n, n))
+    V = 0.1 * (A + A.conj().T)
+    V -= np.trace(V).real / n * np.eye(n)          # V_SOC is traceless
+    E, U = np.linalg.eigh(np.diag(eps) + V)
+    v_ref = np.einsum("in,ij,jn->n", U.conj(), V, U).real
+    assert np.allclose(spinor_soc_energy(E, U, eps), v_ref)
+    assert np.allclose(spinor_soc_energy(E - 0.7, U, eps), v_ref)   # frames shifted by a constant
+
+
+def test_fuzzy_export_and_state_norm_display(tmp_path, monkeypatch):
+    from qdex.fuzzy_bands import smear_and_export_fuzzy
+    from qdex.plot_fuzzy import load_fuzzy, prepare_fuzzy_display
+    monkeypatch.chdir(tmp_path)
+    k = np.arange(40)
+    E = np.array([-1.0, -0.5, 0.5, 1.0])
+    I = np.vstack([np.exp(-0.5 * ((k - c) / 3.0) ** 2) * s + 1e-3 for c, s in zip((0, 10, 20, 30), (1.0, 50.0, 1.0, 2.0))])
+    labels = ["Γ"] + [""] * 38 + ["X"]
+    v = np.array([np.nan, 0.05, -0.1, np.nan])
+    smear_and_export_fuzzy(I, E, labels, (-2.0, 2.0), 0.02, prefix="soc", kpts_frac=np.c_[k / 40.0, k * 0, k * 0],
+                           soc_energy=v)
+    fz = load_fuzzy("fuzzy_data_soc.npz")
+    assert fz["Z_norm"] is not None and fz["peaks"]["k"].size >= 4
+    assert np.isnan(fz["peaks"]["soc_energy"][fz["peaks"]["state"] == 0]).all()
+    assert np.isclose(np.nanmax(fz["soc_energy_map"]), 0.05, atol=1e-3)
+    Zd, zmin, zmax, *_ = prepare_fuzzy_display(fz["Z"], "state_norm", Z_norm=fz["Z_norm"])
+    assert zmin == 0.0 and zmax == 1.0 and 0.0 <= Zd.min() and Zd.max() <= 1.0
+    # per state the 50x heavier state no longer dominates: both peaks reach comparable brightness
+    rows = [np.argmin(abs(fz["centres"] - e)) for e in (-0.5, 0.5)]
+    assert Zd[rows[0]].max() / Zd[rows[1]].max() < 1.5

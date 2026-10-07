@@ -295,11 +295,90 @@ def build_smeared_fuzzy(intensity, eps_plot, ewin, sigma_ev):
     return centres, Z
 
 
-def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="sf", export=True, kpts_frac=None):
+def state_weights(intensity):
+    """Weight of each state along the path normalised to a mean of 1 (1 = spread evenly over the path).
+
+    The raw |<phi|k>|^2 of a state summed over the folded replicas grows with its localisation in
+    real space (a cation d state carries ~10x the weight of a band-edge state), so on the raw map
+    the semicore and surface states dominate the colour scale; per state the k-profile is what
+    carries the band information."""
+    intensity = np.asarray(intensity, float)
+    mean = intensity.mean(axis=1, keepdims=True)
+    return np.divide(intensity, mean, out=np.zeros_like(intensity), where=mean > 0)
+
+
+def _path_segments(n_k, kpts_frac=None):
+    """Index ranges of the continuous pieces of the k-path (split where the path jumps, e.g. K|U)."""
+    if kpts_frac is None or len(kpts_frac) != n_k or n_k < 3:
+        return [(0, n_k)]
+    step = np.linalg.norm(np.diff(np.asarray(kpts_frac, float), axis=0), axis=1)
+    jumps = np.flatnonzero(step > 3.0 * np.median(step[step > 1e-9])) + 1
+    edges = [0, *jumps.tolist(), n_k]
+    return [(a, b) for a, b in zip(edges[:-1], edges[1:]) if b > a]
+
+
+def fuzzy_state_peaks(P, energies, ewin, kpts_frac=None, min_weight=1.5, rel_prominence=0.25, smooth=1.0):
+    """Dominant k of every state: the maxima of its normalised k-profile (state_weights).
+
+    A peak is kept when it is above `min_weight` (times the mean of the state) and stands out by
+    `rel_prominence` of the state's maximum. Returns (k index, energy, weight, state index), one
+    entry per peak. These are the sharp counterpart of the energy-smeared map: one marker per state
+    at its own energy, at the wavevectors where its envelope is concentrated."""
+    from scipy.ndimage import gaussian_filter1d
+    from scipy.signal import find_peaks
+    P = np.asarray(P, float)
+    energies = np.asarray(energies, float)
+    segs = _path_segments(P.shape[1], kpts_frac)
+    ks, es, ws, ns = [], [], [], []
+    for n in np.flatnonzero((energies >= ewin[0]) & (energies <= ewin[1])):
+        p = np.concatenate([gaussian_filter1d(P[n, a:b], smooth, mode="nearest") if b - a > 2 else P[n, a:b]
+                            for a, b in segs])
+        if p.max() < min_weight:
+            continue
+        pk = np.concatenate([a + find_peaks(np.r_[0.0, p[a:b], 0.0], height=min_weight,
+                                            prominence=rel_prominence * p.max())[0] - 1 for a, b in segs])
+        ks.append(pk); ws.append(p[pk])
+        es.append(np.full(pk.size, energies[n])); ns.append(np.full(pk.size, n))
+    if not ks:
+        return np.zeros(0, int), np.zeros(0), np.zeros(0), np.zeros(0, int)
+    return np.concatenate(ks), np.concatenate(es), np.concatenate(ws), np.concatenate(ns)
+
+
+def spinor_soc_energy(soc_E, soc_U, eps_spin):
+    """<psi_n|V_SOC|psi_n> of every spinor of the window, in the units of soc_E.
+
+    In the basis (phi_i alpha, phi_i beta) the spinor Hamiltonian is diag(eps) + V_SOC, so
+    <V>_n = E_n - sum_i |U_in|^2 eps_i. V_SOC has a zero trace (L is purely imaginary in a real
+    basis), so a constant offset between the frames of soc_E and eps_spin is removed by setting the
+    mean over the window to zero. For p-like states <V> = +Delta_so/3 for j = 3/2 and -2 Delta_so/3
+    for j = 1/2: the sign tells the heavy/light-hole states from the split-off ones."""
+    soc_U = np.asarray(soc_U)
+    v = np.asarray(soc_E, float) - (np.abs(soc_U) ** 2 * np.asarray(eps_spin, float)[:, None]).sum(axis=0)
+    return v - v.mean()
+
+
+def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="sf", export=True, kpts_frac=None,
+                           soc_energy=None):
+    """Write fuzzy_data_<prefix>.npz for the dashboard: the energy-smeared map of the raw weights
+    (intensity), of the per-state normalised weights (intensity_norm), the k-peaks of every state
+    (peak_*) and, for spinors, their spin-orbit energy <V_SOC> (soc_energy: per state, NaN where
+    no SOC was applied) as a weighted map (soc_energy_map) and on the peaks."""
     if not export:
         return
     t0 = time.time()
     centres, Z = build_smeared_fuzzy(intensity, eps_plot, ewin, sigma_ev)
+    P = state_weights(intensity)
+    _, Zn = build_smeared_fuzzy(P, eps_plot, ewin, sigma_ev)
+    pk_k, pk_e, pk_w, pk_n = fuzzy_state_peaks(P, eps_plot, ewin, kpts_frac=kpts_frac)
+    soc_extra = {}
+    if soc_energy is not None:
+        v = np.asarray(soc_energy, float)
+        has = np.isfinite(v)
+        _, Zv = build_smeared_fuzzy(P[has] * v[has, None], eps_plot[has], ewin, sigma_ev)
+        _, Zh = build_smeared_fuzzy(P[has], eps_plot[has], ewin, sigma_ev)
+        vmap = np.divide(Zv, Zh, out=np.full_like(Zv, np.nan), where=Zh > 1e-3 * max(Zh.max(), 1e-30))
+        soc_extra = dict(soc_energy=v.astype(np.float32), soc_energy_map=vmap.astype(np.float32),
+                         peak_soc_energy=v[pk_n].astype(np.float32))
 
     # ====================================================================
     # SCIENTIFIC FIX: CLEAN K-PATH LABELS & MERGE PATH BREAKS
@@ -326,8 +405,12 @@ def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="
     np.savez_compressed(
         out_name,
         **extra,
+        **soc_extra,
         centres=centres.astype(np.float32),
         intensity=Z.astype(np.float32),
+        intensity_norm=Zn.astype(np.float32),
+        peak_k=pk_k.astype(np.int32), peak_energy=pk_e.astype(np.float32),
+        peak_weight=pk_w.astype(np.float32), peak_state=pk_n.astype(np.int32),
         tick_positions=np.array(valid_idx, dtype=np.float32),
         tick_labels=np.array(valid_labels, dtype=object),
         ewin=np.array(ewin, dtype=np.float32),
@@ -341,6 +424,10 @@ def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_
     centres, Z_a = build_smeared_fuzzy(intensity_alpha, eps_alpha, ewin, sigma_ev)
     _, Z_b = build_smeared_fuzzy(intensity_beta, eps_beta, ewin, sigma_ev)
     Z_total = Z_a + Z_b
+    P_ab = state_weights(np.vstack([intensity_alpha, intensity_beta]))
+    E_ab = np.concatenate([eps_alpha, eps_beta])
+    _, Zn = build_smeared_fuzzy(P_ab, E_ab, ewin, sigma_ev)
+    pk_k, pk_e, pk_w, pk_n = fuzzy_state_peaks(P_ab, E_ab, ewin, kpts_frac=kpts_frac)
     spinpol = np.divide(Z_a - Z_b, Z_total, out=np.zeros_like(Z_total), where=Z_total > 1e-14)
 
     valid_idx = []
@@ -365,7 +452,10 @@ def smear_and_export_spin_fuzzy(intensity_alpha, eps_alpha, intensity_beta, eps_
     )
     if kpts_frac is not None:
         common["kpath_frac"] = np.asarray(kpts_frac, dtype=np.float64)
-    np.savez_compressed(f"fuzzy_data_{prefix}.npz", intensity=Z_total.astype(np.float32), spinpol=spinpol.astype(np.float32), **common)
+    np.savez_compressed(f"fuzzy_data_{prefix}.npz", intensity=Z_total.astype(np.float32), spinpol=spinpol.astype(np.float32),
+                        intensity_norm=Zn.astype(np.float32), peak_k=pk_k.astype(np.int32),
+                        peak_energy=pk_e.astype(np.float32), peak_weight=pk_w.astype(np.float32),
+                        peak_state=pk_n.astype(np.int32), **common)
     np.savez_compressed(f"fuzzy_data_{prefix}_alpha.npz", intensity=Z_a.astype(np.float32), **common)
     np.savez_compressed(f"fuzzy_data_{prefix}_beta.npz", intensity=Z_b.astype(np.float32), **common)
     logger.debug(f"  [Fuzzy-UKS] Exported fuzzy_data_{prefix}.npz with spin polarization overlay in {time.time()-t0:.2f} s")
@@ -661,9 +751,21 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             I_virt_rows[plot_keep[n_core_rows + n_act:]],
         ])
         eps_soc_plot_unsorted = eps_soc_unsorted[plot_keep]
+        # <V_SOC> of the active spinors (j = 3/2 vs 1/2 character); NaN for the spin-free core/virtual rows
+        if soc_uks:
+            eps_spin_act = np.concatenate([eps_shifted[soc_active_indices], eps_beta_shifted[soc_active_indices_beta]])
+        else:
+            eps_spin_act = np.concatenate([eps_shifted[soc_active_indices], eps_shifted[soc_active_indices]])
+        v_act = spinor_soc_energy(soc_E_act, soc_U_act, eps_spin_act)
+        v_soc_plot_unsorted = np.concatenate([
+            np.full(int(plot_keep[:n_core_rows].sum()), np.nan),
+            v_act[plot_keep[n_core_rows:n_core_rows + n_act]],
+            np.full(int(plot_keep[n_core_rows + n_act:].sum()), np.nan),
+        ])
         sort_idx = np.argsort(eps_soc_plot_unsorted)
         eps_soc = eps_soc_plot_unsorted[sort_idx]
         intensity_soc = I_plot_unsorted[sort_idx, :]
+        soc_energy_plot = v_soc_plot_unsorted[sort_idx]
         soc_ewin = dft_ewin
         occupied_plot = np.where(eps_soc <= 0.0)[0]
         global_spinor_homo_idx = int(occupied_plot[-1]) if occupied_plot.size else 0
@@ -673,11 +775,12 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         logger.info(f"  [Fuzzy-SOC] Spinor LUMO (Idx {global_spinor_homo_idx + 1}): {eps_soc[global_spinor_homo_idx + 1]:8.4f} eV")
         logger.info(f"  [Fuzzy-SOC] ----------------------------------") 
         
-        smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc", export=export_files, kpts_frac=kpts_frac)
+        smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc", export=export_files,
+                               kpts_frac=kpts_frac, soc_energy=soc_energy_plot)
         if store is not None:
             from qdex.store import put_fuzzy
             put_fuzzy(store, "soc", kpts_cart, labels, eps_soc, intensity_soc, sigma_use, soc_ewin, kpts_frac=kpts_frac,
-                      cif=args.cif)
+                      cif=args.cif, soc_energy=soc_energy_plot)
 
         eps_soc_qp = None
         sort_idx_qp = None
@@ -695,7 +798,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             sort_idx_qp = np.argsort(eps_soc_qp_unsorted)
             eps_soc_qp = eps_soc_qp_unsorted[sort_idx_qp]
             intensity_soc_qp = I_plot_unsorted[sort_idx_qp, :]
-            smear_and_export_fuzzy(intensity_soc_qp, eps_soc_qp, labels, soc_qp_ewin, sigma_use, prefix="soc_qp", kpts_frac=kpts_frac)
+            smear_and_export_fuzzy(intensity_soc_qp, eps_soc_qp, labels, soc_qp_ewin, sigma_use, prefix="soc_qp", kpts_frac=kpts_frac,
+                                   soc_energy=v_soc_plot_unsorted[sort_idx_qp])
         
         if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
             logger.info("  [PDOS/COOP] Computing SOC Spinor population analysis...")

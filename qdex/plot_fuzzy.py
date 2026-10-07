@@ -15,14 +15,25 @@ def load_fuzzy(npz_path):
     Z = np.asarray(d["intensity"], dtype=float)
     centres = np.asarray(d["centres"], dtype=float)
     spinpol = np.asarray(d["spinpol"], dtype=float) if "spinpol" in d else None
+    Zn = np.asarray(d["intensity_norm"], dtype=float) if "intensity_norm" in d else None
+    vmap = np.asarray(d["soc_energy_map"], dtype=float) if "soc_energy_map" in d else None
     step = int(np.ceil((Z.size / 250_000) ** 0.5))
     if step > 1:
         Z = Z[::step, ::step]
         centres = centres[::step]
         if spinpol is not None:
             spinpol = spinpol[::step, ::step]
+        if Zn is not None:
+            Zn = Zn[::step, ::step]
+        if vmap is not None:
+            vmap = vmap[::step, ::step]
+    peaks = None
+    if "peak_k" in d:   # k index on the original (not downsampled) path axis, like the extent
+        peaks = dict(k=np.asarray(d["peak_k"], float), energy=np.asarray(d["peak_energy"], float),
+                     weight=np.asarray(d["peak_weight"], float), state=np.asarray(d["peak_state"], int),
+                     soc_energy=np.asarray(d["peak_soc_energy"], float) if "peak_soc_energy" in d else None)
     return dict(
-        centres=centres, Z=Z, 
+        centres=centres, Z=Z, Z_norm=Zn, soc_energy_map=vmap, peaks=peaks,
         spinpol=spinpol,
         tick_positions=np.asarray(d.get("tick_positions", []), dtype=float), 
         tick_labels=[str(x) for x in d.get("tick_labels", [])],
@@ -46,7 +57,23 @@ def load_ipr_csv(csv_path):
     df = pd.read_csv(csv_path)
     return df.iloc[:, 0].to_numpy(dtype=float), df.iloc[:, 1].to_numpy(dtype=float)
 
-def prepare_fuzzy_display(Z, fuzzy_display_mode="raw"):
+def prepare_fuzzy_display(Z, fuzzy_display_mode="state_norm", Z_norm=None):
+    """Colour data of the fuzzy map: (values, zmin, zmax, vmin_base, vmax).
+
+    state_norm (default): each state's k-profile normalised to the same total weight
+    (fuzzy_bands.state_weights), energy-smeared, on a square-root colour scale. The localised
+    semicore/surface states no longer dominate the colours and the low-weight tails, which the
+    logarithmic scale of 'raw' spreads over four decades, fade into the background.
+    Falls back to 'raw' (log10 of the raw weights) for files without the normalised map."""
+    if fuzzy_display_mode == "state_norm" and Z_norm is None:
+        fuzzy_display_mode = "raw"
+    if fuzzy_display_mode == "state_norm":
+        Zpos = Z[Z > 1e-9]
+        vmin_base = float(np.percentile(Zpos, 5)) if Zpos.size else 1e-6
+        v = float(np.percentile(Z_norm, 99.7))
+        v = v if v > 0 else 1.0
+        return np.sqrt(np.clip(Z_norm / v, 0.0, 1.0)).astype(np.float32), 0.0, 1.0, vmin_base, v
+
     if fuzzy_display_mode == "raw":
         Zpos = Z[Z > 1e-9]
         vmax = float(np.percentile(Z, 99.9))
@@ -91,7 +118,7 @@ def prepare_fuzzy_display(Z, fuzzy_display_mode="raw"):
         return np.log10(Zplot), zmin, zmax, 10.0**zmin, 10.0**zmax
 
     if fuzzy_display_mode != "column_norm":
-        raise ValueError("fuzzy_display_mode must be 'raw', 'column_norm', 'background_subtracted', or 'soft_log'")
+        raise ValueError("fuzzy_display_mode must be 'state_norm', 'raw', 'column_norm', 'background_subtracted', or 'soft_log'")
 
     Zplot = Z.astype(np.float32, copy=True)
     col_ref = np.percentile(Zplot, 99, axis=0)
@@ -155,7 +182,7 @@ def parse_cube(filepath):
     atoms_ang = [(z, ax*BOHR_TO_ANG, ay*BOHR_TO_ANG, az*BOHR_TO_ANG) for z, charge, ax, ay, az in atoms]
     return X.flatten(), Y.flatten(), Z.flatten(), V.flatten(), atoms_ang
 
-def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=None, e_lumo=None, normalize_coop=False, energy_label="Energy (eV)", output_html=None, fuzzy_display_mode="raw", bulk_bs_path=None, bulk_alignment="core_level", bulk_semicore_rel=None, bulk_overlay=True, bulk_cif=None, bulk_semicore_label=None):
+def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=None, e_lumo=None, normalize_coop=False, energy_label="Energy (eV)", output_html=None, fuzzy_display_mode="state_norm", bulk_bs_path=None, bulk_alignment="core_level", bulk_semicore_rel=None, bulk_overlay=True, bulk_cif=None, bulk_semicore_label=None):
     if prefix.startswith("soc"):
         lbl = "SOC"
     elif prefix.startswith("uks"):
@@ -175,17 +202,38 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         subplot_titles=(f"{lbl} Fuzzy Bands", "PDOS", "IPR", "Surf/Core", "COOP")
     )
     
+    # Header above the panels, laid out in pixels from the top of the figure so that nothing
+    # overlaps at any window width: one row of controls, the colour bars stacked over the fuzzy
+    # panel, and one vertical legend over each of the panels it belongs to.
+    fig_height, top, bottom = 960, 270, 100
+    plot_h = fig_height - top - bottom
+
+    def y_px(d):
+        """Paper y of a point `d` pixels below the top of the figure."""
+        return 1.0 + (top - d) / plot_h
+
+    def x_col(col):
+        return float(fig.layout[f"xaxis{'' if col == 1 else col}"].domain[0])
+
+    def colorbar(title, row, **kw):
+        """Horizontal colour bar over the fuzzy panel, title on top; row 0 or 1 of the stack."""
+        return dict(title=dict(text=title, side="top", font=dict(size=16)), orientation="h", len=0.30, thickness=14,
+                    x=0.0, xanchor="left", y=y_px(52 + 70 * row), yanchor="top", tickfont=dict(size=14), **kw)
+
+    def legend(title, col):
+        return dict(title=dict(text=f"<b>{title}</b>", font=dict(size=17), side="top"), orientation="v",
+                    x=x_col(col), xanchor="left", y=y_px(52), yanchor="top", font=dict(size=15),
+                    bgcolor="rgba(255,255,255,0)", tracegroupgap=2)
+
     fig.update_layout(
-        template="plotly_white", paper_bgcolor="white", plot_bgcolor="white", 
-        height=900,  
+        template="plotly_white", paper_bgcolor="white", plot_bgcolor="white",
+        height=fig_height,
         font=dict(family="Helvetica, Arial, sans-serif", size=24, color="#222"),
-        margin=dict(l=100, r=40, t=220, b=100),
-        legend=dict(title=dict(text="<b>Atoms</b>", font=dict(size=20)), orientation="h", x=0.45, xanchor="center", y=1.08, yanchor="bottom", font=dict(size=18), bgcolor="rgba(255,255,255,0)"),
-        legend2=dict(title=dict(text="<b>Localization</b>", font=dict(size=20)), orientation="h", x=0.68, xanchor="center", y=1.08, yanchor="bottom", font=dict(size=18), bgcolor="rgba(255,255,255,0)"),
-        legend3=dict(title=dict(text="<b>Bonds</b>", font=dict(size=20)), orientation="h", x=0.89, xanchor="center", y=1.08, yanchor="bottom", font=dict(size=18), bgcolor="rgba(255,255,255,0)")
+        margin=dict(l=100, r=40, t=top, b=bottom),
+        legend=legend("Atoms", 2), legend2=legend("Localization", 3), legend3=legend("Bonds", 5),
     )
 
-    for annotation in fig['layout']['annotations']: annotation['font'] = dict(size=28, family="Helvetica", color="#111")
+    for annotation in fig['layout']['annotations']: annotation['font'] = dict(size=24, family="Helvetica", color="#111")
     palette = ["#636EFA","#EF553B","#00CC96","#AB63FA","#FFA15A","#19D3F3","#FF6692"]
     
     fuzzy = load_fuzzy(f"fuzzy_data_{prefix}.npz")
@@ -196,19 +244,91 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
 
     Z, ewin = fuzzy["Z"], fuzzy["ewin"]
     kx = np.linspace(fuzzy["extent"][0], fuzzy["extent"][1], Z.shape[1])
-    Z_display, zmin_display, zmax_display, vmin_base, vmax = prepare_fuzzy_display(Z, fuzzy_display_mode=fuzzy_display_mode)
+    if fuzzy_display_mode == "state_norm" and fuzzy.get("Z_norm") is None:
+        fuzzy_display_mode = "raw"
+    Z_display, zmin_display, zmax_display, vmin_base, vmax = prepare_fuzzy_display(
+        Z, fuzzy_display_mode=fuzzy_display_mode, Z_norm=fuzzy.get("Z_norm"))
+    norm_mode = fuzzy_display_mode == "state_norm"
     
     fig.add_shape(type="rect", xref="x", yref="y", x0=kx[0], x1=kx[-1], y0=ewin[0], y1=ewin[1], fillcolor="black", line=dict(width=0), layer="below") 
 
+    cbar_title = "<b>√ weight (per state)</b>" if norm_mode else "<b>log₁₀(I)</b>"
     heat = go.Heatmap(
         z=Z_display, x=kx, y=fuzzy["centres"], colorscale="Inferno",
         zmin=zmin_display, zmax=zmax_display, showscale=True,
-        zsmooth="best",  # <--- ADD THIS EXACT LINE
-        colorbar=dict(title=dict(text="<b>log₁₀(I)</b>", font=dict(size=20)), orientation="h", len=0.30, thickness=20, x=0.17, xanchor="center", y=1.08, yanchor="bottom", tickfont=dict(size=18)),
-        hovertemplate="k-point %{x:.0f}<br>E=%{y:.3f} eV<br>log10(I)=%{z:.2f}<extra></extra>"
+        zsmooth="best",
+        colorbar=colorbar(cbar_title, 0, **(dict(tickvals=[0, 0.5, 1]) if norm_mode else {})),
+        hovertemplate="k-point %{x:.0f}<br>E=%{y:.3f} eV<br>" + ("√w" if norm_mode else "log10(I)") + "=%{z:.2f}<extra></extra>"
     )
 
     fig.add_trace(heat, row=1, col=1)
+    view_traces = {"map": [len(fig.data) - 1], "states": [], "jmap": []}
+
+    # j = 3/2 / 1/2 character of the spinors: <V_SOC> averaged over the states in each pixel
+    peaks = fuzzy.get("peaks")
+    soc_char = fuzzy.get("soc_energy_map") is not None
+    V_TITLE = "<b>⟨V<sub>SOC</sub>⟩ (eV)</b>  − j=½ · + j=3/2"
+    v_lim = 0.2
+    if soc_char:
+        v_all = peaks["soc_energy"] if peaks is not None and peaks["soc_energy"] is not None else fuzzy["soc_energy_map"]
+        v_all = v_all[np.isfinite(v_all)]
+        if v_all.size:
+            v_lim = max(float(np.percentile(np.abs(v_all), 98)), 0.02)
+        # j-character view: hue = j character (red j = 3/2, blue j = 1/2, grey mixed or no SOC),
+        # brightness = the weight of the map (a translucent overlay on the map washes the colours out)
+        bright = Z_display if norm_mode else np.clip((np.nan_to_num(Z_display, nan=zmin_display) - zmin_display)
+                                                     / max(zmax_display - zmin_display, 1e-12), 0.0, 1.0)
+        t = np.clip(np.nan_to_num(fuzzy["soc_energy_map"] / v_lim, nan=0.0), -1.0, 1.0)
+        # a heatmap with a composite colour scale (an image trace would force equal axis scales):
+        # n_hue bins from blue to red, each a ramp from black to its colour; value = bin + brightness
+        n_hue = 21
+        grey, red, blue = np.array([204, 204, 204]), np.array([255, 64, 38]), np.array([64, 140, 255])
+        stops = []
+        for h in range(n_hue):
+            th = 2.0 * h / (n_hue - 1) - 1.0
+            c = grey + max(th, 0.0) * (red - grey) + max(-th, 0.0) * (blue - grey)
+            stops += [[h / n_hue, "rgb(0,0,0)"], [(h + 0.999) / n_hue, "rgb(%d,%d,%d)" % tuple(c.round().astype(int))]]
+        stops.append([1.0, stops[-1][1]])
+        hue = np.rint((t + 1.0) / 2.0 * (n_hue - 1))
+        code = hue + 0.999 * np.clip(np.nan_to_num(bright, nan=0.0), 0.0, 1.0)
+        fig.add_trace(go.Heatmap(z=code.astype(np.float32), x=kx, y=fuzzy["centres"], colorscale=stops, zmin=0.0, zmax=float(n_hue),
+                                 zsmooth=False, showscale=False, visible=False, hoverinfo="skip"), row=1, col=1)
+        view_traces["jmap"].append(len(fig.data) - 1)
+        # colour bar of the j-character view
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", showlegend=False, visible=False, hoverinfo="skip",
+                                 marker=dict(color=[0.0], colorscale=[[0, "rgb(64,140,255)"], [0.5, "rgb(204,204,204)"], [1, "rgb(255,64,38)"]],
+                                             cmin=-v_lim, cmax=v_lim, showscale=True,
+                                             colorbar=colorbar(V_TITLE, 1, tickvals=[-v_lim, 0.0, v_lim], ticktext=[f"{-v_lim:.2f}", "0", f"+{v_lim:.2f}"]))), row=1, col=1)
+        view_traces["jmap"].append(len(fig.data) - 1)
+
+    # Dominant k of every state: one marker per k-peak at the state's own energy (no broadening)
+    if peaks is not None and peaks["k"].size:
+        # Kramers pairs of spinors (and degenerate MOs) give the same marker twice: keep one
+        _, first = np.unique(np.stack([peaks["k"], np.round(peaks["energy"], 4)], axis=1), axis=0, return_index=True)
+        keep = np.zeros(peaks["k"].size, bool); keep[first] = True
+        in_win = keep & (peaks["energy"] >= ewin[0]) & (peaks["energy"] <= ewin[1])
+        w = peaks["weight"]
+        w_ref = max(float(np.percentile(w[in_win], 99)) if in_win.any() else float(w.max()), 2.0)
+        size = 2.5 + 6.5 * np.sqrt(np.clip((w - 1.5) / (w_ref - 1.5), 0.0, 1.0))
+        v_pk = peaks["soc_energy"]
+        groups = [(in_win & np.isfinite(v_pk), True), (in_win & ~np.isfinite(v_pk), False)] if v_pk is not None else [(in_win, False)]
+        for sel, coloured in groups:
+            if not sel.any():
+                continue
+            if coloured:
+                marker = dict(size=size[sel], color=v_pk[sel], colorscale="RdBu_r", cmin=-v_lim, cmax=v_lim,
+                              line=dict(width=0.3, color="rgba(0,0,0,0.5)"), opacity=0.9, showscale=True,
+                              colorbar=colorbar(V_TITLE, 1, tickvals=[-v_lim, 0.0, v_lim], ticktext=[f"{-v_lim:.2f}", "0", f"+{v_lim:.2f}"]))
+                custom = np.stack([peaks["state"][sel], w[sel], v_pk[sel]], axis=1)
+                hover = "state %{customdata[0]:.0f}<br>E=%{y:.3f} eV, k-point %{x:.0f}<br>weight %{customdata[1]:.1f}× mean<br>⟨V_SOC⟩=%{customdata[2]:.3f} eV<extra></extra>"
+            else:
+                marker = dict(size=size[sel], color="rgba(235,235,235,0.9)", line=dict(width=0.3, color="rgba(0,0,0,0.5)"))
+                custom = np.stack([peaks["state"][sel], w[sel]], axis=1)
+                hover = "state %{customdata[0]:.0f}<br>E=%{y:.3f} eV, k-point %{x:.0f}<br>weight %{customdata[1]:.1f}× mean<extra></extra>"
+            fig.add_trace(go.Scattergl(x=peaks["k"][sel], y=peaks["energy"][sel], mode="markers", marker=marker,
+                                       customdata=custom, hovertemplate=hover, showlegend=False, visible=False),
+                          row=1, col=1)
+            view_traces["states"].append(len(fig.data) - 1)
 
     if fuzzy.get("spinpol") is not None:
         spinpol = fuzzy["spinpol"].astype(float, copy=True)
@@ -218,12 +338,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                 z=spinpol, x=kx, y=fuzzy["centres"],
                 colorscale="RdBu", zmin=-1.0, zmax=1.0,
                 opacity=0.38, showscale=True, zsmooth="best",
-                colorbar=dict(
-                    title=dict(text="<b>α-β</b>", font=dict(size=20)),
-                    orientation="h", len=0.18, thickness=16,
-                    x=0.38, xanchor="center", y=1.08, yanchor="bottom",
-                    tickfont=dict(size=16)
-                ),
+                colorbar=colorbar("<b>spin polarisation α−β</b>", 1, tickvals=[-1, 0, 1]),
                 hovertemplate="k-point %{x:.0f}<br>E=%{y:.3f} eV<br>spin pol=%{z:.2f}<extra></extra>"
             ),
             row=1, col=1
@@ -253,9 +368,9 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                     segments = [(np.linspace(fuzzy["extent"][0], fuzzy["extent"][1], bulk_data["n_k"]),
                                  bulk_data["bands_aligned"])]
                 if bulk_data.get("soc"):
-                    bulk_name = "Bulk PBE+SOC bands"
+                    bulk_name = "Bulk PBE+SOC"
                 else:
-                    bulk_name = "Bulk PBE bands (no SOC)" if lbl == "SOC" else "Bulk PBE bands"
+                    bulk_name = "Bulk PBE, no SOC" if lbl == "SOC" else "Bulk PBE"
                 first = True
                 for x_seg, b_seg in segments:
                     for b_i in range(b_seg.shape[1]):
@@ -339,24 +454,51 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
 
     if e_homo is not None and e_lumo is not None:
         gap = e_lumo - e_homo
-        fig.add_annotation(x=0.03, y=reference_y, xref="x domain", yref="y", text=f"<b>E<sub>g</sub> = {gap:.3f} eV</b>", showarrow=False, font=dict(color="white", size=24), xanchor="left", yanchor="bottom", yshift=8)
-        fig.add_annotation(x=0.97, y=e_homo, xref="x domain", yref="y", text="<b>HOMO</b>", showarrow=False, font=dict(color="royalblue", size=22), xanchor="right", yanchor="bottom", yshift=6)
-        fig.add_annotation(x=0.97, y=e_lumo, xref="x domain", yref="y", text="<b>LUMO</b>", showarrow=False, font=dict(color="crimson", size=22), xanchor="right", yanchor="top", yshift=-6)
+        # in the PDOS panel, which is empty around the gap (the WebGL markers of the fuzzy panel would
+        # cover them): the gap on the mid-gap line, HOMO below its line, LUMO above its line
+        fig.add_annotation(x=0.97, y=reference_y, xref="x2 domain", yref="y", text=f"<b>E<sub>g</sub> = {gap:.3f} eV</b>", showarrow=False, font=dict(color="#222", size=17), xanchor="right", yanchor="middle", bgcolor="white")
+        fig.add_annotation(x=0.97, y=e_homo, xref="x2 domain", yref="y", text="<b>HOMO</b>", showarrow=False, font=dict(color="royalblue", size=16), xanchor="right", yanchor="top", yshift=-4)
+        fig.add_annotation(x=0.97, y=e_lumo, xref="x2 domain", yref="y", text="<b>LUMO</b>", showarrow=False, font=dict(color="crimson", size=16), xanchor="right", yanchor="bottom", yshift=4)
 
     for col in range(1, 6):
         fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks="outside", gridcolor='rgba(0,0,0,0.1)', zeroline=False, row=1, col=col)
         fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks="outside", gridcolor='rgba(0,0,0,0.1)', zeroline=False, row=1, col=col)
         
     fig.update_yaxes(range=[ewin[0], ewin[1]], title_text=f"<b>{energy_label}</b>", title_font=dict(size=28), row=1, col=1)
-    fig.update_xaxes(title_text="<b>k-Path</b>", title_font=dict(size=28), tickangle=0, row=1, col=1)
+    fig.update_xaxes(title_text="<b>k-Path</b>", title_font=dict(size=28), tickangle=0, tickfont=dict(size=17), row=1, col=1)
     fig.update_xaxes(title_text="<b>DOS</b>", title_font=dict(size=28), row=1, col=2)
     fig.update_xaxes(title_text="<b>IPR</b>", title_font=dict(size=28), tickvals=[0, 0.5, 1.0], row=1, col=3)
     fig.update_xaxes(title_text="<b>Char</b>", title_font=dict(size=28), tickvals=[0, 0.5, 1.0], row=1, col=4)
     fig.update_xaxes(title_text="<b>COOP</b>", title_font=dict(size=28), row=1, col=5)
 
-    opts = [1, 10, 100, 1000]
-    buttons = [dict(label=f"Contrast: {s}x", method="restyle", args=[{"zmin": [float(np.log10(max(vmin_base, vmax/s)))]}, [0]]) for s in opts]
-    fig.update_layout(updatemenus=[dict(type="dropdown", buttons=buttons, x=0.17, y=1.24, xanchor="center", yanchor="bottom", font=dict(size=20), bgcolor="#f8f9fa", bordercolor="black")])
+    if norm_mode:   # saturate the colour scale at 1/s of the reference weight
+        buttons = [dict(label=f"Contrast: {s}x", method="restyle", args=[{"zmax": [float(1.0 / np.sqrt(s))]}, [0]]) for s in (1, 2, 4, 8)]
+    else:
+        buttons = [dict(label=f"Contrast: {s}x", method="restyle", args=[{"zmin": [float(np.log10(max(vmin_base, vmax/s)))]}, [0]]) for s in (1, 10, 100, 1000)]
+    # controls in the top row: contrast at the left, the views next to it (offset in pixels)
+    menus = [dict(type="dropdown", buttons=buttons, x=0.0, y=y_px(6), xanchor="left", yanchor="top",
+                  pad=dict(l=0, t=0), font=dict(size=16), bgcolor="#f8f9fa", bordercolor="black")]
+
+    # Views of the fuzzy panel: smeared map, map + k-peak markers of the states, markers only,
+    # and (SOC) the map coloured by the j = 3/2 / 1/2 character
+    views = []
+    if view_traces["states"]:
+        views += [("Map", ["map"]), ("Map + states", ["map", "states"]), ("States", ["states"])]
+    if view_traces["jmap"]:
+        views += [("j-character", ["jmap"])] if views else [("Map", ["map"]), ("j-character", ["jmap"])]
+    if views:
+        managed = view_traces["map"] + view_traces["states"] + view_traces["jmap"]
+        def _visible(parts):
+            on = {i for part in parts for i in view_traces[part]}
+            return [i in on for i in managed]
+        default = 1 if view_traces["states"] else 0
+        for i, vis in zip(managed, _visible(views[default][1])):
+            fig.data[i].visible = vis
+        menus.append(dict(type="buttons", direction="right", active=default, x=0.0, y=y_px(6), xanchor="left", yanchor="top",
+                          pad=dict(l=150, t=0), font=dict(size=16), bgcolor="#f8f9fa", bordercolor="black", showactive=True,
+                          buttons=[dict(label=lab, method="restyle", args=[{"visible": _visible(parts)}, managed])
+                                   for lab, parts in views]))
+    fig.update_layout(updatemenus=menus)
 
     plot_2d_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'displaylogo': False})
 

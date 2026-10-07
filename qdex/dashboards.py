@@ -84,7 +84,8 @@ def _fuzzy_file(fz, prefix):
                                a["ewin_ev"].strip("[]").split())]
     smear_and_export_fuzzy(fz["intensity"][:].astype(float), fz["energy_ev"][:], labels, ewin,
                            float(a["sigma_ev"]), prefix=prefix,
-                           kpts_frac=fz["kpoints_frac"][:] if "kpoints_frac" in fz else None)
+                           kpts_frac=fz["kpoints_frac"][:] if "kpoints_frac" in fz else None,
+                           soc_energy=fz["soc_energy_ev"][:] if "soc_energy_ev" in fz else None)
     return ewin
 
 
