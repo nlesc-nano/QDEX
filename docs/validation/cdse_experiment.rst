@@ -5,17 +5,17 @@ Part of :doc:`/validation/index`.
 
 .. note::
 
-   These results were produced with the earlier bulk reference: Δ_bulk = 1.57 eV for CdSe (QSGW
-   2.19 eV against the spin-free PBE gap), without the geometry correction of PBE-relaxed dots. The
-   current reference (:doc:`/electronic_structure/bulk_bands`) uses the literature QSGW+SOC gap and
-   PBE+SOC at the same lattice (Δ_Σ = 1.64 eV) plus Δ_geom (+0.17 eV at the PBE lattice), which raises
-   the QP gaps of these dots by about 0.25 eV (2.62 nm, ``bulk_vertex: scaled``: first bright SOC
-   exciton 2.240 → 2.499 eV). The series has not been rerun yet.
+   The 2.6–4.1 nm series was rerun on 2026-10-07 with the current bulk reference
+   (:doc:`/electronic_structure/bulk_bands`): literature QSGW+SOC against PBE+SOC at the experimental
+   lattice (Δ_Σ = 1.64 eV), the geometry correction of PBE-relaxed dots and the split model
+   (``bulk_vertex: scaled``, ``bulk_vertex_factor: 0.8``, ``bulk_residual: experimental``). The 1.2 and
+   2.0 nm tables below still use the earlier reference (Δ_bulk = 1.57 eV, no geometry correction).
 
 This page compares the current QP and excitation models with the measured first-exciton energy of
 colloidal CdSe dots. All numbers were produced with the code as it is, with the default settings:
 
-* bulk QSGW correction (Δ_bulk = 1.57 eV for CdSe, valence share f_b = 41.2 %);
+* bulk QSGW correction (2.6–4.1 nm: Δ_Σ = 1.64 eV, geometry correction and split model; 1.2 and 2.0 nm:
+  the earlier Δ_bulk = 1.57 eV; valence share f_b = 41.2 %);
 * shared W in the QP correction and in K\ :sup:`d`;
 * one-shot ΔCOHSEX for all orbitals, plasmon-pole Z;
 * sphere reaction field for the environment, with the SAXS radius;
@@ -25,7 +25,8 @@ colloidal CdSe dots. All numbers were produced with the code as it is, with the 
   2.6–4.1 nm series below uses ``scaled`` (:doc:`/quasiparticles/gw`).
 
 The raw results are in ``benchmarks/results/cdse_validation_2026-09-27.csv`` (1.2 and 2.0 nm) and
-``benchmarks/results/cdse_large_dots_2026-09-29.csv`` (2.6–4.1 nm).
+``benchmarks/results/cdse_large_dots_2026-10-07.csv`` (2.6–4.1 nm; the earlier reference in
+``cdse_large_dots_2026-09-29.csv``).
 
 Systems and settings
 --------------------
@@ -56,7 +57,7 @@ Systems and settings
    * -
      -
      - 4.10 nm
-     - not recorded
+     - 1.0352 eV
 
 d is the diameter a SAXS measurement would give: the Debye intensity of the inorganic atoms (Cd, Se
 and the Cl surface) fitted with a homogeneous-sphere form factor (``qdex.cluster_size``). The sizing
@@ -282,15 +283,19 @@ the first bright state lies 0.30–0.37 eV above S₁. The rest of the pattern h
 Larger dots: 2.6–4.1 nm
 -----------------------
 
-Three larger PBE-relaxed clusters, computed with the bulk QP correction and the bulk Resta W:
+Three larger PBE-relaxed clusters (``CdSe/2.8nm``, ``3.4nm``, ``4.0nm`` outside the repository; run on
+NHR), computed with the bulk QP correction and the bulk Resta W:
 
 .. code-block:: yaml
 
    environment:
      eps_out: 2.24                # toluene
    quasiparticles:
-     model: bulk                  # PBE + bulk QSGW shift, no ΔW
+     model: bulk                  # PBE + bulk shift, no ΔW
      bulk_vertex: scaled
+     bulk_vertex_factor: 0.8
+     bulk_residual: experimental  # split model
+     bulk_geometry: strain        # default
    excitations:
      mode: bse
      kernel: resta
@@ -298,42 +303,49 @@ Three larger PBE-relaxed clusters, computed with the bulk QP correction and the 
      nlumos: 25
      full_diag: true
 
-with spin–orbit coupling. Δ_bulk is the pure QSGW shift of 1.57 eV reduced by the vertex correction
-(0.314 eV × f, f the fraction of bulk screening the dot keeps; :doc:`/quasiparticles/gw`). Lowest
+with spin–orbit coupling. The bulk shift is
+:math:`\Delta_\Sigma[1 - 0.2 f] + \delta_\text{res} + \Delta_\text{geom}`: Δ_Σ = 1.642 eV (QSGW+SOC 2.16 eV
+against PBE+SOC 0.522 eV), the residual δ_res = 1.675 − (0.522 + 0.8 × 1.642) = −0.161 eV (zinc-blende
+CdSe at room temperature), and Δ_geom = s × 0.170 eV with the strain fraction s measured on the dot's
+interior Cd–Se bonds (:doc:`/electronic_structure/bulk_bands`, :doc:`/quasiparticles/gw`). Lowest
 states (eV):
 
 .. list-table::
    :header-rows: 1
 
-   * - SAXS d
+   * - SAXS d (core)
      - KS gap
-     - Δ_bulk (f)
+     - s
+     - Δ_Σ(f) / δ_res / Δ_geom → shift
+     - QP gap SF / SOC
      - S₁ (lowest state)
      - first state with f\ :sub:`osc` ≥ 0.1
-   * - 2.62 nm
-     - 1.4535
-     - 1.326 (0.78)
-     - 2.4397, dark
-     - 2.4824 (f = 0.115)
-   * - 3.34 nm
+   * - 2.62 nm (Cd₁₅₂Se₁₂₃)
+     - 1.4531
+     - 0.91
+     - 1.396 / −0.161 / +0.154 → 1.390
+     - 2.843 / 2.767
+     - 2.500
+     - 2.556 (f = 0.67)
+   * - 3.34 nm (Cd₃₂₄Se₂₈₁)
      - 1.1511
-     - 1.304 (0.85)
-     - 2.1990, dark
-     - 2.2207 (f = 0.148)
-   * - 4.10 nm
-     - not recorded
-     - not recorded
-     - 2.0883, dark
-     - 2.1051 (f = 0.389)
-   * - 1.93 nm, surface states
-     - 1.4568
-     - 1.326 (0.78)
-     - 2.3760, dark
-     - none among the six lowest (largest f = 0.076 at 2.4410)
+     - 0.81
+     - 1.373 / −0.161 / +0.138 → 1.350
+     - 2.501 / 2.427
+     - 2.237
+     - 2.274 (f = 0.56)
+   * - 4.10 nm (Cd₅₉₂Se₅₁₇)
+     - 1.0352
+     - 0.87
+     - 1.364 / −0.161 / +0.147 → 1.351
+     - 2.386 / 2.304
+     - 2.142
+     - 2.176 (f = 1.24)
 
-The lowest states are dark: 98–99 % triplet character in the spin-free basis, as for the band-edge
-exciton of CdSe (17–43 meV below the first bright state). f and Δ_bulk of the first two
-rows are those printed by the runs and agree with the formula.
+The interior Cd–Se bonds (2.678–2.685 Å) are 81–91 % of the way from the experimental (2.620 Å) to the
+bulk PBE bond (2.692 Å). The lowest state lies 34–56 meV below the first bright state, the dark
+band-edge exciton of CdSe. The spin–orbit lowering of the QP gap is 0.075–0.082 eV, two thirds of the
+bulk value (0.121 eV).
 
 **Against experiment** (bright state, eV):
 
@@ -341,57 +353,53 @@ rows are those printed by the runs and agree with the formula.
    :header-rows: 1
 
    * - d
-     - model
+     - model (before → now)
      - Yu
      - Hens wz
      - Hens all CdSe
      - Hens zb
-     - model − Yu
-     - model − Hens (all)
+     - now − Yu
+     - now − Hens zb
    * - 2.62 nm
-     - 2.482
+     - 2.482 → 2.556
      - 2.364
      - 2.572
      - 2.689
      - 2.740
-     - +0.12
-     - −0.21
+     - +0.19
+     - −0.18
    * - 3.34 nm
-     - 2.221
+     - 2.221 → 2.274
      - 2.201
      - 2.303
      - 2.382
      - 2.411
-     - +0.02
-     - −0.16
+     - +0.07
+     - −0.14
    * - 4.10 nm
-     - 2.105
+     - 2.105 → 2.176
      - 2.108
      - 2.135
      - 2.187
      - 2.201
-     - 0.00
-     - −0.08
+     - +0.07
+     - −0.03
 
-* **The model follows the Yu curve at 3.3 and 4.1 nm** (within 0.02 eV) and lies 0.08–0.16 eV below
-  the Hens all-CdSe curve (0.08–0.16 eV), within the experimental spread of 0.21 and 0.09 eV at those
-  sizes. At 2.62 nm it is inside the window (2.36–2.74 eV).
-* **Size dependence.** From 2.62 to 4.10 nm the model drops by 0.38 eV; the experimental curves drop by
-  0.26 (Yu), 0.44 (Hens wz), 0.50 (Hens all) and 0.54 eV (Hens zb). The model lies between them.
-* **Without the vertex correction** (``bulk_vertex: none``) every energy is higher by 0.314 eV × f:
-  +0.24 eV at 2.62 nm, +0.27 eV at 3.34 nm and about +0.27 eV at 4.10 nm (f not recorded there; about
-  0.88 if the KS gap is near 1.0 eV). This gives about 2.73 eV at 2.62 nm (top of the window, 2.74 eV), about
-  2.49 eV at 3.34 nm and about 2.38 eV at 4.10 nm, above all four curves by 0.08–0.29 eV and
-  0.18–0.27 eV respectively. These are the shift applied to the computed values, not separate runs.
-* **The vertex correction is needed at the large sizes** and cannot be separated from a constant
-  offset by these data: ``full`` (0.314 eV at every size) and ``scaled`` differ by 0.314 eV × (1 − f),
-  0.03–0.07 eV over this range, less than the spread of the experimental curves.
-* **Geometry.** The clusters are PBE-relaxed, whose bonds are about 2 % too long. A gap deformation
-  potential of −2 to −2.5 eV puts the KS gap 0.10–0.15 eV too low (an estimate, not a calculation). With
-  bulk-like bond lengths the computed energies would rise by about that amount, to 2.21–2.26 eV
-  at 4.10 nm and 2.32–2.37 eV at 3.34 nm: inside the Hens range, and consistent with a vertex correction
-  as well as with the bulk limit (1.88 eV spin-free, 1.74 eV experimental plus Δ\ :sub:`so`/3). Geometry
-  and vertex correction have to be settled together.
+* **The bulk limit is right.** The bright state rises by 0.05–0.07 eV with the new reference: the
+  shift grows by 0.05–0.06 eV (Δ_Σ 1.64 instead of 1.57 eV before the vertex scaling, geometry
+  correction +0.14–0.15 eV and room-temperature residual −0.16 eV nearly cancelling). At
+  4.10 nm the model is 0.03 eV below the zinc-blende Hens curve and 0.01 eV below the all-CdSe one,
+  and all three dots are inside the experimental window (2.36–2.74, 2.20–2.41, 2.11–2.20 eV).
+* **The confinement is too weak.** Against the zinc-blende curve (these dots are zinc blende) the
+  deficit grows as the dots shrink: −0.03, −0.14, −0.18 eV. From 2.62 to 4.10 nm the model drops by
+  0.38 eV; the curves by 0.26 (Yu), 0.44 (Hens wz), 0.50 (Hens all) and 0.54 eV (Hens zb). With the bulk
+  limit now fixed by experiment, what is missing is size-dependent: the finite-size self-energy (the
+  ``bulk`` model has no ΔW; the image-charge and reduced-screening terms grow as 1/R), and the 25 × 25
+  active space, which lowers S₁ more in larger dots. The ΔW models on these dots are the next test.
+* **The earlier agreement with the Yu curve was partly compensation**: the PBE lattice lowered the KS
+  gap by 0.14–0.15 eV, and that error was cancelled by the QSGW shift without the room-temperature
+  residual. With both corrected the model sits between the Yu and the Hens curves, closest to Hens
+  wurtzite.
 
 .. _surface-states-193:
 
@@ -477,15 +485,17 @@ Limits
 ------
 
 * **One model in the large-dot series.** The 2.6–4.1 nm dots were computed with the bulk QP
-  correction and the bulk Resta W only; the ΔW models and the sBSE-DIM variant have not been run there.
+  correction (split model) and the bulk Resta W only; the ΔW models and the sBSE-DIM variant have not
+  been run there. The 1.2 and 2.0 nm tables use the earlier bulk reference.
   The 1.93 nm cluster has surface states (:ref:`surface-states-193`) and the 1.2 nm cluster is not
   covered by an experimental curve.
 * **Bright-state definition.** For the larger dots only the lowest states were kept, so the first
   bright state is the first with f\ :sub:`osc` ≥ 0.1 among them, not the state with a fraction of the
-  largest oscillator strength. The KS gap and Δ_bulk of the 4.10 nm dot were not recorded.
-* **Geometry.** PBE-relaxed structures have bonds about 2 % too long (measured 1.6 % on the 1.93 nm
-  cluster), which lowers the KS gap by an estimated 0.10–0.15 eV; the bulk correction refers to the
-  experimental lattice. Relaxing with PBEsol or HLE17, followed by PBE single points, is the remedy.
+  largest oscillator strength.
+* **Geometry.** PBE-relaxed structures have bonds 2.2–2.5 % too long; the bulk shift now removes the
+  resulting gap change through Δ_geom (bulk deformation potential, scaled by the measured strain). The
+  confined states of a dot may respond to strain differently from the bulk edges; relaxing with PBEsol
+  or HLE17 followed by PBE single points would test this.
 * **Active space.** S₁ decreases by about 0.06 eV from 25 × 25 to 100 × 100 at 2 nm; the truncation
   error is expected to grow with size and is unknown for the larger dots.
 * **Extrapolated references** at 1.93 nm, and a 0.5 eV spread between them. The size definition
