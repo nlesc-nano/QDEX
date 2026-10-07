@@ -1114,6 +1114,9 @@ def _build_parser():
     parser.add_argument("--namd-run", action="store_true", help="Run NAMD carrier cooling simulation from precomputed data.")
     parser.add_argument("--namd-compact", type=str, nargs="?", const="default", default=None, help="Compact precomputed NAMD directory (compresses and removes redundant arrays).")
     parser.add_argument("--namd-decoherence", type=str, nargs="?", const="default", default=None, help="Compute state-pair pure-dephasing decoherence times from trajectory fluctuations.")
+    parser.add_argument("--namd-nac", type=str, nargs="?", const="default", default=None,
+                        help="Compute and store the non-adiabatic couplings of every step (namd.nac.scheme: logm, "
+                             "default, or hst; namd.nac.workers parallel processes). Run once after --namd-precompute.")
     parser.add_argument("--namd-soc", action="store_true", help="Enable Spin-Orbit Coupling (SOC) for NAMD precomputation.")
     parser.add_argument("--namd-ta", action="store_true", help="Compute ultrafast pump-probe transient absorption (TA) spectra from NAMD dynamics.")
     parser.add_argument("--namd-ta-sigma", type=float, default=0.03, help="Gaussian line broadening in eV for transient absorption probe spectra (default: 0.03).")
@@ -1224,6 +1227,17 @@ def _load_arguments(parser):
         if dec_dir == "default":
             dec_dir = config_data.get("namd", {}).get("storage", {}).get("precompute_dir", "namd_precomputed")
         compute_trajectory_decoherence_times(dec_dir)
+        return
+
+    if getattr(args, "namd_nac", None) is not None:
+        from qdex.namd.nac import compute_nac_files
+        setup_run_logging(getattr(args, "log_file", "minibse.log"), getattr(args, "verbosity", "full"))
+        nac_cfg = config_data.get("namd", {}).get("nac", {}) or {}
+        nac_dir = args.namd_nac
+        if nac_dir == "default":
+            nac_dir = config_data.get("namd", {}).get("storage", {}).get("precompute_dir", "namd_precomputed")
+        compute_nac_files(nac_dir, scheme=nac_cfg.get("scheme", "logm"), workers=nac_cfg.get("workers"),
+                          threads_per_worker=nac_cfg.get("threads_per_worker"))
         return
 
     if getattr(args, "namd_precompute", False):

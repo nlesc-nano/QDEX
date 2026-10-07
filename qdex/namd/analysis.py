@@ -199,15 +199,15 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
         for ff in frame_files:
             d = np.load(ff)
             times.append(float(d["time_fs"]))
-            homo_ens.append(float(d["eps_occ"][-1]))
-            lumo_ens.append(float(d["eps_virt"][0]))
+            homo_ens.append(float(np.max(d["eps_occ"])))
+            lumo_ens.append(float(np.min(d["eps_virt"])))
             if "lowest_exc" in d:
                 lowest_exc_ens.append(float(d["lowest_exc"]))
     else:
         d0 = np.load(step_files[0])
         times = [float(d0["time_prev_fs"])]
-        homo_ens = [float(d0["eps_occ_prev"][-1])]
-        lumo_ens = [float(d0["eps_virt_prev"][0])]
+        homo_ens = [float(np.max(d0["eps_occ_prev"]))]
+        lumo_ens = [float(np.min(d0["eps_virt_prev"]))]
         # E_curr belongs at time_curr. The t = 0 exciton is the frame-0 pair list.
         frame0_path = os.path.join(precompute_dir, "frame_00000.npz")
         if os.path.exists(frame0_path):
@@ -222,8 +222,8 @@ def compute_band_gap_dynamics_and_spectral_density(precompute_dir, use_lowest_ex
         for sf in step_files:
             d = np.load(sf)
             times.append(float(d["time_curr_fs"]))
-            homo_ens.append(float(d["eps_occ_curr"][-1]))
-            lumo_ens.append(float(d["eps_virt_curr"][0]))
+            homo_ens.append(float(np.max(d["eps_occ_curr"])))
+            lumo_ens.append(float(np.min(d["eps_virt_curr"])))
             if "E_curr" in d:
                 lowest_exc_ens.append(float(np.min(d["E_curr"])))
 

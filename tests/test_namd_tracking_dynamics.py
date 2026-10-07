@@ -79,3 +79,44 @@ def test_pme_pair_line_widths_and_detailed_balance():
         P = propagate_pme_tensor(P, tau_virt_mat=tau, tau_occ_mat=np.full((1, 1), 10.0), **kw)
     assert P.sum() == pytest.approx(1.0)
     assert P[0, 1] / P[0, 0] == pytest.approx(np.exp(-0.05 / (8.617333e-5 * 300.0)), rel=1e-3)
+
+
+@pytest.mark.parametrize("cplx", [False, True])
+def test_logm_nac_is_the_exact_generator_of_the_step(cplx):
+    from scipy.linalg import expm, logm
+    from qdex.namd.nac import nac_logm, nac_hst
+    rng = np.random.default_rng(3)
+    n, dt = 40, 2.0
+    A = rng.normal(size=(n, n)) * 0.15
+    if cplx:
+        A = A + 1j * rng.normal(size=(n, n)) * 0.15
+    G = A - A.conj().T                                    # anti-Hermitian generator
+    G *= 2.5 / np.abs(np.linalg.eigvals(G)).max()         # largest rotation 2.5 rad (< pi): exercises the
+    U = expm(G)                                           # scipy fallback for angles beyond pi/2
+    d = nac_logm(U, dt)
+    assert np.allclose(d * dt, G, atol=1e-10)
+    assert np.allclose(d * dt, 0.5 * (logm(U) - logm(U).conj().T), atol=1e-10)
+    assert np.iscomplexobj(d) == cplx
+    # propagating with exp(-d dt) maps the coefficients exactly: c(t+dt) = U^+ c(t)
+    c = rng.normal(size=n) + 0j
+    assert np.allclose(expm(-d * dt) @ c, U.conj().T @ c)
+    # HST is first order: smaller coupling for large rotations
+    assert np.linalg.norm(nac_hst(U, dt)) < np.linalg.norm(d)
+    # norm leaking out of the window (scaled overlap) does not change the generator
+    assert np.allclose(nac_logm(0.9 * U, dt), d, atol=1e-10)
+
+
+def test_stored_nacs_are_read_back(tmp_path):
+    from qdex.namd.nac import compute_nac_files, step_nacs, nac_logm
+    rng = np.random.default_rng(5)
+    from scipy.linalg import expm
+    for k in range(2):
+        So = expm(np.triu(rng.normal(size=(6, 6)) * 0.2, 1) - np.triu(rng.normal(size=(6, 6)) * 0.2, 1).T)
+        Sv = np.eye(4)
+        np.savez(tmp_path / f"step_{k:05d}_to_{k + 1:05d}.npz", S_occ=So, S_virt=Sv,
+                 time_prev_fs=2.0 * k, time_curr_fs=2.0 * (k + 1))
+    assert compute_nac_files(str(tmp_path), workers=1, threads_per_worker=1) == 2
+    z = np.load(tmp_path / "step_00001_to_00002.npz")
+    d_o, d_v = step_nacs(str(tmp_path), 1, z["S_occ"], z["S_virt"], 2.0, "logm")
+    assert np.allclose(d_o, nac_logm(z["S_occ"], 2.0)) and np.allclose(d_v, 0.0)
+    assert compute_nac_files(str(tmp_path), workers=1, threads_per_worker=1) == 0     # restartable

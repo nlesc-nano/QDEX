@@ -1,6 +1,7 @@
 import os
 import time
 import numpy as np
+from qdex.namd.nac import step_nacs
 
 from qdex.constants import HA_TO_EV
 from qdex.namd.integrator import (
@@ -185,6 +186,7 @@ def propagate_single_namd_origin(
     origin_idx=0,
     pme_tau_mats=None,
     n_atoms=775,
+    nac_scheme="logm",
     n_origins=1
 ):
     """
@@ -297,8 +299,7 @@ def propagate_single_namd_origin(
             eps_occ_prev = step_data["eps_occ_prev"] if "eps_occ_prev" in step_data else eps_occ_init
             eps_virt_prev = step_data["eps_virt_prev"] if "eps_virt_prev" in step_data else eps_virt_init
 
-            d_occ = (S_occ - S_occ.conj().T) / (2.0 * dt_nuc_fs)
-            d_virt = (S_virt - S_virt.conj().T) / (2.0 * dt_nuc_fs)
+            d_occ, d_virt = step_nacs(precompute_dir, k, S_occ, S_virt, dt_nuc_fs, nac_scheme)
             # Hole channel: <Phi_i|d/dt Phi_j> for the hole states a_j|Phi_0> is conj(d_ij)
             # (identical for real orbitals, not for SOC spinors)
             if np.iscomplexobj(d_occ):
@@ -686,8 +687,7 @@ def propagate_single_namd_origin(
             eps_occ_curr = step_data["eps_occ_curr"] if "eps_occ_curr" in step_data else eps_occ_init
             eps_virt_curr = step_data["eps_virt_curr"] if "eps_virt_curr" in step_data else eps_virt_init
 
-            d_occ = (S_occ - S_occ.conj().T) / (2.0 * dt_nuc_fs)
-            d_virt = (S_virt - S_virt.conj().T) / (2.0 * dt_nuc_fs)
+            d_occ, d_virt = step_nacs(precompute_dir, k, S_occ, S_virt, dt_nuc_fs, nac_scheme)
 
             if n_occ_dyn < n_occ or n_virt_dyn < n_virt:
                 d_occ_pme = np.zeros_like(d_occ)
@@ -1002,6 +1002,9 @@ def run_namd_dynamics(config):
         if method == "master_equation":
             logger.info("  [NAMD] PME line widths from the state-pair dephasing times (as DISH).")
     n_atoms_meta = int(meta["n_atoms"]) if "n_atoms" in meta.files else 775
+    nac_scheme = str(dyn_cfg.get("nac_scheme", "logm")).lower()
+    logger.info(f"  [NAMD] Non-adiabatic couplings: {nac_scheme} "
+                f"({'stored' if os.path.exists(os.path.join(precompute_dir, 'nac_00000_to_00001.npz')) else 'computed per step'})")
 
     # Recombination & Photoluminescence Rates (Radiative & Non-Radiative)
     from qdex.hardness import (
@@ -1228,6 +1231,7 @@ def run_namd_dynamics(config):
             n_origins=n_origins,
             pme_tau_mats=pme_tau_mats,
             n_atoms=n_atoms_meta,
+            nac_scheme=nac_scheme,
         )
         origin_results.append(res_m)
 

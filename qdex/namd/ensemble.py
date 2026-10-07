@@ -139,8 +139,13 @@ def estimate_pilot_cooling_time(
         mean_energies = []
         for k in range(n_test):
             s = np.load(step_files[k])
-            d_occ = (s["S_occ"] - s["S_occ"].conj().T) / (2.0 * dt_fs)
-            d_virt = (s["S_virt"] - s["S_virt"].conj().T) / (2.0 * dt_fs)
+            from qdex.namd.nac import nac_file
+            nf = nac_file(precompute_dir, k)
+            if os.path.exists(nf):                      # stored logm couplings
+                zn = np.load(nf); d_occ, d_virt = zn["d_occ"], zn["d_virt"]
+            else:
+                d_occ = (s["S_occ"] - s["S_occ"].conj().T) / (2.0 * dt_fs)
+                d_virt = (s["S_virt"] - s["S_virt"].conj().T) / (2.0 * dt_fs)
             d_occ_dyn = d_occ[np.ix_(dyn_occ, dyn_occ)]
             d_virt_dyn = d_virt[np.ix_(dyn_virt, dyn_virt)]
 
@@ -207,7 +212,7 @@ def auto_calibrate_ensemble_origins(
     t_md_total_fs = float(times_fs[-1])
 
     # 1. Phonon correlation / dephasing time
-    gap_traj = eps_virt_traj[:, 0] - eps_occ_traj[:, -1]
+    gap_traj = eps_virt_traj.min(axis=1) - eps_occ_traj.max(axis=1)   # tracked labels: edges by min/max
     tau_corr_fs = compute_energy_autocorrelation_time(times_fs, gap_traj)
 
     # 2. Pilot cooling lifetime
