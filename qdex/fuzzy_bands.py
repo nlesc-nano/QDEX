@@ -64,7 +64,7 @@ def fit_lattice_orientation(prim_struct, coords_ang, syms=None, interior_fractio
     The interior nearest-neighbour bond directions of the dot are matched to the crystal's
     bond star (Kabsch fit with re-assignment, started from every pair of crystal bonds whose
     angle matches a pair of dot bonds). R is fixed up to the symmetry of the bond star, which
-    leaves the fuzzy weights |<phi|k>|^2 unchanged (crystal point group plus k -> -k).
+    leaves the fuzzy weights ``|<phi|k>|^2`` unchanged (crystal point group plus k -> -k).
     """
     coords = np.asarray(coords_ang, dtype=float)
     cif_dirs, cif_bond, coordination, pairs = cif_bond_star(prim_struct)
@@ -201,12 +201,12 @@ def fuzzy_energy_indices(eps_dft, ewin, sigma_ev, homo_index=None, qp_energies=N
 
 
 def folded_plane_wave_weights(shells, kpts_cart, G_vecs, nthreads, coeff_blocks, spinor_parts=None):
-    """Folded plane-wave weights sum_G |<k+G|psi>|^2 along kpts_cart (1/A).
+    """Folded plane-wave weights ``sum_G |<k+G|psi>|^2`` along kpts_cart (1/A).
 
     coeff_blocks: real MO coefficients (n_ao, n_b), one array per set of orbitals.
     spinor_parts: optional [(block, rows, U_part)], U_part (len(rows), n_spinor): the spin
-        components sum_r U_part[r, n] phi_{block, rows[r]} of two-component spinors. The
-        components are orthogonal in spin, so their weights add: |U_a^T F|^2 + |U_b^T F|^2.
+    components ``sum_r U_part[r, n] phi_{block, rows[r]}`` of two-component spinors. The
+    components are orthogonal in spin, so their weights add: ``|U_a^T F|^2 + |U_b^T F|^2``.
 
     Each G replica is transformed once (n_AO x n_k plane waves) and projected onto every
     block with two real GEMMs; all k+G points at once would need n_AO x n_k x n_G complex
@@ -334,7 +334,7 @@ def build_smeared_fuzzy(intensity, eps_plot, ewin, sigma_ev):
 def state_weights(intensity):
     """Weight of each state along the path normalised to a mean of 1 (1 = spread evenly over the path).
 
-    The raw |<phi|k>|^2 of a state summed over the folded replicas grows with its localisation in
+    The raw ``|<phi|k>|^2`` of a state summed over the folded replicas grows with its localisation in
     real space (a cation d state carries ~10x the weight of a band-edge state), so on the raw map
     the semicore and surface states dominate the colour scale; per state the k-profile is what
     carries the band information."""
@@ -384,7 +384,7 @@ def spinor_soc_energy(soc_E, soc_U, eps_spin):
     """<psi_n|V_SOC|psi_n> of every spinor of the window, in the units of soc_E.
 
     In the basis (phi_i alpha, phi_i beta) the spinor Hamiltonian is diag(eps) + V_SOC, so
-    <V>_n = E_n - sum_i |U_in|^2 eps_i. V_SOC has a zero trace (L is purely imaginary in a real
+    ``<V>_n = E_n - sum_i |U_in|^2 eps_i``. V_SOC has a zero trace (L is purely imaginary in a real
     basis), so a constant offset between the frames of soc_E and eps_spin is removed by setting the
     mean over the window to zero. For p-like states <V> = +Delta_so/3 for j = 3/2 and -2 Delta_so/3
     for j = 1/2: the sign tells the heavy/light-hole states from the split-off ones."""

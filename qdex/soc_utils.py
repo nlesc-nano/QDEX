@@ -18,7 +18,7 @@ def get_angular_momentum_matrices(l):
     """Lx, Ly, Lz in the basis of real spherical harmonics, libint order (m = -l..l).
 
     <R_m|L_k|R_m'> with R_m the real harmonics libint uses for pure shells (and for the
-    HGH projectors): m > 0 ~ cos(m phi), m < 0 ~ sin(|m| phi), e.g. (y, z, x) for l = 1.
+    HGH projectors): m > 0 ~ cos(m phi), m < 0 ~ ``sin(|m| phi)``, e.g. (y, z, x) for l = 1.
     The matrices are purely imaginary and antisymmetric (L is odd under time reversal).
     """
     if l in _L_CACHE:
@@ -296,7 +296,7 @@ def _spinor_cache_key(*parts):
 
 
 def spinor_weighted_shifts(parts):
-    """Energy shift of each spinor: the shifts of its MOs averaged with weights |U|^2.
+    """Energy shift of each spinor: the shifts of its MOs averaged with weights ``|U|^2``.
 
     parts: [(U_block (n_mo, n_spinor), sigma (n_mo,))], one entry per spin block of the
     spinors. Spinors are sorted by energy and come in Kramers pairs, so spinor p is not MO p.
@@ -311,8 +311,10 @@ def project_spinors_to_subspace(E_W, U_W, rows_P, n_sel_occ, n_sel_virt, n_occ_W
 
     The spinors with the largest weight on P are selected separately among the occupied (the
     n_occ_W lowest) and the virtual spinors of W (whole Kramers pairs when kramers=True), and
-    their projections onto P are Löwdin-orthonormalized:
+    their projections onto P are Löwdin-orthonormalized::
+
         Y = U_W[rows_P, sel],   U_P = Y (Y^dagger Y)^{-1/2},   E_P = E_W[sel].
+
     U_P diag(E_P) U_P^dagger is the des Cloizeaux effective Hamiltonian of P: its energies
     include the SOC coupling to the MOs of W outside P to all orders, and the spinors stay in
     the P basis the exciton kernel is built on.

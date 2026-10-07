@@ -7,8 +7,11 @@ SAXS radius, bulk QSGW correction) against silent drifts. Cd16Se13Cl6 (1.2 nm), 
     QDEX_RUN_REGRESSION=1 python -m pytest tests/test_cdse_regression.py
 
 The 2.0 nm cases take about a minute each and also need QDEX_RUN_CDSE=1.
-References: benchmarks/results/cdse_validation_2026-09-27.csv. If a change is meant to move
-these numbers, rerun the validation, update the docs and the CSV, and then the values here.
+References: the bulk reference of 2026-10-07 (literature QSGW+SOC at a_exp, Delta_Sigma = 1.642 eV,
+geometry correction of PBE-relaxed dots): every QP gap moved by +0.072 eV from the values of
+benchmarks/results/cdse_validation_2026-09-27.csv (Delta_bulk = 1.570 eV), and by +0.19 eV for the
+PBE-relaxed 2.0 nm cluster (geometry correction). If a change is meant to move these numbers, rerun
+the validation, update the docs and the CSV, and then the values here.
 """
 import csv
 import gzip
@@ -28,21 +31,21 @@ TOL = 0.005  # eV
 
 # (name, size, flags, eps_out, QP gap, S1, first bright state)
 CASES = [
-    ("sgw_resta_vacuum", "1.2nm", ["--qp_gap", "sgw-resta"], 1.0, 6.767, 3.454, 3.819),
-    ("sgw_resta_toluene", "1.2nm", ["--qp_gap", "sgw-resta"], 2.24, 5.407, 3.406, 3.746),
-    ("sgw_dim_vacuum", "1.2nm", ["--qp_gap", "sgw-dim"], 1.0, 6.635, 3.476, 3.845),
-    ("qsgw_dim_vacuum", "1.2nm", ["--qp_gap", "qsgw-dim"], 1.0, 6.626, 3.437, 3.809),
+    ("sgw_resta_vacuum", "1.2nm", ["--qp_gap", "sgw-resta"], 1.0, 6.835, 3.526, 3.892),
+    ("sgw_resta_toluene", "1.2nm", ["--qp_gap", "sgw-resta"], 2.24, 5.475, 3.478, 3.819),
+    ("sgw_dim_vacuum", "1.2nm", ["--qp_gap", "sgw-dim"], 1.0, 6.707, 3.548, 3.917),
+    ("qsgw_dim_vacuum", "1.2nm", ["--qp_gap", "qsgw-dim"], 1.0, 6.698, 3.509, 3.881),
     ("sbse_resta", "1.2nm", ["--qp_gap", "bulk", "--excitation-mode", "sbse", "--kernel", "resta"],
-     1.0, 4.209, 3.323, 3.617),
+     1.0, 4.281, 3.395, 3.689),
     ("sbse_dim", "1.2nm", ["--qp_gap", "bulk", "--excitation-mode", "sbse", "--kernel", "dim"],
-     1.0, 4.209, 3.137, 3.442),
+     1.0, 4.281, 3.209, 3.514),
     ("stda_dielectric", "1.2nm", ["--qp_gap", "bulk", "--excitation-mode", "stda", "--stda-ax", "dielectric"],
-     1.0, 4.209, 3.808, None),
+     1.0, 4.281, 3.880, None),
     ("stda_pbe", "1.2nm", ["--qp_gap", "none", "--excitation-mode", "stda", "--stda-functional", "pbe"],
      1.0, 2.639, 2.748, None),
-    ("sgw_resta_toluene_2nm", "2.0nm", ["--qp_gap", "sgw-resta"], 2.24, 3.707, 2.964, 2.964),
+    ("sgw_resta_toluene_2nm", "2.0nm", ["--qp_gap", "sgw-resta"], 2.24, 3.908, 3.157, 3.157),
     ("sbse_resta_2nm", "2.0nm", ["--qp_gap", "bulk", "--excitation-mode", "sbse", "--kernel", "resta"],
-     1.0, 3.027, 2.779, 2.779),
+     1.0, 3.214, 2.966, 2.966),
 ]
 MO_FILES = {"1.2nm": "MOs_cleaned_12ang.txt", "2.0nm": "MOs_cleaned_20ang.txt"}
 
