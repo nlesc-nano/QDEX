@@ -429,7 +429,7 @@ def compute_spinor_subspace(
     H_total[:n_mo, n_mo:] = Hab
     H_total[n_mo:, :n_mo] = Hab.conj().T
 
-    soc_E, soc_U = eigh(H_total)
+    soc_E, soc_U = eigh(H_total, driver="evd")   # divide and conquer: ~1.6x faster than evr (OpenBLAS)
     memo[key] = (soc_E.copy(), soc_U.copy())
 
     if verbose:
@@ -520,7 +520,7 @@ def compute_spinor_subspace_uks(
         [Hx_ba + 1j * Hy_ba, -Hz_bb],
     ])
     H_total = H0 + H_SO
-    soc_E, soc_U = eigh(H_total)
+    soc_E, soc_U = eigh(H_total, driver="evd")   # divide and conquer: ~1.6x faster than evr (OpenBLAS)
     memo[key] = (soc_E.copy(), soc_U.copy())
 
     logger.debug(f"  -> UKS spinor diagonalization completed in {time.time() - t0:.2f}s")
