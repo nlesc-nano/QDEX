@@ -174,7 +174,14 @@ Bulk Band Overlay
 
 The dashboards draw the bulk band structure of the material (``qdex/data/bulk_bands``,
 CP2K PBE with the same basis and pseudopotentials) over the fuzzy map. The bulk segments
-are placed on the fuzzy path by their k-coordinates.
+are placed on the fuzzy path by their k-coordinates. A control bar above the plot shows or
+hides the overlay and sets its colour, line width and opacity (for the unfolded perovskite
+overlay the width scales the markers, whose opacity still follows the unfolding weight);
+clicking the overlay's legend entry also toggles it.
+
+The anchor needs the semicore band in the MO file: for CsPbX\ :sub:`3` dots print all occupied
+MOs (``MO_INDEX_RANGE 1 <HOMO + n_virtual>``); a window of the upper valence band (the Br 4p and
+Pb 6s states, about 7 eV deep) stops above Cs 5p, and the bulk bands are then aligned at mid-gap.
 
 The bulk bands are put on the dot's energy axis with a semicore level (from ``<name>.json``:
 the cation d band, Cs 5p in the perovskites, otherwise the anion s band). For CdSe the Cd 4d

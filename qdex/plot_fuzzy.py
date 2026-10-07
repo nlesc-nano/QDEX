@@ -345,6 +345,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         )
 
     # Bulk bands overlay (CP2K reference band structure, spin-free DFT)
+    has_bulk = False
     if bulk_overlay:
         try:
             from qdex.bulk_bands import get_aligned_bulk_bands
@@ -381,7 +382,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                         x=xs[order], y=ys[order], mode="markers", name=bulk_name, legendgroup="bulk_bands",
                         marker=dict(size=3.5 + 3.0 * cs[order], color=[f"rgba(0,240,255,{0.15 + 0.85 * c:.2f})" for c in cs[order]],
                                     line=dict(width=0)),
-                        customdata=cs[order],
+                        customdata=cs[order].tolist(),   # plain list: read back by the bulk-band controls
                         hovertemplate=f"{bulk_name}: E = %{{y:.3f}} eV, weight %{{customdata:.2f}}<extra></extra>"),
                         row=1, col=1)
                     logger.info(f"  [Plotter] Overlaid unfolded bulk bands from {os.path.basename(bulk_data['source_file'])} "
@@ -407,6 +408,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                             row=1, col=1
                         )
                         first = False
+                has_bulk = True
                 if not bulk_data.get("unfolded"):
                     logger.info(f"  [Plotter] Overlaid {len(bulk_data['band_indices'])} bulk PBE bands from "
                                 f"{os.path.basename(bulk_data['source_file'])} ({bulk_data['alignment_mode']} alignment).")
@@ -520,7 +522,20 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                                    for lab, parts in views]))
     fig.update_layout(updatemenus=menus)
 
-    plot_2d_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'displaylogo': False})
+    plot_2d_html = fig.to_html(full_html=False, include_plotlyjs=False, div_id="fuzzy_2d_plot",
+                               config={'responsive': True, 'displaylogo': False})
+    # Bulk-band controls (HTML, above the plot): show/hide, colour, line width and opacity
+    bulk_controls_html = '''
+            <div class="iso-control-bar bulk-control-bar">
+                <strong>Bulk bands:</strong>
+                <label><input type="checkbox" id="bulkShow" checked onchange="updateBulk()"> show</label>
+                <label>colour <input type="color" id="bulkColor" value="#00f0ff" oninput="updateBulk()"></label>
+                <label>width <input type="range" id="bulkWidth" min="0.5" max="6" step="0.5" value="2" oninput="updateBulk()">
+                    <span id="bulkWidthVal">2.0</span></label>
+                <label>opacity <input type="range" id="bulkAlpha" min="0.1" max="1" step="0.05" value="0.85" oninput="updateBulk()">
+                    <span id="bulkAlphaVal">0.85</span></label>
+            </div>''' if has_bulk else ""
+
 
 
     # =========================================================================
@@ -645,6 +660,10 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
             .iso-control-bar input {{ padding: 6px 12px; font-size: 16px; border: 1px solid #ccc; border-radius: 4px; width: 120px; }}
             .iso-control-bar button {{ padding: 8px 16px; font-size: 16px; background: #1f77b4; color: white; border: none; border-radius: 4px; cursor: pointer; transition: 0.2s; }}
             .iso-control-bar button:hover {{ background: #155d8f; }}
+            .bulk-control-bar {{ margin: 0 0 10px 0; font-size: 16px; flex-wrap: wrap; }}
+            .bulk-control-bar label {{ display: inline-flex; align-items: center; gap: 6px; }}
+            .bulk-control-bar input[type=range] {{ width: 110px; padding: 0; }}
+            .bulk-control-bar input[type=color] {{ width: 42px; height: 28px; padding: 0; border: 1px solid #ccc; }}
             .explanation-box {{ background: #fdfdfd; border: 1px solid #eaeaea; border-radius: 8px; padding: 30px; margin-top: 10px; }}
             .explanation-box h2 {{ margin-top: 0; color: #222; font-size: 26px; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }}
             .glossary-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 25px; }}
@@ -658,6 +677,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     <body>
         <div class="dashboard-container">
             <div class="plot-container">
+                {bulk_controls_html}
                 {plot_2d_html}
             </div>
             
@@ -704,6 +724,38 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         </div>
         
         <script>
+        function updateBulk() {{
+            var plotDiv = document.getElementById('fuzzy_2d_plot');
+            if (!plotDiv || !plotDiv.data) return;
+            var show = document.getElementById('bulkShow').checked;
+            var hex = document.getElementById('bulkColor').value;
+            var width = parseFloat(document.getElementById('bulkWidth').value);
+            var alpha = parseFloat(document.getElementById('bulkAlpha').value);
+            document.getElementById('bulkWidthVal').textContent = width.toFixed(1);
+            document.getElementById('bulkAlphaVal').textContent = alpha.toFixed(2);
+            var r = parseInt(hex.substr(1, 2), 16), g = parseInt(hex.substr(3, 2), 16), b = parseInt(hex.substr(5, 2), 16);
+            var rgba = function(a) {{ return 'rgba(' + r + ',' + g + ',' + b + ',' + a.toFixed(3) + ')'; }};
+            var lines = [], markers = [];
+            for (var i = 0; i < plotDiv.data.length; i++) {{
+                if (plotDiv.data[i].legendgroup !== 'bulk_bands') continue;
+                (plotDiv.data[i].mode === 'markers' ? markers : lines).push(i);
+            }}
+            if (lines.length)
+                Plotly.restyle(plotDiv, {{'visible': show, 'line.color': rgba(alpha), 'line.width': width}}, lines);
+            // unfolded bands: opacity and size follow the unfolding weight (customdata)
+            markers.forEach(function(i) {{
+                var cd = plotDiv.data[i].customdata;
+                if (!cd || cd.length === undefined)   // base64-encoded array: use Plotly's decoded copy
+                    cd = (plotDiv._fullData.find(function(t) {{ return t.index === i; }}) || {{}}).customdata;
+                var w = Array.from(cd || []);
+                Plotly.restyle(plotDiv, {{
+                    'visible': show,
+                    'marker.color': [w.map(function(c) {{ return rgba(Math.min(1, alpha * (0.15 + 0.85 * c) / 0.85)); }})],
+                    'marker.size': [w.map(function(c) {{ return (width / 2) * (3.5 + 3.0 * c); }})]
+                }}, [i]);
+            }});
+        }}
+
         function updateIso() {{
             var val = parseFloat(document.getElementById('isoInput').value);
             if (isNaN(val) || val <= 0) return;
