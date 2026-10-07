@@ -980,8 +980,16 @@ def precompute_namd_data(config):
                         curr_data["f_pairs"] = (4.0 / 3.0) * (curr_data["E_pairs"] / HA_TO_EV) * mu_sq_grid[curr_data["i_pairs"], curr_data["a_pairs"]]
 
             # Tracking statistics: states relabelled by the Hungarian assignment in this step
-            n_swap_occ = 0 if perm_occ is None else int(np.count_nonzero(perm_occ != np.arange(len(perm_occ))))
-            n_swap_virt = 0 if perm_virt is None else int(np.count_nonzero(perm_virt != np.arange(len(perm_virt))))
+            # perm maps a tracked label to its energy rank in this frame; a label whose rank changed
+            # since the previous frame was relabelled in this step (the count is per step, not cumulative)
+            def _relabelled(perm, prev_rank):
+                if perm is None:
+                    return 0
+                prev_rank = np.arange(len(perm)) if prev_rank is None else prev_rank
+                return int(np.count_nonzero(perm != prev_rank))
+            n_swap_occ = _relabelled(perm_occ, prev_data.get("rank_occ"))
+            n_swap_virt = _relabelled(perm_virt, prev_data.get("rank_virt"))
+            curr_data["rank_occ"], curr_data["rank_virt"] = perm_occ, perm_virt
 
             # Completeness and tracking quality check
             min_diag_occ = np.min(np.real(np.diag(S_occ)))
