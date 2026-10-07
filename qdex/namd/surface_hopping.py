@@ -1144,6 +1144,8 @@ def run_namd_dynamics(config):
         n_origins = 1
         origin_frames = np.array([0], dtype=int)
         n_win_steps = n_steps_total
+        if dyn_cfg.get("window_fs") is not None:        # a shorter run from frame 0
+            n_win_steps = max(1, min(n_steps_total, int(round(float(dyn_cfg["window_fs"]) / dt_nuc_fs))))
         n_traj_per_origin = n_trajectories
         calib = None
     else:
