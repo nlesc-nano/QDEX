@@ -49,3 +49,6 @@ tests/CdSe/1.2nm/MOs_cleaned_12ang.txt
 tests/CdSe/*/compare_*/
 tests/CdSe/*/sweep/
 .DS_Store
+
+# bundled bulk reference data (unfolded overlays of qdex.bulk_unfold)
+!qdex/data/bulk_bands/*.npz
