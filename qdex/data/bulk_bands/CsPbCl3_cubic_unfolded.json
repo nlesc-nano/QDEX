@@ -1,0 +1,107 @@
+{
+ "source": "benchmarks/bulk_bands/inputs_rt_structures/CsPbCl3_ortho scaled to the PBE pseudo-cubic volume (run on NHR)",
+ "path_bs": "CsPbCl3_cubic.bs.gz",
+ "b_site": "Pb",
+ "n_occ_sf": 68,
+ "q_max_inv_ang": 5.0,
+ "supercell_matrix": [
+  [
+   -1,
+   -1,
+   0
+  ],
+  [
+   -1,
+   1,
+   0
+  ],
+  [
+   0,
+   0,
+   -2
+  ]
+ ],
+ "primitive_a_ang": [
+  5.7412,
+  5.7412,
+  5.7949
+ ],
+ "sf": {
+  "vbm": 0.6594829932729313,
+  "cbm": 3.2668744115514596,
+  "gap": 2.6073914182785285
+ },
+ "soc": {
+  "vbm": 0.6614474179110081,
+  "cbm": 2.4203252879019637,
+  "gap": 1.7588778699909555
+ },
+ "semicore_candidates": [
+  {
+   "element": "Cs",
+   "l": 1,
+   "label": "Cs-p",
+   "bands_sf": [
+    18,
+    19,
+    20,
+    21,
+    22,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30
+   ],
+   "min_fraction": 0.9366140437404366,
+   "level_sf": -6.338871565395479,
+   "level_soc": -6.323241757726203
+  },
+  {
+   "element": "Cl",
+   "l": 0,
+   "label": "Cl-s",
+   "bands_sf": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "min_fraction": 0.9434691776699012,
+   "level_sf": -12.950325819740263,
+   "level_soc": -12.950534612048795
+  }
+ ],
+ "semicore": {
+  "element": "Cs",
+  "l": 1,
+  "label": "Cs-p",
+  "bands_sf": [
+   18,
+   19,
+   20,
+   21,
+   22,
+   24,
+   25,
+   26,
+   27,
+   28,
+   29,
+   30
+  ],
+  "min_fraction": 0.9366140437404366,
+  "level_sf": -6.338871565395479,
+  "level_soc": -6.323241757726203
+ }
+}

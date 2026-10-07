@@ -322,6 +322,65 @@ def map_bulk_to_path(segments, path_frac, atol=1e-4):
     return mapped
 
 
+def find_unfolded(material=None, cif=None):
+    """Unfolded supercell bands for a run: data/bulk_bands/<cif stem>_unfolded.npz, else
+    <Material>_<structure>_unfolded.npz (qdex.bulk_unfold), or None."""
+    if cif:
+        p = os.path.join(DEFAULT_BULK_DIR, f"{_stem(cif)}_unfolded.npz")
+        if os.path.exists(p):
+            return p
+    if material:
+        mat = str(material).strip().upper()
+        for f in sorted(os.listdir(DEFAULT_BULK_DIR)):
+            if f.endswith("_unfolded.npz") and f.split("_")[0].upper() == mat:
+                return os.path.join(DEFAULT_BULK_DIR, f)
+    return None
+
+
+def get_aligned_unfolded_bands(npz_path, ewin=(-5.0, 5.0), qd_semicore_rel=None, path_frac=None, soc=False,
+                               qd_semicore_label=None, min_weight=0.03):
+    """Unfolded bulk bands (qdex.bulk_unfold) on the dot's energy axis, for the overlay.
+
+    Same anchor as get_aligned_bulk_bands (the semicore level of the dot's interior atoms); every
+    (k, band) point carries its unfolding weight. Returns the dict of get_aligned_bulk_bands with
+    'segments' [(x, bands, weights)] and 'unfolded': True, or None."""
+    import json
+    d = np.load(npz_path)
+    with open(os.path.splitext(npz_path)[0] + ".json") as f:
+        meta = json.load(f)
+    tag = "soc" if soc else "sf"
+    E, P = d[f"E_{tag}"], d[f"P_{tag}"]
+    cands = meta.get("semicore_candidates") or []
+    semi = next((c for c in cands if qd_semicore_label is None or c["label"] == qd_semicore_label), None)
+    if semi is not None and qd_semicore_rel is not None:
+        shift, mode = float(qd_semicore_rel) - float(semi[f"level_{tag}"]), "core_level"
+        logger.info(f"  [Bulk Bands] Unfolded {os.path.basename(npz_path)}: semicore anchor ({semi['label']}), "
+                    f"bulk VBM at {meta[tag]['vbm'] + shift:.3f} eV, CBM at {meta[tag]['cbm'] + shift:.3f} eV.")
+    else:
+        shift, mode = -0.5 * (meta[tag]["vbm"] + meta[tag]["cbm"]), "midgap"
+    Es = E + shift
+    keep = np.where((Es.max(axis=0) >= ewin[0] - 0.5) & (Es.min(axis=0) <= ewin[1] + 0.5))[0]
+    if keep.size == 0:
+        return None
+    bounds = np.concatenate([[0], np.cumsum(d["seg_len"])])
+    segs = [dict(kfrac=d["kfrac"][a:b], bands=np.hstack([Es[a:b][:, keep], P[a:b][:, keep]]))
+            for a, b in zip(bounds[:-1], bounds[1:])]
+    segments = None
+    if path_frac is not None:
+        mapped = map_bulk_to_path(segs, path_frac)
+        if mapped:
+            n = len(keep)
+            segments = [(x, b[:, :n], b[:, n:]) for x, b in mapped]
+    if segments is None:
+        logger.warning("  [Bulk Bands] Unfolded bulk k-path does not match the fuzzy path: overlay skipped.")
+        return None
+    return {"bands_aligned": Es[:, keep], "segments": segments, "band_indices": keep.tolist(),
+            "vbm_aligned": meta[tag]["vbm"] + shift, "cbm_aligned": meta[tag]["cbm"] + shift,
+            "gap": meta[tag]["gap"], "n_k": len(E), "shift": shift, "source_file": npz_path,
+            "alignment_mode": mode, "anchor_detail": {}, "soc": soc, "unfolded": True,
+            "min_weight": min_weight}
+
+
 def get_aligned_bulk_bands(
     material="CdSe",
     bs_path=None,
@@ -335,6 +394,7 @@ def get_aligned_bulk_bands(
     soc=False,
     cif=None,
     qd_semicore_label=None,
+    unfolded="auto",
 ):
     """
     Loads bulk bands and aligns them to the QD energy axis for overlay.
@@ -366,6 +426,9 @@ def get_aligned_bulk_bands(
             dict says whether they were found (otherwise the spin-free bands are used).
         cif: str, optional
             CIF of the run; its stem selects the band files (e.g. CdSe_wz.cif -> CdSe_wz.bs).
+        unfolded: 'auto' (default) or 'off'
+            With 'auto', unfolded bands of the measured supercell structure (<cif stem>_unfolded.npz,
+            qdex.bulk_unfold; the tilted perovskites) replace the primitive-cell bands when present.
         qd_semicore_label: str, optional
             Manifold qd_semicore_rel was measured on (e.g. 'Cd-d'; default: the preferred one).
 
@@ -374,6 +437,14 @@ def get_aligned_bulk_bands(
         'band_indices', 'vbm_aligned', 'cbm_aligned', 'gap', 'n_k', 'shift', 'source_file',
         'alignment_mode' (the mode actually used), 'anchor_detail'.
     """
+    if unfolded and unfolded != "off":
+        # tilted perovskites: the measured (orthorhombic) structure unfolded onto the cubic path
+        u = find_unfolded(material=material, cif=cif)
+        if u:
+            res = get_aligned_unfolded_bands(u, ewin=ewin, qd_semicore_rel=qd_semicore_rel, path_frac=path_frac,
+                                             soc=soc, qd_semicore_label=qd_semicore_label)
+            if res is not None:
+                return res
     path = find_bulk_bs(material=material, soc=True, cif=cif) if soc else None
     soc_bands = path is not None
     if not soc_bands:

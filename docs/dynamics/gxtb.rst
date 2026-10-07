@@ -347,13 +347,20 @@ of the method. The reference is the spin-free experimental gap (g-xTB has no SOC
 .. math::
 
    \Delta_{\mathrm{bulk}}^{\mathrm{gxtb}} = E_g^{\mathrm{ref,SF}} - E_g^{\mathrm{gxtb,bulk}},
-   \qquad E_g^{\mathrm{ref,SF}} = E_g^{\mathrm{exp}} + \tfrac13\Delta_{\mathrm{so}} = 1.74 + 0.14 = 1.88\ \mathrm{eV}.
+   \qquad E_g^{\mathrm{ref,SF}} = E_g^{\mathrm{exp}} + [E_g^{\mathrm{PBE}} - E_g^{\mathrm{PBE+SOC}}](a_{\mathrm{exp}})
+   = 1.675 + 0.122 = 1.797\ \mathrm{eV}.
+
+The experimental gap is that of zinc-blende CdSe at room temperature (Aubert et al. 2022; the
+wurtzite entry ``CDSE_WZ`` has 1.751 eV). The spin-orbit lowering added back is the one of PBE with the QDEX GTH-SOC operator (bulk CdSe at the
+experimental lattice, :doc:`/electronic_structure/bulk_bands`), the same the SOC spinors apply to the
+dots, so a SOC run reaches the experimental gap in the bulk; before 2026-10-07 it was the experimental
+:math:`\Delta_{\mathrm{so}}/3` = 0.14 eV.
 
 Since g-xTB overestimates the gap, the shift is negative.
 
 **The g-xTB bulk gap.** Periodic g-xTB did not give a reliable bulk gap (section 8), so the bulk gap is
-estimated from the dot series. The PBE bulk gap is known (0.62 eV, ``MATERIAL_DB``), and on every dot
-where both methods were run one measures how much higher the g-xTB gap is:
+estimated from the dot series. The PBE bulk gap is known, and on every dot where both methods were run
+one measures how much higher the g-xTB gap is:
 
 .. math::
 
@@ -408,17 +415,25 @@ dot this reproduces the gap of the fully relaxed g-xTB structure (4.869 against 
 
 .. math::
 
-   E_g^{\mathrm{gxtb,bulk}} \approx 0.62 + 3.73 = 4.35\ \mathrm{eV},\qquad
-   \Delta_{\mathrm{bulk}}^{\mathrm{gxtb}} = 1.88 - 4.35 = -2.47\ \mathrm{eV}.
+   E_g^{\mathrm{gxtb,bulk}} \approx 0.474 + 3.73 = 4.205\ \mathrm{eV},\qquad
+   \Delta_{\mathrm{bulk}}^{\mathrm{gxtb}} = 1.797 - 4.205 = -2.408\ \mathrm{eV}.
+
+The PBE bulk gap is the one at the PBE lattice (0.474 eV), the partner of the PBE-relaxed dots of
+⟨δ⟩ (their interior Cd–Se bonds are within 0.1 % of the bulk PBE value); the gap at the experimental
+lattice (0.644 eV) would mix a strain shift into the estimate. :math:`E_g^{\mathrm{gxtb,bulk}}` is then
+the g-xTB bulk gap at the g-xTB lattice, and the shift takes the dot from its own lattice to the
+experimental one, like :math:`\Delta_{\mathrm{geom}}` in the PBE route. Before 2026-10-07 the estimate
+used 0.62 eV and 1.88 eV (shift −2.49 eV): the g-xTB QP gaps are now 0.09 eV higher.
 
 Written as :math:`\Delta^{\mathrm{gxtb}}_{\mathrm{bulk}} = (E_g^{\mathrm{ref,SF}} - E_g^{\mathrm{PBE,bulk}}) - \langle\delta\rangle`,
 the shift is chosen so that, on average over the dots, the g-xTB route gives the same QP gap as the
-PBE route with the same experimental reference. The data and the formula are in
+PBE route with a bulk limit at the experimental gap (``bulk_vertex_factor`` set to
+:math:`(E_g^{\mathrm{exp}} - E_g^{\mathrm{PBE+SOC}})/\Delta_\Sigma`, 0.70 for zinc-blende CdSe). The data and the formula are in
 ``qdex.hardness.GXTB_BULK`` and ``gxtb_bulk_shift``. A periodic g-xTB gap, once available, is entered
 as ``gap_gxtb_bulk`` and replaces the estimate.
 
-**Results** (2 nm dot, 50 frames at 300 K): QP gap 2.18 ± 0.09 eV, lowest transition
-1.90 ± 0.05 eV. This is lower than the PBE route (sBSE S₁ = 2.78 eV) for three reasons: this dot's δ
+**Results** (2 nm dot, 50 frames at 300 K, with the shift of −2.49 eV used before 2026-10-07; the
+current shift raises both by 0.09 eV): QP gap 2.18 ± 0.09 eV, lowest transition 1.90 ± 0.05 eV. This is lower than the PBE route (sBSE S₁ = 2.78 eV) for three reasons: this dot's δ
 (3.41 eV) is 0.32 eV below the average, the gap at 300 K is 0.21 eV lower than at the minimum, and the
 PBE route uses the QSGW instead of the experimental reference. The first reason shows the main
 limitation: any single dot can deviate by about ±0.5 eV from the estimate.
@@ -442,7 +457,7 @@ limitation: any single dot can deviate by about ±0.5 eV from the estimate.
      - bulk Resta W and bare MNOK exchange
    * - material parameters
      - none
-     - experimental gap, Δso, PBE bulk gap, ⟨δ⟩
+     - experimental gap, PBE and PBE+SOC bulk gaps, ⟨δ⟩
    * - lowest transition, 2 nm, 300 K
      - 2.99 eV
      - 1.90 eV

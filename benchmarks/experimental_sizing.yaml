@@ -53,3 +53,15 @@ yu-2003:
   citation: "W. W. Yu, L. Qu, W. Guo, X. Peng, Chem. Mater. 15, 2854 (2003)"
   kind: yu2003
   tolerance_ev: 0.10
+
+akkerman-2022-cspbbr3:
+  citation: "Q. A. Akkerman et al. (M. V. Kovalenko), Science 377, 1406 (2022), Fig. 4D: first excitonic
+    absorption peak (1s-1s, room temperature) of purified, lecithin-capped spheroidal CsPbBr3 QDs against
+    their mean diameter (15 sizes; two overlap at ~10.5 nm). Points digitised from the published figure
+    (axis calibration on the tick marks, marker centroids; about +-0.005 eV and +-0.05 nm)."
+  kind: table
+  points: [[3.05, 2.805], [3.75, 2.729], [4.35, 2.653], [4.82, 2.585], [5.85, 2.524], [6.19, 2.527],
+           [6.91, 2.481], [7.33, 2.477], [7.82, 2.462], [8.68, 2.448], [8.83, 2.447], [10.38, 2.429],
+           [10.59, 2.430], [10.74, 2.431]]
+  tolerance_ev: 0.10
+  data_range_nm: [3.05, 10.74]

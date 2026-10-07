@@ -543,8 +543,11 @@ def precompute_namd_data(config):
 
     nhomos = phys_cfg.get("nhomos", None)
     nlumos = phys_cfg.get("nlumos", None)
-    from qdex.hardness import set_mnok_options, set_bulk_vertex
+    from qdex.hardness import set_mnok_options, set_bulk_vertex, set_bulk_geometry
     set_bulk_vertex(phys_cfg.get("bulk_vertex", "none"), phys_cfg.get("bulk_vertex_factor", 0.8))
+    set_bulk_geometry(phys_cfg.get("bulk_geometry", "strain"))
+    from qdex.hardness import set_bulk_residual
+    set_bulk_residual(phys_cfg.get("bulk_residual", "none"))
     set_mnok_options(phys_cfg.get("mnok_exponent", 2.0), phys_cfg.get("mnok_exponent_exchange"),
                      phys_cfg.get("mnok_onsite", "ip_ea"))
 
@@ -684,7 +687,8 @@ def precompute_namd_data(config):
             logger.warning("  [NAMD Warning] bulk_vertex applies to the PBE/QSGW shift; it is ignored for g-xTB.")
         scissor, _ = gxtb_bulk_shift(material)
     elif str(qp_model).lower() == "bulk":
-        from qdex.hardness import bulk_qp_shift
+        from qdex.hardness import bulk_qp_shift, set_dot_strain
+        set_dot_strain(material, syms0, np.asarray(coords0, float))   # lattice of the frame-0 dot (PBE frames)
         dft_gap0 = None
         if phys_cfg.get("bulk_vertex", "none") == "scaled":   # the scaled correction needs the DFT gap of frame 0
             C0, eps0, occ0 = read_mos_dense(os.path.join(frame_dirs[0], mo_name), n_ao)

@@ -1,0 +1,26 @@
+{
+ "CsPbBr3_ortho": {
+  "gap_sf": 1.6569,
+  "gap_soc": 0.7974,
+  "delta_soc": 0.8595,
+  "delta_so": null,
+  "inverted_soc": false,
+  "a": null
+ },
+ "CsPbCl3_ortho": {
+  "gap_sf": 2.3886,
+  "gap_soc": 1.5486,
+  "delta_soc": 0.84,
+  "delta_so": null,
+  "inverted_soc": false,
+  "a": null
+ },
+ "CsPbI3_ortho": {
+  "gap_sf": 1.4016,
+  "gap_soc": 0.5136,
+  "delta_soc": 0.888,
+  "delta_so": null,
+  "inverted_soc": false,
+  "a": null
+ }
+}

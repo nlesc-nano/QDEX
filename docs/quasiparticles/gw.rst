@@ -148,31 +148,58 @@ The self-energy splits the same way:
    \underbrace{\langle n|\Sigma_{\mathrm{bulk}} - v_{xc}|n\rangle}_{\text{bulk GW correction}}
    + \underbrace{\Delta\Sigma_n[\Delta W]}_{\text{finite-size correction}} .
 
-**Bulk part.** The GW correction of the crystal is transferable. QDEX takes it from a bulk GW
-calculation as the gap opening
+**Bulk part.** The GW correction of the crystal is transferable. QDEX takes it from bulk QSGW as
+the gap opening
 
 .. math::
 
-   \Delta_{\mathrm{bulk}} = E_g^{\mathrm{GW}}(\mathrm{bulk}) - E_g^{\mathrm{PBE}}(\mathrm{bulk})
-   \qquad (1.57\ \mathrm{eV\ for\ CdSe,\ bulk\ QSGW}),
+   \Delta_{\mathrm{bulk}} = \Delta_\Sigma + \Delta_{\mathrm{geom}},\qquad
+   \Delta_\Sigma = E_g^{\mathrm{QSGW+SOC}}(a_{\mathrm{exp}}) - E_g^{\mathrm{PBE+SOC}}(a_{\mathrm{exp}})
+   \qquad (1.64\ \mathrm{eV\ for\ CdSe}),
+
+with the literature QSGW gap (with spin-orbit coupling) and our PBE+SOC gap at the same, experimental
+lattice (``MATERIAL_DB`` index 8 − index 7). :math:`\Delta_{\mathrm{geom}} = E_g^{\mathrm{PBE}}(a_{\mathrm{exp}}) -
+E_g^{\mathrm{PBE}}(a_{\mathrm{dot}})` (``quasiparticles.bulk_geometry``) removes the gap change of a
+PBE-relaxed dot, whose lattice is close to the PBE one (+0.166 eV for a 2.62 nm CdSe dot; GaAs +0.47,
+CsPbBr\ :sub:`3` −0.39 eV at the full PBE lattice). Sources, lattices and the measurement of the dot
+lattice: :doc:`/electronic_structure/bulk_bands`. :math:`\Delta_{\mathrm{bulk}}` is
 
 split between the valence and conduction band: :math:`-f_b\,\Delta_{\mathrm{bulk}}` for occupied, :math:`+(1 - f_b)\,\Delta_{\mathrm{bulk}}` for empty states, where :math:`f_b` is the valence share of the bulk opening. In the literature for II-VI semiconductors (Hinuma et al., *PRB* 90, 155405 (2014); Schleife et al., *PRB* 73, 245212 (2006)), the bulk GW opening is asymmetric: the valence-band maximum shifts down by ~42–43% while the conduction-band minimum shifts up by ~57–58%. In QDEX, :math:`f_b` is 41.2 % for CdSe. All dynamical effects of the bulk are inside this number.
 
 **Vertex correction of the bulk part** (``quasiparticles.bulk_vertex``). QSGW overestimates bulk gaps
 by 10–20 %: its W lacks the electron–hole (ladder) vertex, so the polarizability and ε are too small.
 The usual bulk remedy scales the opening, :math:`\Delta_{\mathrm{bulk}} \to a\,\Delta_{\mathrm{bulk}}`
-with :math:`a = 0.8` (``bulk_vertex_factor``); for CdSe this gives a spin-free bulk gap of 1.88 eV,
-the experimental 1.74 eV plus :math:`\Delta_{so}/3`. The missing vertex part is proportional to the
+with :math:`a = 0.8` (``bulk_vertex_factor``); for CdSe this gives a bulk gap of 1.84 eV with SOC
+(0.522 + 0.8 × 1.642), 0.10 eV above the experimental 1.74 eV. The vertex correction scales
+:math:`\Delta_\Sigma` only, not :math:`\Delta_{\mathrm{geom}}`.
+
+The error of QSGW is not the same for every material: against the room-temperature gaps it ranges from
++0.5 eV (ZnS, CdTe) through about zero (PbS, PbSe, AlSb) to −0.15 eV (CsPbBr\ :sub:`3` in its measured structure), and it contains more than the missing vertex (zero-point
+and thermal renormalisation). ``bulk_vertex_factor: material`` therefore uses, for each material, the
+factor that puts the bulk limit on its experimental gap,
+
+.. math::
+
+   a_m = \frac{E_g^{\mathrm{exp}} - E_g^{\mathrm{PBE+SOC}}}{\Delta_\Sigma}
+   \qquad (\text{CdSe zb } 0.70,\ \text{wz } 0.73,\ \text{GaAs } 0.74,\ \text{InP } 0.71,\
+   \text{PbS } 1.04,\ \text{CsPbBr}_3\ 1.11,\ \text{CsPbI}_3\ 0.98),
+
+with :math:`E_g^{\mathrm{exp}}` at room temperature, the temperature of the sizing experiments, and the
+PBE+SOC gap of the measured structure (for the lead halide perovskites the orthorhombic Pnma phases,
+whose tilts open the gap by 0.45–0.70 eV with respect to the cubic cell of the same volume). With ``scaled`` the dot then goes
+from QSGW in the molecular limit to the experimental gap in the bulk, the bulk limit of the g-xTB route.
+A factor above 1 (Pb chalcogenides, perovskites) means QSGW is below the measured gap and is not a vertex
+correction; the run says so. Values per material: :doc:`/electronic_structure/bulk_bands`. The missing vertex part is proportional to the
 polarizability, which is reduced in a dot. With ``scaled`` the correction follows the fraction of bulk
 screening the dot keeps,
 
 .. math::
 
-   \Delta_{\mathrm{bulk}}(R) = \Delta_{\mathrm{QSGW}} - (1 - a)\,\Delta_{\mathrm{QSGW}}\,f(R),\qquad
+   \Delta_\Sigma(R) = \Delta_{\mathrm{QSGW}} - (1 - a)\,\Delta_{\mathrm{QSGW}}\,f(R),\qquad
    f(R) = \frac{\epsilon_{\mathrm{eff}}(R) - 1}{\epsilon_\infty - 1},
 
 with :math:`\epsilon_{\mathrm{eff}}` the Penn value at the DFT gap of the cluster (the same Penn model
-as the Resta W). f → 1 in the bulk (experimental gap), f → 0 in the molecular limit (QSGW). f uses
+as the Resta W; the confinement energy is taken from the bulk PBE gap at the dot's lattice). f → 1 in the bulk (experimental gap), f → 0 in the molecular limit (QSGW). f uses
 the DFT gap, so Δ_bulk is the same for every QP model of a given cluster; the screening of the ΔW
 models is referenced to the same corrected bulk gap, so the vertex correction changes the bulk shift
 and nothing else.
@@ -181,17 +208,36 @@ and nothing else.
    :header-rows: 1
 
    * - ``bulk_vertex``
-     - Δ_bulk
+     - Δ_Σ
      - CdSe: 1.2 nm / 2.0 nm / bulk (eV)
    * - ``none`` (default)
      - pure QSGW
-     - 1.57 / 1.57 / 1.57
+     - 1.64 / 1.64 / 1.64
    * - ``full``
      - :math:`a\,\Delta_{\mathrm{QSGW}}` at every size
-     - 1.26 / 1.26 / 1.26
+     - 1.31 / 1.31 / 1.31
    * - ``scaled``
      - :math:`\Delta_{\mathrm{QSGW}}\,[1 - (1-a) f(R)]`
-     - 1.39 / 1.33 / 1.26
+     - ≈ 1.45 / 1.39 / 1.31 (2.62 nm: 1.38)
+
+**Split model** (``quasiparticles.bulk_residual: experimental``). The residual of a fixed factor,
+:math:`\delta_{\mathrm{res}} = E_g^{\mathrm{exp}} - (E_g^{\mathrm{PBE+SOC}} + a\,\Delta_\Sigma)`, is not a
+vertex effect: for most II–VI and III–V semiconductors it is −0.08 to −0.23 eV (CdSe −0.16 eV, about
+the thermal narrowing to room temperature plus the zero-point renormalisation), for the Pb compounds
++0.1 to +0.4 eV, where QSGW is already below the measured gap. The split model keeps the vertex part
+size-dependent and adds the residual at every size,
+
+.. math::
+
+   \Delta_{\mathrm{bulk}}(R) = \Delta_\Sigma\,[1 - (1 - a) f(R)] + \delta_{\mathrm{res}} + \Delta_{\mathrm{geom}},
+
+so the bulk limit is the measured gap, like ``bulk_vertex_factor: material``, but the temperature and
+zero-point parts do not fade in small dots (with the material factor everything is scaled by
+:math:`f(R)` as if it were vertex). For the 2.62 nm CdSe dot the two give shifts 0.03 eV apart; for
+small dots the difference grows to about 0.07 eV. Recommended settings: ``bulk_vertex: scaled``,
+``bulk_vertex_factor: 0.8``, ``bulk_residual: experimental``. The residuals per material are in
+:doc:`/electronic_structure/bulk_bands`; a large positive one (CsPbBr\ :sub:`3` +0.42 eV) says that the 0.8
+vertex scaling does not suit that material.
 
 It applies to ``bulk`` (the sBSE), the ΔW models and the NAMD precompute, not to the legacy ``gw``
 and ``sgw`` models.

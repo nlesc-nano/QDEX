@@ -44,6 +44,8 @@ SECTIONS = {
         "reference": "qp_reference",
         "bulk_vertex": "bulk_vertex",
         "bulk_vertex_factor": "bulk_vertex_factor",
+        "bulk_geometry": "bulk_geometry",
+        "bulk_residual": "bulk_residual",
         "z": "qp_z",
         "selfenergy": "qp_selfenergy",
         "levels": "qp_levels",

@@ -88,7 +88,9 @@ system
      - basis-set file and basis name; ``basis_name: per-atom`` reads a per-atom basis file written by
        ``qdex.xtb.molden`` (g-xTB orbitals, :doc:`/dynamics/gxtb`)
    * - ``material`` [``--material``]
-     - ``MATERIAL_DB`` entry (bulk gaps, ε∞, effective masses), e.g. ``CDSE``, ``CSPBBR3``
+     - ``MATERIAL_DB`` entry (bulk gaps, ε∞, effective masses), e.g. ``CDSE``, ``CSPBBR3``. CdSe and CdS
+       have one entry per polytype: ``CDSE``/``CDS`` (= ``CDSE_ZB``/``CDS_ZB``) zinc blende,
+       ``CDSE_WZ``/``CDS_WZ`` wurtzite (different bulk limits; :doc:`/electronic_structure/bulk_bands`)
    * - ``gth_file``
      - GTH SOC pseudopotential file
    * - ``nthreads``, ``device``
@@ -140,7 +142,17 @@ quasiparticles
        size) or ``scaled`` (times the Penn fraction of bulk screening; :doc:`/quasiparticles/gw`)
    * - ``bulk_vertex_factor`` [``--bulk-vertex-factor``]
      - 0.8
-     - bulk factor a: Δ_bulk → a Δ_bulk in the bulk
+     - bulk factor a: Δ_Σ → a Δ_Σ in the bulk; ``material``: the factor that puts the bulk limit on the
+       experimental gap of the material (:doc:`/quasiparticles/gw`)
+   * - ``bulk_residual`` [``--bulk-residual``]
+     - ``none``
+     - ``experimental``: a constant shift that puts the bulk limit on the room-temperature gap; with
+       ``bulk_vertex: scaled`` and a numeric factor, the split model (:doc:`/quasiparticles/gw`)
+   * - ``bulk_geometry`` [``--bulk-geometry``]
+     - ``strain``
+     - geometry correction of the bulk shift for PBE-relaxed dots: ``strain`` (bulk PBE gap change between
+       a_exp and the lattice measured on the dot's interior bonds), ``full`` (dot at the bulk PBE lattice)
+       or ``none`` (:doc:`/electronic_structure/bulk_bands`)
    * - ``z`` [``--qp-z``]
      - ``derived``
      - quasiparticle weight: plasmon pole of the model's ε, or a number

@@ -5,7 +5,7 @@ Part of :doc:`/reference/index`.
 
 .. important::
 
-   Material entries in ``MATERIAL_DB`` are benchmark model inputs using **pure 1.0 QSGW scalar-relativistic (spin-free)** bulk values. For example, ``MATERIAL_DB["CDSE"]`` uses 0.62 eV PBE, 2.19 eV QSGW (:math:`\Delta_{\mathrm{bulk}} = +1.57\ \mathrm{eV}`), and :math:`\varepsilon_\infty = 6.2`.
+   The bulk quasiparticle reference of ``MATERIAL_DB`` is the literature 1.0 QSGW gap **with spin-orbit coupling** and our PBE+SOC gap at the same, experimental lattice: :math:`\Delta_\Sigma = E_g^{\mathrm{QSGW+SOC}}(a_{\mathrm{exp}}) - E_g^{\mathrm{PBE+SOC}}(a_{\mathrm{exp}})`. Index 7 is the spin-free PBE gap at :math:`a_{\mathrm{exp}}`, index 8 the spin-free equivalent :math:`E_g^{\mathrm{PBE}}(a_{\mathrm{exp}}) + \Delta_\Sigma`, so that index 8 − index 7 = :math:`\Delta_\Sigma` for spin-free and SOC dots alike. For CdSe: 0.644 eV PBE, 2.286 eV (:math:`\Delta_\Sigma = +1.642` eV, from QSGW+SO 2.16 eV and PBE+SOC 0.522 eV), :math:`\varepsilon_\infty = 6.2`. Sources, lattices and the geometry correction of PBE-relaxed dots: :doc:`/electronic_structure/bulk_bands`.
 
 .. rubric:: QDEX implementation
 
@@ -24,7 +24,7 @@ Implementation entry point:
 11. Material Database Reference
 -------------------------------
 
-Every energy in the tables below is **spin-free (scalar-relativistic)**. The two bulk columns are a scalar PBE fundamental gap and a spin-free 1.0 QSGW gap. Their difference is :math:`\Delta_{\mathrm{bulk}} = E_g^{\mathrm{bulk, QSGW}} - E_g^{\mathrm{bulk, PBE}}`. The cluster columns record the corresponding values for the finite anchor cluster calculated with CP2K (DZVP-RI / GTH / PBE + evGW), along with the frontier orbital fractions :math:`f_H` and :math:`f_L`.
+Every energy in the tables below is **spin-free (scalar-relativistic)**. The two bulk columns are the spin-free PBE gap at the experimental lattice (index 7) and the spin-free QSGW-equivalent gap (index 8); their difference :math:`\Delta_{\mathrm{bulk}}` is the self-energy correction :math:`\Delta_\Sigma`, obtained with spin-orbit coupling on both sides (next section). The cluster columns record the corresponding values for the finite anchor cluster calculated with CP2K (DZVP-RI / GTH / PBE + evGW), along with the frontier orbital fractions :math:`f_H` and :math:`f_L`.
 
 Physical Rationale: 1.0 QSGW vs. 0.8 QSGW in Colloidal Quantum Dots (2–6 nm)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -39,23 +39,17 @@ However, for colloidal quantum dots and nanocrystals of typical experimental siz
 
 If a 0.8 QSGW bulk scissor were used in a 2–6 nm nanocrystal, the quasiparticle opening would be substantially underestimated (for example, yielding an exciton energy of ~2.2 eV for a 3.0 nm CdSe dot, whereas experimental sizing curves demonstrate 2.5–2.6 eV). Pure **1.0 QSGW** provides the physically appropriate high-energy, vertex-quenched asymptote that matches finite vacuum/cluster evGW anchors and accurately reproduces experimental sizing curves (e.g., Hens & Rodina, *Nano Lett.* 2022).
 
-Relativistic Spin-Orbit Coupling (SOC) Correction Conventions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Spin-Orbit Coupling in the Bulk Reference
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Because QDEX solves the Kohn-Sham ground state and Bethe-Salpeter equation on spin-free spatial orbitals (with optional subsequent SOC spinor transformations), all reference bulk gaps in ``MATERIAL_DB`` are strictly **scalar-relativistic (spin-free)**:
+QDEX solves the ground state on spin-free orbitals and adds spin-orbit coupling as spinors (GTH-SOC operator). The literature QSGW gaps include spin-orbit coupling, so the self-energy correction is taken with SOC on both sides and at the same lattice:
 
-* **Zinc-Blende II–VI and III–V Semiconductors:** Spin-orbit coupling splits the triply degenerate :math:`\Gamma_{15v}` valence band into a 4-fold :math:`\Gamma_{8v}` (heavy/light hole) and a 2-fold :math:`\Gamma_{7v}` (split-off) state. The valence band maximum is pushed upward by :math:`+\frac{1}{3}\Delta_{\mathrm{so}}`, while the :math:`s`-like conduction band minimum (:math:`\Gamma_{1c}`) undergoes negligible first-order shift. Consequently:
+.. math::
 
-  .. math::
+   \Delta_\Sigma = E_g^{\mathrm{QSGW+SOC}}(a_{\mathrm{exp}}) - E_g^{\mathrm{PBE+SOC}}(a_{\mathrm{exp}}),\qquad
+   E_g^{\mathrm{index\ 8}} = E_g^{\mathrm{PBE}}(a_{\mathrm{exp}}) + \Delta_\Sigma .
 
-     E_g^{\mathrm{spin-free}} = E_g^{\mathrm{with\ SOC}} + \frac{1}{3}\Delta_{\mathrm{so}}
-
-* **Lead Halide Perovskites (Cubic Phase):** The band edges at :math:`R` feature an :math:`s`-like valence band maximum (Pb :math:`6s` - halide :math:`np` antibonding, negligible SOC shift) and a :math:`p`-like conduction band minimum (Pb :math:`6p`). SOC splits the Pb :math:`6p` manifold into :math:`j=1/2` and :math:`j=3/2`, lowering the :math:`j=1/2` conduction edge by :math:`\approx \frac{2}{3}\Delta_{\mathrm{so}}(\mathrm{Pb}\ 6p) \approx 0.95 - 1.05\ \mathrm{eV}`. Consequently:
-
-  .. math::
-
-     E_g^{\mathrm{spin-free}} = E_g^{\mathrm{with\ SOC}} + \frac{2}{3}\Delta_{\mathrm{so}}^{\mathrm{CB}}
-
+The same :math:`\Delta_\Sigma` then corrects spin-free and SOC dots, and the spin-orbit lowering of the gap is the PBE/GTH-SOC one in both the bulk reference and the dots: about :math:`\Delta_{\mathrm{so}}/3` in zinc blende (the :math:`\Gamma_8` valence edge), about :math:`\frac{2}{3}\Delta_{\mathrm{so}}^{\mathrm{CB}}` in the lead halide perovskites (the :math:`j = 1/2` conduction edge at R), and the L-point splitting in PbS and PbSe. This replaces the earlier conversion of literature gaps to spin-free ones with those formulas and experimental :math:`\Delta_{\mathrm{so}}`. Gaps are signed band-edge transitions (negative = inverted band order, e.g. the Hg compounds). Literature values and lattices: Deguchi et al., *Jpn. J. Appl. Phys.* 55, 051201 (2016) (III–V, Zn and Cd chalcogenides); Svane et al., *Phys. Rev. B* 81, 245120 (2010) (PbS, PbSe); Svane et al., *Phys. Rev. B* 84, 205205 (2011) (Hg chalcogenides); Huang and Lambrecht, *Phys. Rev. B* 93, 195211 (2016) (cubic CsPbX\ :sub:`3`, carried from their lattice to :math:`a_{\mathrm{exp}}` with their QSGW deformation potentials). Details and the full table: :doc:`/electronic_structure/bulk_bands`.
 
 Perovskites
 ~~~~~~~~~~~
@@ -76,9 +70,9 @@ Perovskites
      - :math:`f_L`
    * - Cs\ :sub:`3`\ Bi\ :sub:`2`\ Br\ :sub:`9`
      - 7.85
-     - 3.33
-     - 4.35
-     - +1.02
+     - 3.330
+     - 4.350
+     - +1.020
      - 3.65
      - 7.35
      - +3.70
@@ -86,9 +80,9 @@ Perovskites
      - 0.54
    * - CsPbCl\ :sub:`3`
      - 7.60
-     - 2.45
-     - 4.20
-     - +1.75
+     - 1.771
+     - 3.558
+     - +1.787
      - 3.24
      - 6.90
      - +3.66
@@ -96,9 +90,9 @@ Perovskites
      - 0.50
    * - CsPbBr\ :sub:`3`
      - 7.91
-     - 1.85
-     - 3.40
-     - +1.55
+     - 1.278
+     - 2.628
+     - +1.350
      - 3.08
      - 6.83
      - +3.75
@@ -106,9 +100,9 @@ Perovskites
      - 0.57
    * - CsPbI\ :sub:`3`
      - 8.37
-     - 1.55
-     - 2.80
-     - +1.25
+     - 0.832
+     - 2.076
+     - +1.244
      - 2.69
      - 6.02
      - +3.33
@@ -116,9 +110,9 @@ Perovskites
      - 0.66
    * - MAPbI\ :sub:`3`
      - 
-     - 1.55
-     - 2.73
-     - +1.18
+     - 1.550
+     - 2.730
+     - +1.180
      - 
      - 
      - 
@@ -126,9 +120,9 @@ Perovskites
      - 
    * - FAPbI\ :sub:`3`
      - 
-     - 1.45
-     - 2.60
-     - +1.15
+     - 1.450
+     - 2.600
+     - +1.150
      - 
      - 
      - 
@@ -155,9 +149,9 @@ II–VI Semiconductors
      - :math:`f_L`
    * - ZnS
      - 4.82
-     - 2.08
-     - 4.17
-     - +2.09
+     - 2.051
+     - 4.128
+     - +2.077
      - 3.45
      - 7.26
      - +3.81
@@ -165,9 +159,9 @@ II–VI Semiconductors
      - 0.57
    * - ZnSe
      - 4.94
-     - 1.27
-     - 3.26
-     - +1.99
+     - 1.252
+     - 3.221
+     - +1.969
      - 3.29
      - 6.84
      - +3.55
@@ -175,9 +169,9 @@ II–VI Semiconductors
      - 0.60
    * - ZnTe
      - 5.19
-     - 1.45
-     - 2.96
-     - +1.51
+     - 1.225
+     - 2.940
+     - +1.715
      - 2.98
      - 6.10
      - +3.12
@@ -185,9 +179,9 @@ II–VI Semiconductors
      - 0.61
    * - CdS
      - 5.15
-     - 1.12
-     - 2.78
-     - +1.66
+     - 1.146
+     - 2.863
+     - +1.717
      - 2.72
      - 6.36
      - +3.65
@@ -195,9 +189,9 @@ II–VI Semiconductors
      - 0.56
    * - CdSe
      - 5.31
-     - 0.62
-     - 2.19
-     - +1.57
+     - 0.644
+     - 2.286
+     - +1.642
      - 2.63
      - 6.03
      - +3.40
@@ -205,9 +199,9 @@ II–VI Semiconductors
      - 0.59
    * - CdTe
      - 5.44
-     - 0.86
-     - 2.12
-     - +1.26
+     - 0.740
+     - 2.261
+     - +1.521
      - 2.82
      - 6.08
      - +3.26
@@ -215,9 +209,9 @@ II–VI Semiconductors
      - 0.63
    * - HgS
      - 5.08
-     - −0.15
-     - 0.31
-     - +0.46
+     - -0.421
+     - 0.585
+     - +1.006
      - 2.23
      - 5.47
      - +3.25
@@ -225,9 +219,9 @@ II–VI Semiconductors
      - 0.62
    * - HgSe
      - 5.20
-     - −0.40
-     - 0.05
-     - +0.45
+     - -0.872
+     - -0.018
+     - +0.854
      - 2.16
      - 5.16
      - +3.00
@@ -235,9 +229,9 @@ II–VI Semiconductors
      - 0.65
    * - HgTe
      - 5.41
-     - −0.30
-     - 0.23
-     - +0.53
+     - -0.665
+     - 0.373
+     - +1.038
      - 2.18
      - 4.90
      - +2.72
@@ -264,9 +258,9 @@ III–V Semiconductors
      - :math:`f_L`
    * - AlP
      - 5.18
-     - 1.59
-     - 2.74
-     - +1.15
+     - 1.667
+     - 2.732
+     - +1.065
      - 1.94
      - 5.84
      - +3.90
@@ -274,9 +268,9 @@ III–V Semiconductors
      - 0.53
    * - AlAs
      - 5.23
-     - 1.39
-     - 2.46
-     - +1.07
+     - 1.522
+     - 2.458
+     - +0.936
      - 2.10
      - 5.73
      - +3.63
@@ -284,9 +278,9 @@ III–V Semiconductors
      - 0.55
    * - AlSb
      - 5.56
-     - 1.18
-     - 1.80
-     - +0.62
+     - 1.208
+     - 1.804
+     - +0.596
      - 1.93
      - 5.17
      - +3.24
@@ -294,9 +288,9 @@ III–V Semiconductors
      - 0.57
    * - GaP
      - 5.32
-     - 1.61
-     - 2.49
-     - +0.88
+     - 1.632
+     - 2.487
+     - +0.855
      - 1.98
      - 5.40
      - +3.41
@@ -304,9 +298,9 @@ III–V Semiconductors
      - 0.52
    * - GaAs
      - 5.45
-     - 0.49
-     - 1.89
-     - +1.40
+     - 0.496
+     - 1.891
+     - +1.395
      - 1.89
      - 5.03
      - +3.13
@@ -314,9 +308,9 @@ III–V Semiconductors
      - 0.55
    * - GaSb
      - 5.72
-     - 0.11
-     - 1.20
-     - +1.09
+     - 0.156
+     - 1.304
+     - +1.148
      - 1.48
      - 4.31
      - +2.83
@@ -324,9 +318,9 @@ III–V Semiconductors
      - 0.56
    * - InP
      - 5.63
-     - 0.46
-     - 1.65
-     - +1.19
+     - 0.680
+     - 1.651
+     - +0.971
      - 1.75
      - 4.99
      - +3.24
@@ -334,9 +328,9 @@ III–V Semiconductors
      - 0.55
    * - InAs
      - 5.70
-     - −0.42
-     - 0.80
-     - +1.22
+     - -0.247
+     - 0.788
+     - +1.035
      - 1.60
      - 4.61
      - +3.01
@@ -344,9 +338,9 @@ III–V Semiconductors
      - 0.57
    * - InSb
      - 5.95
-     - −0.61
-     - 0.77
-     - +1.38
+     - -0.153
+     - 0.778
+     - +0.931
      - 1.56
      - 4.30
      - +2.74
@@ -373,9 +367,9 @@ IV–VI Semiconductors
      - :math:`f_L`
    * - PbS
      - 7.24
-     - 0.15
-     - 0.73
-     - +0.58
+     - 0.253
+     - 0.683
+     - +0.430
      - 2.31
      - 5.76
      - +3.45
@@ -383,9 +377,9 @@ IV–VI Semiconductors
      - 0.57
    * - PbSe
      - 7.39
-     - 0.05
-     - 0.65
-     - +0.60
+     - 0.139
+     - 0.582
+     - +0.443
      - 2.27
      - 5.51
      - +3.24

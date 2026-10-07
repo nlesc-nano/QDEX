@@ -215,6 +215,31 @@ CP2K k-point run that prints the real-space Kohn-Sham and overlap matrices:
 
 The bulk bands of all the materials of the QDSpaceWebApp are listed in :doc:`bulk_bands`.
 
+**Tilted perovskites: unfolded bands.** Lead halide perovskite nanocrystals relax with tilted
+octahedra, as in the orthorhombic (Pnma) bulk phase. The fuzzy map keeps the cubic path (the
+pseudo-cubic Brillouin zone, as in the literature): Pnma is a four-fold supercell of the cubic cell
+in which the cubic R and M points both fold onto Γ, and a map on the orthorhombic path piles every
+band edge there. The overlay is the orthorhombic band structure *unfolded* onto the cubic path
+(``qdex.bulk_unfold``; Popescu and Zunger, *Phys. Rev. B* 85, 085201 (2012)): each supercell state
+:math:`\psi_{K n}` gets the weight
+
+.. math::
+
+   P_{Kn}(\mathbf{k}) = \frac{\sum_{\mathbf{g} \in \text{cubic}} |\langle \mathbf{k}+\mathbf{g}|\psi_{Kn}\rangle|^2}
+                             {\sum_{\mathbf{G} \in \text{supercell}} |\langle \mathbf{k}+\mathbf{G}|\psi_{Kn}\rangle|^2},
+
+with the plane-wave amplitudes from the analytic Fourier transforms of the basis (the fuzzy-band
+machinery) and the cubic lattice the average pseudo-cubic one of the supercell (nearest Pb–Pb
+vectors). The dashboard draws one point per (k, band), with an opacity set by the weight: the
+R-derived band edges are bright at R, their folded images faint elsewhere. Validation: untilted
+cubic CsPbBr\ :sub:`3` written in the same supercell unfolds onto its cubic bands within 3.8 meV, with
+weights 0 or 1 (shared only within degenerate sets). The orthorhombic structures are those of
+:doc:`bulk_bands` (CsPbBr\ :sub:`3`, γ-CsPbI\ :sub:`3` measured; CsPbCl\ :sub:`3` with PBE-relaxed tilts),
+scaled to the PBE pseudo-cubic volume like the dots; the files are
+``qdex/data/bulk_bands/<cubic CIF stem>_unfolded.npz`` and are used whenever they exist
+(``get_aligned_bulk_bands(..., unfolded="off")`` restores the cubic bands). They are anchored on
+the Cs 5p level, like the cubic bands.
+
 :math:`H(\mathbf{k}) = \sum_\mathbf{R} e^{i\mathbf{k}\cdot\mathbf{R}} \langle\chi_\mu(0)|H|\chi_\nu(\mathbf{R})\rangle`
 and :math:`S(\mathbf{k})` are built at every point of the path, the SOC operator from
 Bloch sums of the projector overlaps, and the two-component problem is solved in the full

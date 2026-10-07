@@ -367,12 +367,31 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                 else:   # unknown path: stretch the bulk k-points over the fuzzy axis
                     segments = [(np.linspace(fuzzy["extent"][0], fuzzy["extent"][1], bulk_data["n_k"]),
                                  bulk_data["bands_aligned"])]
-                if bulk_data.get("soc"):
+                if bulk_data.get("unfolded"):
+                    # unfolded supercell bands: one marker per (k, band), opacity = unfolding weight
+                    bulk_name = "Bulk PBE+SOC, unfolded" if bulk_data.get("soc") else "Bulk PBE, unfolded"
+                    xs, ys, cs = [], [], []
+                    for x_seg, b_seg, w_seg in segments:
+                        mask = w_seg >= bulk_data.get("min_weight", 0.03)
+                        xx = np.broadcast_to(np.asarray(x_seg, float)[:, None], b_seg.shape)
+                        xs.append(xx[mask]); ys.append(b_seg[mask]); cs.append(w_seg[mask])
+                    xs, ys, cs = np.concatenate(xs), np.concatenate(ys), np.clip(np.concatenate(cs), 0, 1)
+                    order = np.argsort(cs)              # strongest on top
+                    fig.add_trace(go.Scattergl(
+                        x=xs[order], y=ys[order], mode="markers", name=bulk_name, legendgroup="bulk_bands",
+                        marker=dict(size=3.5 + 3.0 * cs[order], color=[f"rgba(0,240,255,{0.15 + 0.85 * c:.2f})" for c in cs[order]],
+                                    line=dict(width=0)),
+                        customdata=cs[order],
+                        hovertemplate=f"{bulk_name}: E = %{{y:.3f}} eV, weight %{{customdata:.2f}}<extra></extra>"),
+                        row=1, col=1)
+                    logger.info(f"  [Plotter] Overlaid unfolded bulk bands from {os.path.basename(bulk_data['source_file'])} "
+                                f"({bulk_data['alignment_mode']} alignment).")
+                elif bulk_data.get("soc"):
                     bulk_name = "Bulk PBE+SOC"
                 else:
                     bulk_name = "Bulk PBE, no SOC" if lbl == "SOC" else "Bulk PBE"
                 first = True
-                for x_seg, b_seg in segments:
+                for x_seg, b_seg in ([] if bulk_data.get("unfolded") else segments):
                     for b_i in range(b_seg.shape[1]):
                         fig.add_trace(
                             go.Scatter(
@@ -388,8 +407,9 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                             row=1, col=1
                         )
                         first = False
-                logger.info(f"  [Plotter] Overlaid {len(bulk_data['band_indices'])} bulk PBE bands from "
-                            f"{os.path.basename(bulk_data['source_file'])} ({bulk_data['alignment_mode']} alignment).")
+                if not bulk_data.get("unfolded"):
+                    logger.info(f"  [Plotter] Overlaid {len(bulk_data['band_indices'])} bulk PBE bands from "
+                                f"{os.path.basename(bulk_data['source_file'])} ({bulk_data['alignment_mode']} alignment).")
         except Exception as exc:
             logger.debug(f"  [Plotter] Bulk band overlay skipped: {exc}")
 

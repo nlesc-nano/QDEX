@@ -121,7 +121,7 @@ def test_bulk_band_files_by_cif_and_material():
     # every material has spin-free and SOC bands and a semicore anchor
     from qdex.bulk_bands import DEFAULT_BULK_DIR
     for f in os.listdir(DEFAULT_BULK_DIR):
-        if f.endswith(".json"):
+        if f.endswith(".json") and not f.endswith("_unfolded.json"):   # unfolded overlays: test_bulk_unfold
             name = f[:-5]
             meta = load_bulk_meta(find_bulk_bs(None, cif=name + ".cif"))
             assert meta["name"] == name and meta["semicore"] is not None
@@ -135,7 +135,8 @@ def test_inverted_zincblende_band_order(name):
     meta = load_bulk_meta(find_bulk_bs(None, cif=name + ".cif"))
     assert meta["gamma_band_order"]["inverted"] and meta["gamma_band_order"]["sf"] < -0.2
     assert not meta["gamma_vb_triplet"]["filled"]
-    assert meta["gamma_vb_triplet"]["delta_so"] > 0.0
+    # Delta_so = E(Gamma8) - E(Gamma7): negative in HgS (doublet above the quartet; LDA -0.11 eV, Svane 2011)
+    assert (meta["gamma_vb_triplet"]["delta_so"] < 0.0) == (name == "HgS_zb")
 
 
 def test_write_bs_round_trip(tmp_path):
@@ -156,7 +157,8 @@ def test_material_db_bulk_pbe_gaps():
         if v["a_exp"] is None:
             continue
         assert MATERIAL_DB[key][7] == pytest.approx(v["gap_exp_lattice"], abs=1e-6)
-        assert MATERIAL_DB[key][2] == pytest.approx(v["a_exp"], abs=1e-3)
+        if not key.endswith("_WZ"):                  # wurtzite: index 2 is the zinc-blende-equivalent a
+            assert MATERIAL_DB[key][2] == pytest.approx(v["a_exp"], abs=1e-3)
         assert v["a_pbe"] > 0.99 * v["a_exp"]                       # PBE lattices are not smaller
     assert MATERIAL_DB_BULK_PBE["GAAS"]["gap_exp_lattice"] > MATERIAL_DB_BULK_PBE["GAAS"]["gap_pbe_lattice"] + 0.3
 

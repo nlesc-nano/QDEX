@@ -3,6 +3,15 @@ CdSe: comparison with experiment
 
 Part of :doc:`/validation/index`.
 
+.. note::
+
+   These results were produced with the earlier bulk reference: Δ_bulk = 1.57 eV for CdSe (QSGW
+   2.19 eV against the spin-free PBE gap), without the geometry correction of PBE-relaxed dots. The
+   current reference (:doc:`/electronic_structure/bulk_bands`) uses the literature QSGW+SOC gap and
+   PBE+SOC at the same lattice (Δ_Σ = 1.64 eV) plus Δ_geom (+0.17 eV at the PBE lattice), which raises
+   the QP gaps of these dots by about 0.25 eV (2.62 nm, ``bulk_vertex: scaled``: first bright SOC
+   exciton 2.240 → 2.499 eV). The series has not been rerun yet.
+
 This page compares the current QP and excitation models with the measured first-exciton energy of
 colloidal CdSe dots. All numbers were produced with the code as it is, with the default settings:
 

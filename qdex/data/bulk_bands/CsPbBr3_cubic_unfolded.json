@@ -1,0 +1,107 @@
+{
+ "source": "benchmarks/bulk_bands/inputs_rt_structures/CsPbBr3_ortho scaled to the PBE pseudo-cubic volume (run on NHR)",
+ "path_bs": "CsPbBr3_cubic.bs.gz",
+ "b_site": "Pb",
+ "n_occ_sf": 68,
+ "q_max_inv_ang": 5.0,
+ "supercell_matrix": [
+  [
+   -1,
+   -1,
+   0
+  ],
+  [
+   -1,
+   1,
+   0
+  ],
+  [
+   0,
+   0,
+   -2
+  ]
+ ],
+ "primitive_a_ang": [
+  6.0054,
+  6.0054,
+  6.0615
+ ],
+ "sf": {
+  "vbm": 0.764641013268639,
+  "cbm": 2.7279028044896387,
+  "gap": 1.9632617912209998
+ },
+ "soc": {
+  "vbm": 0.8010733731588308,
+  "cbm": 1.9014959099366058,
+  "gap": 1.1004225367777751
+ },
+ "semicore_candidates": [
+  {
+   "element": "Cs",
+   "l": 1,
+   "label": "Cs-p",
+   "bands_sf": [
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29
+   ],
+   "min_fraction": 0.9674699595731049,
+   "level_sf": -6.7476266578801605,
+   "level_soc": -6.697251867384711
+  },
+  {
+   "element": "Br",
+   "l": 0,
+   "label": "Br-s",
+   "bands_sf": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15
+   ],
+   "min_fraction": 0.9419416027188826,
+   "level_sf": -12.867066049075582,
+   "level_soc": -12.867250338021202
+  }
+ ],
+ "semicore": {
+  "element": "Cs",
+  "l": 1,
+  "label": "Cs-p",
+  "bands_sf": [
+   18,
+   19,
+   20,
+   21,
+   22,
+   23,
+   24,
+   25,
+   26,
+   27,
+   28,
+   29
+  ],
+  "min_fraction": 0.9674699595731049,
+  "level_sf": -6.7476266578801605,
+  "level_soc": -6.697251867384711
+ }
+}

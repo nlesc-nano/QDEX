@@ -76,6 +76,23 @@ def read_trexio_structure(path):
     return cell, syms, coords
 
 
+def read_cp2k_input_structure(path):
+    """Cell vectors (rows, Angstrom), atom symbols and Cartesian coordinates (Angstrom) of a CP2K input
+    with &CELL A/B/C and Cartesian &COORD (for CP2K builds without TREXIO)."""
+    text = open(path).read()
+    cell_block = re.search(r"&CELL\b(.*?)&END CELL", text, re.S | re.I).group(1)
+    cell = np.array([[float(x) for x in re.search(r"^\s*%s\s+(.+)$" % k, cell_block, re.M).group(1).split()[:3]]
+                     for k in "ABC"])
+    coord_block = re.search(r"&COORD\b(.*?)&END COORD", text, re.S | re.I).group(1)
+    syms, coords = [], []
+    for line in coord_block.splitlines():
+        parts = line.split()
+        if len(parts) >= 4 and re.match(r"^[A-Z][a-z]?", parts[0]) and parts[0].upper() not in ("SCALED", "UNIT"):
+            syms.append(re.match(r"[A-Z][a-z]?", parts[0]).group(0))
+            coords.append([float(x) for x in parts[1:4]])
+    return cell, syms, np.array(coords)
+
+
 def _bloch(mats, kfrac):
     n = next(iter(mats.values())).shape[0]
     out = np.zeros((n, n), dtype=complex)
@@ -134,9 +151,13 @@ class BulkModel:
         from qdex.io_utils import build_shell_dicts, parse_basis, parse_gth_soc_potentials
         import libint_cpp
 
-        trexio_file = trexio_file or glob.glob(os.path.join(run_dir, "*.h5"))[0]
+        h5 = glob.glob(os.path.join(run_dir, "*.h5"))
+        trexio_file = trexio_file or (h5[0] if h5 else None)
         out_file = out_file or os.path.join(run_dir, "cp2k_job.out")
-        self.cell, self.syms, coords = read_trexio_structure(trexio_file)
+        if trexio_file:
+            self.cell, self.syms, coords = read_trexio_structure(trexio_file)
+        else:            # CP2K without TREXIO: the structure of the input
+            self.cell, self.syms, coords = read_cp2k_input_structure(os.path.join(run_dir, "cp2k_job.in"))
         basis = parse_basis(basis_file, basis_name, required_elements=set(self.syms))
         n_ao = sum(2 * s["l"] + 1 for s in build_shell_dicts(self.syms, coords, basis))
         self.H_R = read_real_space_matrices(run_dir, "KS", n_ao, out_file)
@@ -236,16 +257,54 @@ def choose_semicore(E_gamma, labels, frac, counts, vbm, min_depth_ev=2.0):
     return found
 
 
-def _triplet_split(model, kf, triplet, E_soc, C_soc):
-    """Spin-orbit splitting of a spin-free triplet: the six spinors with the largest weight on it."""
+def _edge_weights(model, kf, bands, C_soc):
+    """Weight of every spinor on the spin-free bands `bands` at kf (both spin components)."""
     Sk = _bloch(model.S_R, kf)
     n = model.n_ao
-    _, C = model.sf(kf, vectors=True)
-    T = C[:, triplet]
-    w = np.sum(np.abs(T.conj().T @ Sk @ C_soc[:n]) ** 2 + np.abs(T.conj().T @ Sk @ C_soc[n:]) ** 2, axis=0)
+    T = model.sf(kf, vectors=True)[1][:, bands]
+    return np.sum(np.abs(T.conj().T @ Sk @ C_soc[:n]) ** 2 + np.abs(T.conj().T @ Sk @ C_soc[n:]) ** 2, axis=0)
+
+
+def _triplet_split(model, kf, triplet, E_soc, C_soc):
+    """Spin-orbit splitting of a spin-free triplet: the six spinors with the largest weight on it.
+
+    Returns (Delta_so, E_2, E_4): Delta_so = E(4-fold) - E(2-fold) (Gamma8 - Gamma7 in zinc blende;
+    negative when the doublet lies above the quartet, as in HgS), and the mean energies of the doublet
+    and of the quartet. The quartet is the group of four (lowest or highest) with the smaller spread."""
+    w = _edge_weights(model, kf, triplet, C_soc)
     six = np.sort(np.argsort(-w)[:6])
     e = np.sort(E_soc[six])
-    return float(e[2:].mean() - e[:2].mean()), float(e[:2].mean()), float(e[2:].mean())
+    if np.ptp(e[:4]) < np.ptp(e[2:]):          # quartet below the doublet
+        e2, e4 = float(e[4:].mean()), float(e[:4].mean())
+    else:
+        e2, e4 = float(e[:2].mean()), float(e[2:].mean())
+    return e4 - e2, e2, e4
+
+
+def _edge_band_order(model, kf, n_occ, tol_ev=0.01):
+    """Signed gap at kf with and without SOC, by the character of the band edges.
+
+    The spin-free valence and conduction edge manifolds at kf (bands within tol_ev of the highest
+    occupied and lowest empty band) are followed into the SOC spinors by projection; the SOC gap is
+    E(lowest spinor of conduction character) - E(highest spinor of valence character), negative when
+    spin-orbit coupling inverts the edges (PbSe at L, CsPbI3 at R in PBE+SOC), where counting bands
+    returns the magnitude of the anticrossing instead."""
+    E = model.sf(kf)[: n_occ + 6] * HA_EV
+    v = [i for i in range(n_occ) if E[n_occ - 1] - E[i] < tol_ev]
+    c = [i for i in range(n_occ, len(E)) if E[i] - E[n_occ] < tol_ev]
+    Es, Cs = model.soc(kf, vectors=True)
+    Es = Es * HA_EV
+    wv, wc = _edge_weights(model, kf, v, Cs), _edge_weights(model, kf, c, Cs)
+    sv = np.argsort(-wv)[:2 * len(v)]
+    sc = np.argsort(-wc)[:2 * len(c)]
+    vbm, cbm = float(Es[sv].max()), float(Es[sc].min())
+    w_min = float(min(wv[sv].min(), wc[sc].min()))
+    # reliable when the SOC edges are (mostly) made of the spin-free edge states; not when spin-orbit
+    # coupling mixes a manifold the spin-free edge is only a part of (a tilt-split Pb 6p triplet)
+    return dict(k=np.asarray(kf, float).round(5).tolist(), sf=float(E[c[0]] - E[v[-1]]), soc=cbm - vbm,
+                inverted=bool(cbm < vbm), n_valence_edge=len(v), n_conduction_edge=len(c),
+                valence_weight=float(wv[sv].min()), conduction_weight=float(wc[sc].min()),
+                reliable=bool(w_min > 0.75))
 
 
 def analyse(model, bs, kfrac_segments, sf_segs, soc_segs, n_occ, zincblende=False):
@@ -309,6 +368,9 @@ def analyse(model, bs, kfrac_segments, sf_segs, soc_segs, n_occ, zincblende=Fals
             out["gamma_band_order"] = dict(sf=float(E[i_s] - e15), soc=float(Es[j_s] - e8),
                                            inverted=bool(E[i_s] < e15),
                                            s_character_sf=float(s_sf[i_s]), s_character_soc=float(s_w[j_s]))
+    # direct gap away from Gamma (rock salt at L, cubic perovskites at R): signed gap by edge character
+    if not zincblende and np.allclose(out["sf"]["vbm_k"], out["sf"]["cbm_k"]):
+        out["edge_band_order"] = _edge_band_order(model, np.array(out["sf"]["vbm_k"]), n_occ)
     # conduction-band triplet at the CBM (e.g. Pb 6p at R in the cubic perovskites)
     kc = np.array(out["sf"]["cbm_k"])
     Ec, Cc = model.sf(kc, vectors=True)

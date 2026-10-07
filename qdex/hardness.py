@@ -34,7 +34,7 @@ HARDNESS_DICT = {
 }
 
 # =====================================================================
-# MATERIAL DATABASE (2026 BENCHMARKS: PURE 1.0 QSGW SPIN-FREE)
+# MATERIAL DATABASE (BULK QP REFERENCE: LITERATURE 1.0 QSGW + SOC, PBE AT THE SAME LATTICE)
 # =====================================================================
 # Updated Format: (eps_inf, Bohr_diam_A, lattice_A, gap_exp_eV, eps_static, m_eff, E_LO_eV, 
 #                  gap_pbe_bulk_eV, gap_gw_bulk_eV, 
@@ -69,108 +69,181 @@ HARDNESS_DICT = {
 # matching molecular/vacuum evGW anchors and accurately reproducing experimental sizing
 # curves (such as Hens & Rodina, Nano Lett. 2022).
 #
-# RELATIVISTIC / SPIN-ORBIT COUPLING (SOC) CORRECTION CONVENTION:
-# ---------------------------------------------------------------
-# All bulk PBE (index 7) and bulk QSGW (index 8) gaps are strictly SCALAR RELATIVISTIC
-# (Spin-Free, SF) to remain fully consistent with spin-free DFT Kohn-Sham orbitals.
-# - Zinc-Blende II-VI and III-V: SOC splits the Gamma_15v valence band into Gamma_8v
-#   and Gamma_7v, pushing the VBM up by +1/3 * Delta_so while leaving the s-like CBM
-#   unaffected. Hence:
-#     E_g(Spin-Free) = E_g(with SOC) + 1/3 * Delta_so.
-# - Lead Halide Perovskites (Cubic Phase): The band edges at R have an s-like VBM
-#   (negligible SOC shift) and a p-like CBM (Pb 6p) that splits into j=1/2 (CBM) and
-#   j=3/2. SOC lowers the CBM by ~ 2/3 * Delta_so(Pb 6p) ~ 0.95 - 1.05 eV. Hence:
-#     E_g(Spin-Free) = E_g(with SOC) + 2/3 * Delta_so(CB).
+# BULK QP SHIFT: INDEX 7 (PBE), INDEX 8 (QSGW) AND SPIN-ORBIT COUPLING
+# -------------------------------------------------------------------
+# The bulk QP shift applied to the PBE orbitals of a dot is
+#     Delta_bulk = Delta_Sigma + Delta_geom,
+#     Delta_Sigma = E_g^QSGW+SOC(a_exp) - E_g^PBE+SOC(a_exp)      = index 8 - index 7,
+#     Delta_geom  = E_g^PBE(a_exp) - E_g^PBE(a_dot)                (bulk_geometry_shift, below).
+# Delta_Sigma is the bulk self-energy correction: QSGW and PBE at the same lattice (a_exp, index 2)
+# and with the same spin-orbit treatment. The QSGW gaps are literature values WITH SOC
+# (QSGW_SOC_LITERATURE, after MATERIAL_DB_BULK_PBE; SOC added to the converged QSGW Hamiltonian),
+# carried to a_exp where the source used another lattice; the PBE+SOC gaps are ours at the level of
+# theory of the dots (CP2K PBE, DZVP-MOLOPT-PBE-GTH, GTH-PBE of POTENTIAL_UZH, the QDEX GTH-SOC
+# operator). Gaps change with volume by several eV per unit strain (GaAs PBE: 0.50 eV at a_exp,
+# 0.02 eV at its 2 % larger PBE lattice), so both must be at the same lattice.
+#
+# Index 7 is the spin-free PBE gap at a_exp; index 8 is the spin-free QSGW-equivalent gap
+#     index 8 = index 7 + Delta_Sigma = E_g^QSGW+SOC(a_exp) + [E_g^PBE(a_exp) - E_g^PBE+SOC(a_exp)],
+# so the same Delta_Sigma corrects the spin-free and the SOC dots, and the SOC lowering of the gap is
+# the PBE/GTH-SOC one in both the bulk reference and the dots (the QDEX spinors). Gaps are band-edge
+# transitions, signed (negative = inverted): E(Gamma1/Gamma6) - E(Gamma15/Gamma8) for direct zinc blende
+# (inverted in PBE for HgS, HgSe, HgTe, InAs, InSb; with SOC also GaSb), the fundamental gap for the
+# indirect zinc blendes (X), L in rock salt and R in the cubic perovskites (PBS, PBSE and CSPBI3 are
+# inverted in PBE+SOC at a_exp). Earlier versions converted literature gaps to spin-free ones with
+# Delta_so/3 (zinc blende) or 2/3 Delta_so(CB) (perovskites); the III-V values were in fact the
+# spin-free QSGW of Deguchi et al., and the II-VI, Hg and perovskite values matched no QSGW source
+# (the perovskite ones were 0.5-0.6 eV above Huang and Lambrecht's QSGW).
+#
+# A dot relaxed with PBE is (almost) at the PBE lattice, a_PBE > a_exp, so its PBE gap carries the
+# bulk PBE gap change between a_exp and its own lattice; Delta_geom (quasiparticles.bulk_geometry)
+# removes it, and the QP gap is that of the dot at the experimental lattice. This needs no QSGW at
+# a_PBE: Delta_Sigma(a_dot) + [E^QSGW(a_exp) - E^QSGW(a_dot)] = Delta_Sigma(a_exp) + Delta_geom exactly
+# (which matters: the self-energy correction itself depends on the lattice, strongly so in the lead
+# halide perovskites, where QSGW's dEg/dlnV is about twice PBE's). The vertex correction
+# (quasiparticles.bulk_vertex) scales Delta_Sigma only.
+#
+# MATERIAL_DB_BULK_PBE (below) keeps the spin-free and PBE+SOC gaps at a_exp and at a_PBE, the QSGW+SOC
+# gap at a_exp and Delta_Sigma; the bulk bands drawn over the fuzzy bands (qdex/data/bulk_bands) are
+# at the PBE lattice, like the dots. Computed with qdex.bulk_soc; inputs, runs and the construction of
+# the table in benchmarks/bulk_bands; see docs/electronic_structure/bulk_bands.rst.
 #
 # Monomer values are computed with CP2K (DZVP-RI/GTH/PBE) then evGW.
-# BULK PBE GAP (index 7) AND THE BULK QP SHIFT:
-# -------------------------------------------
-# The bulk QP shift applied to the dots is Delta_bulk = E_g(QSGW, index 8) - E_g(PBE, index 7).
-# The QSGW gaps are literature values at the experimental lattice constant (index 2); QSGW is
-# self-consistent, so they do not depend on a DFT starting point. The PBE gap must instead be
-# computed at the level of theory of the dot calculations (CP2K PBE, DZVP-MOLOPT-PBE-GTH, GTH-PBE
-# of POTENTIAL_UZH) AND at the same lattice as the QSGW reference: gaps change with volume by several
-# eV per unit strain, so a PBE gap at another lattice would put a strain effect into Delta_bulk
-# (GaAs: 0.50 eV at a_exp, 0.02 eV at its PBE lattice, 1.8% larger). Index 7 is therefore the
-# spin-free PBE gap at a_exp (fundamental gap along the high-symmetry path; for zinc blende with an
-# inverted PBE band order - HgS, HgSe, HgTe, InAs, InSb - the negative E(Gamma1, s) - E(Gamma15, p)).
-# Delta_bulk is then a self-energy correction at fixed geometry, which transfers to the dots with
-# their PBE-relaxed geometries. MATERIAL_DB_BULK_PBE below keeps the PBE gaps at both the
-# experimental and the PBE equilibrium lattice; the bulk bands drawn over the fuzzy bands
-# (qdex/data/bulk_bands) are at the PBE lattice, like the dots. Computed with qdex.bulk_soc;
-# inputs and analysis in benchmarks/bulk_bands, see docs/electronic_structure/bulk_bands.rst.
 
 MATERIAL_DB = {
     "CS3BI2BR9": (3.9, 24.0, 8.01, 2.55, 11.7, 0.57, 0.021, 3.33, 4.35, 7.850, -5.5000, -1.8500, -7.2000, 0.1500),
-    # Halide Perovskites (Cubic Phase Benchmarks, Spin-Free PBE & QSGW)
-    "CSPBCL3": (4.0, 25.0, 5.6, 3.0, 20.0, 0.15, 0.022, 1.771, 4.20, 7.604, -4.7512, -1.5076, -6.5706, 0.3314),
-    "CSPBBR3": (4.8, 35.0, 5.83, 2.3, 25.0, 0.12, 0.018, 1.278, 3.40, 7.9149, -4.7779, -1.6961, -6.3775, 0.4555),
-    "CSPBI3": (5.1, 60.0, 6.2, 1.73, 30.0, 0.1, 0.015, 0.832, 2.80, 8.3726, -4.4874, -1.7988, -5.6323, 0.3893),
+    # Halide Perovskites (cubic; index 8 from Huang & Lambrecht QSGW+SO, see QSGW_SOC_LITERATURE)
+    "CSPBCL3": (4.0, 25.0, 5.6, 3.0, 20.0, 0.15, 0.022, 1.771, 3.558, 7.604, -4.7512, -1.5076, -6.5706, 0.3314),
+    "CSPBBR3": (4.8, 35.0, 5.83, 2.3, 25.0, 0.12, 0.018, 1.278, 2.628, 7.9149, -4.7779, -1.6961, -6.3775, 0.4555),
+    "CSPBI3": (5.1, 60.0, 6.2, 1.73, 30.0, 0.1, 0.015, 0.832, 2.076, 8.3726, -4.4874, -1.7988, -5.6323, 0.3893),
     "MAPBI3": (6.5, 45.0, 6.27, 1.55, 30.0, 0.1, 0.015, 1.55, 2.73),
     "FAPBI3": (6.2, 50.0, 6.36, 1.48, 28.0, 0.1, 0.015, 1.45, 2.60),
 
-    # II–VI Semiconductors (Zinc-Blende, Spin-Free PBE & QSGW corrected with 1/3 Delta_so)
-    "ZNS": (5.1, 25.0, 5.41, 3.6, 8.9, 0.28, 0.043, 2.051, 4.17, 4.8204, -6.6591, -3.208, -8.2883, -1.0303),
-    "ZNSE": (5.9, 38.0, 5.67, 2.7, 8.6, 0.17, 0.031, 1.252, 3.26, 4.9394, -6.4914, -3.1993, -7.9032, -1.063),
-    "ZNTE": (6.7, 52.0, 6.1, 2.26, 9.8, 0.12, 0.026, 1.225, 2.96, 5.1907, -5.789, -2.8062, -7.0003, -0.901),
-    "CDS": (5.4, 30.0, 5.82, 2.42, 8.9, 0.16, 0.037, 1.146, 2.78, 5.1533, -6.598, -3.88, -8.2128, -1.8481),
-    "CDSE": (6.2, 56.0, 6.05, 1.74, 9.5, 0.13, 0.026, 0.644, 2.19, 5.31331, -6.4196, -3.7852, -7.8177, -1.7884),
-    "CDTE": (7.1, 73.0, 6.48, 1.44, 10.2, 0.1, 0.021, 0.740, 2.12, 5.4433, -5.7978, -2.9767, -6.9951, -0.9143),
-    "HGS": (11.3, 50.0, 5.85, 0.5, 13.0, 0.2, 0.03, -0.421, 0.31, 5.0759, -6.8468, -4.6185, -8.0873, -2.6135),
-    "HGSE": (14.0, 460.0, 6.08, 0.0, 18.0, 0.04, 0.017, -0.872, 0.05, 5.2017, -6.5897, -4.4284, -7.6523, -2.4936),
-    "HGTE": (15.0, 400.0, 6.46, 0.0, 20.0, 0.03, 0.015, -0.665, 0.23, 5.4091, -5.9729, -3.7913, -6.9007, -1.9993),
+    # II–VI Semiconductors (zinc blende; index 8 from Deguchi et al. / Svane et al. QSGW+SO)
+    "ZNS": (5.1, 25.0, 5.41, 3.6, 8.9, 0.28, 0.043, 2.051, 4.128, 4.8204, -6.6591, -3.208, -8.2883, -1.0303),
+    "ZNSE": (5.9, 38.0, 5.67, 2.7, 8.6, 0.17, 0.031, 1.252, 3.221, 4.9394, -6.4914, -3.1993, -7.9032, -1.063),
+    "ZNTE": (6.7, 52.0, 6.1, 2.26, 9.8, 0.12, 0.026, 1.225, 2.940, 5.1907, -5.789, -2.8062, -7.0003, -0.901),
+    "CDS": (5.4, 30.0, 5.82, 2.42, 8.9, 0.16, 0.037, 1.146, 2.863, 5.1533, -6.598, -3.88, -8.2128, -1.8481),
+    "CDSE": (6.2, 56.0, 6.05, 1.675, 9.5, 0.13, 0.026, 0.644, 2.286, 5.31331, -6.4196, -3.7852, -7.8177, -1.7884),
+    "CDSE_WZ": (6.2, 56.0, 6.077, 1.751, 9.5, 0.13, 0.026, 0.675, 2.317, 5.31331, -6.4196, -3.7852, -7.8177, -1.7884),   # wurtzite; index 2: zinc-blende-equivalent a (volume per formula unit)
+    "CDS_WZ": (5.4, 30.0, 5.839, 2.42, 8.9, 0.16, 0.037, 1.205, 2.936, 5.1533, -6.598, -3.88, -8.2128, -1.8481),
+    "CDTE": (7.1, 73.0, 6.48, 1.44, 10.2, 0.1, 0.021, 0.740, 2.261, 5.4433, -5.7978, -2.9767, -6.9951, -0.9143),
+    "HGS": (11.3, 50.0, 5.85, 0.5, 13.0, 0.2, 0.03, -0.421, 0.585, 5.0759, -6.8468, -4.6185, -8.0873, -2.6135),
+    "HGSE": (14.0, 460.0, 6.08, 0.0, 18.0, 0.04, 0.017, -0.872, -0.018, 5.2017, -6.5897, -4.4284, -7.6523, -2.4936),
+    "HGTE": (15.0, 400.0, 6.46, 0.0, 20.0, 0.03, 0.015, -0.665, 0.373, 5.4091, -5.9729, -3.7913, -6.9007, -1.9993),
 
-    # III–V Semiconductors (Zinc-Blende, Spin-Free PBE & QSGW corrected with 1/3 Delta_so)
-    "ALP": (7.5, 15.0, 5.46, 2.45, 10.0, 0.2, 0.05, 1.667, 2.74, 5.1769, -6.4313, -4.4894, -8.2744, -2.4365),
-    "ALAS": (8.2, 30.0, 5.66, 2.16, 10.1, 0.15, 0.049, 1.522, 2.46, 5.2267, -6.2214, -4.1183, -7.8386, -2.1083),
-    "ALSB": (10.2, 60.0, 6.14, 1.62, 12.0, 0.14, 0.036, 1.208, 1.80, 5.5593, -5.9163, -3.9868, -7.301, -2.1319),
-    "GAP": (9.1, 15.0, 5.45, 2.26, 11.1, 0.15, 0.049, 1.632, 2.49, 5.3208, -6.562, -4.5789, -8.2171, -2.8192),
-    "GAAS": (10.9, 100.0, 5.65, 1.42, 13.1, 0.067, 0.036, 0.496, 1.89, 5.4503, -6.3334, -4.4405, -7.7475, -2.7198),
-    "GASB": (14.4, 200.0, 6.1, 0.73, 15.7, 0.04, 0.028, 0.156, 1.20, 5.7221, -6.0195, -4.5359, -7.2596, -2.9446),
-    "INP": (9.6, 150.0, 5.87, 1.34, 12.4, 0.08, 0.042, 0.680, 1.65, 5.6309, -6.5944, -4.8483, -8.0539, -3.0678),
-    "INAS": (11.8, 340.0, 6.06, 0.35, 15.0, 0.023, 0.029, -0.247, 0.80, 5.697, -6.4406, -4.8382, -7.7358, -3.1218),
-    "INSB": (15.7, 650.0, 6.48, 0.17, 17.9, 0.014, 0.023, -0.153, 0.77, 5.9465, -6.184, -4.6223, -7.3335, -3.0342),
+    # III–V Semiconductors (zinc blende; index 8 from Deguchi et al. QSGW+SO)
+    "ALP": (7.5, 15.0, 5.46, 2.45, 10.0, 0.2, 0.05, 1.667, 2.732, 5.1769, -6.4313, -4.4894, -8.2744, -2.4365),
+    "ALAS": (8.2, 30.0, 5.66, 2.16, 10.1, 0.15, 0.049, 1.522, 2.458, 5.2267, -6.2214, -4.1183, -7.8386, -2.1083),
+    "ALSB": (10.2, 60.0, 6.14, 1.62, 12.0, 0.14, 0.036, 1.208, 1.804, 5.5593, -5.9163, -3.9868, -7.301, -2.1319),
+    "GAP": (9.1, 15.0, 5.45, 2.26, 11.1, 0.15, 0.049, 1.632, 2.487, 5.3208, -6.562, -4.5789, -8.2171, -2.8192),
+    "GAAS": (10.9, 100.0, 5.65, 1.42, 13.1, 0.067, 0.036, 0.496, 1.891, 5.4503, -6.3334, -4.4405, -7.7475, -2.7198),
+    "GASB": (14.4, 200.0, 6.1, 0.73, 15.7, 0.04, 0.028, 0.156, 1.304, 5.7221, -6.0195, -4.5359, -7.2596, -2.9446),
+    "INP": (9.6, 150.0, 5.87, 1.34, 12.4, 0.08, 0.042, 0.680, 1.651, 5.6309, -6.5944, -4.8483, -8.0539, -3.0678),
+    "INAS": (11.8, 340.0, 6.06, 0.35, 15.0, 0.023, 0.029, -0.247, 0.788, 5.697, -6.4406, -4.8382, -7.7358, -3.1218),
+    "INSB": (15.7, 650.0, 6.48, 0.17, 17.9, 0.014, 0.023, -0.153, 0.778, 5.9465, -6.184, -4.6223, -7.3335, -3.0342),
 
     # IV–VI Semiconductors
-    "PBS": (17.2, 200.0, 5.94, 0.41, 23.0, 0.09, 0.027, 0.253, 0.73, 7.2378, -6.638, -4.3253, -8.128, -2.3724),
-    "PBSE": (22.9, 460.0, 6.12, 0.27, 30.0, 0.07, 0.017, 0.139, 0.65, 7.3935, -6.5104, -4.2415, -7.8234, -2.3177),
+    "PBS": (17.2, 200.0, 5.94, 0.41, 23.0, 0.09, 0.027, 0.253, 0.683, 7.2378, -6.638, -4.3253, -8.128, -2.3724),
+    "PBSE": (22.9, 460.0, 6.12, 0.27, 30.0, 0.07, 0.017, 0.139, 0.582, 7.3935, -6.5104, -4.2415, -7.8234, -2.3177),
 
     "DEFAULT": (1.0, 1.0, 5.0, 0.0, 1.0, 1.0, 0.02, 0.00, 0.00)
 
 }
 
-# Bulk PBE gaps (eV, spin-free) at the level of theory of the dots, at the experimental lattice
-# constant a_exp (= MATERIAL_DB index 2; gap_exp_lattice = MATERIAL_DB index 7) and at the PBE
-# equilibrium lattice a_pbe (energy-volume minimum with the same basis, pseudopotentials and cutoff;
-# the bulk bands of the fuzzy-band overlay are at a_pbe). Lattice constants in A (conventional cell;
-# wurtzite: hexagonal a, isotropic scan with c/a and u of the CIF). Negative gaps: inverted band order
-# E(Gamma1) - E(Gamma15). B0: bulk modulus of the energy-volume fit (GPa).
+# Bulk gaps (eV) at the level of theory of the dots, at the experimental lattice constant a_exp
+# (= MATERIAL_DB index 2) and at the PBE equilibrium lattice a_pbe (energy-volume minimum with the same
+# basis, pseudopotentials and cutoff; the bulk bands of the fuzzy-band overlay are at a_pbe):
+# spin-free PBE (gap_exp_lattice = MATERIAL_DB index 7, gap_pbe_lattice), PBE + GTH-SOC
+# (gap_soc_exp_lattice, gap_soc_pbe_lattice), the literature QSGW+SOC gap carried to a_exp
+# (qsgw_soc_exp_lattice) and Delta_Sigma = qsgw_soc_exp_lattice - gap_soc_exp_lattice
+# (= MATERIAL_DB index 8 - index 7). gap_exp_structure / gap_soc_exp_structure: PBE and PBE+SOC gaps of
+# the measured room-temperature structure when it is not the reference one (CsPbBr3: orthorhombic Pnma
+# of Stoumpos et al., Cryst. Growth Des. 13, 2722 (2013), the same volume as the cubic cell at a_exp;
+# the octahedral tilts open the gap by 0.38 eV, 0.45 eV with SOC; gamma-CsPbI3: Pnma of Straus et al.,
+# J. Am. Chem. Soc. 141, 11435 (2019), 295 K, +0.57 / +0.70 eV; CsPbCl3: Pnma at the measured volume
+# with the tilts relaxed in PBE (no room-temperature structure in COD), +0.62 / +0.68 eV, an upper
+# bound: CsPbCl3 is within ~20 K of its cubic transition at room temperature and the 0 K tilts are
+# larger). Wurtzite: a_exp/c_exp (hexagonal) of the room-temperature structure, isotropic PBE scan.
+# Signed band-edge transitions (negative = inverted; see the header
+# of MATERIAL_DB). Lattice constants in A (conventional cell; wurtzite: hexagonal a, isotropic scan
+# with c/a and u of the CIF). B0: bulk modulus of the energy-volume fit (GPa). PBTE and CDSE_WZ: overlay
+# bands only.
 MATERIAL_DB_BULK_PBE = {
-    "CSPBCL3": dict(a_exp=5.600, gap_exp_lattice=1.771, a_pbe=5.759, gap_pbe_lattice=2.113, B0=21.6),
-    "CSPBBR3": dict(a_exp=5.830, gap_exp_lattice=1.278, a_pbe=6.024, gap_pbe_lattice=1.671, B0=18.3),
-    "CSPBI3": dict(a_exp=6.200, gap_exp_lattice=0.832, a_pbe=6.417, gap_pbe_lattice=1.207, B0=15.2),
-    "ZNS": dict(a_exp=5.410, gap_exp_lattice=2.051, a_pbe=5.424, gap_pbe_lattice=2.018, B0=75.2),
-    "ZNSE": dict(a_exp=5.670, gap_exp_lattice=1.252, a_pbe=5.752, gap_pbe_lattice=1.085, B0=56.7),
-    "ZNTE": dict(a_exp=6.100, gap_exp_lattice=1.225, a_pbe=6.206, gap_pbe_lattice=0.984, B0=42.4),
-    "CDS": dict(a_exp=5.820, gap_exp_lattice=1.146, a_pbe=5.947, gap_pbe_lattice=1.004, B0=53.7),
-    "CDSE": dict(a_exp=6.050, gap_exp_lattice=0.644, a_pbe=6.217, gap_pbe_lattice=0.474, B0=45.3),
-    "CDTE": dict(a_exp=6.480, gap_exp_lattice=0.740, a_pbe=6.630, gap_pbe_lattice=0.530, B0=37.0),
-    "HGS": dict(a_exp=5.850, gap_exp_lattice=-0.421, a_pbe=6.013, gap_pbe_lattice=-0.534, B0=50.0),
-    "HGSE": dict(a_exp=6.080, gap_exp_lattice=-0.872, a_pbe=6.285, gap_pbe_lattice=-1.004, B0=42.8),
-    "HGTE": dict(a_exp=6.460, gap_exp_lattice=-0.665, a_pbe=6.679, gap_pbe_lattice=-0.908, B0=35.2),
-    "ALP": dict(a_exp=5.460, gap_exp_lattice=1.667, a_pbe=5.511, gap_pbe_lattice=1.724, B0=81.3),
-    "ALAS": dict(a_exp=5.660, gap_exp_lattice=1.522, a_pbe=5.738, gap_pbe_lattice=1.592, B0=66.6),
-    "ALSB": dict(a_exp=6.140, gap_exp_lattice=1.208, a_pbe=6.243, gap_pbe_lattice=1.212, B0=48.6),
-    "GAP": dict(a_exp=5.450, gap_exp_lattice=1.632, a_pbe=5.433, gap_pbe_lattice=1.614, B0=85.9),
-    "GAAS": dict(a_exp=5.650, gap_exp_lattice=0.496, a_pbe=5.774, gap_pbe_lattice=0.022, B0=55.0),
-    "GASB": dict(a_exp=6.100, gap_exp_lattice=0.156, a_pbe=6.270, gap_pbe_lattice=-0.425, B0=39.7),
-    "INP": dict(a_exp=5.870, gap_exp_lattice=0.680, a_pbe=5.978, gap_pbe_lattice=0.377, B0=59.1),
-    "INAS": dict(a_exp=6.060, gap_exp_lattice=-0.247, a_pbe=6.204, gap_pbe_lattice=-0.603, B0=48.7),
-    "INSB": dict(a_exp=6.480, gap_exp_lattice=-0.153, a_pbe=6.661, gap_pbe_lattice=-0.622, B0=36.6),
-    "PBS": dict(a_exp=5.940, gap_exp_lattice=0.253, a_pbe=6.040, gap_pbe_lattice=0.421, B0=52.7),
-    "PBSE": dict(a_exp=6.120, gap_exp_lattice=0.139, a_pbe=6.241, gap_pbe_lattice=0.325, B0=46.6),
+    "CSPBCL3": dict(a_exp=5.600, gap_exp_lattice=1.771, gap_soc_exp_lattice=0.870, a_pbe=5.759, gap_pbe_lattice=2.113, gap_soc_pbe_lattice=1.211, qsgw_soc_exp_lattice=2.657, delta_sigma=1.787, B0=21.6,
+                    gap_exp_structure=2.389, gap_soc_exp_structure=1.549),   # Pnma, PBE tilts: upper bound
+    "CSPBBR3": dict(a_exp=5.830, gap_exp_lattice=1.278, gap_soc_exp_lattice=0.349, a_pbe=6.024, gap_pbe_lattice=1.671, gap_soc_pbe_lattice=0.738, qsgw_soc_exp_lattice=1.699, delta_sigma=1.350, B0=18.3,
+                    gap_exp_structure=1.657, gap_soc_exp_structure=0.797),   # Pnma (RT) structure, see below
+    "CSPBI3": dict(a_exp=6.200, gap_exp_lattice=0.832, gap_soc_exp_lattice=-0.187, a_pbe=6.417, gap_pbe_lattice=1.207, gap_soc_pbe_lattice=0.155, qsgw_soc_exp_lattice=1.057, delta_sigma=1.244, B0=15.2,
+                   gap_exp_structure=1.402, gap_soc_exp_structure=0.514),   # gamma-CsPbI3 Pnma (295 K)
+    "ZNS": dict(a_exp=5.410, gap_exp_lattice=2.051, gap_soc_exp_lattice=2.030, a_pbe=5.424, gap_pbe_lattice=2.018, gap_soc_pbe_lattice=1.997, qsgw_soc_exp_lattice=4.107, delta_sigma=2.077, B0=75.2),
+    "ZNSE": dict(a_exp=5.670, gap_exp_lattice=1.252, gap_soc_exp_lattice=1.125, a_pbe=5.752, gap_pbe_lattice=1.085, gap_soc_pbe_lattice=0.958, qsgw_soc_exp_lattice=3.094, delta_sigma=1.969, B0=56.7),
+    "ZNTE": dict(a_exp=6.100, gap_exp_lattice=1.225, gap_soc_exp_lattice=0.927, a_pbe=6.206, gap_pbe_lattice=0.984, gap_soc_pbe_lattice=0.689, qsgw_soc_exp_lattice=2.642, delta_sigma=1.715, B0=42.4),
+    "CDS": dict(a_exp=5.820, gap_exp_lattice=1.146, gap_soc_exp_lattice=1.130, a_pbe=5.947, gap_pbe_lattice=1.004, gap_soc_pbe_lattice=0.987, qsgw_soc_exp_lattice=2.847, delta_sigma=1.717, B0=53.7),
+    "CDSE": dict(a_exp=6.050, gap_exp_lattice=0.644, gap_soc_exp_lattice=0.522, a_pbe=6.217, gap_pbe_lattice=0.474, gap_soc_pbe_lattice=0.353, qsgw_soc_exp_lattice=2.164, delta_sigma=1.642, B0=45.3),
+    "CDTE": dict(a_exp=6.480, gap_exp_lattice=0.740, gap_soc_exp_lattice=0.452, a_pbe=6.630, gap_pbe_lattice=0.530, gap_soc_pbe_lattice=0.245, qsgw_soc_exp_lattice=1.973, delta_sigma=1.521, B0=37.0),
+    "HGS": dict(a_exp=5.850, gap_exp_lattice=-0.421, gap_soc_exp_lattice=-0.403, a_pbe=6.013, gap_pbe_lattice=-0.534, gap_soc_pbe_lattice=-0.524, qsgw_soc_exp_lattice=0.603, delta_sigma=1.006, B0=50.0),
+    "HGSE": dict(a_exp=6.080, gap_exp_lattice=-0.872, gap_soc_exp_lattice=-0.964, a_pbe=6.285, gap_pbe_lattice=-1.004, gap_soc_pbe_lattice=-1.102, qsgw_soc_exp_lattice=-0.110, delta_sigma=0.854, B0=42.8),
+    "HGTE": dict(a_exp=6.460, gap_exp_lattice=-0.665, gap_soc_exp_lattice=-0.937, a_pbe=6.679, gap_pbe_lattice=-0.908, gap_soc_pbe_lattice=-1.179, qsgw_soc_exp_lattice=0.101, delta_sigma=1.038, B0=35.2),
+    "ALP": dict(a_exp=5.460, gap_exp_lattice=1.667, gap_soc_exp_lattice=1.647, a_pbe=5.511, gap_pbe_lattice=1.724, gap_soc_pbe_lattice=1.704, qsgw_soc_exp_lattice=2.712, delta_sigma=1.065, B0=81.3),
+    "ALAS": dict(a_exp=5.660, gap_exp_lattice=1.522, gap_soc_exp_lattice=1.423, a_pbe=5.738, gap_pbe_lattice=1.592, gap_soc_pbe_lattice=1.495, qsgw_soc_exp_lattice=2.359, delta_sigma=0.936, B0=66.6),
+    "ALSB": dict(a_exp=6.140, gap_exp_lattice=1.208, gap_soc_exp_lattice=0.994, a_pbe=6.243, gap_pbe_lattice=1.212, gap_soc_pbe_lattice=1.004, qsgw_soc_exp_lattice=1.590, delta_sigma=0.596, B0=48.6),
+    "GAP": dict(a_exp=5.450, gap_exp_lattice=1.632, gap_soc_exp_lattice=1.604, a_pbe=5.433, gap_pbe_lattice=1.614, gap_soc_pbe_lattice=1.586, qsgw_soc_exp_lattice=2.459, delta_sigma=0.855, B0=85.9),
+    "GAAS": dict(a_exp=5.650, gap_exp_lattice=0.496, gap_soc_exp_lattice=0.386, a_pbe=5.774, gap_pbe_lattice=0.022, gap_soc_pbe_lattice=-0.086, qsgw_soc_exp_lattice=1.782, delta_sigma=1.395, B0=55.0),
+    "GASB": dict(a_exp=6.100, gap_exp_lattice=0.156, gap_soc_exp_lattice=-0.071, a_pbe=6.270, gap_pbe_lattice=-0.425, gap_soc_pbe_lattice=-0.646, qsgw_soc_exp_lattice=1.076, delta_sigma=1.148, B0=39.7),
+    "INP": dict(a_exp=5.870, gap_exp_lattice=0.680, gap_soc_exp_lattice=0.649, a_pbe=5.978, gap_pbe_lattice=0.377, gap_soc_pbe_lattice=0.346, qsgw_soc_exp_lattice=1.620, delta_sigma=0.971, B0=59.1),
+    "INAS": dict(a_exp=6.060, gap_exp_lattice=-0.247, gap_soc_exp_lattice=-0.360, a_pbe=6.204, gap_pbe_lattice=-0.603, gap_soc_pbe_lattice=-0.713, qsgw_soc_exp_lattice=0.675, delta_sigma=1.035, B0=48.7),
+    "INSB": dict(a_exp=6.480, gap_exp_lattice=-0.153, gap_soc_exp_lattice=-0.394, a_pbe=6.661, gap_pbe_lattice=-0.622, gap_soc_pbe_lattice=-0.855, qsgw_soc_exp_lattice=0.537, delta_sigma=0.931, B0=36.6),
+    "PBS": dict(a_exp=5.940, gap_exp_lattice=0.253, gap_soc_exp_lattice=-0.037, a_pbe=6.040, gap_pbe_lattice=0.421, gap_soc_pbe_lattice=0.134, qsgw_soc_exp_lattice=0.393, delta_sigma=0.430, B0=52.7),
+    "PBSE": dict(a_exp=6.120, gap_exp_lattice=0.139, gap_soc_exp_lattice=-0.180, a_pbe=6.241, gap_pbe_lattice=0.325, gap_soc_pbe_lattice=0.006, qsgw_soc_exp_lattice=0.263, delta_sigma=0.443, B0=46.6),
     "PBTE": dict(a_exp=None, gap_exp_lattice=None, a_pbe=6.584, gap_pbe_lattice=0.616, B0=39.8),
-    "CDSE_WZ": dict(a_exp=None, gap_exp_lattice=None, a_pbe=4.399, gap_pbe_lattice=0.522, B0=45.1),
+    "CDSE_WZ": dict(a_exp=4.299, c_exp=7.013, gap_exp_lattice=0.675, gap_soc_exp_lattice=0.554, a_pbe=4.399,
+                    c_pbe=7.177, gap_pbe_lattice=0.522, gap_soc_pbe_lattice=0.401, qsgw_soc_exp_lattice=2.196,
+                    delta_sigma=1.642, B0=45.1),   # Delta_Sigma of zinc blende (no QSGW+SOC for wurtzite CdSe)
+    "CDS_WZ": dict(a_exp=4.137, c_exp=6.714, gap_exp_lattice=1.205, gap_soc_exp_lattice=1.189, a_pbe=4.215,
+                   c_pbe=6.841, gap_pbe_lattice=1.072, gap_soc_pbe_lattice=1.054, qsgw_soc_exp_lattice=2.920,
+                   delta_sigma=1.731, B0=53.5),
+}
+
+# Literature QSGW gaps WITH spin-orbit coupling (100 % QSGW, RPA W; SOC added to the converged QSGW
+# Hamiltonian), the reference of the bulk self-energy correction (see "BULK QP SHIFT" above MATERIAL_DB):
+#   material: (gap_eV, a_lit_A, transition, source, dEg/dlnV_eV or None)
+# The gap is the band-edge transition, signed (negative = inverted): E(Gamma6) - E(Gamma8) for the
+# direct zinc blendes and the Hg compounds (E0), the fundamental gap of the indirect zinc blendes (X), L
+# in rock salt, R in the cubic perovskites. dEg/dlnV, when the source gives it, carries the gap from
+# a_lit to a_exp (MATERIAL_DB index 2); otherwise the PBE deformation potential does.
+#   Deguchi16: D. Deguchi, K. Sato, H. Kino, T. Kotani, Jpn. J. Appl. Phys. 55, 051201 (2016),
+#              Table II (QSGW+SO), Table III (Gamma6c of GaSb); lattice constants of its Table I.
+#   Svane11:   A. Svane et al., Phys. Rev. B 84, 205205 (2011), Table I (QSGW E0).
+#   Huang16:   L.-y. Huang and W. R. L. Lambrecht, Phys. Rev. B 93, 195211 (2016), Tables I-II.
+#   Svane10:   A. Svane et al., Phys. Rev. B 81, 245120 (2010), Table I (QSGW) at the low-temperature
+#              lattices of its Ref. 43, Table V (QSGW deformation potentials). Deguchi16 gives 0.49 eV for
+#              PbS at 5.936 A, about 0.1 eV above Svane10 carried to the same lattice.
+QSGW_SOC_LITERATURE = {
+    "ALP": (2.72, 5.467, "Gamma-X (indirect)", "Deguchi16", None),
+    "ALAS": (2.36, 5.661, "Gamma-X (indirect)", "Deguchi16", None),
+    "ALSB": (1.59, 6.136, "Gamma-X (indirect)", "Deguchi16", None),
+    "GAP": (2.46, 5.451, "Gamma-X (indirect)", "Deguchi16", None),
+    "GAAS": (1.77, 5.653, "Gamma6-Gamma8", "Deguchi16", None),
+    "GASB": (1.09, 6.096, "Gamma6-Gamma8 (Table III; the QSGW minimum is at L)", "Deguchi16", None),
+    "INP": (1.62, 5.870, "Gamma6-Gamma8", "Deguchi16", None),
+    "INAS": (0.68, 6.058, "Gamma6-Gamma8", "Deguchi16", None),
+    "INSB": (0.54, 6.479, "Gamma6-Gamma8", "Deguchi16", None),
+    "ZNS": (4.10, 5.413, "Gamma6-Gamma8", "Deguchi16", None),
+    "ZNSE": (3.10, 5.667, "Gamma6-Gamma8", "Deguchi16", None),
+    "ZNTE": (2.64, 6.101, "Gamma6-Gamma8", "Deguchi16", None),
+    "CDS": (2.84, 5.826, "Gamma6-Gamma8", "Deguchi16", None),
+    "CDS_WZ": (2.88, 4.160, "Gamma7c-Gamma9v (wurtzite; c = 6.756 A)", "Deguchi16", None),
+    "CDSE": (2.16, 6.054, "Gamma6-Gamma8", "Deguchi16", None),
+    "CDTE": (1.97, 6.482, "Gamma6-Gamma8", "Deguchi16", None),
+    "HGS": (0.61, 5.84, "E0 = Gamma6-Gamma8", "Svane11", None),
+    "HGSE": (-0.11, 6.08, "E0 = Gamma6-Gamma8", "Svane11", None),
+    "HGTE": (0.09, 6.47, "E0 = Gamma6-Gamma8", "Svane11", None),
+    "PBS": (0.31, 5.909, "L6+-L6-", "Svane10", 5.3),
+    "PBSE": (0.21, 6.098, "L6+-L6-", "Svane10", 4.9),
+    "CSPBCL3": (2.678, 5.605, "R", "Huang16", 7.7),
+    "CSPBBR3": (1.868, 5.874, "R", "Huang16", 7.5),
+    "CSPBI3": (1.331, 6.289, "R", "Huang16", 6.4),
 }
 
 # Core inorganic elements for each material (ignores organic ligands like MA/FA)
@@ -404,7 +477,7 @@ def estimate_gw_qp_gap(
         
     # Extract Bulk Data
     eps_inf = entry[0]
-    gap_pbe_bulk = entry[7]
+    gap_pbe_bulk = bulk_pbe_gap_dot(m_name)     # bulk PBE gap at the dot's lattice (geometry correction)
     gap_gw_bulk = entry[8]
     
     if gap_gw_bulk == 0.0:
@@ -594,7 +667,7 @@ def compute_delta_xc(material):
         logger.warning(f"[Δxc] Warning: no PBE gap for {material}. Using Δxc = 0.")
         return 0.0
 
-    gap_pbe = entry[7]
+    gap_pbe = bulk_pbe_gap_dot(material)
 
     delta_xc = gap_exp - gap_pbe
 
@@ -619,6 +692,18 @@ PLASMON_DATA = {
     "PBS": (10, 0.25), "PBSE": (10, 0.25),
     "CSPBCL3": (26, 1.0), "CSPBBR3": (26, 1.0), "CSPBI3": (26, 1.0),
 }
+
+# Polytypes: wurtzite CdSe/CdS (MATERIAL_DB "CDSE_WZ", "CDS_WZ") share the composition-level data of the
+# zinc-blende entries; "CDSE_ZB"/"CDS_ZB" are aliases of the zinc-blende "CDSE"/"CDS" (bulk limits differ
+# between polytypes: experimental gap, PBE gaps and lattice, MATERIAL_DB_BULK_PBE).
+for _wz, _zb in (("CDSE_WZ", "CDSE"), ("CDS_WZ", "CDS")):
+    for _tab in (MATERIAL_ELEMENTS, REFRACTIVE_INDEX_DICT, PLASMON_DATA):
+        _tab.setdefault(_wz, _tab[_zb])
+for _alias, _zb in (("CDSE_ZB", "CDSE"), ("CDS_ZB", "CDS")):
+    for _tab in (MATERIAL_DB, MATERIAL_DB_BULK_PBE, QSGW_SOC_LITERATURE, MATERIAL_ELEMENTS, REFRACTIVE_INDEX_DICT,
+                 PLASMON_DATA):
+        if _zb in _tab:
+            _tab.setdefault(_alias, _tab[_zb])
 DEFAULT_PLASMON_EV = 15.0
 COULOMB_EV_ANG = 14.3996
 
@@ -714,7 +799,7 @@ def anchor_residual_scale(material_name, radius_ang, dft_gap=None, mode="econf",
         return 0.0, "none"
     R0 = float(entry[9])
     if str(mode).lower() == "econf" and dft_gap is not None:
-        eg_bulk = float(entry[7])
+        eg_bulk = bulk_pbe_gap_dot(m_name)
         e0 = (float(entry[11]) - float(entry[10])) - eg_bulk
         if e0 > 1.0e-6:
             return float(np.clip((float(dft_gap) - eg_bulk) / e0, 0.0, 1.0)), "econf"
@@ -777,7 +862,7 @@ def anchor_edge_curves(material_name, radius_ang, eps_out, residual_power=2.0,
     if entry is None or len(entry) < 14:
         return None
     eps_inf = float(entry[0])
-    d_bulk = float(entry[8]) - float(entry[7])
+    d_bulk = float(entry[8]) - bulk_pbe_gap_dot(m_name)
     R0 = float(entry[9])
     d_h0 = -(float(entry[12]) - float(entry[10]))
     d_l0 = float(entry[13]) - float(entry[11])
@@ -971,6 +1056,144 @@ def format_integrals_block(representation, charges, kernel, symbols, stda_info=N
     return "\n".join(lines)
 
 
+# Geometry correction of the bulk QP shift (quasiparticles.bulk_geometry).
+# The bulk shift splits into a self-energy and a geometry part,
+#     Delta_bulk = [E_g^QSGW(a_exp) - E_g^PBE(a_exp)] + [E_g^PBE(a_exp) - E_g^PBE(a_dot)]
+#                =  Delta_Sigma                        +  Delta_geom.
+# A dot relaxed with PBE has (almost) the PBE lattice: its PBE gap carries the gap change of bulk PBE
+# between a_exp and its own lattice a_dot, which Delta_geom removes. Delta_geom is a geometry effect,
+# not a self-energy: the bulk vertex correction scales Delta_Sigma only. With
+# E_g^PBE(a_dot) = E_g^PBE(a_exp) - s * [E_g^PBE(a_exp) - E_g^PBE(a_PBE)], the strain fraction s of the dot
+# is measured on its interior: s = (d_dot/g - a_exp) / (a_PBE - a_exp), with d the cation-anion bond and
+# g the bond per lattice constant (zinc blende sqrt(3)/4, rock salt 1/2); in the perovskites d is the
+# B-B (Pb-Pb) distance, g = 1, because octahedral tilts lengthen the Pb-X bond at fixed volume (by 1.6 %
+# in orthorhombic CsPbBr3) while the Pb-Pb distance stays the pseudo-cubic lattice constant. s is capped
+# at 1: frames of a 300 K trajectory are expanded beyond the 0 K PBE lattice by thermal expansion, which
+# the room-temperature experiment has as well.
+#   strain : s measured on the dot (default; s = 1 when it cannot be measured)
+#   full   : s = 1, the dot at the bulk PBE lattice
+#   none   : s = 0, no geometry correction (the dot taken at a_exp)
+BULK_GEOMETRY = "none"
+DOT_STRAIN = {}            # material -> strain fraction s of the dot of this run (set_dot_strain)
+# bond per lattice constant: zinc blende sqrt(3)/4 a; wurtzite sqrt(3/8) a_hex (ideal c/a and u); rock salt
+# a/2; perovskite: the B-B distance, a
+_BOND_PER_LATTICE = {"zb": np.sqrt(3.0) / 4.0, "wz": np.sqrt(3.0 / 8.0), "rs": 0.5, "perovskite": 1.0}
+
+
+def _structure_of(m_name):
+    if m_name.startswith("CSPB") or m_name in ("MAPBI3", "FAPBI3"):
+        return "perovskite"
+    if m_name.endswith("_WZ"):
+        return "wz"
+    if m_name in ("PBS", "PBSE", "PBTE"):
+        return "rs"
+    return "zb"
+
+
+def set_bulk_geometry(mode="strain", verbose=True):
+    """Set the geometry correction of the bulk QP shift ('strain', 'full' or 'none')."""
+    global BULK_GEOMETRY
+    mode = str(mode or "none").lower()
+    if mode not in ("strain", "full", "none"):
+        raise ValueError(f"bulk_geometry must be 'strain', 'full' or 'none', not '{mode}'")
+    BULK_GEOMETRY = mode
+    DOT_STRAIN.clear()
+    if verbose and mode != "none":
+        logger.info(f"  [QP] Bulk geometry correction: {mode}")
+
+
+def dot_lattice_strain(material_name, atom_symbols, coords_ang, interior=0.6):
+    """Strain fraction s of a dot between a_exp (s = 0) and the bulk PBE lattice (s = 1).
+
+    Median of the nearest cation-anion bonds whose atoms lie within `interior` x the radius of the
+    inorganic core (widened when there are fewer than 8 such bonds). Returns (s, info); s is None
+    when the material has no bulk PBE lattice data or the dot has no cation-anion bonds."""
+    from scipy.spatial import cKDTree
+    m_name = str(material_name).upper()
+    data = MATERIAL_DB_BULK_PBE.get(m_name)
+    elements = MATERIAL_ELEMENTS.get(m_name)
+    if not data or data.get("a_exp") is None or not elements:
+        return None, {}
+    structure = _structure_of(m_name)
+    # perovskites: B-B (Pb-Pb) distances, insensitive to the octahedral tilts
+    cation, anion = (elements[1], elements[1]) if structure == "perovskite" else (elements[0], elements[1])
+    syms = np.array([str(s).capitalize() for s in atom_symbols])
+    X = np.asarray(coords_ang, float)
+    ic, ia = np.flatnonzero(syms == cation), np.flatnonzero(syms == anion)
+    if ic.size == 0 or ia.size == 0:
+        return None, {}
+    g = _BOND_PER_LATTICE[structure]
+    d_exp, d_pbe = g * data["a_exp"], g * data["a_pbe"]
+    core = np.concatenate([ic, ia])
+    centre = X[core].mean(axis=0)
+    r = np.linalg.norm(X - centre, axis=1)
+    R = float(r[core].max())
+    tree = cKDTree(X[ia])
+    same = cation == anion
+    k = min(8 + same, ia.size)
+    dist, nb = tree.query(X[ic], k=k)
+    dist, nb = np.atleast_2d(dist), np.atleast_2d(nb)
+    keep = (dist < 1.25 * d_pbe) & (dist > 0.5 * d_exp)            # (B-B: not the atom itself)
+    bond_d = dist[keep]
+    bond_r = np.maximum(np.repeat(r[ic][:, None], k, axis=1)[keep], r[ia][nb[keep]])
+    if bond_d.size == 0:
+        return None, {}
+    frac_used = interior
+    while frac_used < 1.0 and np.count_nonzero(bond_r <= frac_used * R) < 8:
+        frac_used = min(1.0, frac_used + 0.1)
+    sel = bond_r <= frac_used * R + 1e-9
+    d_dot = float(np.median(bond_d[sel]))
+    s = (d_dot - d_exp) / (d_pbe - d_exp)
+    info = dict(bond=f"{cation}-{anion}", bond_dot_ang=d_dot, bond_exp_ang=float(d_exp), bond_pbe_ang=float(d_pbe),
+                n_bonds=int(np.count_nonzero(sel)), interior_fraction=float(frac_used), strain_fraction=float(s))
+    return float(s), info
+
+
+def structure_is_bb(m_name):
+    return _structure_of(str(m_name).upper()) == "perovskite"
+
+
+def set_dot_strain(material_name, atom_symbols, coords_ang):
+    """Measure the strain fraction of the dot of this run (bulk_geometry 'strain'); returns (s, info)."""
+    m_name = str(material_name).upper() if material_name else "DEFAULT"
+    if BULK_GEOMETRY != "strain" or m_name not in MATERIAL_DB_BULK_PBE:
+        return None, {}
+    s, info = dot_lattice_strain(m_name, atom_symbols, coords_ang)
+    if s is None:
+        logger.warning(f"  [QP] Bulk geometry: no {m_name} cation-anion bonds found; the dot is taken at the bulk "
+                       f"PBE lattice (s = 1).")
+        return None, {}
+    if s > 1.0:
+        logger.info(f"  [QP] Bulk geometry: strain fraction {s:.2f} > 1 (a thermal frame?); the expansion beyond "
+                    f"the PBE lattice is taken as thermal, as in the room-temperature experiment: s = 1.")
+    elif s < -0.25:
+        logger.warning(f"  [QP] Bulk geometry: strain fraction {s:.2f} < 0: the dot is smaller than at a_exp. "
+                       f"Was it relaxed with PBE? s = 0.")
+    DOT_STRAIN[m_name] = float(np.clip(s, 0.0, 1.0))
+    logger.info(f"  [QP] Dot lattice: interior {info['bond']} {'distance' if structure_is_bb(m_name) else 'bond'} {info['bond_dot_ang']:.4f} A over {info['n_bonds']} "
+                f"bonds (bulk {info['bond_exp_ang']:.4f} A at a_exp, {info['bond_pbe_ang']:.4f} A at a_PBE): "
+                f"strain fraction s = {s:.3f}")
+    return DOT_STRAIN[m_name], info
+
+
+def bulk_geometry_shift(material_name):
+    """Delta_geom = s * [E_g^PBE(a_exp) - E_g^PBE(a_PBE)] (spin-free) for the dot of this run. Returns (shift, s)."""
+    m_name = str(material_name).upper() if material_name else "DEFAULT"
+    data = MATERIAL_DB_BULK_PBE.get(m_name)
+    if BULK_GEOMETRY == "none" or not data or data.get("gap_exp_lattice") is None:
+        return 0.0, 0.0
+    s = 1.0 if BULK_GEOMETRY == "full" else DOT_STRAIN.get(m_name, 1.0)
+    return float(s * (data["gap_exp_lattice"] - data["gap_pbe_lattice"])), float(s)
+
+
+def bulk_pbe_gap_dot(material_name):
+    """Bulk PBE gap at the lattice of the dot of this run: the bulk limit of its PBE gap
+    (MATERIAL_DB index 7, at a_exp, minus the geometry correction)."""
+    m_name = str(material_name).upper() if material_name else "DEFAULT"
+    entry = MATERIAL_DB.get(m_name, MATERIAL_DB["DEFAULT"])
+    return float(entry[7]) - bulk_geometry_shift(m_name)[0]
+
+
 # Vertex correction of the bulk QSGW gap (quasiparticles.bulk_vertex).
 # QSGW overestimates bulk gaps because its W lacks the electron-hole (ladder) vertex, which makes the
 # polarizability too small; the bulk fix is Delta_bulk -> factor * Delta_bulk (factor 0.8). In a dot the
@@ -979,22 +1202,112 @@ def format_integrals_block(representation, charges, kernel, symbols, stda_info=N
 #   full   : the bulk vertex correction at every size, Delta = factor * Delta_QSGW
 #   scaled : the correction times the fraction of bulk screening the dot keeps,
 #            f = (eps_eff - 1)/(eps_inf - 1), eps_eff from the Penn model at the DFT gap
+#   factor: a number (0.8: the usual bulk QSGW80 scaling) or 'material': the factor that puts the bulk
+#   limit on the experimental gap of the material,
+#       a_m = (E_exp - E_g^PBE+SOC(a_exp)) / Delta_Sigma,
+#   so that PBE+SOC + a_m Delta_Sigma = E_exp in the bulk. It absorbs every difference between 0 K QSGW
+#   and the measured gap (missing vertex, zero-point and thermal renormalisation), so E_exp must be at the
+#   temperature, and E_g^PBE+SOC for the structure, of the experiments the dots are compared with
+#   (room temperature; EXPERIMENTAL_BULK_GAP). With 'scaled' the dot goes from QSGW (molecular limit)
+#   to the experimental gap (bulk) with the Penn fraction f. Same bulk limit as the g-xTB route.
 BULK_VERTEX = "none"
 BULK_VERTEX_FACTOR = 0.8
 
+# Experimental bulk gaps for bulk_vertex_factor: material, the same transition as the QSGW and PBE gaps
+# of MATERIAL_DB_BULK_PBE (signed). Room temperature, MATERIAL_DB index 3, except the Hg compounds:
+# E0 = E(Gamma6) - E(Gamma8) from the representative experimental values in Svane et al., Phys. Rev. B 84,
+# 205205 (2011), Table I (HgS uncertain: experiments disagree on its sign). Notes on the phase:
+# CdS 2.42 and CdSe 1.74 eV are the wurtzite values (zinc blende about 0.05-0.07 eV lower); the lead
+# halide perovskites are measured in their room-temperature (tilted) phases, while the PBE and QSGW gaps
+# are for the cubic structure: the PBE+SOC partner of E_exp is then the gap of the measured structure
+# (gap_soc_exp_structure in MATERIAL_DB_BULK_PBE; CsPbBr3 only so far), with Delta_Sigma from the cubic one.
+EXPERIMENTAL_E0 = {"HGS": -0.11, "HGSE": -0.20, "HGTE": -0.30}
+
+
+def experimental_bulk_gap(material_name):
+    m_name = str(material_name).upper()
+    if m_name in EXPERIMENTAL_E0:
+        return float(EXPERIMENTAL_E0[m_name])
+    return float(MATERIAL_DB[m_name][3])
+
+
+def material_vertex_factor(material_name):
+    """a_m = (E_exp - E_PBE+SOC(a_exp)) / Delta_Sigma; None without the bulk data. Returns (a_m, info)."""
+    m_name = str(material_name).upper()
+    b = MATERIAL_DB_BULK_PBE.get(m_name, {})
+    if b.get("delta_sigma") is None or b.get("gap_soc_exp_lattice") is None:
+        return None, {}
+    e_exp = experimental_bulk_gap(m_name)
+    partner = float(b.get("gap_soc_exp_structure", b["gap_soc_exp_lattice"]))   # PBE+SOC of the measured structure
+    a = (e_exp - partner) / b["delta_sigma"]
+    return float(a), dict(bulk_gap_exp_ev=e_exp, bulk_gap_pbe_soc_ev=partner,
+                          bulk_delta_sigma_ev=float(b["delta_sigma"]))
+
 
 def set_bulk_vertex(mode="none", factor=0.8, verbose=True):
-    """Set the vertex correction of the bulk QP shift ('none', 'full' or 'scaled') and the bulk factor."""
+    """Set the vertex correction of the bulk QP shift ('none', 'full' or 'scaled') and the bulk factor
+    (a number in (0, 1], or 'material' for the per-material factor a_m)."""
     global BULK_VERTEX, BULK_VERTEX_FACTOR
     mode = str(mode or "none").lower()
     if mode not in ("none", "full", "scaled"):
         raise ValueError(f"bulk_vertex must be 'none', 'full' or 'scaled', not '{mode}'")
-    factor = float(0.8 if factor in (None, "") else factor)
-    if not 0.0 < factor <= 1.0:
-        raise ValueError(f"bulk_vertex_factor must be in (0, 1], not {factor}")
+    if isinstance(factor, str) and factor.strip().lower() == "material":
+        factor = "material"
+    else:
+        factor = float(0.8 if factor in (None, "") else factor)
+        if not 0.0 < factor <= 1.0:
+            raise ValueError(f"bulk_vertex_factor must be in (0, 1] or 'material', not {factor}")
     BULK_VERTEX, BULK_VERTEX_FACTOR = mode, factor
     if verbose and mode != "none":
-        logger.info(f"  [QP] Bulk vertex correction: {mode} (bulk factor {factor:g})")
+        logger.info(f"  [QP] Bulk vertex correction: {mode} (bulk factor {factor if factor == 'material' else f'{factor:g}'})")
+
+
+# Residual of the bulk reference (quasiparticles.bulk_residual).
+#   none         : the bulk limit is PBE+SOC + a Delta_Sigma (0 K, frozen lattice; QSGW with the vertex factor)
+#   experimental : plus a constant, size-independent residual that puts the bulk limit on the measured gap,
+#                  delta_res = E_exp - (E_g^PBE+SOC + a_bulk Delta_Sigma), a_bulk the vertex factor in the bulk
+#                  (1 without vertex correction). The split model: the vertex part fades with the dot's
+#                  screening (bulk_vertex: scaled), the residual - thermal and zero-point renormalisation and
+#                  what else separates 0 K QSGW80 from the room-temperature gap - does not.
+BULK_RESIDUAL = "none"
+
+
+def set_bulk_residual(mode="none", verbose=True):
+    """Set the residual of the bulk reference: 'none' or 'experimental' (split model)."""
+    global BULK_RESIDUAL
+    mode = str(mode or "none").lower()
+    if mode not in ("none", "experimental"):
+        raise ValueError(f"bulk_residual must be 'none' or 'experimental', not '{mode}'")
+    BULK_RESIDUAL = mode
+    if verbose and mode != "none":
+        logger.info(f"  [QP] Bulk residual: {mode} (bulk limit on the room-temperature experimental gap)")
+
+
+def bulk_residual_shift(material_name, a_bulk):
+    """delta_res = E_exp - (E_PBE+SOC of the measured structure + a_bulk Delta_Sigma); (0, {}) without data."""
+    m_name = str(material_name).upper()
+    b = MATERIAL_DB_BULK_PBE.get(m_name, {})
+    if BULK_RESIDUAL == "none" or b.get("delta_sigma") is None or b.get("gap_soc_exp_lattice") is None:
+        return 0.0, {}
+    e_exp = experimental_bulk_gap(m_name)
+    partner = float(b.get("gap_soc_exp_structure", b["gap_soc_exp_lattice"]))
+    res = e_exp - (partner + a_bulk * float(b["delta_sigma"]))
+    return float(res), dict(bulk_gap_exp_ev=e_exp, bulk_gap_pbe_soc_ev=partner)
+
+
+def _vertex_factor(m_name):
+    """The bulk factor of this run for a material: (a, info)."""
+    if BULK_VERTEX_FACTOR != "material":
+        return float(BULK_VERTEX_FACTOR), {}
+    a, info = material_vertex_factor(m_name)
+    if a is None:
+        logger.warning(f"  [QP] bulk_vertex_factor: material has no experimental/PBE+SOC data for {m_name}; using 0.8.")
+        return 0.8, {}
+    if a > 1.0:
+        logger.warning(f"  [QP] Material vertex factor of {m_name} is {a:.3f} > 1: the bulk QSGW gap is below the "
+                       f"experimental one, so the factor is not a vertex correction (check the structure and "
+                       f"temperature of the reference).")
+    return a, info
 
 
 def bulk_qp_shift(material_name, dft_gap=None):
@@ -1004,47 +1317,75 @@ def bulk_qp_shift(material_name, dft_gap=None):
     """
     m_name = str(material_name).upper() if material_name else "DEFAULT"
     entry = MATERIAL_DB.get(m_name)
-    info = {"bulk_vertex": BULK_VERTEX, "bulk_vertex_factor": float(BULK_VERTEX_FACTOR)}
+    a_vertex, a_info = _vertex_factor(m_name) if BULK_VERTEX != "none" else (
+        (0.8 if BULK_VERTEX_FACTOR == "material" else float(BULK_VERTEX_FACTOR)), {})
+    info = {"bulk_vertex": BULK_VERTEX, "bulk_vertex_factor": float(a_vertex),
+            "bulk_vertex_factor_mode": "material" if BULK_VERTEX_FACTOR == "material" else "fixed", **a_info}
     if entry is None or len(entry) < 9:
         info.update(bulk_qsgw_shift_ev=0.0, bulk_vertex_fraction=0.0, bulk_vertex_correction_ev=0.0)
         return 0.0, info
     eps_inf, pbe_gap, gw_gap = float(entry[0]), float(entry[7]), float(entry[8])
-    d_qsgw = gw_gap - pbe_gap
-    delta_v = (1.0 - BULK_VERTEX_FACTOR) * d_qsgw
+    d_qsgw = gw_gap - pbe_gap                        # Delta_Sigma: QSGW - PBE, both at a_exp
+    d_geom, s = bulk_geometry_shift(m_name)          # PBE gap at a_exp - PBE gap at the dot's lattice
+    pbe_gap_dot = pbe_gap - d_geom
+    delta_v = (1.0 - a_vertex) * d_qsgw
     eps_eff = None
     if BULK_VERTEX == "none":
         frac = 0.0
     elif BULK_VERTEX == "full" or dft_gap is None:
         frac = 1.0
     else:
-        d_e_conf = max(0.0, float(dft_gap) - pbe_gap)
+        d_e_conf = max(0.0, float(dft_gap) - pbe_gap_dot)
         eps_eff = penn_eps_eff(eps_inf, d_e_conf, penn_gap_ev(m_name, eps_inf))
         frac = float(np.clip((eps_eff - 1.0) / max(eps_inf - 1.0, 1e-12), 0.0, 1.0))
-    shift = d_qsgw - delta_v * frac if frac else d_qsgw
+    d_sigma = d_qsgw - delta_v * frac if frac else d_qsgw
+    d_res, r_info = bulk_residual_shift(m_name, a_vertex if BULK_VERTEX != "none" else 1.0)
+    if d_res:
+        info.update(r_info)
+    shift = d_sigma + d_res + d_geom
     info.update(bulk_qsgw_shift_ev=float(d_qsgw), bulk_vertex_fraction=float(frac),
-                bulk_vertex_correction_ev=float(shift - d_qsgw))
+                bulk_vertex_correction_ev=float(d_sigma - d_qsgw), bulk_selfenergy_shift_ev=float(d_sigma),
+                bulk_geometry=BULK_GEOMETRY, bulk_geometry_shift_ev=float(d_geom), bulk_strain_fraction=float(s),
+                bulk_pbe_gap_dot_lattice_ev=float(pbe_gap_dot), bulk_residual=BULK_RESIDUAL,
+                bulk_residual_shift_ev=float(d_res))
     if eps_eff is not None:
         info["bulk_vertex_eps_eff"] = float(eps_eff)
     if BULK_VERTEX != "none":
         extra = f", Penn eps_eff {eps_eff:.2f} at the DFT gap" if eps_eff is not None else ""
-        logger.info(f"  [QP] Bulk vertex correction ({BULK_VERTEX}): fraction {frac:.3f}{extra}; "
-                    f"Delta_bulk {d_qsgw:.3f} -> {shift:.3f} eV")
+        logger.info(f"  [QP] Bulk vertex correction ({BULK_VERTEX}, factor {a_vertex:.3f}"
+                    f"{' (material)' if BULK_VERTEX_FACTOR == 'material' else ''}): fraction {frac:.3f}{extra}; "
+                    f"Delta_Sigma {d_qsgw:.3f} -> {d_sigma:.3f} eV")
+    if BULK_GEOMETRY != "none" and d_geom != 0.0:
+        logger.info(f"  [QP] Bulk geometry correction ({BULK_GEOMETRY}, s = {s:.3f}): Delta_geom {d_geom:+.3f} eV "
+                    f"(bulk PBE gap {pbe_gap:.3f} eV at a_exp, {pbe_gap_dot:.3f} eV at the dot's lattice)")
+    if BULK_RESIDUAL != "none":
+        logger.info(f"  [QP] Bulk residual (experimental): {d_res:+.3f} eV (E_exp {r_info.get('bulk_gap_exp_ev', float('nan')):.3f} eV)")
+    logger.info(f"  [QP] Bulk shift = Delta_Sigma {d_sigma:.3f} + residual {d_res:+.3f} + Delta_geom {d_geom:+.3f} "
+                f"= {shift:.3f} eV")
     return float(shift), info
 
 
 # g-xTB route (qdex.xtb): bulk QP shift for g-xTB orbitals on g-xTB-relaxed geometries.
 #
 #   Delta_bulk^gxtb = E_g^ref,SF - E_g^gxtb,bulk
-#   E_g^ref,SF      = gap_exp + Delta_so / 3                     (spin-free experimental gap)
-#   E_g^gxtb,bulk  ~= gap_pbe_bulk + <E_g^gxtb(dot_i; g-xTB geometry) - E_g^PBE(dot_i; PBE geometry)>_i
+#   E_g^ref,SF      = gap_exp + [E_g^PBE(a_exp) - E_g^PBE+SOC(a_exp)]   (spin-free experimental gap)
+#   E_g^gxtb,bulk  ~= E_g^PBE(a_PBE) + <E_g^gxtb(dot_i; g-xTB geometry) - E_g^PBE(dot_i; PBE geometry)>_i
 #
-# so that Delta_bulk^gxtb = (E_g^ref,SF - gap_pbe_bulk) - delta: on average over the dots the g-xTB
-# route reproduces the PBE route with the same experimental reference. PROVISIONAL (2026-10-02): periodic
-# g-xTB (xtb-bleed, macOS arm64) did not converge reliably, so delta comes from the CdSe dot series
-# 1.2-3.4 nm (CP2K PBE gaps; g-xTB gaps with the Cd-Se bonds rescaled to the g-xTB value 2.60 A).
-# Replace it by a periodic g-xTB bulk gap when one is available (key 'gap_gxtb_bulk').
+# The spin-free reference adds back the spin-orbit lowering of the gap of PBE with the QDEX GTH-SOC
+# operator (MATERIAL_DB_BULK_PBE, 0.121 eV for CdSe), the one the SOC spinors of the dots apply, so
+# that a SOC run lands on gap_exp in the bulk (as the PBE route does with Delta_Sigma). The PBE dots of
+# delta were relaxed with PBE, so their bulk partner is the PBE gap at the PBE lattice (0.474 eV for
+# CdSe, not 0.644 at a_exp): E_gxtb,bulk is then the g-xTB bulk gap at the g-xTB lattice, and the shift
+# carries the dot from its own lattice to the experimental one, like Delta_geom of the PBE route.
+# Equivalently Delta_bulk^gxtb = (E_g^ref,SF - E_g^PBE(a_PBE)) - delta: on average over the dots the
+# g-xTB route reproduces the PBE route with a bulk limit at the experimental gap (bulk_vertex_factor
+# = (E_exp - E_PBE+SOC)/Delta_Sigma). PROVISIONAL (2026-10-02): periodic g-xTB (xtb-bleed, macOS arm64)
+# did not converge reliably, so delta comes from the CdSe dot series 1.2-3.4 nm (CP2K PBE gaps; g-xTB
+# gaps with the Cd-Se bonds rescaled to the g-xTB value 2.60 A). Replace it by a periodic g-xTB bulk
+# gap when one is available (key 'gap_gxtb_bulk').
 GXTB_BULK = {
-    # delta (eV), sample std over the dots (eV), number of dots, Delta_so (eV)
+    # delta (eV), sample std over the dots (eV), number of dots; Delta_so (eV, experimental): used only
+    # when MATERIAL_DB_BULK_PBE has no PBE+SOC gap for the material
     "CDSE": dict(delta=3.731, delta_std=0.520, n_dots=6, delta_so=0.42),
 }
 
@@ -1056,18 +1397,26 @@ def gxtb_bulk_shift(material_name):
     if data is None or entry is None:
         raise ValueError(f"quasiparticles.reference: gxtb has no g-xTB bulk data for material '{material_name}'. "
                          f"Available: {', '.join(sorted(GXTB_BULK))}")
-    gap_exp, gap_pbe_bulk = float(entry[3]), float(entry[7])
-    gap_ref_sf = gap_exp + data["delta_so"] / 3.0
+    bulk = MATERIAL_DB_BULK_PBE.get(m_name, {})
+    gap_exp = float(entry[3])
+    if bulk.get("gap_soc_exp_lattice") is not None:
+        soc_lowering = float(bulk["gap_exp_lattice"] - bulk["gap_soc_exp_lattice"])
+        soc_source = "PBE/GTH-SOC at a_exp"
+    else:
+        soc_lowering, soc_source = data["delta_so"] / 3.0, "experimental Delta_so/3"
+    gap_ref_sf = gap_exp + soc_lowering
+    gap_pbe_bulk = float(bulk.get("gap_pbe_lattice", entry[7]))   # partner of the PBE-relaxed dots of delta
     if "gap_gxtb_bulk" in data:
         gap_gxtb_bulk, source = float(data["gap_gxtb_bulk"]), "periodic g-xTB"
     else:
-        gap_gxtb_bulk, source = gap_pbe_bulk + data["delta"], "PBE bulk + dot-averaged g-xTB/PBE offset"
+        gap_gxtb_bulk, source = gap_pbe_bulk + data["delta"], "PBE bulk at a_PBE + dot-averaged g-xTB/PBE offset"
     shift = gap_ref_sf - gap_gxtb_bulk
-    info = dict(qp_reference="gxtb", gap_ref_spin_free_ev=gap_ref_sf, gap_gxtb_bulk_ev=gap_gxtb_bulk,
-                gxtb_bulk_source=source, gxtb_pbe_offset_ev=data.get("delta"),
+    info = dict(qp_reference="gxtb", gap_ref_spin_free_ev=gap_ref_sf, gap_exp_ev=gap_exp,
+                soc_lowering_ev=soc_lowering, soc_lowering_source=soc_source, gap_pbe_bulk_ev=gap_pbe_bulk,
+                gap_gxtb_bulk_ev=gap_gxtb_bulk, gxtb_bulk_source=source, gxtb_pbe_offset_ev=data.get("delta"),
                 gxtb_pbe_offset_std_ev=data.get("delta_std"), bulk_shift_ev=shift)
-    logger.info(f"  [QP] g-xTB bulk shift: E_ref(SF) {gap_ref_sf:.3f} - E_gxtb(bulk) {gap_gxtb_bulk:.3f} "
-                f"= {shift:+.3f} eV ({source})")
+    logger.info(f"  [QP] g-xTB bulk shift: E_ref(SF) {gap_exp:.3f} + {soc_lowering:.3f} ({soc_source}) - "
+                f"E_gxtb(bulk) {gap_gxtb_bulk:.3f} = {shift:+.3f} eV ({source})")
     return float(shift), info
 
 
@@ -1790,9 +2139,9 @@ def estimate_sgw_qp_gap(coords, atom_symbols, material_name=None, eps_out=1.0,
         raise ValueError(f"Material '{m_name}' not found in database or lacks bulk GW data.")
 
     eps_bulk = float(entry[0])
-    pbe_bulk_gap = float(entry[7])
+    pbe_bulk_gap = bulk_pbe_gap_dot(m_name)    # at the dot's lattice (bulk_geometry)
     gw_bulk_gap = float(entry[8])
-    bulk_shift = gw_bulk_gap - pbe_bulk_gap # e.g. 2.19 - 0.62 = +1.57 eV
+    bulk_shift = gw_bulk_gap - pbe_bulk_gap
 
     # 1. Compute microscopic W^{QD} using sBSE kernel builder
     res = build_sbse_kernel(
@@ -2022,7 +2371,7 @@ class _ScreeningModel:
             raise ValueError(f"Material '{m_name}' not found in database or lacks bulk GW data.")
 
         self.eps_bulk = eps_bulk = float(entry[0])
-        self.pbe_bulk_gap = float(entry[7])
+        self.pbe_bulk_gap = bulk_pbe_gap_dot(m_name)   # bulk limit of the dot's PBE gap (its lattice)
         self.gw_bulk_gap = float(entry[8])
         self.bulk_shift = self.gw_bulk_gap - self.pbe_bulk_gap
         self.qp_bulk_ref = self.gw_bulk_gap   # bulk QP gap used as the screening reference

@@ -236,7 +236,8 @@ def estimate_periodic_bulk_gw_scissor(material_name):
     if entry is None or len(entry) < 9:
         return None, None
 
-    gap_pbe_bulk = float(entry[7])
+    from qdex.hardness import bulk_pbe_gap_dot
+    gap_pbe_bulk = bulk_pbe_gap_dot(m_name)       # at the dot's lattice (bulk_geometry)
     gap_gw_bulk = float(entry[8])
     scissor = gap_gw_bulk - gap_pbe_bulk
     details = {
@@ -829,8 +830,17 @@ def _build_parser():
     parser.add_argument("--bulk-vertex", dest="bulk_vertex", choices=["none", "full", "scaled"], default="none",
                         help="Vertex correction of the bulk QSGW shift: 'none' (pure QSGW, default), 'full' (bulk factor "
                              "at every size) or 'scaled' (times the Penn fraction of bulk screening the dot keeps).")
-    parser.add_argument("--bulk-vertex-factor", dest="bulk_vertex_factor", type=float, default=0.8,
-                        help="Bulk vertex factor: Delta_bulk -> factor * Delta_bulk in the bulk (default 0.8).")
+    parser.add_argument("--bulk-vertex-factor", dest="bulk_vertex_factor", type=str, default="0.8",
+                        help="Bulk vertex factor: Delta_Sigma -> factor * Delta_Sigma in the bulk (default 0.8), or "
+                             "'material': the factor that puts the bulk limit on the experimental gap of the material.")
+    parser.add_argument("--bulk-residual", dest="bulk_residual", choices=["none", "experimental"], default="none",
+                        help="Residual of the bulk reference: 'none' (QSGW with the vertex factor) or 'experimental' "
+                             "(constant shift that puts the bulk limit on the room-temperature gap; with "
+                             "bulk_vertex: scaled, the split model).")
+    parser.add_argument("--bulk-geometry", dest="bulk_geometry", choices=["strain", "full", "none"], default="strain",
+                        help="Geometry correction of the bulk QP shift for PBE-relaxed dots: 'strain' (default; bulk PBE "
+                             "gap change between a_exp and the dot's measured lattice), 'full' (dot at the bulk PBE "
+                             "lattice) or 'none' (dot taken at a_exp).")
     parser.add_argument("--qp-reference", dest="qp_reference", choices=["pbe", "gxtb"], default="pbe",
                         help="Orbitals the 'bulk' QP shift corrects: 'pbe' (default, bulk QSGW - bulk PBE) or 'gxtb' "
                              "(g-xTB frames: spin-free experimental gap - g-xTB bulk gap; NAMD precompute only).")
@@ -1234,6 +1244,8 @@ def _prepare_run(args, *, config_path, parser):
     import qdex.hardness as _hardness
     _hardness.RADIUS_DEFINITION = str(getattr(args, "qp_radius", "saxs") or "saxs").lower()
     _hardness.set_bulk_vertex(getattr(args, "bulk_vertex", "none"), getattr(args, "bulk_vertex_factor", 0.8))
+    _hardness.set_bulk_geometry(getattr(args, "bulk_geometry", "strain"))
+    _hardness.set_bulk_residual(getattr(args, "bulk_residual", "none"))
     _hardness.set_mnok_options(getattr(args, "mnok_exponent", 2.0), getattr(args, "mnok_exponent_exchange", None),
                                getattr(args, "mnok_onsite", "ip_ea"))
     compute_device, dev_obj = resolve_device(args.device, verbose=True)
@@ -1403,6 +1415,9 @@ def _quasiparticle_correction(args, *,
     """QP model: gap correction and the screened interaction W it is built on."""
     tracker.start_stage("Quasiparticle (GW) Model")
     dft_gap = eps_beta[homo_index_beta + 1] - eps[homo_index]
+    if args.material:   # lattice of the dot for the geometry part of the bulk QP shift
+        from qdex.hardness import set_dot_strain
+        set_dot_strain(args.material, syms, np.asarray(coords_ang, float))
     target_qp_gap = dft_gap
     confinement_energy = 0.0
     qp_provenance = None
@@ -1712,7 +1727,7 @@ def _quasiparticle_correction(args, *,
             from qdex.hardness import bulk_qp_shift
             scissor, bulk_vertex_info = bulk_qp_shift(args.material, dft_gap)
             if entry is not None and len(entry) >= 9:
-                pbe_bulk_gap = float(entry[7])
+                pbe_bulk_gap = float(bulk_vertex_info.get("bulk_pbe_gap_dot_lattice_ev", entry[7]))
                 gw_bulk_gap = float(entry[8])
             target_qp_gap = dft_gap + scissor
             f_homo = anchor_bulk_homo_fraction(args.material)
