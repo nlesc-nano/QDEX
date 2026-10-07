@@ -57,7 +57,8 @@ transition, no mixing), so that the same transitions can be followed along the t
        and ``basis_name``
    * - ``excitations.include_exchange``, ``include_direct_eh``
      - true
-     - K\ :sup:`x` and K\ :sup:`d`
+     - K\ :sup:`x` and K\ :sup:`d`, in every frame (before 2026-10-07 K\ :sup:`x` was computed on every
+       frame but kept only on frame 0; ``include_exchange: false`` skips it and saves its cost)
 
 Each transition energy is
 

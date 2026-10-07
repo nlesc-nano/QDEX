@@ -110,6 +110,73 @@ def align_spinor_phases_and_crossings(S_mat, U_list, track_crossings=True, lock_
     return S_mat, U_list, perm
 
 
+def _degenerate_groups(eps, tol):
+    """Groups (index arrays, size >= 2) of states whose energies lie within tol of each other."""
+    eps = np.asarray(eps, dtype=float)
+    if eps.size < 2:
+        return []
+    order = np.argsort(eps, kind="stable")
+    groups, cur = [], [order[0]]
+    for a, b in zip(order[:-1], order[1:]):
+        if eps[b] - eps[a] < tol:
+            cur.append(b)
+        else:
+            if len(cur) > 1:
+                groups.append(np.array(cur))
+            cur = [b]
+    if len(cur) > 1:
+        groups.append(np.array(cur))
+    return groups
+
+
+def align_degenerate_blocks(S_mat, U_list, eps_next, tol=1.0e-5):
+    """
+    Parallel transport inside exactly degenerate groups (Kramers pairs of the SOC spinors).
+
+    A degenerate pair comes out of the diagonaliser in an arbitrary SU(2) frame, different at every
+    frame; a U(1) phase per spinor cannot undo that, and the rotation shows up as a spurious coupling
+    |S_12|/dt between the partners. For each group G (energies of frame t+dt within tol, eV) the
+    columns are rotated by R = V W^+ from the SVD S_GG = W s V^+, so that S_GG R = W s W^+ is Hermitian
+    positive semidefinite (Loewdin / parallel-transport gauge).
+    Returns (S_aligned, U_list_aligned, n_groups).
+    """
+    groups = _degenerate_groups(eps_next, tol)
+    S_mat = np.array(S_mat, copy=True)
+    for G in groups:
+        W, _, Vh = np.linalg.svd(S_mat[np.ix_(G, G)])
+        R = Vh.conj().T @ W.conj().T
+        S_mat[:, G] = S_mat[:, G] @ R
+        for idx in range(len(U_list)):
+            U_list[idx] = np.array(U_list[idx], copy=True)
+            U_list[idx][:, G] = U_list[idx][:, G] @ R
+    return S_mat, U_list, len(groups)
+
+
+def _group_average_pairs(M, groups_occ, groups_virt):
+    """Average a pair-diagonal (n_occ, n_virt) quantity over degenerate groups.
+
+    Inside a degenerate group only the trace of a pair quantity is independent of the basis the
+    diagonaliser picked, so the diagonal is replaced by its group average (blocks G_occ x G_virt)."""
+    if M is None or (not groups_occ and not groups_virt):
+        return M
+    M = np.array(M, copy=True)
+    for G in groups_occ:
+        M[G, :] = M[G, :].mean(axis=0)
+    for H in groups_virt:
+        M[:, H] = M[:, H].mean(axis=1)[:, None]
+    return M
+
+
+def _pair_energies(data, i_idx, a_idx):
+    """Diagonal BSE pair energies eps_a - eps_i + k_x K^x_ia - K^d_ia (k_x = 2 spin-free, 1 for spinors)."""
+    E = data["eps_virt"][a_idx] - data["eps_occ"][i_idx]
+    if data.get("Kx_mat") is not None:
+        E = E + data.get("kx_factor", 2.0) * data["Kx_mat"][i_idx, a_idx]
+    if data.get("Kd_mat") is not None:
+        E = E - data["Kd_mat"][i_idx, a_idx]
+    return E
+
+
 DIAGONAL_MODES = ("diagonal_bse", "diagonal_sbse", "diagonal_stda")
 INDEPENDENT_MODES = ("independent_qp", "independent_dft")
 
@@ -212,7 +279,8 @@ def compute_frame_diagonal_bse(
     device="numpy",
     verbose_soc=False,
     frame_basis_path=None,
-    stda=None
+    stda=None,
+    degeneracy_tol_ev=1.0e-5,
 ):
     """
     Computes single-particle QP energies, diagonal BSE exciton energies,
@@ -345,6 +413,8 @@ def compute_frame_diagonal_bse(
             "pair_mask": pair_mask,
             "mu_sq_grid": mu_sq_grid,
             "Kd_mat": Kd_mat,
+            "Kx_mat": Kx_mat,
+            "kx_factor": 2.0,
             "dft_gap": dft_gap,
             "qp_gap": qp_gap,
             "lowest_exc": float(np.min(E_pairs)) if len(E_pairs) > 0 else qp_gap,
@@ -457,8 +527,17 @@ def compute_frame_diagonal_bse(
 
             W_virt_diag = q_virt_diag @ w_resta.T
             Kd_mat = q_occ_diag @ W_virt_diag.T
-            Kd_pairs = Kd_mat[i_indices, a_indices]
-            E_diag = E_diag - Kd_pairs
+
+        # Kramers pairs: pair-diagonal quantities averaged over the degenerate partners (basis-independent)
+        groups_occ = _degenerate_groups(eps_occ_sp, degeneracy_tol_ev)
+        groups_virt = _degenerate_groups(eps_virt_sp, degeneracy_tol_ev)
+        Kx_mat = _group_average_pairs(Kx_mat, groups_occ, groups_virt)
+        Kd_mat = _group_average_pairs(Kd_mat, groups_occ, groups_virt)
+        E_diag = E_sp.copy()
+        if Kx_mat is not None:
+            E_diag = E_diag + Kx_mat[i_indices, a_indices]
+        if Kd_mat is not None:
+            E_diag = E_diag - Kd_mat[i_indices, a_indices]
 
         if compute_dipoles:
             mu_ao_x, mu_ao_y, mu_ao_z = compute_dipole_ao(shells, nthreads=nthreads)
@@ -468,7 +547,8 @@ def compute_frame_diagonal_bse(
             mu_sp_x = U_occ_alpha.conj().T @ (M_x @ U_virt_alpha) + U_occ_beta.conj().T @ (M_x @ U_virt_beta)
             mu_sp_y = U_occ_alpha.conj().T @ (M_y @ U_virt_alpha) + U_occ_beta.conj().T @ (M_y @ U_virt_beta)
             mu_sp_z = U_occ_alpha.conj().T @ (M_z @ U_virt_alpha) + U_occ_beta.conj().T @ (M_z @ U_virt_beta)
-            mu_sq_grid = np.abs(mu_sp_x)**2 + np.abs(mu_sp_y)**2 + np.abs(mu_sp_z)**2
+            mu_sq_grid = _group_average_pairs(np.abs(mu_sp_x)**2 + np.abs(mu_sp_y)**2 + np.abs(mu_sp_z)**2,
+                                              groups_occ, groups_virt)
             mu_sq = mu_sq_grid[i_indices, a_indices]
             # Spinors already carry both components: 2/3, energy in Hartree.
             f_osc = (2.0 / 3.0) * (E_diag / HA_TO_EV) * mu_sq
@@ -507,6 +587,8 @@ def compute_frame_diagonal_bse(
             "pair_mask": pair_mask,
             "mu_sq_grid": mu_sq_grid,
             "Kd_mat": Kd_mat,
+            "Kx_mat": Kx_mat,
+            "kx_factor": 1.0,
             "dft_gap": dft_gap,
             "qp_gap": qp_gap,
             "lowest_exc": float(np.min(E_pairs)) if len(E_pairs) > 0 else qp_gap,
@@ -604,6 +686,8 @@ def precompute_namd_data(config):
     phase_correction = track_cfg.get("phase_correction", True)
     hungarian_tracking = track_cfg.get("hungarian_tracking", True)
     completeness_thresh = float(track_cfg.get("completeness_threshold", 0.99))
+    # energy window (eV) of exactly degenerate states: Kramers pairs of the SOC spinors
+    degeneracy_tol_ev = float(track_cfg.get("degeneracy_tol_ev", 1.0e-5))
 
     soc = bool(phys_cfg.get("soc_flag", False) or phys_cfg.get("soc") is True or namd_cfg.get("soc", False))
     gth_file = sys_cfg.get("gth_file", None)
@@ -799,7 +883,8 @@ def precompute_namd_data(config):
             gth_functional=gth_functional,
             verbose_soc=(k == 0),
             frame_basis_path=os.path.join(fdir, frame_basis) if frame_basis else None,
-            stda=stda
+            stda=stda,
+            degeneracy_tol_ev=degeneracy_tol_ev,
         )
 
         dft_gaps.append(curr_data["dft_gap"])
@@ -810,6 +895,7 @@ def precompute_namd_data(config):
             fixed_pair_mask = curr_data["pair_mask"]
 
         if prev_data is not None:
+            perm_occ = perm_virt = None
             # Compute cross-AO overlap between frame k-1 and frame k
             shells_prev = prev_data["shells"]
             shells_curr = curr_data["shells"]
@@ -832,25 +918,28 @@ def precompute_namd_data(config):
                     S_occ, U_occ_list, perm_occ = align_spinor_phases_and_crossings(
                         S_occ, U_occ_list, track_crossings=hungarian_tracking
                     )
-                    curr_data["U_occ_alpha"], curr_data["U_occ_beta"] = U_occ_list
-
                     U_virt_list = [curr_data["U_virt_alpha"], curr_data["U_virt_beta"]]
                     S_virt, U_virt_list, perm_virt = align_spinor_phases_and_crossings(
                         S_virt, U_virt_list, track_crossings=hungarian_tracking
                     )
-                    curr_data["U_virt_alpha"], curr_data["U_virt_beta"] = U_virt_list
 
                     # Permute single-particle QP energies to match tracked spinor basis
                     curr_data["eps_occ"] = curr_data["eps_occ"][perm_occ]
                     curr_data["eps_virt"] = curr_data["eps_virt"][perm_virt]
 
-                    # Update pair energies in the tracked basis
-                    if curr_data["Kd_mat"] is not None:
-                        curr_data["Kd_mat"] = curr_data["Kd_mat"][np.ix_(perm_occ, perm_virt)]
-                        Kd_pairs = curr_data["Kd_mat"][curr_data["i_pairs"], curr_data["a_pairs"]]
-                        curr_data["E_pairs"] = (curr_data["eps_virt"][curr_data["a_pairs"]] - curr_data["eps_occ"][curr_data["i_pairs"]]) - Kd_pairs
-                    else:
-                        curr_data["E_pairs"] = curr_data["eps_virt"][curr_data["a_pairs"]] - curr_data["eps_occ"][curr_data["i_pairs"]]
+                    # Kramers pairs: parallel transport inside each degenerate pair (SU(2) frame)
+                    S_occ, U_occ_list, n_deg_occ = align_degenerate_blocks(
+                        S_occ, U_occ_list, curr_data["eps_occ"], tol=degeneracy_tol_ev)
+                    S_virt, U_virt_list, n_deg_virt = align_degenerate_blocks(
+                        S_virt, U_virt_list, curr_data["eps_virt"], tol=degeneracy_tol_ev)
+                    curr_data["U_occ_alpha"], curr_data["U_occ_beta"] = U_occ_list
+                    curr_data["U_virt_alpha"], curr_data["U_virt_beta"] = U_virt_list
+
+                    # Update pair energies in the tracked basis (K^x and K^d permuted with the states)
+                    for key in ("Kd_mat", "Kx_mat"):
+                        if curr_data.get(key) is not None:
+                            curr_data[key] = curr_data[key][np.ix_(perm_occ, perm_virt)]
+                    curr_data["E_pairs"] = _pair_energies(curr_data, curr_data["i_pairs"], curr_data["a_pairs"])
 
                     # Update oscillator strengths in the tracked basis if computed
                     if curr_data["mu_sq_grid"] is not None:
@@ -878,19 +967,21 @@ def precompute_namd_data(config):
                     curr_data["eps_occ"] = curr_data["eps_occ"][perm_occ]
                     curr_data["eps_virt"] = curr_data["eps_virt"][perm_virt]
 
-                    # Update pair energies in the tracked basis
-                    if curr_data["Kd_mat"] is not None:
-                        curr_data["Kd_mat"] = curr_data["Kd_mat"][np.ix_(perm_occ, perm_virt)]
-                        Kd_pairs = curr_data["Kd_mat"][curr_data["i_pairs"], curr_data["a_pairs"]]
-                        curr_data["E_pairs"] = (curr_data["eps_virt"][curr_data["a_pairs"]] - curr_data["eps_occ"][curr_data["i_pairs"]]) - Kd_pairs
-                    else:
-                        curr_data["E_pairs"] = curr_data["eps_virt"][curr_data["a_pairs"]] - curr_data["eps_occ"][curr_data["i_pairs"]]
+                    # Update pair energies in the tracked basis (K^x and K^d permuted with the states)
+                    for key in ("Kd_mat", "Kx_mat"):
+                        if curr_data.get(key) is not None:
+                            curr_data[key] = curr_data[key][np.ix_(perm_occ, perm_virt)]
+                    curr_data["E_pairs"] = _pair_energies(curr_data, curr_data["i_pairs"], curr_data["a_pairs"])
 
                     # Update oscillator strengths in the tracked basis if computed
                     if curr_data["mu_sq_grid"] is not None:
                         mu_sq_grid = curr_data["mu_sq_grid"][np.ix_(perm_occ, perm_virt)]
                         curr_data["mu_sq_grid"] = mu_sq_grid
                         curr_data["f_pairs"] = (4.0 / 3.0) * (curr_data["E_pairs"] / HA_TO_EV) * mu_sq_grid[curr_data["i_pairs"], curr_data["a_pairs"]]
+
+            # Tracking statistics: states relabelled by the Hungarian assignment in this step
+            n_swap_occ = 0 if perm_occ is None else int(np.count_nonzero(perm_occ != np.arange(len(perm_occ))))
+            n_swap_virt = 0 if perm_virt is None else int(np.count_nonzero(perm_virt != np.arange(len(perm_virt))))
 
             # Completeness and tracking quality check
             min_diag_occ = np.min(np.real(np.diag(S_occ)))
@@ -921,7 +1012,9 @@ def precompute_namd_data(config):
                 eps_virt_curr=curr_data["eps_virt"],
                 S_occ=S_occ,
                 S_virt=S_virt,
-                max_norm_loss=max_loss
+                max_norm_loss=max_loss,
+                n_swap_occ=n_swap_occ,
+                n_swap_virt=n_swap_virt,
             )
 
         # Save single frame properties (frame 0 contains full pair basis; others are optional)
@@ -943,7 +1036,8 @@ def precompute_namd_data(config):
             )
 
         dt_f = time.time() - t0_frame
-        logger.info(f" done ({dt_f:.2f} s | {len(curr_data['E_pairs'])} active pairs)")
+        swaps = f" | relabelled occ {n_swap_occ}, virt {n_swap_virt}" if prev_data is not None else ""
+        logger.info(f" done ({dt_f:.2f} s | {len(curr_data['E_pairs'])} active pairs{swaps})")
         prev_data = curr_data
 
     # Save summary metadata with pair indices
@@ -969,6 +1063,7 @@ def precompute_namd_data(config):
         lowest_exc_energies=np.array(lowest_exc_energies),
         scissor=scissor,
         soc=soc,
+        n_atoms=len(syms0),
         f_convention=np.array("au_hartree"),
     )
 

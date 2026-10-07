@@ -325,8 +325,9 @@ def load_origin_frame_data(precompute_dir, k0, frame0=None):
             eps_occ = frame0["eps_occ"]
             eps_virt = frame0["eps_virt"]
 
-    qp_gap = float(eps_virt[0] - eps_occ[-1])
+    qp_gap = float(np.min(eps_virt) - np.max(eps_occ))
     return {
+        "lowest_exc": float(np.min(E_pairs)),
         "E_pairs": E_pairs,
         "f_pairs": f_pairs,
         "i_pairs": i_pairs,
@@ -358,7 +359,7 @@ def sample_origin_initial_states(
     origin_data = load_origin_frame_data(precompute_dir, k0, frame0=frame0)
     E_pairs = origin_data["E_pairs"]
     f_pairs = origin_data["f_pairs"]
-    qp_gap_k = origin_data["qp_gap"]
+    qp_gap_k = origin_data["lowest_exc"]   # same reference as the pump excess (lowest exciton)
 
     # Referenced pump energy preserves excess kinetic energy
     pump_energy_k = qp_gap_k + max(0.0, pump_excess_ev)

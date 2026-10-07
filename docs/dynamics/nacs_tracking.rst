@@ -62,5 +62,19 @@ A trivial crossing is a label swap between two orbitals that do not interact. In
 
    C_{IJ} = 1 - |S_{IJ}(t, t+\Delta t)|^2
 
-and a state is allowed to leave its own column only when :math:`|S_{II}| < 0.5`. An avoided crossing that still overlaps its own adiabatic label stays in the adiabatic basis that surface hopping propagates. The assignment is not a global diabatization.
+and a state is allowed to leave its own column only when :math:`|S_{II}| < 0.5`. An avoided crossing that still overlaps its own adiabatic label stays in the adiabatic basis that surface hopping propagates. The assignment is not a global diabatization. The number of relabelled states of each step is stored in the step files (``n_swap_occ``, ``n_swap_virt``) and printed in the log.
+
+Kramers Pairs of the SOC Spinors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each Kramers pair is exactly degenerate, so the diagonaliser returns it in an arbitrary SU(2) frame that
+changes from frame to frame; a U(1) phase per spinor cannot undo the rotation, which appears as a spurious
+coupling :math:`|S_{12}|/\Delta t` between the partners (up to 0.6/Δt in a random frame). After the Hungarian
+step the columns of every degenerate group :math:`G` (energies within ``tracking.degeneracy_tol_ev``,
+default 10\ :sup:`−5` eV) are rotated by :math:`R = V W^\dagger` from the SVD
+:math:`S_{GG} = W \Sigma V^\dagger`, so that :math:`S_{GG} R = W \Sigma W^\dagger` is Hermitian positive
+(parallel transport). Pair-diagonal quantities inside a degenerate group (:math:`K^x`, :math:`K^d`,
+:math:`|\mu|^2`) depend on that frame; only their trace does not, so they are replaced by the group
+average. In the hole channel the coupling between hole states :math:`a_j|\Phi_0\rangle` is
+:math:`d_{ij}^*`, which the dynamics uses for complex spinors (real orbitals: :math:`d_{ij}^* = d_{ij}`).
 

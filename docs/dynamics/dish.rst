@@ -116,7 +116,10 @@ In DISH, the transition rate :math:`k_{K \to J}^{\mathrm{DISH}}` is the product 
 
    k_{K \to J}^{\mathrm{DISH}} = \frac{P_{\mathrm{dec}, J} \cdot P_{\mathrm{hop}, J}}{\Delta t} \approx \frac{1}{\tau_{KJ}} \left[ \frac{|d_{KJ}|^2 \tau_{KJ}^2}{1 + \left( \frac{\Delta E_{KJ} \tau_{KJ}}{\hbar} \right)^2} \right] = |d_{KJ}|^2 \left[ \frac{\tau_{KJ}}{1 + \left( \frac{\Delta E_{KJ} \tau_{KJ}}{\hbar} \right)^2} \right]
 
-Apart from a standard factor of 2 arising from the full two-sided integration of the bath autocorrelation function, this expression is **mathematically identical to Fermi's Golden Rule with Lorentzian broadening** used in the Pauli Master Equation:
+Averaged over the Poisson-distributed ages of the coherence since the last decoherence event
+(:math:`\langle s^2 \rangle = 2\tau^2`), this becomes :math:`2|d_{KJ}|^2 \tau_{KJ}/[1 + (\Delta E_{KJ}\tau_{KJ}/\hbar)^2]`,
+**identical to Fermi's Golden Rule with Lorentzian broadening** used in the Pauli Master Equation (two-level
+tests reproduce it within 5–8 %):
 
 .. math::
 

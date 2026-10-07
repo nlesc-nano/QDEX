@@ -1,0 +1,81 @@
+"""NAMD fixes: K^x in tracked frames, Kramers-pair alignment, DISH targets, PME line widths."""
+import numpy as np
+import pytest
+
+from qdex.namd.precompute import (_pair_energies, _degenerate_groups, _group_average_pairs,
+                                  align_degenerate_blocks, align_spinor_phases_and_crossings)
+from qdex.namd.integrator import step_dish_batch
+from qdex.namd.master_equation import propagate_pme_tensor
+
+
+def test_tracked_pair_energies_keep_the_exchange():
+    rng = np.random.default_rng(1)
+    eps_o, eps_v = np.sort(rng.normal(-1, 0.3, 4)), np.sort(rng.normal(1, 0.3, 3))
+    Kx, Kd = rng.uniform(0, 0.02, (4, 3)), rng.uniform(0.1, 0.3, (4, 3))
+    i, a = np.repeat(np.arange(4), 3), np.tile(np.arange(3), 4)
+    d = dict(eps_occ=eps_o, eps_virt=eps_v, Kx_mat=Kx, Kd_mat=Kd, kx_factor=2.0)
+    E0 = eps_v[a] - eps_o[i] + 2 * Kx[i, a] - Kd[i, a]                    # frame 0 (singlets)
+    assert np.allclose(_pair_energies(d, i, a), E0)
+    # a relabelling of the states permutes K^x with them: same pair energies, permuted
+    po, pv = np.array([1, 0, 3, 2]), np.array([2, 0, 1])
+    d2 = dict(eps_occ=eps_o[po], eps_virt=eps_v[pv], Kx_mat=Kx[np.ix_(po, pv)], Kd_mat=Kd[np.ix_(po, pv)],
+              kx_factor=2.0)
+    E_perm = _pair_energies(d2, i, a).reshape(4, 3)
+    assert np.allclose(E_perm, E0.reshape(4, 3)[np.ix_(po, pv)])
+
+
+def test_kramers_pairs_are_parallel_transported():
+    rng = np.random.default_rng(0)
+    U_prev = np.linalg.qr(rng.normal(size=(8, 4)) + 1j * rng.normal(size=(8, 4)))[0]
+
+    def su2():
+        a, b = rng.normal(size=2) + 1j * rng.normal(size=2)
+        n = np.sqrt(abs(a) ** 2 + abs(b) ** 2)
+        return np.array([[a, -b.conj()], [b, a.conj()]]) / n
+    R = np.zeros((4, 4), complex)
+    R[:2, :2], R[2:, 2:] = su2(), su2()
+    U_next = U_prev @ R                                   # same states, new SU(2) frame per pair
+    S = U_prev.conj().T @ U_next
+    S1, (U1,), _ = align_spinor_phases_and_crossings(S, [U_next.copy()])
+    assert np.abs(S1 - np.diag(np.diag(S1))).max() > 0.1  # U(1) alone leaves a spurious coupling
+    S2, (U2,), n = align_degenerate_blocks(S1, [U1], np.array([0.0, 0.0, 1.0, 1.0]))
+    assert n == 2
+    assert np.allclose(S2, np.eye(4), atol=1e-12)
+    assert np.allclose(U_prev.conj().T @ U2, S2)          # the coefficients carry the same rotation
+
+
+def test_group_average_is_the_basis_independent_part():
+    M = np.arange(12.0).reshape(4, 3)
+    g = _degenerate_groups(np.array([0.0, 0.0, 1.0, 2.0]), 1e-5)
+    A = _group_average_pairs(M, g, [])
+    assert np.allclose(A[:2], M[:2].mean(axis=0)) and np.allclose(A[2:], M[2:])
+    assert A[:2].sum() == pytest.approx(M[:2].sum())
+
+
+def test_dish_never_lands_on_a_pair_that_is_not_stored():
+    np.random.seed(0)
+    n_states, n_traj = 3, 2000
+    C = np.zeros((n_states, n_traj), complex)
+    C[0], C[1], C[2] = np.sqrt(0.4), np.sqrt(0.3), np.sqrt(0.3)
+    allowed = np.ones((n_states, n_traj), bool)
+    allowed[2] = False
+    tau = np.full((n_states, n_states), 1.0)
+    _, act, hopped = step_dish_batch(C, np.zeros(n_traj, int), np.zeros((n_states, n_traj)), 5.0,
+                                     tau_mat=tau, beta=None, detailed_balance=False, allowed=allowed)
+    assert hopped.any() and not np.any(act == 2)
+
+
+def test_pme_pair_line_widths_and_detailed_balance():
+    d = np.array([[0.0, 0.01], [-0.01, 0.0]])
+    eps_v = np.array([1.0, 1.05])
+    P = np.array([[0.0, 1.0]])                            # one hole, electron in the upper state
+    kw = dict(E_mat=np.zeros((1, 2)), d_occ=np.zeros((1, 1)), d_virt=d, dt_fs=1.0, temp_k=300.0,
+              eps_occ=np.array([0.0]), eps_virt=eps_v)
+    tau = np.full((2, 2), 10.0)
+    P_pair = propagate_pme_tensor(P, tau_virt_mat=tau, tau_occ_mat=np.full((1, 1), 10.0), **kw)
+    P_unif = propagate_pme_tensor(P, tau_dec_fs=10.0, **kw)
+    assert np.allclose(P_pair, P_unif)                     # a uniform matrix equals the single tau
+    for _ in range(20000):                                 # long-time limit: Boltzmann
+        P = propagate_pme_tensor(P, tau_virt_mat=tau, tau_occ_mat=np.full((1, 1), 10.0), **kw)
+    assert P.sum() == pytest.approx(1.0)
+    assert P[0, 1] / P[0, 0] == pytest.approx(np.exp(-0.05 / (8.617333e-5 * 300.0)), rel=1e-3)

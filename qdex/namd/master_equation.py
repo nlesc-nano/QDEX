@@ -75,13 +75,18 @@ def propagate_pme_tensor(
     eps_virt=None,
     n_atoms=775,
     k_loss=None,
-    return_flux=False
+    return_flux=False,
+    tau_occ_mat=None,
+    tau_virt_mat=None,
 ):
     """
     Propagates exciton population matrix P_mat of shape (n_occ, n_virt) via the Pauli Master Equation.
     Fully vectorized using BLAS matrix operations: runs in ~0.2 s per step.
     Supports on-the-fly state-dependent EDC decoherence: ``tau_kj = hbar / |dE_kj| * (1 + C / E_kin)``.
     If return_flux=True, also returns instantaneous transition probability fluxes (flux_virt, flux_occ).
+    tau_occ_mat / tau_virt_mat: state-pair pure-dephasing times (fs, n_occ x n_occ / n_virt x n_virt, the
+    decoherence_times.npz of the precompute); when given they set the Lorentzian line widths, the same
+    times DISH uses, so that PME and DISH give the same golden-rule rates.
     """
     n_occ, n_virt = P_mat.shape
     dt = dt_fs / n_substeps
@@ -104,7 +109,9 @@ def propagate_pme_tensor(
         E_row = np.mean(E_mat, axis=0)
         dE_virt = E_row[np.newaxis, :] - E_row[:, np.newaxis]
 
-    if tau_dec_fs is None or str(tau_dec_fs).lower() in ("edc", "auto", "dynamic", "on_the_fly"):
+    if tau_virt_mat is not None:
+        lor_virt = tau_virt_mat / (1.0 + (dE_virt * tau_virt_mat / HBAR_EV_FS) ** 2)
+    elif tau_dec_fs is None or str(tau_dec_fs).lower() in ("edc", "auto", "dynamic", "on_the_fly"):
         # On-the-fly state-dependent EDC decoherence
         abs_dE_v = np.abs(dE_virt)
         tau_v = np.minimum(HBAR_EV_FS / np.maximum(abs_dE_v, 1e-4) * edc_factor, 50.0)
@@ -126,7 +133,9 @@ def propagate_pme_tensor(
         E_col = np.mean(E_mat, axis=1)
         dE_occ = E_col[np.newaxis, :] - E_col[:, np.newaxis]
 
-    if tau_dec_fs is None or str(tau_dec_fs).lower() in ("edc", "auto", "dynamic", "on_the_fly"):
+    if tau_occ_mat is not None:
+        lor_occ = tau_occ_mat / (1.0 + (dE_occ * tau_occ_mat / HBAR_EV_FS) ** 2)
+    elif tau_dec_fs is None or str(tau_dec_fs).lower() in ("edc", "auto", "dynamic", "on_the_fly"):
         abs_dE_o = np.abs(dE_occ)
         tau_o = np.minimum(HBAR_EV_FS / np.maximum(abs_dE_o, 1e-4) * edc_factor, 50.0)
         lor_occ = tau_o / (1.0 + (dE_occ * tau_o / HBAR_EV_FS) ** 2)

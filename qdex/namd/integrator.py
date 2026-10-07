@@ -234,6 +234,7 @@ def step_dish_batch(
     beta=None,
     detailed_balance=True,
     min_tau_fs=1.0,
+    allowed=None,
 ):
     """
     Decoherence-Induced Surface Hopping (DISH, Jaeger, Fischer, Prezhdo, JCP 2012)
@@ -249,6 +250,9 @@ def step_dish_batch(
            c_J = 1.0, c_{L != J} = 0.
          - If rejected: state J is quenched (c_J -> 0).
       3. If no hop occurred, renormalize the remaining non-zero amplitudes of trajectory tr.
+
+    allowed: optional bool array (n_states, n_trajectories); False marks targets that are not stored
+      pairs of the exciton basis (no hop there; the decoherence event still quenches the amplitude).
 
     Returns:
       C_new : updated complex ndarray of shape (n_states, n_trajectories)
@@ -280,6 +284,8 @@ def step_dish_batch(
 
     pop = np.abs(C_out)**2
     P_hop = pop * boltz
+    if allowed is not None:
+        P_hop = P_hop * np.asarray(allowed, dtype=bool)
 
     R2 = np.random.rand(n_states, n_traj)
     hop_cands = dec_events & (R2 < P_hop)

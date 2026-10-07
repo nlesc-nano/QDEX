@@ -53,7 +53,13 @@ The instantaneous rate constant :math:`k_{I \to J}` is obtained from second-orde
 
    k_{I \to J}(t) = 2 |d_{IJ}(t)|^2 \, \left[ \frac{\tau_{\mathrm{dec}}}{1 + \left( \frac{(E_J(t) - E_I(t)) \tau_{\mathrm{dec}}}{\hbar} \right)^2} \right] \times B_{IJ}(T)
 
-where :math:`d_{IJ}(t) = \langle \psi_I | \frac{\partial}{\partial t} | \psi_J \rangle` is the non-adiabatic coupling, and :math:`B_{IJ}(T)` enforces thermodynamic **detailed balance** at lattice temperature :math:`T`:
+where :math:`d_{IJ}(t) = \langle \psi_I | \frac{\partial}{\partial t} | \psi_J \rangle` is the non-adiabatic coupling.
+With ``dynamics.pme_tau: pairs`` (the default when ``decoherence_times.npz`` exists) the line width
+:math:`\tau_{\mathrm{dec}}` is the state-pair pure-dephasing time :math:`\tau_{IJ}` that DISH uses, so the
+two methods share their golden-rule rates; ``pme_tau: uniform`` takes the single ``tau_dec_fs`` (or the
+EDC formula). The energy gaps of the PME are orbital energy differences at fixed partner carrier, while
+DISH and FSSH use the pair energies (with :math:`K^d` and :math:`K^x`), so their equilibria differ by the
+spread of the binding energies over the window. :math:`B_{IJ}(T)` :math:`B_{IJ}(T)` enforces thermodynamic **detailed balance** at lattice temperature :math:`T`:
 
 .. math::
 

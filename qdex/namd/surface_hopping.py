@@ -183,6 +183,8 @@ def propagate_single_namd_origin(
     pme_flux_records=None,
     verbose=True,
     origin_idx=0,
+    pme_tau_mats=None,
+    n_atoms=775,
     n_origins=1
 ):
     """
@@ -201,7 +203,8 @@ def propagate_single_namd_origin(
         f_init = orig_data["f_pairs"]
         eps_occ_init = orig_data["eps_occ"]
         eps_virt_init = orig_data["eps_virt"]
-        qp_gap_init = orig_data["qp_gap"]
+        # same reference as origin 0 (mean_lowest_exc): the lowest exciton, not the QP gap
+        qp_gap_init = orig_data["lowest_exc"]
 
     # Preserve excess kinetic energy relative to instantaneous band edge
     pump_excess_ev = max(0.0, pump_energy_ev - qp_gap_0)
@@ -262,8 +265,8 @@ def propagate_single_namd_origin(
                 trajectory_energies[0, :] = E_init[active_surfaces]
 
         if eps_occ_init is not None and eps_virt_init is not None:
-            mean_excess_e[0] = np.mean(eps_virt_init[a_pairs0[active_surfaces]] - eps_virt_init[0])
-            mean_excess_h[0] = np.mean(eps_occ_init[-1] - eps_occ_init[i_pairs0[active_surfaces]])
+            mean_excess_e[0] = np.mean(eps_virt_init[a_pairs0[active_surfaces]] - eps_virt_init.min())
+            mean_excess_h[0] = np.mean(eps_occ_init.max() - eps_occ_init[i_pairs0[active_surfaces]])
         else:
             mean_excess_e[0] = 0.5 * (mean_energy[0] - qp_gap_init)
             mean_excess_h[0] = 0.5 * (mean_energy[0] - qp_gap_init)
@@ -296,6 +299,10 @@ def propagate_single_namd_origin(
 
             d_occ = (S_occ - S_occ.conj().T) / (2.0 * dt_nuc_fs)
             d_virt = (S_virt - S_virt.conj().T) / (2.0 * dt_nuc_fs)
+            # Hole channel: <Phi_i|d/dt Phi_j> for the hole states a_j|Phi_0> is conj(d_ij)
+            # (identical for real orbitals, not for SOC spinors)
+            if np.iscomplexobj(d_occ):
+                d_occ = d_occ.conj()
 
             # Diagonal-BSE pair energies
             if eps_occ_prev is not None and eps_virt_prev is not None:
@@ -385,15 +392,20 @@ def propagate_single_namd_origin(
 
             # 3. Surface Hopping (DISH vs CPA-FSSH)
             if method == "dish":
+                # hops only to stored pairs: the electron at fixed hole, then the hole at the new electron
+                allowed_e = (pair_lookup[curr_i][:, dyn_virt_active] >= 0).T
                 C_e, new_curr_a_sub, hopped_e = step_dish_batch(
                     C_e, curr_a_sub, E_e_kplus1_batch, dt_nuc_fs,
                     tau_mat=tau_virt_dyn, beta=beta,
-                    detailed_balance=detailed_balance,
+                    detailed_balance=detailed_balance, allowed=allowed_e,
                 )
+                a_after = np.where(ok_e & (new_curr_a_sub >= 0),
+                                   dyn_virt_active[np.maximum(new_curr_a_sub, 0)], curr_a)
+                allowed_h = pair_lookup[dyn_occ_active][:, a_after] >= 0
                 C_h, new_curr_i_sub, hopped_h = step_dish_batch(
                     C_h, curr_i_sub, E_h_kplus1_batch, dt_nuc_fs,
                     tau_mat=tau_occ_dyn, beta=beta,
-                    detailed_balance=detailed_balance,
+                    detailed_balance=detailed_balance, allowed=allowed_h,
                 )
 
                 if run_tr_sd and hop_records is not None:
@@ -624,8 +636,8 @@ def propagate_single_namd_origin(
             curr_a_new = np.array([p[1] for p in active_pairs])
             curr_i_new = np.array([p[0] for p in active_pairs])
             if eps_occ_curr is not None and eps_virt_curr is not None:
-                mean_excess_e[step_idx + 1] = np.mean(eps_virt_curr[curr_a_new] - eps_virt_curr[0])
-                mean_excess_h[step_idx + 1] = np.mean(eps_occ_curr[-1] - eps_occ_curr[curr_i_new])
+                mean_excess_e[step_idx + 1] = np.mean(eps_virt_curr[curr_a_new] - eps_virt_curr.min())
+                mean_excess_h[step_idx + 1] = np.mean(eps_occ_curr.max() - eps_occ_curr[curr_i_new])
             else:
                 mean_excess_e[step_idx + 1] = 0.5 * (mean_energy[step_idx + 1] - qp_gap_init)
                 mean_excess_h[step_idx + 1] = 0.5 * (mean_energy[step_idx + 1] - qp_gap_init)
@@ -648,8 +660,8 @@ def propagate_single_namd_origin(
         p_virt0 = np.sum(P_mat, axis=0)
         p_occ0 = np.sum(P_mat, axis=1)
         if eps_occ_init is not None and eps_virt_init is not None:
-            mean_excess_e[0] = np.sum(p_virt0 * (eps_virt_init - eps_virt_init[0]))
-            mean_excess_h[0] = np.sum(p_occ0 * (eps_occ_init[-1] - eps_occ_init))
+            mean_excess_e[0] = np.sum(p_virt0 * (eps_virt_init - eps_virt_init.min()))
+            mean_excess_h[0] = np.sum(p_occ0 * (eps_occ_init.max() - eps_occ_init))
         else:
             mean_excess_e[0] = 0.5 * (mean_energy[0] - qp_gap_init)
             mean_excess_h[0] = 0.5 * (mean_energy[0] - qp_gap_init)
@@ -701,6 +713,9 @@ def propagate_single_namd_origin(
                     eps_occ=eps_occ_curr,
                     eps_virt=eps_virt_curr,
                     k_loss=k_loss_mat,
+                    n_atoms=n_atoms,
+                    tau_occ_mat=None if pme_tau_mats is None else pme_tau_mats[0],
+                    tau_virt_mat=None if pme_tau_mats is None else pme_tau_mats[1],
                     return_flux=True,
                 )
                 pme_flux_records.append({
@@ -720,6 +735,9 @@ def propagate_single_namd_origin(
                     eps_occ=eps_occ_curr,
                     eps_virt=eps_virt_curr,
                     k_loss=k_loss_mat,
+                    n_atoms=n_atoms,
+                    tau_occ_mat=None if pme_tau_mats is None else pme_tau_mats[0],
+                    tau_virt_mat=None if pme_tau_mats is None else pme_tau_mats[1],
                 )
 
             P_vec = P_mat[i_pairs, a_pairs]
@@ -729,8 +747,8 @@ def propagate_single_namd_origin(
             p_virt = np.sum(P_mat, axis=0)
             p_occ = np.sum(P_mat, axis=1)
             if eps_occ_curr is not None and eps_virt_curr is not None:
-                mean_excess_e[step_idx + 1] = np.sum(p_virt * (eps_virt_curr - eps_virt_curr[0]))
-                mean_excess_h[step_idx + 1] = np.sum(p_occ * (eps_occ_curr[-1] - eps_occ_curr))
+                mean_excess_e[step_idx + 1] = np.sum(p_virt * (eps_virt_curr - eps_virt_curr.min()))
+                mean_excess_h[step_idx + 1] = np.sum(p_occ * (eps_occ_curr.max() - eps_occ_curr))
             else:
                 mean_excess_e[step_idx + 1] = 0.5 * (mean_energy[step_idx + 1] - qp_gap_init)
                 mean_excess_h[step_idx + 1] = 0.5 * (mean_energy[step_idx + 1] - qp_gap_init)
@@ -789,6 +807,10 @@ def run_namd_dynamics(config):
         )
 
     meta = np.load(meta_path)
+    seed = dyn_cfg.get("seed", None) if isinstance(dyn_cfg, dict) else None
+    if seed is not None:
+        np.random.seed(int(seed))    # reproducible hops, decoherence events and initial sampling
+        logger.info(f"  [NAMD] Random seed: {int(seed)}")
     n_frames = int(meta["n_frames"])
     dt_nuc_fs = float(meta["dt_nuc_fs"]) if "dt_nuc_fs" in meta else float(meta.get("dt_fs", 2.0))
 
@@ -850,8 +872,8 @@ def run_namd_dynamics(config):
             logger.info(
                 f"  [NAMD] Cumulant dephasing time of the lowest exciton: "
                 f"tau_dec = {tau_dec_fs:.2f} fs (gap fluctuation std: {std_g:.4f} eV). "
-                "Diagnostic only: each nuclear step starts from the active orbital, "
-                "so this time is not applied inside the step."
+                "Used as the PME line width (pme_tau: uniform or no decoherence_times.npz) and as the "
+                "uniform surface-hopping tau when decoherence_times.npz is missing."
             )
             decoherence = f"cumulant diagnostic ({tau_dec_fs:.1f} fs)"
         else:
@@ -951,6 +973,11 @@ def run_namd_dynamics(config):
         except Exception as e:
             logger.warning(f"  [NAMD:Warn] Failed loading {dec_file}: {e}")
 
+    if tau_occ_mat is None or tau_virt_mat is None:
+        tau_fallback = float(tau_dec_fs) if isinstance(tau_dec_fs, (int, float)) and tau_dec_fs > 0 else 20.0
+        logger.warning(f"  [NAMD:Warn] No state-pair decoherence times ('{dec_file}' missing or unreadable): "
+                       f"every pair gets tau = {tau_fallback:.1f} fs. DISH and the FSSH damping then use one "
+                       f"uniform dephasing time; run 'qdex --namd-decoherence' on the precompute first.")
     if tau_occ_mat is not None and tau_occ_mat.shape[0] >= n_occ:
         tau_occ_dyn = tau_occ_mat[np.ix_(dyn_occ_active, dyn_occ_active)]
     else:
@@ -964,6 +991,17 @@ def run_namd_dynamics(config):
         tau_val = float(tau_dec_fs) if isinstance(tau_dec_fs, (int, float)) and tau_dec_fs > 0 else 20.0
         tau_virt_dyn = np.full((n_virt_dyn, n_virt_dyn), tau_val)
         np.fill_diagonal(tau_virt_dyn, 500.0)
+
+    # PME line widths: the state-pair dephasing times of DISH (pme_tau: pairs, default when
+    # decoherence_times.npz exists) or the single tau / EDC of tau_dec_fs (pme_tau: uniform)
+    pme_tau_mode = str(dyn_cfg.get("pme_tau", "pairs")).lower()
+    pme_tau_mats = None
+    if pme_tau_mode == "pairs" and tau_occ_mat is not None and tau_virt_mat is not None \
+            and tau_occ_mat.shape[0] >= n_occ and tau_virt_mat.shape[0] >= n_virt:
+        pme_tau_mats = (np.asarray(tau_occ_mat, float)[:n_occ, :n_occ], np.asarray(tau_virt_mat, float)[:n_virt, :n_virt])
+        if method == "master_equation":
+            logger.info("  [NAMD] PME line widths from the state-pair dephasing times (as DISH).")
+    n_atoms_meta = int(meta["n_atoms"]) if "n_atoms" in meta.files else 775
 
     # Recombination & Photoluminescence Rates (Radiative & Non-Radiative)
     from qdex.hardness import (
@@ -1187,7 +1225,9 @@ def run_namd_dynamics(config):
             pme_flux_records=pme_flux_records,
             verbose=(not is_multi_origin or (calib and calib["is_fallback"]) or (m == 0)),
             origin_idx=m,
-            n_origins=n_origins
+            n_origins=n_origins,
+            pme_tau_mats=pme_tau_mats,
+            n_atoms=n_atoms_meta,
         )
         origin_results.append(res_m)
 
