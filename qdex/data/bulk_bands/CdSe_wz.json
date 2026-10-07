@@ -1,8 +1,8 @@
 {
  "sf": {
-  "vbm": 2.7639098618270626,
-  "cbm": 3.3664405933561024,
-  "gap": 0.6025307315290398,
+  "vbm": 2.420216637461725,
+  "cbm": 2.942264670262055,
+  "gap": 0.5220480328003299,
   "vbm_k": [
    0.0,
    0.0,
@@ -17,9 +17,9 @@
   "cbm_label": "Gamma"
  },
  "soc": {
-  "vbm": 2.885153008904653,
-  "cbm": 3.3666730481625278,
-  "gap": 0.4815200392578749,
+  "vbm": 2.541458545861568,
+  "cbm": 2.9425868902165107,
+  "gap": 0.4011283443549427,
   "vbm_k": [
    0.0,
    0.0,
@@ -40,208 +40,204 @@
  "gamma_characters_sf": [
   {
    "band": 0,
-   "energy": -9.6677,
+   "energy": -9.8222,
    "character": {
-    "Se-s": 0.847,
-    "Cd-s": 0.146
+    "Se-s": 0.859,
+    "Cd-s": 0.134
    }
   },
   {
    "band": 1,
-   "energy": -9.3169,
+   "energy": -9.5015,
    "character": {
-    "Se-s": 0.847,
-    "Cd-d": 0.086
+    "Se-s": 0.857,
+    "Cd-d": 0.081
    }
   },
   {
    "band": 2,
-   "energy": -5.1017,
+   "energy": -5.3414,
    "character": {
-    "Cd-d": 0.947,
-    "Se-p": 0.05
+    "Cd-d": 0.952
    }
   },
   {
    "band": 3,
-   "energy": -5.0972,
+   "energy": -5.3374,
    "character": {
-    "Cd-d": 0.946,
-    "Se-p": 0.052
+    "Cd-d": 0.95
    }
   },
   {
    "band": 4,
-   "energy": -5.0971,
+   "energy": -5.3373,
    "character": {
-    "Cd-d": 0.946,
-    "Se-p": 0.052
+    "Cd-d": 0.95
    }
   },
   {
    "band": 5,
-   "energy": -5.0356,
+   "energy": -5.282,
    "character": {
-    "Cd-d": 0.955
+    "Cd-d": 0.959
    }
   },
   {
    "band": 6,
-   "energy": -5.0355,
+   "energy": -5.2819,
    "character": {
-    "Cd-d": 0.955
+    "Cd-d": 0.959
    }
   },
   {
    "band": 7,
-   "energy": -4.7903,
+   "energy": -5.0618,
    "character": {
-    "Cd-d": 0.994
+    "Cd-d": 0.995
    }
   },
   {
    "band": 8,
-   "energy": -4.7903,
+   "energy": -5.0617,
    "character": {
-    "Cd-d": 0.994
+    "Cd-d": 0.995
    }
   },
   {
    "band": 9,
-   "energy": -4.7313,
+   "energy": -5.0092,
    "character": {
     "Cd-d": 0.997
    }
   },
   {
    "band": 10,
-   "energy": -4.7312,
+   "energy": -5.0091,
    "character": {
     "Cd-d": 0.997
    }
   },
   {
    "band": 11,
-   "energy": -4.4819,
+   "energy": -4.7827,
    "character": {
-    "Cd-d": 0.935,
-    "Se-s": 0.052
+    "Cd-d": 0.94
    }
   },
   {
    "band": 12,
-   "energy": -1.4646,
+   "energy": -1.6082,
    "character": {
-    "Se-p": 0.649,
-    "Cd-s": 0.26,
-    "Cd-p": 0.078
+    "Se-p": 0.653,
+    "Cd-s": 0.265,
+    "Cd-p": 0.07
    }
   },
   {
    "band": 13,
-   "energy": 2.0333,
+   "energy": 1.7379,
    "character": {
-    "Se-p": 0.842,
-    "Cd-p": 0.092,
-    "Cd-d": 0.057
+    "Se-p": 0.848,
+    "Cd-p": 0.09,
+    "Cd-d": 0.053
    }
   },
   {
    "band": 14,
-   "energy": 2.0335,
+   "energy": 1.7381,
    "character": {
-    "Se-p": 0.842,
-    "Cd-p": 0.092,
-    "Cd-d": 0.057
+    "Se-p": 0.848,
+    "Cd-p": 0.09,
+    "Cd-d": 0.053
    }
   },
   {
    "band": 15,
-   "energy": 2.7198,
+   "energy": 2.3804,
    "character": {
-    "Se-p": 0.883,
-    "Cd-d": 0.075
+    "Se-p": 0.887,
+    "Cd-d": 0.071
    }
   },
   {
    "band": 16,
-   "energy": 2.7637,
+   "energy": 2.4199,
    "character": {
-    "Se-p": 0.885,
-    "Cd-d": 0.084
+    "Se-p": 0.89,
+    "Cd-d": 0.079
    }
   },
   {
    "band": 17,
-   "energy": 2.7639,
+   "energy": 2.4202,
    "character": {
-    "Se-p": 0.885,
-    "Cd-d": 0.084
+    "Se-p": 0.89,
+    "Cd-d": 0.079
    }
   },
   {
    "band": 18,
-   "energy": 3.3664,
+   "energy": 2.9423,
    "character": {
-    "Cd-s": 1.121
+    "Cd-s": 1.107
    }
   },
   {
    "band": 19,
-   "energy": 4.9949,
+   "energy": 4.6046,
    "character": {
-    "Cd-s": 0.573,
-    "Cd-p": 0.328,
-    "Se-p": 0.095
+    "Cd-s": 0.577,
+    "Cd-p": 0.316,
+    "Se-p": 0.104
    }
   },
   {
    "band": 20,
-   "energy": 8.8276,
+   "energy": 8.471,
    "character": {
-    "Cd-p": 0.729,
-    "Se-d": 0.222
+    "Cd-p": 0.741,
+    "Se-d": 0.212
    }
   },
   {
    "band": 21,
-   "energy": 8.8276,
+   "energy": 8.471,
    "character": {
-    "Cd-p": 0.729,
-    "Se-d": 0.222
+    "Cd-p": 0.741,
+    "Se-d": 0.212
    }
   },
   {
    "band": 22,
-   "energy": 9.1762,
+   "energy": 8.8081,
    "character": {
-    "Cd-p": 0.733,
-    "Se-d": 0.236
+    "Cd-p": 0.746,
+    "Se-d": 0.224
    }
   },
   {
    "band": 23,
-   "energy": 10.0983,
+   "energy": 9.6936,
    "character": {
-    "Cd-p": 0.677,
-    "Se-d": 0.24
+    "Cd-p": 0.694,
+    "Se-d": 0.226
    }
   },
   {
    "band": 24,
-   "energy": 10.0983,
+   "energy": 9.6936,
    "character": {
-    "Cd-p": 0.677,
-    "Se-d": 0.24
+    "Cd-p": 0.694,
+    "Se-d": 0.226
    }
   },
   {
    "band": 25,
-   "energy": 10.6577,
+   "energy": 10.1527,
    "character": {
-    "Cd-p": 0.625,
-    "Cd-s": 0.178,
-    "Se-p": 0.132
+    "Cd-p": 0.633,
+    "Cd-s": 0.166,
+    "Se-p": 0.144
    }
   }
  ],
@@ -253,14 +249,14 @@
    2,
    12
   ],
-  "min_fraction": 0.9346229023614481,
+  "min_fraction": 0.9398496824722615,
   "bands_soc": [
    4,
    24
   ],
-  "level_sf": -4.8258472145824145,
-  "level_soc": -4.828406217788896,
-  "depth_below_vbm_sf": 7.589757076409477
+  "level_sf": -5.092468998211408,
+  "level_soc": -5.094924892552391,
+  "depth_below_vbm_sf": 7.512685635673133
  },
  "semicore_candidates": [
   {
@@ -271,14 +267,14 @@
     2,
     12
    ],
-   "min_fraction": 0.9346229023614481,
+   "min_fraction": 0.9398496824722615,
    "bands_soc": [
     4,
     24
    ],
-   "level_sf": -4.8258472145824145,
-   "level_soc": -4.828406217788896,
-   "depth_below_vbm_sf": 7.589757076409477
+   "level_sf": -5.092468998211408,
+   "level_soc": -5.094924892552391,
+   "depth_below_vbm_sf": 7.512685635673133
   },
   {
    "element": "Se",
@@ -288,17 +284,17 @@
     0,
     2
    ],
-   "min_fraction": 0.8470766733579623,
+   "min_fraction": 0.8568366212387372,
    "bands_soc": [
     0,
     4
    ],
-   "level_sf": -9.339265161218702,
-   "level_soc": -9.34033019078645,
-   "depth_below_vbm_sf": 12.103175023045765
+   "level_sf": -9.521918894931526,
+   "level_soc": -9.52291767525047,
+   "depth_below_vbm_sf": 11.942135532393252
   }
  ],
- "sf_vs_cp2k_max_dev_ev": 5.0042909798264645e-06,
+ "sf_vs_cp2k_max_dev_ev": 4.87370610002813e-06,
  "name": "CdSe_wz",
  "functional": "PBE",
  "basis": "DZVP-MOLOPT-PBE-GTH",
@@ -308,23 +304,33 @@
  },
  "cell_ang": [
   [
-   2.173043,
-   -3.763821,
+   2.199619,
+   -3.809852,
    0.0
   ],
   [
-   2.173043,
-   3.763821,
+   2.199619,
+   3.809852,
    0.0
   ],
   [
    0.0,
    0.0,
-   7.08984
+   7.176549
   ]
  ],
  "n_bands_sf": 38,
  "spacegroup": "P6_3mc",
  "formula": "CdSe",
- "cif": "CdSe_wz.cif"
+ "cif": "CdSe_wz.cif",
+ "lattice": {
+  "type": "PBE equilibrium lattice (energy-volume minimum at the level of theory of the dots)",
+  "a": 4.3992,
+  "scale_vs_cif": 1.01223,
+  "a_cif": 4.3461,
+  "bulk_modulus_gpa": 45.1,
+  "c": 7.1766,
+  "c_cif": 7.0898,
+  "note": "isotropic scan: c/a and u of the CIF"
+ }
 }

@@ -83,50 +83,94 @@ HARDNESS_DICT = {
 #     E_g(Spin-Free) = E_g(with SOC) + 2/3 * Delta_so(CB).
 #
 # Monomer values are computed with CP2K (DZVP-RI/GTH/PBE) then evGW.
-# Bulk PBE gaps (index 7) are computed at the level of theory of the QD calculations: CP2K PBE,
-# DZVP-MOLOPT-PBE-GTH, GTH-PBE (POTENTIAL_UZH), lattice of the QDSpaceWebApp bulk CIF; spin-free,
-# fundamental gap along the high-symmetry path (qdex/data/bulk_bands/<name>.json, made with
-# qdex.bulk_soc, which also holds the PBE+SOC gaps). PbTe, CdSe (wurtzite) are in data/bulk_bands only.
-# Inverted gap systems (InAs, InSb, HgS, HgSe, HgTe) use negative PBE values to ensure correct scissor
-# scaling: E(Gamma1, s) - E(Gamma15, p) at Gamma.
+# BULK PBE GAP (index 7) AND THE BULK QP SHIFT:
+# -------------------------------------------
+# The bulk QP shift applied to the dots is Delta_bulk = E_g(QSGW, index 8) - E_g(PBE, index 7).
+# The QSGW gaps are literature values at the experimental lattice constant (index 2); QSGW is
+# self-consistent, so they do not depend on a DFT starting point. The PBE gap must instead be
+# computed at the level of theory of the dot calculations (CP2K PBE, DZVP-MOLOPT-PBE-GTH, GTH-PBE
+# of POTENTIAL_UZH) AND at the same lattice as the QSGW reference: gaps change with volume by several
+# eV per unit strain, so a PBE gap at another lattice would put a strain effect into Delta_bulk
+# (GaAs: 0.50 eV at a_exp, 0.02 eV at its PBE lattice, 1.8% larger). Index 7 is therefore the
+# spin-free PBE gap at a_exp (fundamental gap along the high-symmetry path; for zinc blende with an
+# inverted PBE band order - HgS, HgSe, HgTe, InAs, InSb - the negative E(Gamma1, s) - E(Gamma15, p)).
+# Delta_bulk is then a self-energy correction at fixed geometry, which transfers to the dots with
+# their PBE-relaxed geometries. MATERIAL_DB_BULK_PBE below keeps the PBE gaps at both the
+# experimental and the PBE equilibrium lattice; the bulk bands drawn over the fuzzy bands
+# (qdex/data/bulk_bands) are at the PBE lattice, like the dots. Computed with qdex.bulk_soc;
+# inputs and analysis in benchmarks/bulk_bands, see docs/electronic_structure/bulk_bands.rst.
 
 MATERIAL_DB = {
     "CS3BI2BR9": (3.9, 24.0, 8.01, 2.55, 11.7, 0.57, 0.021, 3.33, 4.35, 7.850, -5.5000, -1.8500, -7.2000, 0.1500),
     # Halide Perovskites (Cubic Phase Benchmarks, Spin-Free PBE & QSGW)
-    "CSPBCL3": (4.0, 25.0, 5.6, 3.0, 20.0, 0.15, 0.022, 1.955, 4.20, 7.604, -4.7512, -1.5076, -6.5706, 0.3314),
-    "CSPBBR3": (4.8, 35.0, 5.83, 2.3, 25.0, 0.12, 0.018, 1.533, 3.40, 7.9149, -4.7779, -1.6961, -6.3775, 0.4555),
-    "CSPBI3": (5.1, 60.0, 6.2, 1.73, 30.0, 0.1, 0.015, 0.977, 2.80, 8.3726, -4.4874, -1.7988, -5.6323, 0.3893),
+    "CSPBCL3": (4.0, 25.0, 5.6, 3.0, 20.0, 0.15, 0.022, 1.771, 4.20, 7.604, -4.7512, -1.5076, -6.5706, 0.3314),
+    "CSPBBR3": (4.8, 35.0, 5.83, 2.3, 25.0, 0.12, 0.018, 1.278, 3.40, 7.9149, -4.7779, -1.6961, -6.3775, 0.4555),
+    "CSPBI3": (5.1, 60.0, 6.2, 1.73, 30.0, 0.1, 0.015, 0.832, 2.80, 8.3726, -4.4874, -1.7988, -5.6323, 0.3893),
     "MAPBI3": (6.5, 45.0, 6.27, 1.55, 30.0, 0.1, 0.015, 1.55, 2.73),
     "FAPBI3": (6.2, 50.0, 6.36, 1.48, 28.0, 0.1, 0.015, 1.45, 2.60),
 
     # II–VI Semiconductors (Zinc-Blende, Spin-Free PBE & QSGW corrected with 1/3 Delta_so)
-    "ZNS": (5.1, 25.0, 5.41, 3.6, 8.9, 0.28, 0.043, 2.105, 4.17, 4.8204, -6.6591, -3.208, -8.2883, -1.0303),
-    "ZNSE": (5.9, 38.0, 5.67, 2.7, 8.6, 0.17, 0.031, 1.263, 3.26, 4.9394, -6.4914, -3.1993, -7.9032, -1.063),
-    "ZNTE": (6.7, 52.0, 6.1, 2.26, 9.8, 0.12, 0.026, 1.199, 2.96, 5.1907, -5.789, -2.8062, -7.0003, -0.901),
-    "CDS": (5.4, 30.0, 5.82, 2.42, 8.9, 0.16, 0.037, 1.073, 2.78, 5.1533, -6.598, -3.88, -8.2128, -1.8481),
-    "CDSE": (6.2, 56.0, 6.05, 1.74, 9.5, 0.13, 0.026, 0.551, 2.19, 5.31331, -6.4196, -3.7852, -7.8177, -1.7884),
-    "CDTE": (7.1, 73.0, 6.48, 1.44, 10.2, 0.1, 0.021, 0.621, 2.12, 5.4433, -5.7978, -2.9767, -6.9951, -0.9143),
-    "HGS": (11.3, 50.0, 5.85, 0.5, 13.0, 0.2, 0.03, -0.483, 0.31, 5.0759, -6.8468, -4.6185, -8.0873, -2.6135),
-    "HGSE": (14.0, 460.0, 6.08, 0.0, 18.0, 0.04, 0.017, -0.946, 0.05, 5.2017, -6.5897, -4.4284, -7.6523, -2.4936),
-    "HGTE": (15.0, 400.0, 6.46, 0.0, 20.0, 0.03, 0.015, -0.803, 0.23, 5.4091, -5.9729, -3.7913, -6.9007, -1.9993),
+    "ZNS": (5.1, 25.0, 5.41, 3.6, 8.9, 0.28, 0.043, 2.051, 4.17, 4.8204, -6.6591, -3.208, -8.2883, -1.0303),
+    "ZNSE": (5.9, 38.0, 5.67, 2.7, 8.6, 0.17, 0.031, 1.252, 3.26, 4.9394, -6.4914, -3.1993, -7.9032, -1.063),
+    "ZNTE": (6.7, 52.0, 6.1, 2.26, 9.8, 0.12, 0.026, 1.225, 2.96, 5.1907, -5.789, -2.8062, -7.0003, -0.901),
+    "CDS": (5.4, 30.0, 5.82, 2.42, 8.9, 0.16, 0.037, 1.146, 2.78, 5.1533, -6.598, -3.88, -8.2128, -1.8481),
+    "CDSE": (6.2, 56.0, 6.05, 1.74, 9.5, 0.13, 0.026, 0.644, 2.19, 5.31331, -6.4196, -3.7852, -7.8177, -1.7884),
+    "CDTE": (7.1, 73.0, 6.48, 1.44, 10.2, 0.1, 0.021, 0.740, 2.12, 5.4433, -5.7978, -2.9767, -6.9951, -0.9143),
+    "HGS": (11.3, 50.0, 5.85, 0.5, 13.0, 0.2, 0.03, -0.421, 0.31, 5.0759, -6.8468, -4.6185, -8.0873, -2.6135),
+    "HGSE": (14.0, 460.0, 6.08, 0.0, 18.0, 0.04, 0.017, -0.872, 0.05, 5.2017, -6.5897, -4.4284, -7.6523, -2.4936),
+    "HGTE": (15.0, 400.0, 6.46, 0.0, 20.0, 0.03, 0.015, -0.665, 0.23, 5.4091, -5.9729, -3.7913, -6.9007, -1.9993),
 
     # III–V Semiconductors (Zinc-Blende, Spin-Free PBE & QSGW corrected with 1/3 Delta_so)
-    "ALP": (7.5, 15.0, 5.46, 2.45, 10.0, 0.2, 0.05, 1.678, 2.74, 5.1769, -6.4313, -4.4894, -8.2744, -2.4365),
-    "ALAS": (8.2, 30.0, 5.66, 2.16, 10.1, 0.15, 0.049, 1.541, 2.46, 5.2267, -6.2214, -4.1183, -7.8386, -2.1083),
-    "ALSB": (10.2, 60.0, 6.14, 1.62, 12.0, 0.14, 0.036, 1.245, 1.80, 5.5593, -5.9163, -3.9868, -7.301, -2.1319),
-    "GAP": (9.1, 15.0, 5.45, 2.26, 11.1, 0.15, 0.049, 1.634, 2.49, 5.3208, -6.562, -4.5789, -8.2171, -2.8192),
-    "GAAS": (10.9, 100.0, 5.65, 1.42, 13.1, 0.067, 0.036, 0.110, 1.89, 5.4503, -6.3334, -4.4405, -7.7475, -2.7198),
-    "GASB": (14.4, 200.0, 6.1, 0.73, 15.7, 0.04, 0.028, 0.024, 1.20, 5.7221, -6.0195, -4.5359, -7.2596, -2.9446),
-    "INP": (9.6, 150.0, 5.87, 1.34, 12.4, 0.08, 0.042, 0.583, 1.65, 5.6309, -6.5944, -4.8483, -8.0539, -3.0678),
-    "INAS": (11.8, 340.0, 6.06, 0.35, 15.0, 0.023, 0.029, -0.365, 0.80, 5.697, -6.4406, -4.8382, -7.7358, -3.1218),
-    "INSB": (15.7, 650.0, 6.48, 0.17, 17.9, 0.014, 0.023, -0.552, 0.77, 5.9465, -6.184, -4.6223, -7.3335, -3.0342),
+    "ALP": (7.5, 15.0, 5.46, 2.45, 10.0, 0.2, 0.05, 1.667, 2.74, 5.1769, -6.4313, -4.4894, -8.2744, -2.4365),
+    "ALAS": (8.2, 30.0, 5.66, 2.16, 10.1, 0.15, 0.049, 1.522, 2.46, 5.2267, -6.2214, -4.1183, -7.8386, -2.1083),
+    "ALSB": (10.2, 60.0, 6.14, 1.62, 12.0, 0.14, 0.036, 1.208, 1.80, 5.5593, -5.9163, -3.9868, -7.301, -2.1319),
+    "GAP": (9.1, 15.0, 5.45, 2.26, 11.1, 0.15, 0.049, 1.632, 2.49, 5.3208, -6.562, -4.5789, -8.2171, -2.8192),
+    "GAAS": (10.9, 100.0, 5.65, 1.42, 13.1, 0.067, 0.036, 0.496, 1.89, 5.4503, -6.3334, -4.4405, -7.7475, -2.7198),
+    "GASB": (14.4, 200.0, 6.1, 0.73, 15.7, 0.04, 0.028, 0.156, 1.20, 5.7221, -6.0195, -4.5359, -7.2596, -2.9446),
+    "INP": (9.6, 150.0, 5.87, 1.34, 12.4, 0.08, 0.042, 0.680, 1.65, 5.6309, -6.5944, -4.8483, -8.0539, -3.0678),
+    "INAS": (11.8, 340.0, 6.06, 0.35, 15.0, 0.023, 0.029, -0.247, 0.80, 5.697, -6.4406, -4.8382, -7.7358, -3.1218),
+    "INSB": (15.7, 650.0, 6.48, 0.17, 17.9, 0.014, 0.023, -0.153, 0.77, 5.9465, -6.184, -4.6223, -7.3335, -3.0342),
 
     # IV–VI Semiconductors
-    "PBS": (17.2, 200.0, 5.94, 0.41, 23.0, 0.09, 0.027, 0.317, 0.73, 7.2378, -6.638, -4.3253, -8.128, -2.3724),
-    "PBSE": (22.9, 460.0, 6.12, 0.27, 30.0, 0.07, 0.017, 0.238, 0.65, 7.3935, -6.5104, -4.2415, -7.8234, -2.3177),
+    "PBS": (17.2, 200.0, 5.94, 0.41, 23.0, 0.09, 0.027, 0.253, 0.73, 7.2378, -6.638, -4.3253, -8.128, -2.3724),
+    "PBSE": (22.9, 460.0, 6.12, 0.27, 30.0, 0.07, 0.017, 0.139, 0.65, 7.3935, -6.5104, -4.2415, -7.8234, -2.3177),
 
     "DEFAULT": (1.0, 1.0, 5.0, 0.0, 1.0, 1.0, 0.02, 0.00, 0.00)
 
+}
+
+# Bulk PBE gaps (eV, spin-free) at the level of theory of the dots, at the experimental lattice
+# constant a_exp (= MATERIAL_DB index 2; gap_exp_lattice = MATERIAL_DB index 7) and at the PBE
+# equilibrium lattice a_pbe (energy-volume minimum with the same basis, pseudopotentials and cutoff;
+# the bulk bands of the fuzzy-band overlay are at a_pbe). Lattice constants in A (conventional cell;
+# wurtzite: hexagonal a, isotropic scan with c/a and u of the CIF). Negative gaps: inverted band order
+# E(Gamma1) - E(Gamma15). B0: bulk modulus of the energy-volume fit (GPa).
+MATERIAL_DB_BULK_PBE = {
+    "CSPBCL3": dict(a_exp=5.600, gap_exp_lattice=1.771, a_pbe=5.759, gap_pbe_lattice=2.113, B0=21.6),
+    "CSPBBR3": dict(a_exp=5.830, gap_exp_lattice=1.278, a_pbe=6.024, gap_pbe_lattice=1.671, B0=18.3),
+    "CSPBI3": dict(a_exp=6.200, gap_exp_lattice=0.832, a_pbe=6.417, gap_pbe_lattice=1.207, B0=15.2),
+    "ZNS": dict(a_exp=5.410, gap_exp_lattice=2.051, a_pbe=5.424, gap_pbe_lattice=2.018, B0=75.2),
+    "ZNSE": dict(a_exp=5.670, gap_exp_lattice=1.252, a_pbe=5.752, gap_pbe_lattice=1.085, B0=56.7),
+    "ZNTE": dict(a_exp=6.100, gap_exp_lattice=1.225, a_pbe=6.206, gap_pbe_lattice=0.984, B0=42.4),
+    "CDS": dict(a_exp=5.820, gap_exp_lattice=1.146, a_pbe=5.947, gap_pbe_lattice=1.004, B0=53.7),
+    "CDSE": dict(a_exp=6.050, gap_exp_lattice=0.644, a_pbe=6.217, gap_pbe_lattice=0.474, B0=45.3),
+    "CDTE": dict(a_exp=6.480, gap_exp_lattice=0.740, a_pbe=6.630, gap_pbe_lattice=0.530, B0=37.0),
+    "HGS": dict(a_exp=5.850, gap_exp_lattice=-0.421, a_pbe=6.013, gap_pbe_lattice=-0.534, B0=50.0),
+    "HGSE": dict(a_exp=6.080, gap_exp_lattice=-0.872, a_pbe=6.285, gap_pbe_lattice=-1.004, B0=42.8),
+    "HGTE": dict(a_exp=6.460, gap_exp_lattice=-0.665, a_pbe=6.679, gap_pbe_lattice=-0.908, B0=35.2),
+    "ALP": dict(a_exp=5.460, gap_exp_lattice=1.667, a_pbe=5.511, gap_pbe_lattice=1.724, B0=81.3),
+    "ALAS": dict(a_exp=5.660, gap_exp_lattice=1.522, a_pbe=5.738, gap_pbe_lattice=1.592, B0=66.6),
+    "ALSB": dict(a_exp=6.140, gap_exp_lattice=1.208, a_pbe=6.243, gap_pbe_lattice=1.212, B0=48.6),
+    "GAP": dict(a_exp=5.450, gap_exp_lattice=1.632, a_pbe=5.433, gap_pbe_lattice=1.614, B0=85.9),
+    "GAAS": dict(a_exp=5.650, gap_exp_lattice=0.496, a_pbe=5.774, gap_pbe_lattice=0.022, B0=55.0),
+    "GASB": dict(a_exp=6.100, gap_exp_lattice=0.156, a_pbe=6.270, gap_pbe_lattice=-0.425, B0=39.7),
+    "INP": dict(a_exp=5.870, gap_exp_lattice=0.680, a_pbe=5.978, gap_pbe_lattice=0.377, B0=59.1),
+    "INAS": dict(a_exp=6.060, gap_exp_lattice=-0.247, a_pbe=6.204, gap_pbe_lattice=-0.603, B0=48.7),
+    "INSB": dict(a_exp=6.480, gap_exp_lattice=-0.153, a_pbe=6.661, gap_pbe_lattice=-0.622, B0=36.6),
+    "PBS": dict(a_exp=5.940, gap_exp_lattice=0.253, a_pbe=6.040, gap_pbe_lattice=0.421, B0=52.7),
+    "PBSE": dict(a_exp=6.120, gap_exp_lattice=0.139, a_pbe=6.241, gap_pbe_lattice=0.325, B0=46.6),
+    "PBTE": dict(a_exp=None, gap_exp_lattice=None, a_pbe=6.584, gap_pbe_lattice=0.616, B0=39.8),
+    "CDSE_WZ": dict(a_exp=None, gap_exp_lattice=None, a_pbe=4.399, gap_pbe_lattice=0.522, B0=45.1),
 }
 
 # Core inorganic elements for each material (ignores organic ligands like MA/FA)

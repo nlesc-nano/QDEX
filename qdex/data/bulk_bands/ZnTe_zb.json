@@ -1,8 +1,8 @@
 {
  "sf": {
-  "vbm": 3.2034853376669807,
-  "cbm": 4.40256471535933,
-  "gap": 1.1990793776923492,
+  "vbm": 2.7657287288917725,
+  "cbm": 3.749492418737805,
+  "gap": 0.9837636898460325,
   "vbm_k": [
    0.0,
    0.0,
@@ -17,9 +17,9 @@
   "cbm_label": "Gamma"
  },
  "soc": {
-  "vbm": 3.501229285046329,
-  "cbm": 4.402564728642812,
-  "gap": 0.9013354435964827,
+  "vbm": 3.0604493297378172,
+  "cbm": 3.749492461758354,
+  "gap": 0.6890431320205366,
   "vbm_k": [
    0.0,
    0.0,
@@ -40,137 +40,137 @@
  "gamma_characters_sf": [
   {
    "band": 0,
-   "energy": -8.5559,
+   "energy": -8.7075,
    "character": {
-    "Te-s": 0.717,
-    "Zn-s": 0.27
+    "Te-s": 0.742,
+    "Zn-s": 0.244
    }
   },
   {
    "band": 1,
-   "energy": -3.6929,
+   "energy": -3.9746,
    "character": {
-    "Zn-d": 0.958
+    "Zn-d": 0.962
    }
   },
   {
    "band": 2,
-   "energy": -3.6927,
+   "energy": -3.9744,
    "character": {
-    "Zn-d": 0.958
+    "Zn-d": 0.962
    }
   },
   {
    "band": 3,
-   "energy": -3.6927,
+   "energy": -3.9744,
    "character": {
-    "Zn-d": 0.958
+    "Zn-d": 0.962
    }
   },
   {
    "band": 4,
-   "energy": -3.4609,
+   "energy": -3.7677,
    "character": {
-    "Zn-d": 0.996
+    "Zn-d": 0.997
    }
   },
   {
    "band": 5,
-   "energy": -3.4609,
+   "energy": -3.7677,
    "character": {
-    "Zn-d": 0.996
+    "Zn-d": 0.997
    }
   },
   {
    "band": 6,
-   "energy": 3.2032,
+   "energy": 2.7654,
    "character": {
-    "Te-p": 0.843,
-    "Zn-d": 0.092,
-    "Zn-p": 0.058
+    "Te-p": 0.849,
+    "Zn-d": 0.087,
+    "Zn-p": 0.057
    }
   },
   {
    "band": 7,
-   "energy": 3.2035,
+   "energy": 2.7657,
    "character": {
-    "Te-p": 0.843,
-    "Zn-d": 0.092,
-    "Zn-p": 0.058
+    "Te-p": 0.849,
+    "Zn-d": 0.087,
+    "Zn-p": 0.057
    }
   },
   {
    "band": 8,
-   "energy": 3.2035,
+   "energy": 2.7657,
    "character": {
-    "Te-p": 0.843,
-    "Zn-d": 0.092,
-    "Zn-p": 0.058
+    "Te-p": 0.849,
+    "Zn-d": 0.087,
+    "Zn-p": 0.057
    }
   },
   {
    "band": 9,
-   "energy": 4.4026,
+   "energy": 3.7495,
    "character": {
-    "Zn-s": 1.092
+    "Zn-s": 1.071
    }
   },
   {
    "band": 10,
-   "energy": 7.653,
+   "energy": 7.2514,
    "character": {
-    "Zn-p": 0.718,
-    "Te-d": 0.211
+    "Zn-p": 0.728,
+    "Te-d": 0.204
    }
   },
   {
    "band": 11,
-   "energy": 7.653,
+   "energy": 7.2514,
    "character": {
-    "Zn-p": 0.718,
-    "Te-d": 0.211
+    "Zn-p": 0.728,
+    "Te-d": 0.204
    }
   },
   {
    "band": 12,
-   "energy": 7.654,
+   "energy": 7.253,
    "character": {
-    "Zn-p": 0.718,
-    "Te-d": 0.211
+    "Zn-p": 0.728,
+    "Te-d": 0.204
    }
   },
   {
    "band": 13,
-   "energy": 14.1386,
+   "energy": 13.7054,
    "character": {
-    "Te-d": 0.7,
-    "Zn-d": 0.3
+    "Te-d": 0.702,
+    "Zn-d": 0.298
    }
   },
   {
    "band": 14,
-   "energy": 14.1386,
+   "energy": 13.7054,
    "character": {
-    "Te-d": 0.7,
-    "Zn-d": 0.3
+    "Te-d": 0.702,
+    "Zn-d": 0.298
    }
   },
   {
    "band": 15,
-   "energy": 16.6426,
+   "energy": 15.9374,
    "character": {
-    "Zn-s": 0.604,
-    "Zn-f": 0.31,
-    "Te-s": 0.086
+    "Zn-s": 0.635,
+    "Zn-f": 0.299,
+    "Te-s": 0.066
    }
   },
   {
    "band": 16,
-   "energy": 18.5187,
+   "energy": 18.1026,
    "character": {
-    "Zn-f": 0.419,
-    "Zn-d": 0.223,
-    "Te-d": 0.219
+    "Zn-f": 0.4,
+    "Te-d": 0.231,
+    "Zn-d": 0.226
    }
   }
  ],
@@ -182,14 +182,14 @@
    1,
    6
   ],
-  "min_fraction": 0.9580041548678958,
+  "min_fraction": 0.9617157726507866,
   "bands_soc": [
    2,
    12
   ],
-  "level_sf": -3.5108174702445893,
-  "level_soc": -3.5123097344221015,
-  "depth_below_vbm_sf": 6.7143028079115705
+  "level_sf": -3.810989731760828,
+  "level_soc": -3.8123025048726458,
+  "depth_below_vbm_sf": 6.5767184606526
  },
  "semicore_candidates": [
   {
@@ -200,14 +200,14 @@
     1,
     6
    ],
-   "min_fraction": 0.9580041548678958,
+   "min_fraction": 0.9617157726507866,
    "bands_soc": [
     2,
     12
    ],
-   "level_sf": -3.5108174702445893,
-   "level_soc": -3.5123097344221015,
-   "depth_below_vbm_sf": 6.7143028079115705
+   "level_sf": -3.810989731760828,
+   "level_soc": -3.8123025048726458,
+   "depth_below_vbm_sf": 6.5767184606526
   },
   {
    "element": "Te",
@@ -217,31 +217,31 @@
     0,
     1
    ],
-   "min_fraction": 0.7168988020394849,
+   "min_fraction": 0.7423153430206179,
    "bands_soc": [
     0,
     2
    ],
-   "level_sf": -7.7368081440550736,
-   "level_soc": -7.737048403028013,
-   "depth_below_vbm_sf": 10.940293481722055
+   "level_sf": -7.964651716554866,
+   "level_soc": -7.964868288775301,
+   "depth_below_vbm_sf": 10.730380445446638
   }
  ],
  "gamma_vb_triplet": {
-  "sf": 3.2033789790029528,
-  "delta_so": 0.91130430096739,
-  "soc_lower": 2.5898235413089536,
-  "soc_upper": 3.5011278422763437,
+  "sf": 2.7656025416434056,
+  "delta_so": 0.9024561415658767,
+  "soc_lower": 2.1578733923262297,
+  "soc_upper": 3.0603295338921064,
   "filled": true
  },
  "gamma_band_order": {
-  "sf": 1.1991857363564038,
-  "soc": 0.9014368863664761,
+  "sf": 0.9838898770944136,
+  "soc": 0.689162927866243,
   "inverted": false,
-  "s_character_sf": 1.00017499086853,
-  "s_character_soc": 1.0001749587429554
+  "s_character_sf": 1.001859533832914,
+  "s_character_soc": 1.0018594030320398
  },
- "sf_vs_cp2k_max_dev_ev": 1.0095950408128829e-05,
+ "sf_vs_cp2k_max_dev_ev": 3.47149472190722e-06,
  "name": "ZnTe_zb",
  "functional": "PBE",
  "basis": "DZVP-MOLOPT-PBE-GTH",
@@ -252,22 +252,29 @@
  "cell_ang": [
   [
    -0.0,
-   3.055615,
-   3.055615
+   3.103191,
+   3.103191
   ],
   [
-   3.055615,
+   3.103191,
    0.0,
-   3.055615
+   3.103191
   ],
   [
-   3.055615,
-   3.055615,
+   3.103191,
+   3.103191,
    0.0
   ]
  ],
  "n_bands_sf": 29,
  "spacegroup": "F-43m",
  "formula": "ZnTe",
- "cif": "ZnTe_zb.cif"
+ "cif": "ZnTe_zb.cif",
+ "lattice": {
+  "type": "PBE equilibrium lattice (energy-volume minimum at the level of theory of the dots)",
+  "a": 6.2064,
+  "scale_vs_cif": 1.01557,
+  "a_cif": 6.1112,
+  "bulk_modulus_gpa": 42.4
+ }
 }

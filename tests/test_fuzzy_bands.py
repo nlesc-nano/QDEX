@@ -147,3 +147,15 @@ def test_write_bs_round_trip(tmp_path):
     d = parse_cp2k_bs(tmp_path / "x.bs")
     assert d["n_k"] == 7 and d["n_bands"] == 6 and d["vbm_band"] == 1
     assert np.allclose(d["segments"][1]["bands"], bands[1]) and np.allclose(d["segments"][0]["kfrac"], kf[0])
+
+
+def test_material_db_bulk_pbe_gaps():
+    """Index 7 is the PBE gap at the experimental lattice; MATERIAL_DB_BULK_PBE keeps both lattices."""
+    from qdex.hardness import MATERIAL_DB, MATERIAL_DB_BULK_PBE
+    for key, v in MATERIAL_DB_BULK_PBE.items():
+        if v["a_exp"] is None:
+            continue
+        assert MATERIAL_DB[key][7] == pytest.approx(v["gap_exp_lattice"], abs=1e-6)
+        assert MATERIAL_DB[key][2] == pytest.approx(v["a_exp"], abs=1e-3)
+        assert v["a_pbe"] > 0.99 * v["a_exp"]                       # PBE lattices are not smaller
+    assert MATERIAL_DB_BULK_PBE["GAAS"]["gap_exp_lattice"] > MATERIAL_DB_BULK_PBE["GAAS"]["gap_pbe_lattice"] + 0.3

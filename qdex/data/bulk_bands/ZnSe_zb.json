@@ -1,8 +1,8 @@
 {
  "sf": {
-  "vbm": 3.06431032694675,
-  "cbm": 4.32756453178001,
-  "gap": 1.26325420483326,
+  "vbm": 2.6190994890120773,
+  "cbm": 3.7040488958443074,
+  "gap": 1.08494940683223,
   "vbm_k": [
    0.0,
    0.0,
@@ -17,9 +17,9 @@
   "cbm_label": "Gamma"
  },
  "soc": {
-  "vbm": 3.1920028066792625,
-  "cbm": 4.32756453186431,
-  "gap": 1.1355617251850472,
+  "vbm": 2.7459902163795458,
+  "cbm": 3.7040488961700153,
+  "gap": 0.9580586797904695,
   "vbm_k": [
    0.0,
    0.0,
@@ -34,143 +34,143 @@
   "cbm_label": "Gamma"
  },
  "atoms": {
-  "Zn": 1,
-  "Se": 1
+  "Se": 1,
+  "Zn": 1
  },
  "gamma_characters_sf": [
   {
    "band": 0,
-   "energy": -10.2119,
+   "energy": -10.3709,
    "character": {
-    "Se-s": 0.755,
-    "Zn-s": 0.235
+    "Se-s": 0.776,
+    "Zn-s": 0.215
    }
   },
   {
    "band": 1,
-   "energy": -3.5025,
+   "energy": -3.786,
    "character": {
-    "Zn-d": 0.932,
-    "Se-p": 0.065
+    "Zn-d": 0.938,
+    "Se-p": 0.059
    }
   },
   {
    "band": 2,
-   "energy": -3.5025,
+   "energy": -3.786,
    "character": {
-    "Zn-d": 0.932,
-    "Se-p": 0.065
+    "Zn-d": 0.938,
+    "Se-p": 0.059
    }
   },
   {
    "band": 3,
-   "energy": -3.5024,
+   "energy": -3.7859,
    "character": {
-    "Zn-d": 0.932,
-    "Se-p": 0.065
+    "Zn-d": 0.938,
+    "Se-p": 0.059
    }
   },
   {
    "band": 4,
-   "energy": -3.1277,
+   "energy": -3.4512,
    "character": {
-    "Zn-d": 0.995
+    "Zn-d": 0.996
    }
   },
   {
    "band": 5,
-   "energy": -3.1277,
+   "energy": -3.4512,
    "character": {
-    "Zn-d": 0.995
+    "Zn-d": 0.996
    }
   },
   {
    "band": 6,
-   "energy": 3.0643,
+   "energy": 2.6191,
    "character": {
-    "Se-p": 0.852,
-    "Zn-d": 0.106
+    "Se-p": 0.859,
+    "Zn-d": 0.099
    }
   },
   {
    "band": 7,
-   "energy": 3.0643,
+   "energy": 2.6191,
    "character": {
-    "Se-p": 0.852,
-    "Zn-d": 0.106
+    "Se-p": 0.859,
+    "Zn-d": 0.099
    }
   },
   {
    "band": 8,
-   "energy": 3.0643,
+   "energy": 2.6191,
    "character": {
-    "Se-p": 0.852,
-    "Zn-d": 0.106
+    "Se-p": 0.859,
+    "Zn-d": 0.099
    }
   },
   {
    "band": 9,
-   "energy": 4.3276,
+   "energy": 3.704,
    "character": {
-    "Zn-s": 1.184
+    "Zn-s": 1.167
    }
   },
   {
    "band": 10,
-   "energy": 8.8932,
+   "energy": 8.4576,
    "character": {
-    "Zn-p": 0.713,
-    "Se-d": 0.229
+    "Zn-p": 0.727,
+    "Se-d": 0.218
    }
   },
   {
    "band": 11,
-   "energy": 8.8932,
+   "energy": 8.4576,
    "character": {
-    "Zn-p": 0.713,
-    "Se-d": 0.229
+    "Zn-p": 0.727,
+    "Se-d": 0.218
    }
   },
   {
    "band": 12,
-   "energy": 8.8933,
+   "energy": 8.4578,
    "character": {
-    "Zn-p": 0.713,
-    "Se-d": 0.229
+    "Zn-p": 0.727,
+    "Se-d": 0.218
    }
   },
   {
    "band": 13,
-   "energy": 15.6791,
+   "energy": 15.2349,
    "character": {
-    "Se-d": 0.678,
-    "Zn-d": 0.322
+    "Se-d": 0.676,
+    "Zn-d": 0.324
    }
   },
   {
    "band": 14,
-   "energy": 15.6791,
+   "energy": 15.2349,
    "character": {
-    "Se-d": 0.678,
-    "Zn-d": 0.322
+    "Se-d": 0.676,
+    "Zn-d": 0.324
    }
   },
   {
    "band": 15,
-   "energy": 19.434,
+   "energy": 18.9633,
    "character": {
-    "Zn-f": 0.459,
-    "Zn-d": 0.157,
-    "Se-p": 0.138
+    "Zn-f": 0.448,
+    "Zn-d": 0.164,
+    "Se-d": 0.143
    }
   },
   {
    "band": 16,
-   "energy": 19.434,
+   "energy": 18.9633,
    "character": {
-    "Zn-f": 0.459,
-    "Zn-d": 0.157,
-    "Se-p": 0.138
+    "Zn-f": 0.448,
+    "Zn-d": 0.164,
+    "Se-d": 0.143
    }
   }
  ],
@@ -182,14 +182,14 @@
    1,
    6
   ],
-  "min_fraction": 0.9324520391749911,
+  "min_fraction": 0.9380797262995051,
   "bands_soc": [
    2,
    12
   ],
-  "level_sf": -3.232144800269816,
-  "level_soc": -3.23338038199816,
-  "depth_below_vbm_sf": 6.296455127216566
+  "level_sf": -3.541934359258177,
+  "level_soc": -3.5430259029554256,
+  "depth_below_vbm_sf": 6.161033848270254
  },
  "semicore_candidates": [
   {
@@ -200,14 +200,14 @@
     1,
     6
    ],
-   "min_fraction": 0.9324520391749911,
+   "min_fraction": 0.9380797262995051,
    "bands_soc": [
     2,
     12
    ],
-   "level_sf": -3.232144800269816,
-   "level_soc": -3.23338038199816,
-   "depth_below_vbm_sf": 6.296455127216566
+   "level_sf": -3.541934359258177,
+   "level_soc": -3.5430259029554256,
+   "depth_below_vbm_sf": 6.161033848270254
   },
   {
    "element": "Se",
@@ -217,31 +217,31 @@
     0,
     1
    ],
-   "min_fraction": 0.755284701342743,
+   "min_fraction": 0.7758197712624417,
    "bands_soc": [
     0,
     2
    ],
-   "level_sf": -9.461596636677399,
-   "level_soc": -9.461697049899874,
-   "depth_below_vbm_sf": 12.525906963624148
+   "level_sf": -9.692032882423703,
+   "level_soc": -9.692122812034803,
+   "depth_below_vbm_sf": 12.31113237143578
   }
  ],
  "gamma_vb_triplet": {
-  "sf": 3.064295651024976,
-  "delta_so": 0.38158214021884085,
-  "soc_lower": 2.810413151417969,
-  "soc_upper": 3.1919952916368097,
+  "sf": 2.619082634419892,
+  "delta_so": 0.37956239670020864,
+  "soc_lower": 2.3664189597537826,
+  "soc_upper": 2.745981356453991,
   "filled": true
  },
  "gamma_band_order": {
-  "sf": 1.2632688807550303,
-  "soc": 1.1355692402275337,
+  "sf": 1.084966261424411,
+  "soc": 0.958067539716017,
   "inverted": false,
-  "s_character_sf": 0.9847231726179435,
-  "s_character_soc": 0.9847231724374885
+  "s_character_sf": 0.9890488600606905,
+  "s_character_soc": 0.9890488592394195
  },
- "sf_vs_cp2k_max_dev_ev": 4.254016783278303e-05,
+ "sf_vs_cp2k_max_dev_ev": 1.891482643401332e-05,
  "name": "ZnSe_zb",
  "functional": "PBE",
  "basis": "DZVP-MOLOPT-PBE-GTH",
@@ -252,22 +252,29 @@
  "cell_ang": [
   [
    -0.0,
-   2.832443,
-   2.832443
+   2.876006,
+   2.876006
   ],
   [
-   2.832443,
+   2.876006,
    0.0,
-   2.832443
+   2.876006
   ],
   [
-   2.832443,
-   2.832443,
+   2.876006,
+   2.876006,
    0.0
   ]
  ],
  "n_bands_sf": 29,
  "spacegroup": "F-43m",
  "formula": "ZnSe",
- "cif": "ZnSe_zb.cif"
+ "cif": "ZnSe_zb.cif",
+ "lattice": {
+  "type": "PBE equilibrium lattice (energy-volume minimum at the level of theory of the dots)",
+  "a": 5.752,
+  "scale_vs_cif": 1.01538,
+  "a_cif": 5.6649,
+  "bulk_modulus_gpa": 56.7
+ }
 }

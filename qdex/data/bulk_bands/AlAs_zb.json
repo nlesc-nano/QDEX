@@ -1,8 +1,8 @@
 {
  "sf": {
-  "vbm": 3.737799880952219,
-  "cbm": 5.278475625907264,
-  "gap": 1.540675744955045,
+  "vbm": 3.4898956399767087,
+  "cbm": 5.081839744926474,
+  "gap": 1.5919441049497651,
   "vbm_k": [
    0.0,
    0.0,
@@ -17,9 +17,9 @@
   "cbm_label": "X"
  },
  "soc": {
-  "vbm": 3.8358405377723983,
-  "cbm": 5.278466747423637,
-  "gap": 1.4426262096512383,
+  "vbm": 3.5867444133101163,
+  "cbm": 5.081830843238789,
+  "gap": 1.4950864299286728,
   "vbm_k": [
    0.0,
    0.0,
@@ -34,112 +34,112 @@
   "cbm_label": "X"
  },
  "atoms": {
-  "Al": 1,
-  "As": 1
+  "As": 1,
+  "Al": 1
  },
  "gamma_characters_sf": [
   {
    "band": 0,
-   "energy": -8.0655,
+   "energy": -8.1471,
    "character": {
-    "As-s": 0.714,
-    "Al-s": 0.286
+    "As-s": 0.722,
+    "Al-s": 0.278
    }
   },
   {
    "band": 1,
-   "energy": 3.7378,
+   "energy": 3.4899,
    "character": {
-    "As-p": 0.815,
-    "Al-d": 0.101,
-    "Al-p": 0.071
+    "As-p": 0.817,
+    "Al-d": 0.098,
+    "Al-p": 0.072
    }
   },
   {
    "band": 2,
-   "energy": 3.7378,
+   "energy": 3.4899,
    "character": {
-    "As-p": 0.815,
-    "Al-d": 0.101,
-    "Al-p": 0.071
+    "As-p": 0.817,
+    "Al-d": 0.098,
+    "Al-p": 0.072
    }
   },
   {
    "band": 3,
-   "energy": 3.7378,
+   "energy": 3.4899,
    "character": {
-    "As-p": 0.815,
-    "Al-d": 0.101,
-    "Al-p": 0.071
+    "As-p": 0.817,
+    "Al-d": 0.098,
+    "Al-p": 0.072
    }
   },
   {
    "band": 4,
-   "energy": 5.8385,
+   "energy": 5.3391,
    "character": {
-    "Al-s": 0.905,
-    "As-s": 0.095
+    "Al-s": 0.898,
+    "As-s": 0.102
    }
   },
   {
    "band": 5,
-   "energy": 8.0542,
+   "energy": 7.7539,
    "character": {
-    "Al-p": 0.737,
-    "As-d": 0.174,
-    "As-p": 0.074
+    "Al-p": 0.742,
+    "As-d": 0.168,
+    "As-p": 0.076
    }
   },
   {
    "band": 6,
-   "energy": 8.0542,
+   "energy": 7.7539,
    "character": {
-    "Al-p": 0.737,
-    "As-d": 0.174,
-    "As-p": 0.074
+    "Al-p": 0.742,
+    "As-d": 0.168,
+    "As-p": 0.076
    }
   },
   {
    "band": 7,
-   "energy": 8.0542,
+   "energy": 7.7539,
    "character": {
-    "Al-p": 0.737,
-    "As-d": 0.174,
-    "As-p": 0.074
+    "Al-p": 0.742,
+    "As-d": 0.168,
+    "As-p": 0.076
    }
   },
   {
    "band": 8,
-   "energy": 13.3694,
+   "energy": 13.117,
    "character": {
-    "As-d": 0.543,
-    "Al-d": 0.457
+    "As-d": 0.542,
+    "Al-d": 0.458
    }
   },
   {
    "band": 9,
-   "energy": 13.3694,
+   "energy": 13.117,
    "character": {
-    "As-d": 0.543,
-    "Al-d": 0.457
+    "As-d": 0.542,
+    "Al-d": 0.458
    }
   },
   {
    "band": 10,
-   "energy": 20.0611,
+   "energy": 19.7128,
    "character": {
-    "Al-d": 0.365,
-    "As-d": 0.348,
-    "As-p": 0.205
+    "Al-d": 0.376,
+    "As-d": 0.347,
+    "As-p": 0.201
    }
   },
   {
    "band": 11,
-   "energy": 20.0611,
+   "energy": 19.7128,
    "character": {
-    "Al-d": 0.365,
-    "As-d": 0.348,
-    "As-p": 0.205
+    "Al-d": 0.376,
+    "As-d": 0.347,
+    "As-p": 0.201
    }
   }
  ],
@@ -151,14 +151,14 @@
    0,
    1
   ],
-  "min_fraction": 0.7143438493009528,
+  "min_fraction": 0.7223735398606613,
   "bands_soc": [
    0,
    2
   ],
-  "level_sf": -6.732342779569758,
-  "level_soc": -6.732349614760732,
-  "depth_below_vbm_sf": 10.470142660521978
+  "level_sf": -6.879078227406127,
+  "level_soc": -6.879084453072136,
+  "depth_below_vbm_sf": 10.368973867382834
  },
  "semicore_candidates": [
   {
@@ -169,31 +169,31 @@
     0,
     1
    ],
-   "min_fraction": 0.7143438493009528,
+   "min_fraction": 0.7223735398606613,
    "bands_soc": [
     0,
     2
    ],
-   "level_sf": -6.732342779569758,
-   "level_soc": -6.732349614760732,
-   "depth_below_vbm_sf": 10.470142660521978
+   "level_sf": -6.879078227406127,
+   "level_soc": -6.879084453072136,
+   "depth_below_vbm_sf": 10.368973867382834
   }
  ],
  "gamma_vb_triplet": {
-  "sf": 3.737798309394402,
-  "delta_so": 0.29695147647598263,
-  "soc_lower": 3.5388874664765426,
-  "soc_upper": 3.8358389429525253,
+  "sf": 3.489893437749321,
+  "delta_so": 0.29342047768855384,
+  "soc_lower": 3.293321707469456,
+  "soc_upper": 3.58674218515801,
   "filled": true
  },
  "gamma_band_order": {
-  "sf": 2.1007146086373516,
-  "soc": 2.0026739750792237,
+  "sf": 1.8492029648867656,
+  "soc": 1.752354217478075,
   "inverted": false,
-  "s_character_sf": 0.999999999998346,
-  "s_character_soc": 0.9999999999983439
+  "s_character_sf": 0.9999999999985136,
+  "s_character_soc": 0.99999999999851
  },
- "sf_vs_cp2k_max_dev_ev": 0.0001868254578951678,
+ "sf_vs_cp2k_max_dev_ev": 0.00019316927199497513,
  "name": "AlAs_zb",
  "functional": "PBE",
  "basis": "DZVP-MOLOPT-PBE-GTH",
@@ -204,22 +204,29 @@
  "cell_ang": [
   [
    -0.0,
-   2.84,
-   2.84
+   2.868883,
+   2.868883
   ],
   [
-   2.84,
+   2.868883,
    0.0,
-   2.84
+   2.868883
   ],
   [
-   2.84,
-   2.84,
+   2.868883,
+   2.868883,
    0.0
   ]
  ],
  "n_bands_sf": 24,
  "spacegroup": "F-43m",
  "formula": "AlAs",
- "cif": "AlAs_zb.cif"
+ "cif": "AlAs_zb.cif",
+ "lattice": {
+  "type": "PBE equilibrium lattice (energy-volume minimum at the level of theory of the dots)",
+  "a": 5.7378,
+  "scale_vs_cif": 1.01017,
+  "a_cif": 5.68,
+  "bulk_modulus_gpa": 66.6
+ }
 }
