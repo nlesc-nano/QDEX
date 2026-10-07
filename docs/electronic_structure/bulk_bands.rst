@@ -142,7 +142,8 @@ blende, 1/2 for the rock-salt and the Pb–X bond of the perovskites),
 :math:`s = 1` and ``none`` :math:`s = 0` (the dot taken at :math:`a_\text{exp}`). The vertex correction
 (``quasiparticles.bulk_vertex``) scales :math:`\Delta_\Sigma` only. Every other use of the bulk PBE gap
 as the bulk limit of the dot's PBE gap (confinement energy, Penn screening, the anchor models) uses
-the gap at the dot's lattice, :math:`E_g^\text{PBE}(a_\text{exp}) - \Delta_\text{geom}`.
+the gap at the dot's lattice, :math:`E_g^\text{PBE}(a_\text{exp}) - \Delta_\text{geom}`; for the
+perovskites the confinement energy is measured from the tilted structure (below).
 
 For the Cd\ :sub:`156`\ Se\ :sub:`111`\ Cl\ :sub:`90` dot (2.62 nm) the interior Cd–Se bond is 2.690 Å
 (bulk 2.620 Å at :math:`a_\text{exp}`, 2.692 Å at :math:`a_\text{PBE}`), :math:`s` = 0.975 and
@@ -229,6 +230,17 @@ With the tilts, cubic QSGW+SOC plus the tilt opening is within 0.15 eV of the me
 (2.15 against 2.30 eV) and CsPbI\ :sub:`3` (1.76 against 1.73 eV), instead of 0.6–0.7 eV below them against
 the cubic gaps. The self-energy correction :math:`\Delta_\Sigma` is taken from the cubic cell; the tilts are
 in the PBE gap of the dot itself.
+
+**Confinement of perovskite dots.** Because the dots are tilted, their confinement energy
+:math:`\Delta E_\text{conf} = E_g^\text{PBE}(\text{dot}) - E_g^\text{ref}` (Penn :math:`\epsilon_\text{eff}`
+of the ΔW models and of the split vertex) is measured from the bulk PBE gap of the measured, tilted
+structure at the dot's lattice,
+:math:`E_g^\text{ref} = E_g^\text{PBE,cubic}(a_\text{dot}) + T_\text{exp} + s\,(T_\text{PBE} - T_\text{exp})`,
+with :math:`T` the tilt opening at :math:`a_\text{exp}` (``gap_exp_structure`` − ``gap_exp_lattice``) and at
+the PBE volume (``gap_pbe_structure``, the unfolded overlay data, − ``gap_pbe_lattice``): 0.62/0.48 eV
+(Cl), 0.38/0.29 eV (Br), 0.57/0.45 eV (I). Against the cubic gap the tilt opening was counted as
+confinement: the 4.1 nm CsPbBr\ :sub:`3` cube had :math:`\Delta E_\text{conf}` = 0.69 instead of 0.40 eV
+and a vertex fraction f = 0.83 instead of 0.89. The self-energy shift keeps the cubic reference.
 
 **Lattice of perovskite dots.** Tilts lengthen the Pb–X bond at fixed volume (Pnma CsPbBr\ :sub:`3`: Pb–Br
 2.962 Å against 2.916 Å for the cubic cell of the same volume) while the Pb–Pb distance stays the

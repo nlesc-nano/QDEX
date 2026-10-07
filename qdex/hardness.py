@@ -164,18 +164,21 @@ MATERIAL_DB = {
 # J. Am. Chem. Soc. 141, 11435 (2019), 295 K, +0.57 / +0.70 eV; CsPbCl3: Pnma at the measured volume
 # with the tilts relaxed in PBE (no room-temperature structure in COD), +0.62 / +0.68 eV, an upper
 # bound: CsPbCl3 is within ~20 K of its cubic transition at room temperature and the 0 K tilts are
-# larger). Wurtzite: a_exp/c_exp (hexagonal) of the room-temperature structure, isotropic PBE scan.
+# larger). gap_pbe_structure: spin-free PBE gap of the same measured structure scaled to the PBE
+# pseudo-cubic volume (the unfolded overlay data, CsPbX3_cubic_unfolded.json). The tilted structure is the
+# reference of the dot's confinement energy (bulk_pbe_confinement_ref); the cubic one stays the reference
+# of the self-energy shift. Wurtzite: a_exp/c_exp (hexagonal) of the room-temperature structure, isotropic PBE scan.
 # Signed band-edge transitions (negative = inverted; see the header
 # of MATERIAL_DB). Lattice constants in A (conventional cell; wurtzite: hexagonal a, isotropic scan
 # with c/a and u of the CIF). B0: bulk modulus of the energy-volume fit (GPa). PBTE and CDSE_WZ: overlay
 # bands only.
 MATERIAL_DB_BULK_PBE = {
     "CSPBCL3": dict(a_exp=5.600, gap_exp_lattice=1.771, gap_soc_exp_lattice=0.870, a_pbe=5.759, gap_pbe_lattice=2.113, gap_soc_pbe_lattice=1.211, qsgw_soc_exp_lattice=2.657, delta_sigma=1.787, B0=21.6,
-                    gap_exp_structure=2.389, gap_soc_exp_structure=1.549),   # Pnma, PBE tilts: upper bound
+                    gap_exp_structure=2.389, gap_soc_exp_structure=1.549, gap_pbe_structure=2.607),   # Pnma, PBE tilts: upper bound
     "CSPBBR3": dict(a_exp=5.830, gap_exp_lattice=1.278, gap_soc_exp_lattice=0.349, a_pbe=6.024, gap_pbe_lattice=1.671, gap_soc_pbe_lattice=0.738, qsgw_soc_exp_lattice=1.699, delta_sigma=1.350, B0=18.3,
-                    gap_exp_structure=1.657, gap_soc_exp_structure=0.797),   # Pnma (RT) structure, see below
+                    gap_exp_structure=1.657, gap_soc_exp_structure=0.797, gap_pbe_structure=1.963),   # Pnma (RT) structure, see below
     "CSPBI3": dict(a_exp=6.200, gap_exp_lattice=0.832, gap_soc_exp_lattice=-0.187, a_pbe=6.417, gap_pbe_lattice=1.207, gap_soc_pbe_lattice=0.155, qsgw_soc_exp_lattice=1.057, delta_sigma=1.244, B0=15.2,
-                   gap_exp_structure=1.402, gap_soc_exp_structure=0.514),   # gamma-CsPbI3 Pnma (295 K)
+                   gap_exp_structure=1.402, gap_soc_exp_structure=0.514, gap_pbe_structure=1.658),   # gamma-CsPbI3 Pnma (295 K)
     "ZNS": dict(a_exp=5.410, gap_exp_lattice=2.051, gap_soc_exp_lattice=2.030, a_pbe=5.424, gap_pbe_lattice=2.018, gap_soc_pbe_lattice=1.997, qsgw_soc_exp_lattice=4.107, delta_sigma=2.077, B0=75.2),
     "ZNSE": dict(a_exp=5.670, gap_exp_lattice=1.252, gap_soc_exp_lattice=1.125, a_pbe=5.752, gap_pbe_lattice=1.085, gap_soc_pbe_lattice=0.958, qsgw_soc_exp_lattice=3.094, delta_sigma=1.969, B0=56.7),
     "ZNTE": dict(a_exp=6.100, gap_exp_lattice=1.225, gap_soc_exp_lattice=0.927, a_pbe=6.206, gap_pbe_lattice=0.984, gap_soc_pbe_lattice=0.689, qsgw_soc_exp_lattice=2.642, delta_sigma=1.715, B0=42.4),
@@ -799,7 +802,7 @@ def anchor_residual_scale(material_name, radius_ang, dft_gap=None, mode="econf",
         return 0.0, "none"
     R0 = float(entry[9])
     if str(mode).lower() == "econf" and dft_gap is not None:
-        eg_bulk = bulk_pbe_gap_dot(m_name)
+        eg_bulk = bulk_pbe_confinement_ref(m_name)
         e0 = (float(entry[11]) - float(entry[10])) - eg_bulk
         if e0 > 1.0e-6:
             return float(np.clip((float(dft_gap) - eg_bulk) / e0, 0.0, 1.0)), "econf"
@@ -1194,6 +1197,34 @@ def bulk_pbe_gap_dot(material_name):
     return float(entry[7]) - bulk_geometry_shift(m_name)[0]
 
 
+def bulk_structure_opening(material_name):
+    """Opening of the bulk PBE gap by the measured structure (octahedral tilts of the perovskites) at the
+    lattice of the dot of this run: T = T_exp + s (T_pbe - T_exp), with T_exp and T_pbe the tilted-minus-cubic
+    spin-free PBE gaps at a_exp and at the PBE volume and s the strain fraction of the geometry correction.
+    0 for materials whose measured structure is the reference one. Returns (T, s)."""
+    m_name = str(material_name).upper() if material_name else "DEFAULT"
+    data = MATERIAL_DB_BULK_PBE.get(m_name) or {}
+    if data.get("gap_exp_structure") is None or data.get("gap_exp_lattice") is None:
+        return 0.0, 0.0
+    t_exp = float(data["gap_exp_structure"]) - float(data["gap_exp_lattice"])
+    if data.get("gap_pbe_structure") is None or data.get("gap_pbe_lattice") is None:
+        return t_exp, 0.0
+    t_pbe = float(data["gap_pbe_structure"]) - float(data["gap_pbe_lattice"])
+    s = 0.0 if BULK_GEOMETRY == "none" else (1.0 if BULK_GEOMETRY == "full" else DOT_STRAIN.get(m_name, 1.0))
+    return float(t_exp + s * (t_pbe - t_exp)), float(s)
+
+
+def bulk_pbe_confinement_ref(material_name):
+    """Bulk limit of the dot's PBE gap for its confinement energy Delta E_conf = E_g^PBE(dot) - ref:
+    bulk_pbe_gap_dot (the reference, cubic structure) plus the opening of the measured, tilted structure.
+
+    A perovskite dot has the tilts of the measured phase, not those of the cubic reference, so measuring its
+    confinement from the cubic gap counts the tilt opening (0.3-0.6 eV) as confinement and lowers the Penn
+    eps_eff of the dot (sgw/evgw/qsgw-resta, the scaled bulk vertex). The self-energy shift
+    Delta_Sigma + Delta_geom keeps the cubic reference: Delta_Sigma is defined on it."""
+    return bulk_pbe_gap_dot(material_name) + bulk_structure_opening(material_name)[0]
+
+
 # Vertex correction of the bulk QSGW gap (quasiparticles.bulk_vertex).
 # QSGW overestimates bulk gaps because its W lacks the electron-hole (ladder) vertex, which makes the
 # polarizability too small; the bulk fix is Delta_bulk -> factor * Delta_bulk (factor 0.8). In a dot the
@@ -1328,6 +1359,8 @@ def bulk_qp_shift(material_name, dft_gap=None):
     d_qsgw = gw_gap - pbe_gap                        # Delta_Sigma: QSGW - PBE, both at a_exp
     d_geom, s = bulk_geometry_shift(m_name)          # PBE gap at a_exp - PBE gap at the dot's lattice
     pbe_gap_dot = pbe_gap - d_geom
+    t_open, _ = bulk_structure_opening(m_name)       # tilts of the measured structure (perovskites)
+    conf_ref = pbe_gap_dot + t_open
     delta_v = (1.0 - a_vertex) * d_qsgw
     eps_eff = None
     if BULK_VERTEX == "none":
@@ -1335,7 +1368,7 @@ def bulk_qp_shift(material_name, dft_gap=None):
     elif BULK_VERTEX == "full" or dft_gap is None:
         frac = 1.0
     else:
-        d_e_conf = max(0.0, float(dft_gap) - pbe_gap_dot)
+        d_e_conf = max(0.0, float(dft_gap) - conf_ref)
         eps_eff = penn_eps_eff(eps_inf, d_e_conf, penn_gap_ev(m_name, eps_inf))
         frac = float(np.clip((eps_eff - 1.0) / max(eps_inf - 1.0, 1e-12), 0.0, 1.0))
     d_sigma = d_qsgw - delta_v * frac if frac else d_qsgw
@@ -1346,12 +1379,16 @@ def bulk_qp_shift(material_name, dft_gap=None):
     info.update(bulk_qsgw_shift_ev=float(d_qsgw), bulk_vertex_fraction=float(frac),
                 bulk_vertex_correction_ev=float(d_sigma - d_qsgw), bulk_selfenergy_shift_ev=float(d_sigma),
                 bulk_geometry=BULK_GEOMETRY, bulk_geometry_shift_ev=float(d_geom), bulk_strain_fraction=float(s),
-                bulk_pbe_gap_dot_lattice_ev=float(pbe_gap_dot), bulk_residual=BULK_RESIDUAL,
+                bulk_pbe_gap_dot_lattice_ev=float(pbe_gap_dot), bulk_structure_opening_ev=float(t_open),
+                bulk_pbe_confinement_ref_ev=float(conf_ref), bulk_residual=BULK_RESIDUAL,
                 bulk_residual_shift_ev=float(d_res))
     if eps_eff is not None:
         info["bulk_vertex_eps_eff"] = float(eps_eff)
     if BULK_VERTEX != "none":
         extra = f", Penn eps_eff {eps_eff:.2f} at the DFT gap" if eps_eff is not None else ""
+        if eps_eff is not None and t_open:
+            extra += (f" (confinement from the tilted bulk PBE gap {conf_ref:.3f} eV = cubic {pbe_gap_dot:.3f} "
+                      f"+ tilts {t_open:.3f})")
         logger.info(f"  [QP] Bulk vertex correction ({BULK_VERTEX}, factor {a_vertex:.3f}"
                     f"{' (material)' if BULK_VERTEX_FACTOR == 'material' else ''}): fraction {frac:.3f}{extra}; "
                     f"Delta_Sigma {d_qsgw:.3f} -> {d_sigma:.3f} eV")
@@ -2374,7 +2411,10 @@ class _ScreeningModel:
         self.pbe_bulk_gap = bulk_pbe_gap_dot(m_name)   # bulk limit of the dot's PBE gap (its lattice)
         self.gw_bulk_gap = float(entry[8])
         self.bulk_shift = self.gw_bulk_gap - self.pbe_bulk_gap
-        self.qp_bulk_ref = self.gw_bulk_gap   # bulk QP gap used as the screening reference
+        # confinement reference: the measured (tilted) structure for perovskites
+        self.structure_opening = bulk_structure_opening(m_name)[0]
+        self.pbe_conf_ref = self.pbe_bulk_gap + self.structure_opening
+        self.qp_bulk_ref = self.gw_bulk_gap + self.structure_opening   # bulk QP gap used as the screening reference
         self.bulk_vertex_info = {}
         self.n_atoms = len(atom_symbols)
         self.R_QD_ang = qd_radius(coords, atom_symbols, m_name)
@@ -2412,7 +2452,7 @@ class _ScreeningModel:
             _, self.bulk_vertex_info = bulk_qp_shift(self.m_name, dft_gap)
             return
         self.bulk_shift, self.bulk_vertex_info = bulk_qp_shift(self.m_name, dft_gap)
-        self.qp_bulk_ref = self.pbe_bulk_gap + self.bulk_shift
+        self.qp_bulk_ref = self.pbe_conf_ref + self.bulk_shift
 
     def _resta_w(self, eps):
         from qdex.constants import ANG_PER_BOHR
@@ -2438,8 +2478,8 @@ class _ScreeningModel:
         """W^QD and the eps entering Z for a one-shot correction at the DFT gap."""
         if self.kind == "dim":
             return self._dim(self.alpha)
-        if self.penn_scaling and gap_dft > self.pbe_bulk_gap:
-            eps = self._penn(float(gap_dft - self.pbe_bulk_gap))
+        if self.penn_scaling and gap_dft > self.pbe_conf_ref:
+            eps = self._penn(float(gap_dft - self.pbe_conf_ref))
             return self._resta_w(eps), eps
         return self.W_bulk_ev, self.eps_bulk
 
@@ -2583,6 +2623,9 @@ def _estimate_sgw_delta_w(model, dft_gap=None, C_occ_low=None, C_virt_low=None, 
               f"Quasiparticle Correction for {m_name}:")
     logger.info(f"    Cluster Radius (R_QD)    : {R_QD_ang:.3f} Å")
     logger.info(f"    Bulk PBE -> GW Gap      : {pbe_bulk_gap:.3f} -> {gw_bulk_gap:.3f} eV (Shift: +{bulk_shift:.3f} eV)")
+    if m.structure_opening:
+        logger.info(f"    Confinement reference    : tilted bulk PBE gap {m.pbe_conf_ref:.3f} eV (cubic + tilts "
+                    f"{m.structure_opening:+.3f} eV); Delta E_conf = {gap_dft - m.pbe_conf_ref:.3f} eV")
     if m.kind == "dim":
         logger.info(f"    Internal DIM Contrast    : +{confinement_shift_internal:.3f} eV (surface coordination under-screening)")
         logger.info(f"    Solvent Reaction Field   : +{confinement_shift_solv:.3f} eV (eps_out = {m.eps_out_val:.2f}, eps_bulk = {eps_bulk:.2f})")

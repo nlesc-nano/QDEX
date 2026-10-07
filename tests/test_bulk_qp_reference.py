@@ -142,3 +142,28 @@ def test_split_model_vertex_scales_and_residual_does_not():
         h.set_bulk_residual("none", verbose=False)
     with pytest.raises(ValueError):
         h.set_bulk_residual("bogus", verbose=False)
+
+
+def test_perovskite_confinement_is_measured_from_the_tilted_bulk():
+    b = h.MATERIAL_DB_BULK_PBE["CSPBBR3"]
+    t_exp = b["gap_exp_structure"] - b["gap_exp_lattice"]
+    t_pbe = b["gap_pbe_structure"] - b["gap_pbe_lattice"]
+    try:
+        h.set_bulk_geometry("none", verbose=False)               # dot at a_exp: the tilt opening at a_exp
+        assert h.bulk_structure_opening("CSPBBR3")[0] == pytest.approx(t_exp)
+        assert h.bulk_pbe_confinement_ref("CSPBBR3") == pytest.approx(b["gap_exp_structure"])
+        h.set_bulk_geometry("full", verbose=False)               # dot at the PBE lattice
+        assert h.bulk_pbe_confinement_ref("CSPBBR3") == pytest.approx(b["gap_pbe_structure"])
+        assert h.bulk_structure_opening("CDSE")[0] == 0.0        # no tilts: cubic reference unchanged
+        assert h.bulk_pbe_confinement_ref("CDSE") == pytest.approx(h.bulk_pbe_gap_dot("CDSE"))
+        # a dot exactly at the tilted bulk gap has no confinement: full bulk screening, f = 1
+        h.set_bulk_vertex("scaled", 0.8, verbose=False)
+        info = h.bulk_qp_shift("CSPBBR3", b["gap_pbe_structure"])[1]
+        assert info["bulk_vertex_fraction"] == pytest.approx(1.0)
+        assert info["bulk_pbe_confinement_ref_ev"] == pytest.approx(b["gap_pbe_structure"])
+        # ... and the self-energy shift keeps the cubic reference
+        assert info["bulk_pbe_gap_dot_lattice_ev"] == pytest.approx(b["gap_pbe_lattice"])
+        assert t_pbe > 0
+    finally:
+        h.set_bulk_vertex("none", verbose=False)
+        h.set_bulk_geometry("none", verbose=False)

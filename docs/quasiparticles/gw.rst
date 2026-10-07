@@ -199,7 +199,8 @@ screening the dot keeps,
    f(R) = \frac{\epsilon_{\mathrm{eff}}(R) - 1}{\epsilon_\infty - 1},
 
 with :math:`\epsilon_{\mathrm{eff}}` the Penn value at the DFT gap of the cluster (the same Penn model
-as the Resta W; the confinement energy is taken from the bulk PBE gap at the dot's lattice). f → 1 in the bulk (experimental gap), f → 0 in the molecular limit (QSGW). f uses
+as the Resta W; the confinement energy is taken from the bulk PBE gap at the dot's lattice, of the
+measured tilted structure for the perovskites, :doc:`/electronic_structure/bulk_bands`). f → 1 in the bulk (experimental gap), f → 0 in the molecular limit (QSGW). f uses
 the DFT gap, so Δ_bulk is the same for every QP model of a given cluster; the screening of the ΔW
 models is referenced to the same corrected bulk gap, so the vertex correction changes the bulk shift
 and nothing else.
