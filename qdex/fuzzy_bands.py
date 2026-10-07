@@ -31,17 +31,31 @@ def _refine_rotation(units, R, cif_dirs, n_iter=8):
 
 def cif_bond_star(prim_struct):
     """Nearest-neighbour bond directions of the crystal (both directions of every bond),
-    the bond length and the coordination of each element."""
+    the bond length, the coordination of each element and the bonded element pairs."""
     dmin = min(n.nn_distance for site in prim_struct for n in prim_struct.get_neighbors(site, 6.0))
-    dirs, coordination = [], {}
+    dirs, coordination, pairs = [], {}, set()
     for site in prim_struct:
         nbrs = prim_struct.get_neighbors(site, 1.15 * dmin)
         coordination[site.specie.symbol] = len(nbrs)
         for n in nbrs:
             v = n.coords - site.coords
             dirs.append(v / np.linalg.norm(v))
+            pairs.add((site.specie.symbol, n.specie.symbol))
     dirs = np.unique(np.round(np.array(dirs), 6), axis=0)
-    return dirs, float(dmin), coordination
+    return dirs, float(dmin), coordination, pairs
+
+
+def _sublattice_element(prim_struct, coordination):
+    """Most coordinated element and its nearest same-element distance in the crystal.
+
+    Its sublattice carries the lattice constant: the B site of a perovskite (Pb-Pb = a_pc),
+    the cation of zinc blende, wurtzite or rock salt. Octahedral tilts shorten the B-B distance
+    but not the B-X bond, so the bond length overestimates the lattice of a tilted dot.
+    """
+    el = max(sorted(coordination), key=lambda e: coordination[e])
+    d = min(n.nn_distance for site in prim_struct if site.specie.symbol == el
+            for n in prim_struct.get_neighbors(site, 12.0) if n.specie.symbol == el)
+    return el, float(d)
 
 
 def fit_lattice_orientation(prim_struct, coords_ang, syms=None, interior_fraction=0.7):
@@ -53,10 +67,11 @@ def fit_lattice_orientation(prim_struct, coords_ang, syms=None, interior_fractio
     leaves the fuzzy weights |<phi|k>|^2 unchanged (crystal point group plus k -> -k).
     """
     coords = np.asarray(coords_ang, dtype=float)
-    cif_dirs, cif_bond, coordination = cif_bond_star(prim_struct)
+    cif_dirs, cif_bond, coordination, pairs = cif_bond_star(prim_struct)
     elements = set(coordination)
     mask = np.ones(len(coords), bool) if syms is None else np.array([s in elements for s in syms])
     X = coords[mask]
+    xs = None if syms is None else [s for s, m in zip(syms, mask) if m]
     info = dict(rotation=np.eye(3), scale=1.0, match=float("nan"), n_bonds=0, cif_bond_ang=cif_bond,
                 qd_bond_ang=float("nan"), coordination=coordination, elements=sorted(elements))
     if len(X) < 2:
@@ -70,7 +85,8 @@ def fit_lattice_orientation(prim_struct, coords_ang, syms=None, interior_fractio
     tree = cKDTree(X)
     vecs, ref_atom = [], None
     for i in interior[np.argsort(r[interior])]:
-        nbrs = [j for j in tree.query_ball_point(X[i], 1.3 * cif_bond) if j != i]
+        nbrs = [j for j in tree.query_ball_point(X[i], 1.3 * cif_bond)
+                if j != i and (xs is None or (xs[i], xs[j]) in pairs)]
         if ref_atom is None and len(nbrs) >= 2:
             ref_atom = len(vecs)
         vecs.extend(X[j] - X[i] for j in nbrs)
@@ -97,12 +113,28 @@ def fit_lattice_orientation(prim_struct, coords_ang, syms=None, interior_fractio
         if m > best + 1e-9:
             best_R, best = R, m
 
-    info.update(rotation=best_R, scale=qd_bond / cif_bond, match=best, n_bonds=len(units), qd_bond_ang=qd_bond)
+    # Lattice scale from the sublattice of the most coordinated element (B-B for perovskites)
+    scale, how = qd_bond / cif_bond, f"median bond {qd_bond:.4f} A vs CIF {cif_bond:.4f} A"
+    if xs is not None:
+        el, d_cif = _sublattice_element(prim_struct, coordination)
+        sub = np.array([k for k, e in enumerate(xs) if e == el])
+        if len(sub) >= 2:
+            inner = sub[r[sub] <= interior_fraction * r.max()]
+            dd, _ = cKDTree(X[sub]).query(X[inner] if len(inner) else X[sub], k=2)
+            dd = dd[:, 1][dd[:, 1] < 1.3 * d_cif]
+            if len(dd) >= 1:
+                d_qd = float(np.median(dd))
+                scale, how = d_qd / d_cif, f"median {el}-{el} {d_qd:.4f} A vs CIF {d_cif:.4f} A"
+                info.update(sublattice_element=el, qd_sublattice_ang=d_qd, cif_sublattice_ang=d_cif)
+    info.update(rotation=best_R, scale=scale, match=best, n_bonds=len(units), qd_bond_ang=qd_bond)
     angle = np.degrees(np.arccos(np.clip((np.trace(best_R) - 1) / 2, -1, 1)))
     logger.info(f"  [Fuzzy] Lattice orientation: {len(units)} interior bonds fitted to the crystal bond star "
                 f"(mean cos {best:.4f}, rotation {angle:.1f} deg from the CIF frame).")
-    logger.info(f"  [Fuzzy] Lattice scale: median bond {qd_bond:.4f} A vs CIF {cif_bond:.4f} A "
-                f"-> k-points scaled by 1/{qd_bond / cif_bond:.4f}.")
+    logger.info(f"  [Fuzzy] Lattice scale: {how} -> k-points scaled by 1/{scale:.4f} "
+                f"(median bond {qd_bond:.4f} A vs CIF {cif_bond:.4f} A).")
+    if abs(qd_bond / cif_bond - 1) > 0.08:
+        logger.warning(f"  [Fuzzy] The dot's bonds are {100 * (qd_bond / cif_bond - 1):+.1f}% off the CIF: "
+                       f"check that the CIF is the dot's material.")
     if best < 0.95:
         logger.warning(f"  [Fuzzy] Weak lattice match (mean cos {best:.3f}): the dot has no well-ordered core "
                        f"of the CIF structure, so the k-path directions are uncertain.")

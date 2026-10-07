@@ -58,6 +58,30 @@ def test_lattice_orientation_recovers_a_rotated_cluster():
     assert np.allclose(np.sort(np.abs(M), axis=1), [[0, 0, 1]] * 3, atol=1e-6)
 
 
+def test_perovskite_scale_from_the_b_sublattice():
+    """Tilted octahedra: the k scale follows Pb-Pb (the lattice), not the Pb-Br bond."""
+    from pymatgen.core import Lattice, Structure
+    from qdex.fuzzy_bands import fit_lattice_orientation
+
+    a = 5.95
+    prim = Structure(Lattice.cubic(a), ["Cs", "Pb", "Br", "Br", "Br"],
+                     [[0, 0, 0], [0.5, 0.5, 0.5], [0.5, 0.5, 0], [0.5, 0, 0.5], [0, 0.5, 0.5]])
+    sc = prim * (5, 5, 5)
+    coords = np.array([s.coords for s in sc]) * 0.99
+    syms = [s.specie.symbol for s in sc]
+    # buckle the Br off the Pb-Pb lines (alternating, as a tilt): bonds lengthen, Pb-Pb is unchanged
+    for k, (s_, x) in enumerate(zip(syms, coords)):
+        if s_ == "Br":
+            frac = np.round(x / (0.99 * a) * 2).astype(int)
+            axis = int(np.argmax(frac % 2 == 1))   # perpendicular to the Pb-Br-Pb line
+            coords[k, axis] += 0.35 * (-1) ** int(frac.sum() // 2)
+    info = fit_lattice_orientation(prim, coords, syms)
+
+    assert info["sublattice_element"] == "Pb"
+    assert info["scale"] == pytest.approx(0.99, abs=1e-3)
+    assert info["qd_bond_ang"] > 0.99 * a / 2 * 1.005
+
+
 def test_bulk_bands_land_on_the_fuzzy_path():
     from pymatgen.symmetry.bandstructure import HighSymmKpath
     from qdex.bulk_bands import find_bulk_bs, parse_cp2k_bs, map_bulk_to_path

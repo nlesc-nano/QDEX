@@ -25,8 +25,8 @@ colloidal CdSe dots. All numbers were produced with the code as it is, with the 
   2.6–4.1 nm series below uses ``scaled`` (:doc:`/quasiparticles/gw`).
 
 The raw results are in ``benchmarks/results/cdse_validation_2026-09-27.csv`` (1.2 and 2.0 nm) and
-``benchmarks/results/cdse_large_dots_2026-10-07.csv`` (2.6–4.1 nm; the earlier reference in
-``cdse_large_dots_2026-09-29.csv``).
+``benchmarks/results/cdse_large_dots_2026-10-07.csv`` (2.6–4.1 nm, ``bulk`` model; the ΔW models in
+``cdse_large_dots_dW_2026-10-07.csv``; the earlier reference in ``cdse_large_dots_2026-09-29.csv``).
 
 Systems and settings
 --------------------
@@ -395,11 +395,76 @@ bulk value (0.121 eV).
   0.38 eV; the curves by 0.26 (Yu), 0.44 (Hens wz), 0.50 (Hens all) and 0.54 eV (Hens zb). With the bulk
   limit now fixed by experiment, what is missing is size-dependent: the finite-size self-energy (the
   ``bulk`` model has no ΔW; the image-charge and reduced-screening terms grow as 1/R), and the 25 × 25
-  active space, which lowers S₁ more in larger dots. The ΔW models on these dots are the next test.
+  active space, which lowers S₁ more in larger dots. The ΔW models below supply the first.
 * **The earlier agreement with the Yu curve was partly compensation**: the PBE lattice lowered the KS
   gap by 0.14–0.15 eV, and that error was cancelled by the QSGW shift without the room-temperature
   residual. With both corrected the model sits between the Yu and the Hens curves, closest to Hens
   wurtzite.
+
+**ΔW models.** The same dots and settings with ``quasiparticles.model`` set to each ΔW model
+(``sgw``, ``evgw``, ``qsgw`` with the Resta or the DIM screening; same split-model bulk reference,
+``bse`` with the Resta kernel, SOC, toluene, 25 × 25). The bright state is the first state with
+f\ :sub:`osc` ≥ half of the largest one (at 4.10 nm the ΔW runs have a weak state, f = 0.17, 34 meV
+below the bright triplet). Bright state with SOC (eV):
+
+.. list-table::
+   :header-rows: 1
+
+   * - d
+     - bulk
+     - sgw-resta
+     - sgw-dim
+     - evgw-resta
+     - evgw-dim
+     - qsgw-resta
+     - qsgw-dim
+     - Hens zb
+     - sgw-resta − Hens zb
+   * - 2.62 nm
+     - 2.556
+     - 2.701
+     - 2.747
+     - 2.728
+     - 2.729
+     - 2.730
+     - 2.714
+     - 2.740
+     - −0.04
+   * - 3.34 nm
+     - 2.274
+     - 2.405
+     - 2.471
+     - 2.431
+     - 2.457
+     - 2.428
+     - 2.438
+     - 2.411
+     - −0.01
+   * - 4.10 nm
+     - 2.176
+     - 2.282
+     - 2.362
+     - 2.302
+     - 2.347
+     - —
+     - —
+     - 2.201
+     - +0.08
+
+* **The finite-size self-energy closes most of the confinement gap.** ``sgw-resta`` raises the QP gap
+  by 0.53, 0.42 and 0.32 eV over the ``bulk`` model and the exciton binding by 0.38, 0.29 and 0.22 eV,
+  a net +0.15, +0.13 and +0.11 eV on the bright state. It is within 0.04 eV of the zinc-blende Hens
+  curve at 2.62 and 3.34 nm.
+* **At 4.10 nm it overshoots by 0.08 eV.** The ΔW term decays more slowly than 1/R (0.106 eV at
+  4.10 nm against 0.093 eV for 1/R from 2.62 nm), and the bulk model was already within 0.03 eV of
+  experiment there. From 2.62 to 4.10 nm ``sgw-resta`` drops by 0.42 eV, the Hens zb curve by 0.54 eV.
+* **The models agree to 0.05 eV at 2.62 nm and spread to 0.08 eV at 4.10 nm**; the DIM screening
+  gives the larger shifts at 3.34 and 4.10 nm. ``sgw-resta``, the cheapest, is the closest to
+  experiment over the series.
+* **qsGW at 4.10 nm was not run**: full-AO qsGW needs all MOs, and the MO file of this dot holds a
+  window of 7,628 of its 23,471.
+
+The results are in ``benchmarks/results/cdse_large_dots_dW_2026-10-07.csv``.
 
 .. _surface-states-193:
 
@@ -484,9 +549,9 @@ S₁ at 2 nm in toluene (spin-free, ``sgw-resta``) through the successive versio
 Limits
 ------
 
-* **One model in the large-dot series.** The 2.6–4.1 nm dots were computed with the bulk QP
-  correction (split model) and the bulk Resta W only; the ΔW models and the sBSE-DIM variant have not
-  been run there. The 1.2 and 2.0 nm tables use the earlier bulk reference.
+* **Large-dot series.** The 2.6–4.1 nm dots were computed with the split-model bulk reference, the
+  ``bulk`` model and the six ΔW models (no qsGW at 4.10 nm), the full BSE with the Resta kernel; the
+  sBSE-DIM variant has not been run there. The 1.2 and 2.0 nm tables use the earlier bulk reference.
   The 1.93 nm cluster has surface states (:ref:`surface-states-193`) and the 1.2 nm cluster is not
   covered by an experimental curve.
 * **Bright-state definition.** For the larger dots only the lowest states were kept, so the first
