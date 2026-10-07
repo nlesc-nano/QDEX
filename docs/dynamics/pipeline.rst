@@ -42,10 +42,14 @@ The NAMD simulation workflow is decoupled into three modular stages:
    [Stage 1: Trajectory Precomputation]
      ├─ Evaluate Quasiparticle & Diagonal BSE Exciton States per frame
      ├─ Compute Cross-Frame Overlaps S(t, t+Δt) analytically via Libint2
-     ├─ Extract Non-Adiabatic Couplings (NAC) d_IJ(t) via finite differences
-     ├─ Eliminate Random Phase Jumps e^{iθ} via Geometric Phase Alignment
-     ├─ Repair trivial crossings only (|S_ii| < 0.5); avoided crossings stay adiabatic
-     └─ Compress & Cache Precomputed Data into step_*.npz
+     ├─ Repair trivial crossings only (|S_ii| < 0.5, Hungarian); avoided crossings stay adiabatic
+     ├─ Fix phases (sign / U(1)); SOC: parallel transport inside Kramers pairs
+     └─ Cache overlaps, energies, pair energies into step_*.npz
+                 │
+                 ▼
+   [Stage 1b: --namd-decoherence, --namd-nac]
+     ├─ State-pair dephasing times tau_ij from the energy-gap fluctuations
+     └─ Couplings d = log(U)/Δt of the Loewdin-orthonormalised overlaps (nac_*.npz)
                  │
                  ▼
    [Stage 2: Dynamical Propagation]

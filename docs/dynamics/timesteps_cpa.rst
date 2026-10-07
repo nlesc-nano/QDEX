@@ -58,74 +58,95 @@ This provides an immense computational advantage:
 2. **Post-Processing Reusability**: All non-adiabatic electronic calculations (FSSH with thousands of stochastic trajectories, or PME at multiple temperatures and decoherence models) are executed in post-processing without ever re-evaluating expensive DFT self-consistent field cycles or nuclear forces.
 
 
-Electronic Sub-Stepping in CPA-FSSH
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Nuclear steps and electronic sub-steps
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Within each nuclear time interval :math:`[t_k, t_{k+1}]` of duration :math:`\Delta t_{\mathrm{nuc}}`, ``QDEX`` divides the interval into :math:`N_{\mathrm{sub}}` fine electronic sub-steps (typically :math:`N_{\mathrm{sub}} = 100 - 500`):
+**Nuclear step.** The nuclear time step :math:`\Delta t` is the spacing of the MD frames
+(``namd.trajectory.dt_nuc_fs``, 2 fs for the CsPbX\ :sub:`3` trajectories). Everything that depends on
+the geometry is known only at the frames: the pair energies :math:`E(t_k)` and the step coupling
+:math:`d_k` (from the overlap of frames :math:`k` and :math:`k+1`, :doc:`nacs_tracking`). Hops, DISH
+decoherence events, the FSSH decoherence damping and the PME rates act once per nuclear step.
 
-.. math::
-
-   \delta t_{\mathrm{elec}} = \frac{\Delta t_{\mathrm{nuc}}}{N_{\mathrm{sub}}} \approx 0.002 - 0.02\text{ fs}
-
-Along the sub-steps :math:`\tau_m = (m + 0.5) \delta t_{\mathrm{elec}}`, the adiabatic energies are linearly interpolated:
-
-.. math::
-
-   E_I(\tau_m) = E_I(t_k) + \frac{\tau_m}{\Delta t_{\mathrm{nuc}}} \left( E_I(t_{k+1}) - E_I(t_k) \right)
-
-The effective non-adiabatic Hamiltonian driving electronic evolution is constructed in ``qdex.namd.integrator``:
+**Electronic sub-steps.** The amplitudes of the electron and of the hole channel are propagated through
+the step with :math:`N_{\mathrm{sub}}` sub-steps (``namd.integration.n_substeps``),
 
 .. math::
 
-   \mathbf{H}_{\mathrm{eff}}(\tau_m) = \operatorname{diag}\left( \mathbf{E}(\tau_m) \right) - i \hbar \, \mathbf{d}(t_k)
+   \delta t = \frac{\Delta t}{N_{\mathrm{sub}}}, \qquad
+   \tau_m = \left(m + \tfrac{1}{2}\right)\delta t, \quad m = 0 \ldots N_{\mathrm{sub}} - 1 .
 
-Because the non-adiabatic coupling matrix :math:`\mathbf{d}` is anti-Hermitian (:math:`d_{IJ} = -d_{JI}^*`), the product :math:`-i\hbar \mathbf{d}` is **strictly Hermitian**, ensuring that :math:`\mathbf{H}_{\mathrm{eff}}` is Hermitian.
-
-Ensemble propagator
-"""""""""""""""""""
-
-The single-wavefunction routine ``step_unitary_matrix_exp`` diagonalizes :math:`\mathbf{H}_{\mathrm{eff}} = \mathbf{V} \boldsymbol{\Lambda} \mathbf{V}^\dagger` and applies the exact unitary exponential
+Inside the step the energies are interpolated linearly between the frames and the coupling is held at its
+step value (the generator of the step for ``nac_scheme: logm``):
 
 .. math::
 
-   \mathbf{c}(\tau + \delta t_{\mathrm{elec}}) = \mathbf{V} \, \exp\left( -i \boldsymbol{\Lambda} \frac{\delta t_{\mathrm{elec}}}{\hbar} \right) \mathbf{V}^\dagger \, \mathbf{c}(\tau)
+   E_I(\tau_m) = E_I(t_k) + \frac{\tau_m}{\Delta t}\left[E_I(t_{k+1}) - E_I(t_k)\right], \qquad
+   \mathbf{H}_{\mathrm{eff}}(\tau_m) = \operatorname{diag}\, \mathbf{E}(\tau_m) - i\hbar\, \mathbf{d}_k .
 
-which conserves :math:`\sum_I |c_I|^2` to the accuracy of the diagonalization. The ensemble path used by surface hopping does not call that routine. It uses second-order Strang splitting,
-
-.. math::
-
-   \mathbf{U}(\delta t) = e^{-i E \delta t / 2\hbar} \, e^{-\mathbf{d}\, \delta t} \, e^{-i E \delta t / 2\hbar}
-
-with :math:`E` the diagonal-BSE pair energy, binding :math:`K_d` included. Because :math:`\mathbf{d}` is anti-Hermitian, :math:`e^{-\mathbf{d}\,\delta t}` is unitary. Set ``integrator: strang``. The name ``unitary_matrix_exp`` is rejected on the ensemble path.
-
-Tully Hopping Flux Accumulation
-"""""""""""""""""""""""""""""""
-
-Tully's fewest switches hopping probabilities are accumulated incrementally across the electronic sub-steps:
+:math:`\mathbf{d}` is anti-Hermitian, so :math:`\mathbf{H}_{\mathrm{eff}}` is Hermitian. Each sub-step is a
+second-order Strang splitting (``integrator: strang``),
 
 .. math::
 
-   g_{I \to J} = \sum_{m=1}^{N_{\mathrm{sub}}} \max\left( 0, \, \frac{2 \delta t_{\mathrm{elec}} \, \operatorname{Re}\left( c_I^*(\tau_m) c_J(\tau_m) d_{IJ} \right)}{|c_I(\tau_m)|^2} \right) \times B_{IJ}(T)
+   \mathbf{c}(\tau + \delta t) = D_m\, O\, D_m\, \mathbf{c}(\tau), \qquad
+   D_m = e^{-i\, \mathbf{E}(\tau_m)\, \delta t / 2\hbar}, \qquad O = e^{-\mathbf{d}_k\, \delta t},
 
-The sum is the hop probability for that nuclear step. If the electron and hole channels together exceed 1, they are scaled so the total is 1 and the event is counted. Each nuclear step of a surface-hopping trajectory starts from the active orbital. The cumulant time :math:`\tau_{\mathrm{dec}}` is computed and printed. It is not applied again inside a step that already begins in a pure active state. Upward one-body hops are multiplied by :math:`B_{IJ}` after the flux is accumulated. That factor is the classical-path stand-in for a rejected velocity rescaling (Parandekar and Tully, J. Chem. Phys. 2005; Jain, Alguire, and Subotnik, J. Chem. Phys. 2016). Two-body Auger hops, when requested, do not carry it.
+exactly unitary; :math:`O` is computed once per nuclear step and applied with one matrix product per
+sub-step to all trajectories at once (columns of :math:`\mathbf{c}`). With :math:`\mathbf{E}` constant the
+sub-steps compose to :math:`e^{-\mathbf{d}_k \Delta t} = U^\dagger` for the logm coupling: the populations
+move exactly as the overlap of the two frames says. The splitting error comes from the energy phases and
+the coupling not commuting, :math:`\mathcal{O}\big((\Delta E\,\delta t/\hbar)\,(|d|\,\delta t)\big)` per
+sub-step: with :math:`|d|\,\Delta t` up to 0.9 in the valence band of the CsPbX\ :sub:`3` dots and pair-energy
+spreads of a few eV, :math:`N_{\mathrm{sub}} = 20` (δt = 0.1 fs) is used for production (default 2;
+convergence: :ref:`namd-substeps`).
+
+``step_unitary_matrix_exp`` (single wavefunction, exact :math:`e^{-i\mathbf{H}_{\mathrm{eff}}\delta t/\hbar}`
+from a diagonalization) is not used on the ensemble path; ``rk4`` is available for tests.
+
+Tully hopping flux (CPA-FSSH)
+"""""""""""""""""""""""""""""
+
+The fewest-switches probability of the active state :math:`I` is accumulated over the sub-steps,
+
+.. math::
+
+   g_{I \to J} = \sum_{m} \max\left(0,\; \frac{2\,\delta t\, \operatorname{Re}\left(c_I^*(\tau_m)\, c_J(\tau_m)\, d_{IJ}\right)}{|c_I(\tau_m)|^2}\right),
+
+and an upward hop is accepted with the Boltzmann factor :math:`B_{IJ} = \min(1, e^{-(E_J - E_I)/k_BT})`,
+the classical-path stand-in for velocity rescaling (Parandekar & Tully, J. Chem. Phys. 2005). One hop
+(electron or hole) per nuclear step; a hop collapses the amplitudes onto the new state. Trajectories that
+do not hop are damped once per nuclear step, :math:`c_J \leftarrow c_J\, e^{-\Delta t/\tau_{IJ}}` for
+:math:`J \ne I` with the state-pair dephasing times :math:`\tau_{IJ}` (``decoherence_times.npz``), and
+renormalised. The amplitudes are **not** reset to the active state at every step.
+
+DISH
+""""
+
+DISH (``method: dish``, Jaeger, Fischer & Prezhdo, J. Chem. Phys. 137, 22A545 (2012)) propagates the same
+amplitudes without flux hops. Once per nuclear step a decoherence event for each inactive state :math:`J`
+occurs with probability :math:`1 - e^{-\Delta t/\tau_{IJ}}`; on an event the trajectory hops to :math:`J`
+with probability :math:`|c_J|^2 B_{IJ}` (only to stored pairs) and collapses onto it, otherwise
+:math:`c_J` is set to zero and the amplitudes renormalised (:doc:`dish`).
 
 
-Electronic Sub-Stepping in the Pauli Master Equation (PME)
+Electronic sub-stepping in the Pauli master equation (PME)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Although the Pauli Master Equation propagates real-valued populations :math:`P_I(t)` rather than oscillating complex amplitudes :math:`c_I(t)`, sub-stepping is equally vital for numerical stability.
+The PME propagates populations with golden-rule rates built once per nuclear step from :math:`|d_k|^2`,
+the energy gaps and the line widths (state-pair dephasing times :math:`\tau_{IJ}` with
+``pme_tau: pairs``, :doc:`pme`). For the diagonal-BSE pair manifold each of 20 sub-steps applies a
+row-stochastic matrix :math:`T = I + \delta t\, K` of the electron channel and of the hole channel
+(:math:`\mathbf{P} \leftarrow \mathbf{P} T_e`, then :math:`\mathbf{P} \leftarrow T_h^\mathsf{T} \mathbf{P}`);
+a row whose leaving probability would exceed 1 is renormalised onto its outgoing transitions, which keeps
+every population non-negative and conserves the total. Recombination :math:`e^{-k_{\mathrm{loss}}\Delta t}`
+is applied once per nuclear step.
 
-In dense manifolds where non-adiabatic couplings are large, single-step forward Euler integration of :math:`\frac{d\mathbf{P}}{dt} = \mathbf{R} \mathbf{P}` with a coarse step :math:`\Delta t_{\mathrm{nuc}} \sim 1\text{ fs}` can lead to **stiffness instabilities**, causing populations to oscillate or become negative (:math:`P_I < 0`).
 
-In ``qdex.namd.master_equation``, two robust solutions are provided:
+.. _namd-substeps:
 
-1. **Exact Matrix Exponential**:
-   For modest state spaces, the population vector is propagated analytically over the nuclear step:
+Sub-step convergence
+~~~~~~~~~~~~~~~~~~~~
 
-   .. math::
-
-      \mathbf{P}(t + \Delta t_{\mathrm{nuc}}) = \exp\left( \mathbf{R} \, \Delta t_{\mathrm{nuc}} \right) \mathbf{P}(t)
-
-2. **Tensorized row-stochastic step (Diagonal BSE)**:
-   For the pair manifold actually propagated, each sub-step builds a row-stochastic matrix :math:`T = I + \delta t K` from the electron channel and from the hole channel. A row whose leaving probability would exceed 1 is renormalized onto its outgoing transitions. Applying :math:`\mathbf{P} \leftarrow \mathbf{P} T_e` and then :math:`\mathbf{P} \leftarrow T_h^\mathsf{T} \mathbf{P}` keeps every entry non-negative and conserves probability. Recombination :math:`\exp(-k_{\mathrm{loss}}\Delta t)` is applied once after the sub-steps, without putting that lost population back.
-
+Tested on the spin-free CsPbBr\ :sub:`3` cube (1300 × 800 window, 2 fs frames, logm couplings, one
+origin, 200 fs, 1000 trajectories, pump 2 E\ :sub:`g`): see the table below (filled in from
+``namd/CsPbBr3/conv`` on NHR).

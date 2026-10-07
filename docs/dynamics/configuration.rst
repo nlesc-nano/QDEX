@@ -113,6 +113,11 @@ Command-Line Arguments
    * - ``--namd-decoherence [dir]``
      - ``None``
      - Compute and cache state-pair pure-dephasing matrices (:math:`\tau_{ij}`) into ``decoherence_times.npz``.
+       Needed by DISH, the FSSH damping and the PME line widths (a warning is printed without it).
+   * - ``--namd-nac [dir]``
+     - ``None``
+     - Compute the non-adiabatic couplings of every step once (``namd.nac.scheme``: ``logm``, default, or
+       ``hst``), in parallel over the steps, into ``nac_<k>_to_<k+1>.npz`` (:doc:`nacs_tracking`).
    * - ``--namd-compact [dir]``
      - ``None``
      - Compress precomputed directory, eliminating redundant duplicate arrays.
@@ -164,6 +169,16 @@ YAML Configuration Example
        start_frame: 1
        end_frame: 500
 
+     tracking:
+       phase_correction: true
+       hungarian_tracking: true          # relabel trivial crossings (|S_ii| < 0.5)
+       degeneracy_tol_ev: 1.0e-5         # Kramers pairs (SOC): parallel transport inside the pair
+
+     nac:                                # --namd-nac (after --namd-precompute)
+       scheme: "logm"                    # log of the Loewdin-orthonormalised overlap; "hst": (S - S^+)/2dt
+       workers: 6                        # parallel processes over the steps
+       threads_per_worker: 8
+
      dynamics:
        method: "dish"                    # "master_equation" (PME), "dish" (DISH), or "cpa_fssh" (FSSH-EDC)
        initial_conditions: "multiple"    # "single" (t0 = 0) or "multiple" (auto-calibrated ensemble)
@@ -172,10 +187,15 @@ YAML Configuration Example
        decoherence: "edc"                # Decoherence scheme for FSSH (continuous EDC)
        n_trajectories: 1000              # Trajectory count (split evenly across origins in multi-mode)
        detailed_balance: true            # Enforce Boltzmann detailed balance factor
+       nac_scheme: "logm"                # couplings: stored logm (--namd-nac) or "hst"
+       pme_tau: "pairs"                  # PME line widths: state-pair dephasing times (as DISH) or "uniform"
+       seed: 2026                        # reproducible hops, decoherence events and initial sampling
+       n_origins: 6                      # with initial_conditions: multiple
+       window_fs: 500.0                  # length of each origin's run
 
      integration:
        integrator: "strang"              # Unitary Strang operator splitting
-       n_substeps: 2                     # Electronic sub-steps per nuclear interval
+       n_substeps: 20                    # Electronic sub-steps per nuclear interval (default 2)
 
      transient_absorption:
        run: true                         # Enable pump-probe transient absorption calculation
