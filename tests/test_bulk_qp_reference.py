@@ -169,12 +169,23 @@ def test_perovskite_confinement_is_measured_from_the_tilted_bulk():
         h.set_bulk_geometry("none", verbose=False)
 
 
-def test_bulk_edge_split_table():
-    from qdex.hardness import BULK_EDGE_SPLIT, MATERIAL_DB, bulk_homo_fraction
-    f, src = bulk_homo_fraction("CdSe")
-    assert f == 0.95 and "Grueneis" in src
-    assert bulk_homo_fraction("CSPBBR3")[0] == 0.0
-    f, src = bulk_homo_fraction("PBS")
-    assert f == 0.5 and src.startswith("default")
-    for m, (fb, _) in BULK_EDGE_SPLIT.items():
-        assert m in MATERIAL_DB and -0.5 <= fb <= 1.0
+def test_bulk_edge_split_modes():
+    import qdex.hardness as hh
+    try:
+        hh.set_bulk_edge_split("symmetric", verbose=False)
+        assert hh.bulk_homo_fraction("CdSe")[0] == 0.5
+        hh.set_bulk_edge_split("bulk", verbose=False)
+        f, src = hh.bulk_homo_fraction("CdSe")
+        assert f == 0.95 and "Grueneis" in src
+        assert hh.bulk_homo_fraction("PBS")[0] == 0.5            # no bulk value: default 1/2
+        hh.set_bulk_edge_split("cluster", verbose=False)
+        assert hh.bulk_homo_fraction("CdSe")[0] == 0.07
+        assert hh.bulk_homo_fraction("CSPBBR3")[0] == 0.60
+        hh.set_bulk_edge_split(0.3, verbose=False)
+        assert hh.bulk_homo_fraction("GaAs")[0] == 0.3
+        with pytest.raises(ValueError):
+            hh.set_bulk_edge_split("vacuum", verbose=False)
+        for table in (hh.BULK_EDGE_SPLIT, hh.CLUSTER_EDGE_SPLIT):
+            assert all(m in hh.MATERIAL_DB for m in table)
+    finally:
+        hh.set_bulk_edge_split("symmetric", verbose=False)

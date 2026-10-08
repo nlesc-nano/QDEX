@@ -16,8 +16,8 @@ where
 
 * :math:`\varepsilon_n` is the KS (PBE) energy;
 * :math:`\Delta_{\mathrm{bulk}}` is the bulk GW gap opening from ``MATERIAL_DB`` (bulk QSGW), and
-  :math:`f_b` its valence share, from bulk GW band-edge shifts (0.95 for CdSe; see
-  :doc:`/workflows/qp_edges`); it moves the absolute levels, not the gap;
+  :math:`f_b` its valence share (``quasiparticles.bulk_edge_split``; 1/2 by default). It shifts all
+  levels by a constant and leaves the gap unchanged (:doc:`/workflows/qp_edges`);
 * :math:`Z_n\,\Delta\Sigma_n[\Delta W]` is the finite-size self-energy of ΔW, weighted by the
   quasiparticle weight :math:`Z_n`.
 

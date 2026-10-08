@@ -148,6 +148,15 @@ quasiparticles
      - ``none``
      - ``experimental``: a constant shift that puts the bulk limit on the room-temperature gap; with
        ``bulk_vertex: scaled`` and a numeric factor, the split model (:doc:`/quasiparticles/gw`)
+   * - ``bulk_edge_split`` [``--bulk-edge-split``]
+     - ``symmetric``
+     - HOMO share f_b of the bulk QP correction; places IP and EA, leaves the gap and the BSE unchanged:
+       ``symmetric`` (1/2), ``cluster`` (calibrated on evGW of small clusters), ``bulk`` (bulk GW and
+       experiment) or a number (:doc:`/workflows/qp_edges`)
+   * - ``ip_ea`` [``--qp-ip-ea``]
+     - ``resta``
+     - IP/EA of ``bulk``: ``resta`` adds the ``sgw-resta`` self-energy of the HOMO and LUMO (report only),
+       ``rigid`` the bulk shift only (:doc:`/quasiparticles/models`)
    * - ``bulk_geometry`` [``--bulk-geometry``]
      - ``strain``
      - geometry correction of the bulk shift for PBE-relaxed dots: ``strain`` (bulk PBE gap change between

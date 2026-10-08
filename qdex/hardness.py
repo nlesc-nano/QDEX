@@ -810,30 +810,33 @@ def anchor_residual_scale(material_name, radius_ang, dft_gap=None, mode="econf",
     return float((R0 / R) ** float(residual_power)), "power"
 
 
-# Split of the bulk QP correction Delta_bulk between the band edges (quasiparticles: absolute IP/EA).
-# Delta_bulk is a gap correction (QSGW gap - PBE gap) and says nothing about how the two edges move; the
-# HOMO share f_b comes from bulk GW band-edge shifts on a fixed electrostatic reference (frozen Hartree
-# potential), f_b = -dE_VBM / (dE_CBM - dE_VBM):
-#   material: (f_b, source)
-# Materials not listed use f_b = 0.5 (a warning is printed). f_b moves the IP and EA, not the gap.
-#
-# Source: GW with the vertex in the self-energy, GWTC-TC + GWGamma1 on HSE, against PBE (A. Grueneis,
-# G. Kresse, Y. Hinuma, F. Oba, Phys. Rev. Lett. 112, 096401 (2014), Suppl. Table IV; gaps of Y. Hinuma
-# et al., Phys. Rev. B 90, 155405 (2014), Table I): dE_VBM = -(IP_GWGamma1 - IP_PBE) of the nonpolar
-# surface, dE_CBM = dE_VBM + (E_g^GW - E_g^PBE). The vertex in Sigma raises both edges by 0.2-0.3 eV
-# relative to GW0 and brings the split onto experiment, f_exp = (IP_exp - IP_PBE) / (E_g,exp - E_g^PBE):
-# CdSe 0.94, CdTe 0.95-0.97, ZnS 0.99, ZnSe 0.88, ZnTe 0.75, GaAs 0.65-0.81, InP 0.84-1.07, AlSb 0.97
-# (same tables). Spread from the method alone: about +-0.2 (GW0@PBE gives f_b > 1, as both edges go down).
-# Zero or inverted PBE gap (GaSb, InAs, InSb): f_b = -dE_VBM / Delta_bulk with Delta_bulk of MATERIAL_DB
-# (index 8 - index 7), so that the VBM moves by the literature amount.
-# Wurtzite: the zinc-blende value (Chen and Pasquarello, Phys. Rev. B 86, 035134 (2012): zb and wz band-edge
-# shifts agree). Hg chalcogenides: no edge-resolved GW; the Cd analogue (same anion-p VBM pushed down by GW
-# through the shallow d band). Lead halide perovskites: no CsPbX3 data; MAPbI3 with spin-orbit coupling has
-# the VBM unchanged or slightly up and the whole opening on the CBM (G0W0, M. R. Filip and F. Giustino,
-# Phys. Rev. B 90, 245145 (2014), Table I: f = -0.21; QSGW+SOC, F. Brivio et al., Phys. Rev. B 89, 155204
-# (2014): f ~ -0.2), taken as f_b = 0. No data: PbS, PbSe (VBM Pb 6s - anion p like the perovskites, CBM Pb 6p;
-# small f_b expected), Cs3Bi2Br9, MAPbI3/FAPbI3 (default 0.5).
-_GWG1 = "GWGamma1 vs PBE band-edge shifts (Grueneis et al. PRL 112, 096401 (2014), SM Table IV)"
+# Split of the bulk QP correction Delta_bulk between the band edges (quasiparticles.bulk_edge_split).
+# Delta_bulk is a gap correction (QSGW gap - PBE gap): it fixes the gap but not where the two edges go. The
+# HOMO share f_b (HOMO: -f_b Delta_bulk, LUMO: +(1 - f_b) Delta_bulk) moves the absolute levels (IP, EA) by a
+# common constant and leaves every energy difference, hence the gap and the BSE, unchanged. It is not known to
+# better than about +-0.5 in nanocrystals (docs/workflows/qp_edges.rst):
+#   - bulk crystals: most of the opening lowers the valence band, f_b = 0.75-0.98 for II-VI and III-V (GWGamma
+#     and experiment vs PBE slab ionization potentials);
+#   - 1-2 nm clusters (evGW@PBE0 of M16X13Cl6-type clusters, CdSe also at 1.9 nm): f_b ~ 0 for the Zn, Cd, Ga, In
+#     compounds and 0.3-0.9 for Al pnictides, Pb chalcogenides and CsPbX3 (calibrations against QDEX's own
+#     finite-size term, see CLUSTER_EDGE_SPLIT);
+#   - the edge split of cluster GW depends on the starting point and the basis by several tenths of an eV, and
+#     measured nanocrystal IPs are dominated by ligand dipoles (0.3-2 eV).
+# Modes: 'symmetric' (default; f_b = 1/2 for every material, the rigid +-Delta/2 split of Biffi, Cho, Krahne and
+# Berkelbach, arXiv:2210.01324), 'cluster' (CLUSTER_EDGE_SPLIT), 'bulk' (BULK_EDGE_SPLIT) or a number.
+BULK_EDGE_SPLIT_MODE = "symmetric"
+
+# Bulk band-edge split: GW with the vertex in the self-energy, GWTC-TC + GWGamma1 on HSE, against PBE (A. Grueneis,
+# G. Kresse, Y. Hinuma, F. Oba, Phys. Rev. Lett. 112, 096401 (2014), Suppl. Table IV; gaps of Y. Hinuma et al.,
+# Phys. Rev. B 90, 155405 (2014), Table I): dE_VBM = -(IP_GWGamma1 - IP_PBE) of the nonpolar surface,
+# dE_CBM = dE_VBM + (E_g^GW - E_g^PBE). Experiment agrees, f_exp = (IP_exp - IP_PBE) / (E_g,exp - E_g^PBE):
+# CdSe 0.94, CdTe 0.95-0.97, ZnS 0.99, ZnSe 0.88, ZnTe 0.75, GaAs 0.65-0.81, InP 0.84-1.07, AlSb 0.97.
+# Zero or inverted PBE gap (GaSb, InAs, InSb): f_b = -dE_VBM / Delta_bulk (index 8 - index 7). Wurtzite: the
+# zinc-blende value. Hg chalcogenides: the Cd analogue. Lead halide perovskites: MAPbI3 with spin-orbit coupling
+# (M. R. Filip and F. Giustino, Phys. Rev. B 90, 245145 (2014); F. Brivio et al., Phys. Rev. B 89, 155204 (2014)),
+# f_b ~ 0. Not listed: f_b = 1/2.
+_GWG1 = "bulk GWGamma1 vs PBE band-edge shifts (Grueneis et al. PRL 112, 096401 (2014), SM Table IV)"
+_MAPI = "bulk MAPbI3+SOC analogue (Filip & Giustino PRB 90, 245145 (2014); Brivio et al. PRB 89, 155204 (2014))"
 BULK_EDGE_SPLIT = {
     "ZNS": (0.78, _GWG1), "ZNSE": (0.82, _GWG1), "ZNTE": (0.75, _GWG1),
     "CDS": (0.87, _GWG1), "CDSE": (0.95, _GWG1), "CDTE": (0.88, _GWG1),
@@ -843,22 +846,59 @@ BULK_EDGE_SPLIT = {
     "GASB": (0.73, _GWG1 + "; dE_VBM = -0.84 eV over Delta_bulk (PBE gap ~ 0)"),
     "INAS": (0.87, _GWG1 + "; dE_VBM = -0.90 eV over Delta_bulk (inverted PBE gap)"),
     "INSB": (0.90, _GWG1 + "; dE_VBM = -0.84 eV over Delta_bulk (inverted PBE gap)"),
-    "HGS": (0.87, "analogue of CdS (no edge-resolved GW for HgS)"),
-    "HGSE": (0.95, "analogue of CdSe (no edge-resolved GW for HgSe)"),
-    "HGTE": (0.88, "analogue of CdTe (no edge-resolved GW for HgTe)"),
-    "CSPBCL3": (0.0, "analogue of MAPbI3 with SOC (Filip & Giustino PRB 90, 245145 (2014); Brivio et al. PRB 89, 155204 (2014))"),
-    "CSPBBR3": (0.0, "analogue of MAPbI3 with SOC (Filip & Giustino PRB 90, 245145 (2014); Brivio et al. PRB 89, 155204 (2014))"),
-    "CSPBI3": (0.0, "analogue of MAPbI3 with SOC (Filip & Giustino PRB 90, 245145 (2014); Brivio et al. PRB 89, 155204 (2014))"),
+    "HGS": (0.87, "bulk analogue of CdS"), "HGSE": (0.95, "bulk analogue of CdSe"),
+    "HGTE": (0.88, "bulk analogue of CdTe"),
+    "CSPBCL3": (0.0, _MAPI), "CSPBBR3": (0.0, _MAPI), "CSPBI3": (0.0, _MAPI),
+}
+
+# Cluster calibration: the f_b with which QDEX (sgw-resta, or bulk with ip_ea: resta; bulk_vertex: scaled,
+# bulk_vertex_factor: material, bulk_residual: experimental; vacuum, mnok, Mulliken) reproduces the evGW@PBE0
+# ionization potential of the M16X13Cl6-type clusters (CP2K, DZVP-MOLOPT, PERIODIC NONE/MULTIPOLE, 4 evGW
+# iterations; the cluster anchors of MATERIAL_DB, indices 10-13): f_b = (IP_GW - IP_QDEX(f_b = 0)) / Delta_bulk.
+# For CdSe the 1.2 nm value (0.07) reproduces the evGW0@PBE0 IP of a 1.9 nm Cd68Se55Cl26 cluster to 0.01 eV.
+# Values outside [0, 1] (Hg, PbS) absorb errors of QDEX's finite-size term for those clusters: calibrations,
+# not physical splits. EA then carries QDEX's gap error. Wurtzite: the zinc-blende value. Not listed: f_b = 1/2.
+_CL = "cluster evGW@PBE0 calibration (M16X13Cl6-type cluster, qdex/hardness.py CLUSTER_EDGE_SPLIT)"
+CLUSTER_EDGE_SPLIT = {
+    "ZNS": (0.18, _CL), "ZNSE": (0.02, _CL), "ZNTE": (-0.05, _CL),
+    "CDS": (0.23, _CL), "CDSE": (0.07, _CL), "CDTE": (-0.07, _CL),
+    "CDS_WZ": (0.23, _CL + "; zinc-blende value"), "CDSE_WZ": (0.07, _CL + "; zinc-blende value"),
+    "HGS": (-0.32, _CL), "HGSE": (-0.49, _CL), "HGTE": (-0.51, _CL),
+    "ALP": (0.91, _CL), "ALAS": (0.64, _CL), "ALSB": (0.41, _CL),
+    "GAP": (0.71, _CL), "GAAS": (0.09, _CL), "GASB": (0.02, _CL),
+    "INP": (0.28, _CL), "INAS": (-0.01, _CL), "INSB": (-0.08, _CL),
+    "PBS": (1.37, _CL), "PBSE": (0.75, _CL),
+    "CSPBCL3": (0.75, _CL), "CSPBBR3": (0.60, _CL), "CSPBI3": (0.28, _CL),
 }
 
 
+def set_bulk_edge_split(mode="symmetric", verbose=True):
+    """Set how the bulk QP correction is split between the band edges: 'symmetric', 'cluster', 'bulk' or a number."""
+    global BULK_EDGE_SPLIT_MODE
+    key = str(mode if mode not in (None, "") else "symmetric").strip().lower()
+    if key not in ("symmetric", "cluster", "bulk"):
+        try:
+            key = float(key)
+        except ValueError:
+            raise ValueError(f"bulk_edge_split must be 'symmetric', 'cluster', 'bulk' or a number, not '{mode}'")
+    BULK_EDGE_SPLIT_MODE = key
+    if verbose and key != "symmetric":
+        logger.info(f"  [QP] Bulk edge split: {key} (HOMO share of the bulk QP correction; absolute levels only)")
+
+
 def bulk_homo_fraction(material_name, default=0.5):
-    """HOMO share f_b of the bulk QP correction for the absolute band edges. Returns (f_b, source)."""
+    """HOMO share f_b of the bulk QP correction (BULK_EDGE_SPLIT_MODE). Returns (f_b, source)."""
     m_name = str(material_name).upper() if material_name else "DEFAULT"
-    if m_name in BULK_EDGE_SPLIT:
-        f_b, source = BULK_EDGE_SPLIT[m_name]
+    mode = BULK_EDGE_SPLIT_MODE
+    if isinstance(mode, float):
+        return float(mode), "fixed (quasiparticles.bulk_edge_split)"
+    if mode == "symmetric":
+        return 0.5, "symmetric split (Biffi et al., arXiv:2210.01324)"
+    table = CLUSTER_EDGE_SPLIT if mode == "cluster" else BULK_EDGE_SPLIT
+    if m_name in table:
+        f_b, source = table[m_name]
         return float(f_b), str(source)
-    return float(default), "default (no bulk GW band-edge data)"
+    return float(default), f"default 1/2 (no {mode} band-edge split for {m_name})"
 
 
 def anchor_bulk_homo_fraction(material_name, default=0.5):

@@ -837,6 +837,10 @@ def _build_parser():
                         help="Residual of the bulk reference: 'none' (QSGW with the vertex factor) or 'experimental' "
                              "(constant shift that puts the bulk limit on the room-temperature gap; with "
                              "bulk_vertex: scaled, the split model).")
+    parser.add_argument("--bulk-edge-split", dest="bulk_edge_split", type=str, default="symmetric",
+                        help="HOMO share f_b of the bulk QP correction, which places the absolute levels (IP, EA) and leaves "
+                             "the gap unchanged: 'symmetric' (default, f_b = 1/2), 'cluster' (per material, calibrated on "
+                             "evGW@PBE0 of small clusters), 'bulk' (bulk GW / experiment) or a number.")
     parser.add_argument("--bulk-geometry", dest="bulk_geometry", choices=["strain", "full", "none"], default="strain",
                         help="Geometry correction of the bulk QP shift for PBE-relaxed dots: 'strain' (default; bulk PBE "
                              "gap change between a_exp and the dot's measured lattice), 'full' (dot at the bulk PBE "
@@ -1285,6 +1289,7 @@ def _prepare_run(args, *, config_path, parser):
     _hardness.set_bulk_vertex(getattr(args, "bulk_vertex", "none"), getattr(args, "bulk_vertex_factor", 0.8))
     _hardness.set_bulk_geometry(getattr(args, "bulk_geometry", "strain"))
     _hardness.set_bulk_residual(getattr(args, "bulk_residual", "none"))
+    _hardness.set_bulk_edge_split(getattr(args, "bulk_edge_split", "symmetric"))
     _hardness.set_mnok_options(getattr(args, "mnok_exponent", 2.0), getattr(args, "mnok_exponent_exchange", None),
                                getattr(args, "mnok_onsite", "ip_ea"))
     compute_device, dev_obj = resolve_device(args.device, verbose=True)
@@ -2085,6 +2090,7 @@ def _ip_ea_and_energy_axis(args, *,
     dft_lumo_raw = eps[homo_index + 1]
 
     entry = MATERIAL_DB.get(args.material.upper(), None)
+    f_b = d_bulk = None
 
     if getattr(args, "periodic_enabled", False):
         f_homo, f_lumo = 0.0, 1.0
@@ -2150,12 +2156,14 @@ def _ip_ea_and_energy_axis(args, *,
         logger.info(f"    PBE HOMO / LUMO  : {dft_homo_raw:8.4f} / {dft_lumo_raw:8.4f} eV (CP2K eigenvalues; on the vacuum scale only for PERIODIC NONE with an isolated Poisson solver)")
         logger.info(f"    QP shifts        : HOMO {qp_homo - dft_homo_raw:+.4f} eV, LUMO {qp_lumo - dft_lumo_raw:+.4f} eV "
                     f"({split_note})")
+        f_b = d_bulk = None
         if args.material:
             f_b, f_b_source = bulk_homo_fraction(args.material)
             logger.info(f"    Bulk edge split  : f_b = {f_b:.3f} of the bulk QP shift on the HOMO ({f_b_source})")
             if f_b_source.startswith("default"):
-                logger.warning(f"  [QP Warning] No bulk GW band-edge split for {str(args.material).upper()}: f_b = 0.5; "
-                               "the gap is unaffected, the absolute IP/EA are uncertain by f_b x the bulk shift.")
+                logger.warning(f"  [QP Warning] {f_b_source}: f_b = 0.5.")
+            if qp_provenance is not None and qp_provenance.get("bulk_shift_ev") is not None:
+                d_bulk = float(qp_provenance["bulk_shift_ev"])
 
     if getattr(args, "periodic_enabled", False):
         logger.info(f"    QP HOMO-like     : {qp_homo:8.4f} eV (relative eigenvalue)")
@@ -2163,6 +2171,17 @@ def _ip_ea_and_energy_axis(args, *,
     else:
         logger.info(f"    QP HOMO (IP)     : {qp_homo:8.4f} eV   -> IP = {-qp_homo:8.4f} eV")
         logger.info(f"    QP LUMO (EA)     : {qp_lumo:8.4f} eV   -> EA = {-qp_lumo:8.4f} eV")
+        if f_b is not None and d_bulk is not None:
+            # f_b moves both edges by d_bulk per unit of f_b: IP(f) = IP + (f - f_b) d_bulk, the same for EA.
+            ip_lo, ip_hi = -qp_homo - f_b * d_bulk, -qp_homo + (1.0 - f_b) * d_bulk
+            ea_lo, ea_hi = -qp_lumo - f_b * d_bulk, -qp_lumo + (1.0 - f_b) * d_bulk
+            logger.info(f"    Split range      : f_b = 0 -> 1 gives IP {ip_lo:.3f} -> {ip_hi:.3f} eV, EA {ea_lo:.3f} -> "
+                        f"{ea_hi:.3f} eV (bulk shift {d_bulk:.3f} eV; the gap does not depend on f_b)")
+            if qp_provenance is not None:
+                import qdex.hardness as _hardness_mod
+                qp_provenance.update({"bulk_homo_fraction": float(f_b), "bulk_edge_split": str(_hardness_mod.BULK_EDGE_SPLIT_MODE),
+                                      "ip_range_fb0_fb1_ev": [float(ip_lo), float(ip_hi)],
+                                      "ea_range_fb0_fb1_ev": [float(ea_lo), float(ea_hi)]})
     if qp_provenance is not None:
         qp_provenance.update({
             "target_pbe_gap_ev": float(dft_gap),
