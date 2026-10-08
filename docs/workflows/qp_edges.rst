@@ -61,16 +61,33 @@ Execution
 Key Output
 ~~~~~~~~~~
 
-The terminal prints the reconstructed absolute band edges:
+The terminal prints the absolute band edges of the dot:
 
 .. code-block:: text
 
    [Absolute Band Edges (IP & EA)]
-     Raw CP2K HOMO    :  -3.2140 eV (Floating Vacuum)
-     Modeled PBE HOMO :  -5.4210 eV (anchor-reconstructed)
-     -> Shift Split   : HOMO takes 43.1%, LUMO takes 56.9%
-     QP HOMO (IP)     :  -5.8920 eV   -> IP = 5.8920 eV
-     QP LUMO (EA)     :  -3.4110 eV   -> EA = 3.4110 eV
+     PBE HOMO / LUMO  :  e_H / e_L eV (CP2K eigenvalues; on the vacuum scale only for PERIODIC NONE ...)
+     QP shifts        : HOMO d_H eV, LUMO d_L eV (orbital-resolved QP levels)
+     QP HOMO (IP)     :  e_H + d_H eV   -> IP = -(e_H + d_H) eV
+     QP LUMO (EA)     :  e_L + d_L eV   -> EA = -(e_L + d_L) eV
+
+The edges are the dot's own PBE eigenvalues plus the QP shift of each edge:
+
+.. math::
+
+   \mathrm{IP} = -\left(\varepsilon_\mathrm{HOMO}^\mathrm{PBE} + \Delta_\mathrm{HOMO}\right), \qquad
+   \mathrm{EA} = -\left(\varepsilon_\mathrm{LUMO}^\mathrm{PBE} + \Delta_\mathrm{LUMO}\right).
+
+A finite cluster computed with ``PERIODIC NONE`` and an isolated Poisson solver has its eigenvalues on
+the vacuum scale (``MULTIPOLE`` is within about 0.04 eV of ``WAVELET`` and ``MT`` for the 1.2 nm CdSe
+cluster in a 28 Å box), so dots of different sizes compare directly; keep a similar amount of vacuum
+around each dot. A run with a periodic Poisson solver has an arbitrary eigenvalue zero, and its IP/EA are
+meaningless (the 1.2 nm MO file in ``tests/CdSe/1.2nm`` lies rigidly 0.66 eV above the same cluster
+computed with ``PERIODIC NONE`` and ``MULTIPOLE``).
+With orbital-resolved QP levels (the Delta-W models, ``quasiparticles.levels: orbital``)
+:math:`\Delta_\mathrm{HOMO}` and :math:`\Delta_\mathrm{LUMO}` are the model's own shifts of the two
+orbitals; with rigid levels (``bulk``, ``levels: rigid``) the gap correction is split between the edges
+with the model's HOMO fraction. Periodic runs have no vacuum level, and no IP/EA is assigned.
 
 Both ``fuzzy_dashboard_dft.html`` and ``fuzzy_dashboard_qp.html`` are created, allowing direct side-by-side comparison of DFT and quasiparticle band structures.
 

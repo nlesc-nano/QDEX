@@ -49,6 +49,7 @@ SECTIONS = {
         "z": "qp_z",
         "selfenergy": "qp_selfenergy",
         "levels": "qp_levels",
+        "ip_ea": "qp_ip_ea",
         "window": "qp_window",
         "window_size": "qp_window_size",
         "solvent_term": "qp_solvent_term",

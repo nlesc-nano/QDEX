@@ -369,6 +369,46 @@ def cohsex_qp_energies(eps, coh, sex, homo_index, bulk_shift, z_mode, z_fixed, e
     return eps_qp, info
 
 
+def resta_edge_shifts(C, S, homo_index, atom_ao_ranges, coords, atom_symbols, material, eps_out, dft_gap,
+                      bulk_shift, homo_fraction_bulk, alpha=1.0, solvent_term="sphere", selfenergy="cohsex",
+                      z_mode="derived", z_fixed=0.8, populations="mulliken"):
+    """HOMO and LUMO QP shifts of the sgw-resta model, for the absolute edges (IP/EA) of a gap-only model.
+
+    The shifts are those of the orbital-resolved sgw-resta levels (one shot, Penn-scaled Resta W,
+    sphere reaction field, atom representation), with the bulk correction of the calling model:
+
+        HOMO:  -f_b D_bulk       + Z_H Sigma_H
+        LUMO:  (1 - f_b) D_bulk  + Z_L Sigma_L
+
+    Sigma_n = COH_n + SEX_n (``cohsex_diagonal``) or -/+ 1/2 q_n^T dW q_n (classical). The finite-size
+    part is what the charged states (IP, EA) feel; in the optical gap it cancels against the
+    electron-hole binding. Returns (d_homo, d_lumo, info).
+    """
+    from qdex.hardness import _ScreeningModel
+    h, l = int(homo_index), int(homo_index) + 1
+    model = _ScreeningModel("resta", np.asarray(coords, dtype=float), atom_symbols, material, eps_out,
+                            solvent_term, alpha=alpha, penn_scaling=True)
+    w_qd, eps_z = model.one_shot(float(dft_gap))
+    dW = atom_delta_w(model.w_parts(w_qd, eps_z))
+    if str(selfenergy).lower() == "cohsex":
+        coh, sex = cohsex_diagonal(C, S, h, atom_ao_ranges, dW_atom=dW, eval_indices=np.array([h, l]))
+        sig = np.array([coh[h] + sex[h], coh[l] + sex[l]])
+    else:
+        C_cols = C[:, [h, l]]
+        q = orbital_populations(C_cols, S, atom_ao_ranges, populations, "atom")
+        s = orbital_sigma(q, dW)
+        sig = np.array([-s[0], s[1]])
+    z = plasmon_pole_z(sig, eps_z, material) if z_mode == "derived" else np.full(2, float(z_fixed))
+    fb = float(homo_fraction_bulk)
+    d_h = -fb * float(bulk_shift) + float(z[0] * sig[0])
+    d_l = (1.0 - fb) * float(bulk_shift) + float(z[1] * sig[1])
+    info = {"ipea_edge_model": "sgw_resta_edges", "ipea_selfenergy": str(selfenergy).lower(),
+            "ipea_sigma_homo_ev": float(sig[0]), "ipea_sigma_lumo_ev": float(sig[1]),
+            "ipea_z_homo": float(z[0]), "ipea_z_lumo": float(z[1]), "ipea_eps_eff": float(eps_z),
+            "ipea_homo_shift_ev": float(d_h), "ipea_lumo_shift_ev": float(d_l)}
+    return d_h, d_l, info
+
+
 # ---------------------------------------------------------------------------
 # Anchor residuals of the Delta-W models (calibrated on the evGW anchor cluster)
 # ---------------------------------------------------------------------------

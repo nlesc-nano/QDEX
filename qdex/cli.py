@@ -26,7 +26,7 @@ from qdex.constants import HA_TO_EV, BOHR_PER_ANG
 from qdex.exciton_analysis import ExcitonAnalyzer, plot_analysis_summary
 from qdex.integrals import compute_dipole_ao
 from qdex.oscillator import compute_oscillator_strengths
-from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap, build_gamma, anchor_bulk_homo_fraction
+from qdex.hardness import MATERIAL_DB, estimate_brus_qp_gap, estimate_gw_qp_gap, build_gamma, anchor_bulk_homo_fraction, bulk_homo_fraction
 from qdex.qp_levels import (xs_shared_w, atom_delta_w, orbital_qp_energies, orbital_populations,
                              cohsex_diagonal, cohsex_qp_energies, anchor_key, load_anchor_table,
                              save_anchor_entry)
@@ -898,6 +898,11 @@ def _build_parser():
     parser.add_argument("--qp-edge-split", dest="qp_edge_split", choices=["anchor", "model"], default="model",
                         help="HOMO/LUMO split of the QP correction for absolute IP/EA: 'model' (the model's own "
                              "levels, default) or 'anchor' (legacy per-edge curves fitted to the monomer evGW).")
+    parser.add_argument("--qp-ip-ea", dest="qp_ip_ea", choices=["resta", "rigid"], default="resta",
+                        help="Absolute edges (IP/EA) of the gap-only 'bulk' model: 'resta' (default; HOMO and LUMO "
+                             "shifts of the sgw-resta levels, i.e. the bulk shift split with f_b plus the finite-size "
+                             "Delta-W self-energy of each edge, report only: the gap and the BSE are unchanged) or "
+                             "'rigid' (the bulk shift split with f_b only).")
     parser.add_argument("--qp-levels", dest="qp_levels", choices=["orbital", "rigid"], default="orbital",
                         help="QP energies of models that define W: 'orbital' (default; every molecular orbital gets its "
                              "own Z_p * sigma_p) or 'rigid' (one scissor on all virtual orbitals).")
@@ -1764,7 +1769,7 @@ def _quasiparticle_correction(args, *,
                 pbe_bulk_gap = float(bulk_vertex_info.get("bulk_pbe_gap_dot_lattice_ev", entry[7]))
                 gw_bulk_gap = float(entry[8])
             target_qp_gap = dft_gap + scissor
-            f_homo = anchor_bulk_homo_fraction(args.material)
+            f_homo, f_b_source = bulk_homo_fraction(args.material)
             f_lumo = 1.0 - f_homo
             qp_provenance = {
                 "qp_model": "bulk_gw_scissor",
@@ -1785,7 +1790,21 @@ def _quasiparticle_correction(args, *,
                 "residual_scale": 0.0,
                 "anchor_residual_scale": 0.0,
                 "bulk_homo_fraction": float(f_homo),
+                "bulk_homo_fraction_source": f_b_source,
             }
+            if (str(getattr(args, "qp_ip_ea", "resta")).lower() == "resta"
+                    and not getattr(args, "periodic_enabled", False)):
+                # Absolute edges only: the sgw-resta HOMO/LUMO shifts (finite-size Delta-W self-energy of
+                # each edge, which the charged states feel) on top of this model's bulk shift.
+                from qdex.qp_levels import resta_edge_shifts
+                use_dz, z_val = resolve_qp_z(args, True)
+                _, _, ipea_info = resta_edge_shifts(
+                    C, S, homo_index, atom_ao_ranges, np.array(coords_ang), syms, args.material, args.eps_out,
+                    dft_gap, scissor, f_homo, alpha=args.alpha,
+                    solvent_term=getattr(args, "qp_solvent_term", "sphere"),
+                    selfenergy=getattr(args, "qp_selfenergy", "cohsex"),
+                    z_mode="derived" if use_dz else "fixed", z_fixed=z_val, populations=qp_pop_mode)
+                qp_provenance.update(ipea_info)
             logger.info(f"  [QP] Pure Bulk GW Scissor mode selected ('{args.qp_gap}'):")
             logger.info(f"       -> Scissor = {scissor:+.4f} eV (PBE bulk {pbe_bulk_gap:.3f} -> GW bulk {gw_bulk_gap:.3f} eV)")
             logger.info(f"       -> Zero finite-size Delta-W or boundary polarization applied.")
@@ -2057,11 +2076,14 @@ def _ip_ea_and_energy_axis(args, *,
         eps_shifted, f_homo, f_lumo, homo_index, qp_provenance, scissor, syms, t0_gap, target_qp_gap):
     """IP/EA prediction and the shifted energy axis."""
     # =========================================================================
-    # DYNAMIC IP & EA PREDICTION (Vacuum-Anchored Projection Method)
+    # IP & EA: the dot's own PBE frontier eigenvalues plus the QP shift of each edge.
+    # A finite cluster (PERIODIC NONE, isolated Poisson solver) has its eigenvalues on the
+    # vacuum scale (MULTIPOLE within ~0.04 eV of WAVELET/MT for the 1.2 nm CdSe cluster in a
+    # 28 A box), so dots of different sizes compare directly and HOMO_QP = -IP, LUMO_QP = -EA.
     # =========================================================================
     dft_homo_raw = eps[homo_index]
     dft_lumo_raw = eps[homo_index + 1]
-    
+
     entry = MATERIAL_DB.get(args.material.upper(), None)
 
     if getattr(args, "periodic_enabled", False):
@@ -2075,94 +2097,65 @@ def _ip_ea_and_energy_axis(args, *,
         logger.info(f"    Bulk GW scissor  : virtual manifold shifted by {scissor:+.4f} eV")
         logger.info("    Note             : absolute IP/EA levels are not assigned in periodic mode.")
 
-    elif qp_provenance is not None and "f_homo" in qp_provenance and "f_lumo" in qp_provenance:
-        if (getattr(args, "qp_edge_split", "model") == "anchor"
-                and qp_provenance.get("edge_split_source") is None
-                and entry is not None and len(entry) >= 14):
-            # Delta-W models split the correction almost 50/50 (classical charging);
-            # take the HOMO/LUMO split from the per-edge two-anchor curves instead.
-            from qdex.hardness import anchor_edge_curves, get_cluster_size_metrics
-            r_split = qp_provenance.get("cluster_radius_ang")
-            if r_split is None:
-                r_split = get_cluster_size_metrics(np.array(coords_ang), syms, args.material)["R_eff_hull"]
-            from qdex.hardness import anchor_residual_scale
-            dec, _ = anchor_residual_scale(args.material, float(r_split), dft_gap,
-                                           getattr(args, "qp_residual_scaling", "econf"), args.qp_residual_power)
-            edges = anchor_edge_curves(args.material, float(r_split), args.eps_out,
-                                       residual_power=args.qp_residual_power, decay=dec)
-            if edges is not None:
-                qp_provenance.setdefault("f_homo_micro", qp_provenance["f_homo"])
-                qp_provenance.setdefault("f_lumo_micro", qp_provenance["f_lumo"])
-                qp_provenance["f_homo"] = float(edges["f_homo"])
-                qp_provenance["f_lumo"] = float(edges["f_lumo"])
-                qp_provenance["edge_split_source"] = "anchor_edge_curves"
-                logger.info(f"\n  [QP Edge Split] Anchor-calibrated: HOMO {edges['f_homo']*100:.1f}% / LUMO "
-                      f"{edges['f_lumo']*100:.1f}% (model's own split: {qp_provenance['f_homo_micro']*100:.1f}% / "
-                      f"{qp_provenance['f_lumo_micro']*100:.1f}%)")
-        f_homo = float(qp_provenance["f_homo"])
-        f_lumo = float(qp_provenance["f_lumo"])
-        model_name = qp_provenance.get("qp_model", "microscopic").upper()
-
-        if entry is not None and len(entry) >= 14:
-            pbe_h_mono, pbe_l_mono = entry[10], entry[11]
-            gap_pbe_mono = pbe_l_mono - pbe_h_mono
-            shrinkage_pbe = gap_pbe_mono - dft_gap
-            true_pbe_homo = pbe_h_mono + (shrinkage_pbe * f_homo)
-            true_pbe_lumo = pbe_l_mono - (shrinkage_pbe * f_lumo)
-            qp_homo = true_pbe_homo - (scissor * f_homo)
-            qp_lumo = true_pbe_lumo + (scissor * f_lumo)
-            logger.info(f"\n  [Absolute Band Edges (IP & EA - Microscopic Wavefunction Asymmetry)]")
-            logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (Floating Vacuum)")
-            logger.info(f"    Modeled PBE HOMO : {true_pbe_homo:8.4f} eV (vacuum-anchored)")
-            logger.info(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}% ({model_name})")
-        else:
-            qp_homo = dft_homo_raw - (scissor * f_homo)
-            qp_lumo = dft_lumo_raw + (scissor * f_lumo)
-            logger.info(f"\n  [Absolute Band Edges (IP & EA - Microscopic Wavefunction Asymmetry)]")
-            logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV")
-            logger.info(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}% ({model_name})")
-
-    elif entry is not None and len(entry) >= 14:
-        pbe_h_mono, pbe_l_mono, gw_h_mono, gw_l_mono = entry[10], entry[11], entry[12], entry[13]
-        gap_pbe_mono = pbe_l_mono - pbe_h_mono
-        
-        # 1. Asymmetry Fractions from the GW Anchor
-        delta_h = gw_h_mono - pbe_h_mono
-        delta_l = gw_l_mono - pbe_l_mono
-        anchor_gap_opening = delta_l - delta_h
-
-        if anchor_gap_opening > 1.0e-12 and delta_h <= 0.0 and delta_l >= 0.0:
-            f_homo = -delta_h / anchor_gap_opening
-            f_lumo = delta_l / anchor_gap_opening
-        else:
-            f_homo = f_lumo = 0.5
-            logger.warning("  [QP Warning] Anchor frontier shifts do not bracket the PBE gap; using a symmetric edge split.")
-        
-        # 2. Project Absolute PBE Levels (Bypassing CP2K floating vacuum)
-        # We use the computed intermediate PBE gap (dft_gap) as the physical truth
-        shrinkage_pbe = gap_pbe_mono - dft_gap 
-        
-        true_pbe_homo = pbe_h_mono + (shrinkage_pbe * f_homo)
-        true_pbe_lumo = pbe_l_mono - (shrinkage_pbe * f_lumo)
-        
-        # 3. Apply the Dielectric Scissor to get QP levels
-        qp_homo = true_pbe_homo - (scissor * f_homo)
-        qp_lumo = true_pbe_lumo + (scissor * f_lumo)
-        
-        logger.info(f"\n  [Absolute Band Edges (IP & EA)]")
-        logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV (Floating Vacuum)")
-        logger.info(f"    Modeled PBE HOMO : {true_pbe_homo:8.4f} eV (anchor-reconstructed)")
-        logger.info(f"    -> Shift Split   : HOMO takes {f_homo*100:.1f}%, LUMO takes {f_lumo*100:.1f}%")
-
     else:
-        # Fallback if no 14-item monomer data is available
-        f_homo, f_lumo = 0.5, 0.5
-        qp_homo = dft_homo_raw - (scissor * f_homo)
-        qp_lumo = dft_lumo_raw + (scissor * f_lumo)
-        
+        if eps_qp_active is not None:
+            # Orbital-resolved QP levels: the model's own HOMO and LUMO shifts.
+            qp_homo = float(eps_qp_active[homo_index])
+            qp_lumo = float(eps_qp_active[homo_index + 1])
+            split_note = "orbital-resolved QP levels"
+        elif qp_provenance is not None and "ipea_homo_shift_ev" in qp_provenance:
+            # Gap-only model with the sgw-resta edge self-energies (quasiparticles.ip_ea: resta).
+            qp_homo = dft_homo_raw + float(qp_provenance["ipea_homo_shift_ev"])
+            qp_lumo = dft_lumo_raw + float(qp_provenance["ipea_lumo_shift_ev"])
+            split_note = (f"bulk shift split f_b = {float(qp_provenance.get('bulk_homo_fraction', 0.5)):.2f} "
+                          f"+ sgw-resta edge self-energies Z*Sigma: HOMO {qp_provenance['ipea_z_homo'] * qp_provenance['ipea_sigma_homo_ev']:+.3f}, "
+                          f"LUMO {qp_provenance['ipea_z_lumo'] * qp_provenance['ipea_sigma_lumo_ev']:+.3f} eV")
+        else:
+            # Rigid levels: the gap correction split between the edges.
+            if qp_provenance is not None and "f_homo" in qp_provenance and "f_lumo" in qp_provenance:
+                if (getattr(args, "qp_edge_split", "model") == "anchor"
+                        and qp_provenance.get("edge_split_source") is None
+                        and entry is not None and len(entry) >= 14):
+                    # Delta-W models split the correction almost 50/50 (classical charging);
+                    # take the HOMO/LUMO split from the per-edge two-anchor curves instead.
+                    from qdex.hardness import anchor_edge_curves, get_cluster_size_metrics
+                    r_split = qp_provenance.get("cluster_radius_ang")
+                    if r_split is None:
+                        r_split = get_cluster_size_metrics(np.array(coords_ang), syms, args.material)["R_eff_hull"]
+                    from qdex.hardness import anchor_residual_scale
+                    dec, _ = anchor_residual_scale(args.material, float(r_split), dft_gap,
+                                                   getattr(args, "qp_residual_scaling", "econf"), args.qp_residual_power)
+                    edges = anchor_edge_curves(args.material, float(r_split), args.eps_out,
+                                               residual_power=args.qp_residual_power, decay=dec)
+                    if edges is not None:
+                        qp_provenance.setdefault("f_homo_micro", qp_provenance["f_homo"])
+                        qp_provenance.setdefault("f_lumo_micro", qp_provenance["f_lumo"])
+                        qp_provenance["f_homo"] = float(edges["f_homo"])
+                        qp_provenance["f_lumo"] = float(edges["f_lumo"])
+                        qp_provenance["edge_split_source"] = "anchor_edge_curves"
+                        logger.info(f"\n  [QP Edge Split] Anchor-calibrated: HOMO {edges['f_homo']*100:.1f}% / LUMO "
+                              f"{edges['f_lumo']*100:.1f}% (model's own split: {qp_provenance['f_homo_micro']*100:.1f}% / "
+                              f"{qp_provenance['f_lumo_micro']*100:.1f}%)")
+                f_homo = float(qp_provenance["f_homo"])
+                f_lumo = float(qp_provenance["f_lumo"])
+                split_note = (f"rigid, HOMO {f_homo*100:.1f}% / LUMO {f_lumo*100:.1f}% of the gap correction "
+                              f"({qp_provenance.get('qp_model', 'model').upper()})")
+            else:
+                f_homo, f_lumo = 0.5, 0.5
+                split_note = "rigid, symmetric split of the gap correction (default)"
+            qp_homo = dft_homo_raw - scissor * f_homo
+            qp_lumo = dft_lumo_raw + scissor * f_lumo
+
         logger.info(f"\n  [Absolute Band Edges (IP & EA)]")
-        logger.info(f"    Raw CP2K HOMO    : {dft_homo_raw:8.4f} eV")
-        logger.info(f"    -> Shift Split   : HOMO takes 50.0%, LUMO takes 50.0% (Default)")
+        logger.info(f"    PBE HOMO / LUMO  : {dft_homo_raw:8.4f} / {dft_lumo_raw:8.4f} eV (CP2K eigenvalues; on the vacuum scale only for PERIODIC NONE with an isolated Poisson solver)")
+        logger.info(f"    QP shifts        : HOMO {qp_homo - dft_homo_raw:+.4f} eV, LUMO {qp_lumo - dft_lumo_raw:+.4f} eV "
+                    f"({split_note})")
+        if args.material:
+            f_b, f_b_source = bulk_homo_fraction(args.material)
+            logger.info(f"    Bulk edge split  : f_b = {f_b:.3f} of the bulk QP shift on the HOMO ({f_b_source})")
+            if f_b_source.startswith("default"):
+                logger.warning(f"  [QP Warning] No bulk GW band-edge split for {str(args.material).upper()}: f_b = 0.5; "
+                               "the gap is unaffected, the absolute IP/EA are uncertain by f_b x the bulk shift.")
 
     if getattr(args, "periodic_enabled", False):
         logger.info(f"    QP HOMO-like     : {qp_homo:8.4f} eV (relative eigenvalue)")
@@ -2178,7 +2171,9 @@ def _ip_ea_and_energy_axis(args, *,
             "modeled_qp_lumo_ev": float(qp_lumo),
             "modeled_ip_ev": float(-qp_homo),
             "modeled_ea_ev": float(-qp_lumo),
-            "absolute_edge_model": "anchor_reconstructed",
+            "absolute_edge_model": "dft_eigenvalues_plus_qp_shift",
+            "dft_homo_ev": float(dft_homo_raw),
+            "dft_lumo_ev": float(dft_lumo_raw),
         })
         write_qp_provenance(qp_provenance, dft_gap, target_qp_gap, scissor, args)
     # =========================================================================
@@ -2357,7 +2352,7 @@ def _active_space_and_soc(args, *,
 
     qp_breakdown_alpha = None
     if qp_provenance is not None and getattr(args, "qp_gap", "").lower() not in ("pbe", "none", "dft"):
-        fb = qp_provenance.get("bulk_homo_fraction", anchor_bulk_homo_fraction(args.material))
+        fb = qp_provenance.get("bulk_homo_fraction", bulk_homo_fraction(args.material)[0])
         d_bulk = float(qp_provenance.get("bulk_gw_shift_ev", qp_provenance.get("bulk_shift_ev", 0.0)))
         bulk_arr = np.where(np.arange(len(eps)) <= homo_index, -fb * d_bulk, (1.0 - fb) * d_bulk)
         

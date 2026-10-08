@@ -167,3 +167,14 @@ def test_perovskite_confinement_is_measured_from_the_tilted_bulk():
     finally:
         h.set_bulk_vertex("none", verbose=False)
         h.set_bulk_geometry("none", verbose=False)
+
+
+def test_bulk_edge_split_table():
+    from qdex.hardness import BULK_EDGE_SPLIT, MATERIAL_DB, bulk_homo_fraction
+    f, src = bulk_homo_fraction("CdSe")
+    assert f == 0.95 and "Grueneis" in src
+    assert bulk_homo_fraction("CSPBBR3")[0] == 0.0
+    f, src = bulk_homo_fraction("PBS")
+    assert f == 0.5 and src.startswith("default")
+    for m, (fb, _) in BULK_EDGE_SPLIT.items():
+        assert m in MATERIAL_DB and -0.5 <= fb <= 1.0

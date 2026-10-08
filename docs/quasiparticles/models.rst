@@ -16,7 +16,8 @@ where
 
 * :math:`\varepsilon_n` is the KS (PBE) energy;
 * :math:`\Delta_{\mathrm{bulk}}` is the bulk GW gap opening from ``MATERIAL_DB`` (bulk QSGW), and
-  :math:`f_b` its valence share (41.2 % for CdSe);
+  :math:`f_b` its valence share, from bulk GW band-edge shifts (0.95 for CdSe; see
+  :doc:`/workflows/qp_edges`); it moves the absolute levels, not the gap;
 * :math:`Z_n\,\Delta\Sigma_n[\Delta W]` is the finite-size self-energy of ΔW, weighted by the
   quasiparticle weight :math:`Z_n`.
 
@@ -73,6 +74,22 @@ hybrid orbitals it would count the exchange opening twice. The confinement is th
 the actual orbitals. With ``excitations.mode: sbse`` and a
 bulk kernel this is the sBSE: by the Delerue–Lannoo–Allan cancellation the surface polarization drops
 out of the neutral excitation, and neither the QP gap nor the BSE needs it.
+
+The cancellation holds for the neutral excitation only. The ionization potential and the electron
+affinity are charged states and keep the finite-size self-energy of each edge. For the absolute edges
+(:doc:`/workflows/qp_edges`) ``bulk`` therefore adds the ``sgw-resta`` self-energy of the HOMO and
+the LUMO (``quasiparticles.ip_ea: resta``, the default):
+
+.. math::
+
+   \Delta_{\mathrm{HOMO}} = -f_b\,\Delta_{\mathrm{bulk}} + Z_H\,\Delta\Sigma_H[\Delta W_{\mathrm{Resta}}],\qquad
+   \Delta_{\mathrm{LUMO}} = (1-f_b)\,\Delta_{\mathrm{bulk}} + Z_L\,\Delta\Sigma_L[\Delta W_{\mathrm{Resta}}],
+
+with ΔΣ the ΔCOHSEX diagonal (or the classical term with ``selfenergy: classical``) of the one-shot
+``sgw-resta`` ΔW in the atom representation. This enters IP = −(ε_HOMO + Δ_HOMO) and
+EA = −(ε_LUMO + Δ_LUMO) only; the gap, the levels and the BSE of ``bulk`` are unchanged. With the
+same bulk vertex setting, ``bulk`` and ``sgw-resta`` give the same IP and EA.
+``ip_ea: rigid`` keeps the bulk term only.
 
 **``brus``** replaces the KS gap by the Brus kinetic confinement on the experimental bulk gap (without
 the polarization terms):

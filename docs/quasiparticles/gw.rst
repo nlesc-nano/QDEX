@@ -164,7 +164,13 @@ PBE-relaxed dot, whose lattice is close to the PBE one (+0.166 eV for a 2.62 nm 
 CsPbBr\ :sub:`3` −0.39 eV at the full PBE lattice). Sources, lattices and the measurement of the dot
 lattice: :doc:`/electronic_structure/bulk_bands`. :math:`\Delta_{\mathrm{bulk}}` is
 
-split between the valence and conduction band: :math:`-f_b\,\Delta_{\mathrm{bulk}}` for occupied, :math:`+(1 - f_b)\,\Delta_{\mathrm{bulk}}` for empty states, where :math:`f_b` is the valence share of the bulk opening. In the literature for II-VI semiconductors (Hinuma et al., *PRB* 90, 155405 (2014); Schleife et al., *PRB* 73, 245212 (2006)), the bulk GW opening is asymmetric: the valence-band maximum shifts down by ~42–43% while the conduction-band minimum shifts up by ~57–58%. In QDEX, :math:`f_b` is 41.2 % for CdSe. All dynamical effects of the bulk are inside this number.
+split between the valence and conduction band: :math:`-f_b\,\Delta_{\mathrm{bulk}}` for occupied, :math:`+(1 - f_b)\,\Delta_{\mathrm{bulk}}` for empty states, where :math:`f_b` is the valence share of the bulk opening. The split does not change the gap; it places the levels on the absolute scale (IP, EA). It comes from
+bulk GW band-edge shifts with the vertex in the self-energy (GWΓ\ :sub:`1` against PBE, Grüneis et al.,
+*PRL* 112, 096401 (2014); Hinuma et al., *PRB* 90, 155405 (2014)): in the II-VI and III-V
+semiconductors most of the opening lowers the valence band, :math:`f_b` = 0.75–0.98 (0.95 for CdSe),
+in line with the measured ionization potentials. In the lead halide perovskites with spin-orbit coupling
+the valence band hardly moves and :math:`f_b \approx 0`. Values and sources: ``BULK_EDGE_SPLIT`` in
+``qdex/hardness.py``. All dynamical effects of the bulk are inside this number.
 
 **Vertex correction of the bulk part** (``quasiparticles.bulk_vertex``). QSGW overestimates bulk gaps
 by 10–20 %: its W lacks the electron–hole (ladder) vertex, so the polarizability and ε are too small.
