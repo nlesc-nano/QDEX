@@ -161,3 +161,23 @@ def test_nac_correlation_time_of_an_exponential_coupling(tmp_path):
     # exact integral of exp(-s/tau_c) up to the first zero crossing ~ tau_c (minus the trapezoid offset)
     assert out["tau_c_occ_fs"] == pytest.approx(tau_c, rel=0.15)
     assert out["C_virt"][1] == pytest.approx(phi, abs=0.05)
+
+
+def test_pair_coupling_reduction(tmp_path):
+    from qdex.namd.nac import pair_coupling_reduction
+    rng = np.random.default_rng(3)
+    n, T, dt = 3, 4000, 2.0
+    # pair (0,1): constant coupling -> r = 1; pair (0,2): white noise (decorrelates within a step) -> r small
+    d = np.zeros((T, n, n))
+    d[:, 0, 1] = 0.05
+    d[:, 0, 2] = 0.05 * rng.normal(size=T)
+    d = d - np.transpose(d, (0, 2, 1))
+    for t in range(T):
+        np.savez(tmp_path / f"nac_{t:05d}_to_{t + 1:05d}.npz", d_occ=d[t], d_virt=d[t], dt_fs=dt)
+    tau = np.full((n, n), 20.0)
+    np.savez(tmp_path / "decoherence_times.npz", tau_occ=tau, tau_virt=tau)
+    r_o, _ = pair_coupling_reduction(str(tmp_path), max_lag_fs=60.0)
+    assert r_o[0, 1] == pytest.approx(1.0, abs=1e-6)
+    # white noise: only the s = 0 term survives -> r = 0.5 / sum_s w_s D(s)
+    s = np.arange(31) * dt; w = np.ones(31); w[0] = 0.5
+    assert r_o[0, 2] == pytest.approx(0.5 / np.sum(w * np.exp(-0.5 * (s / 20.0) ** 2)), rel=0.25)

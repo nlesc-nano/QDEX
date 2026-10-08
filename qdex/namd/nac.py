@@ -121,6 +121,8 @@ def compute_nac_files(precompute_dir, scheme="logm", workers=None, threads_per_w
     logger.info(f"[NAMD NAC] Done in {time.time() - t0:.1f} s")
     try:
         nac_correlation(precompute_dir)
+        if os.path.exists(os.path.join(precompute_dir, "decoherence_times.npz")):
+            pair_coupling_reduction(precompute_dir)
     except Exception as exc:
         logger.warning(f"[NAMD NAC] Coupling correlation not computed: {exc}")
     return len(todo)
@@ -183,3 +185,62 @@ def nac_correlation(precompute_dir, max_steps=500, max_lag=25, neighbours=5, n_p
     logger.info(f"[NAMD NAC] Coupling correlation time: holes {out['tau_c_occ_fs']:.2f} fs, "
                 f"electrons {out['tau_c_virt_fs']:.2f} fs")
     return out
+
+
+def pair_coupling_reduction(precompute_dir, max_lag_fs=60.0, max_steps=None, write=True):
+    """Pair-resolved effect of the coupling fluctuations on the golden-rule rate.
+
+    For every pair of each channel, with C_ij(s) = Re<d_ij*(t) d_ij(t+s)>_t / <|d_ij|^2>_t (truncated at its
+    first non-positive lag) and the pair dephasing D_ij(s) = exp(-s^2 / 2 tau_ij^2) of decoherence_times.npz,
+
+        r_ij = sum_s w_s C_ij(s) D_ij(s) / sum_s w_s D_ij(s)      (trapezoid weights, s <= max_lag_fs)
+
+    is the fraction of the constant-coupling rate that survives; the PME (pme_tau: pairs_nac) uses
+    tau_eff_ij = r_ij tau_ij, which is tau_ij for a coupling that keeps its phase (r = 1). The lagged
+    products are accumulated streaming over the steps with a buffer of the last max_lag_fs/dt couplings.
+    Adds r_occ, r_virt (float32) to nac_correlation.npz. Returns (r_occ, r_virt)."""
+    from collections import deque
+    files = sorted(glob.glob(os.path.join(precompute_dir, "nac_*_to_*.npz")))
+    if max_steps:
+        files = files[:max_steps]
+    dec = np.load(os.path.join(precompute_dir, "decoherence_times.npz"))
+    z0 = np.load(files[0])
+    dt = float(z0["dt_fs"]) if "dt_fs" in z0.files else 2.0
+    L = int(max(1, round(max_lag_fs / dt)))
+    w = np.ones(L + 1); w[0] = 0.5
+    result = {}
+    for ch, key, tkey in (("occ", "d_occ", "tau_occ"), ("virt", "d_virt", "tau_virt")):
+        n = z0[key].shape[0]
+        acc = np.zeros((L + 1, n, n))
+        buf = deque(maxlen=L + 1)
+        T = 0
+        for f in files:
+            d = np.load(f)[key]
+            buf.appendleft(d)                       # buf[s] = d(t - s)
+            for s in range(len(buf)):
+                acc[s] += np.real(np.conj(buf[s]) * d)
+            T += 1
+        counts = np.array([T - s for s in range(L + 1)], dtype=float)
+        C = acc / counts[:, None, None]
+        C0 = np.maximum(C[0], 1e-30)
+        C = C / C0
+        alive = np.cumprod(C > 0, axis=0).astype(bool)        # truncate each pair at its first zero
+        C = np.where(alive, C, 0.0)
+        tau = np.asarray(dec[tkey], float)[:n, :n]
+        s_fs = (np.arange(L + 1) * dt)[:, None, None]
+        D = np.exp(-0.5 * (s_fs / np.maximum(tau, 1e-6)) ** 2)
+        r = np.einsum("s,sij->ij", w, C * D) / np.einsum("s,sij->ij", w, D)
+        r = np.clip(r, 0.0, 1.0)
+        np.fill_diagonal(r, 1.0)
+        result[f"r_{ch}"] = r.astype(np.float32)
+        off = ~np.eye(n, dtype=bool)
+        wgt = C0[off]
+        logger.info(f"[NAMD NAC] Pair coupling reduction ({ch}): median {np.median(r[off]):.3f}, "
+                    f"|d|^2-weighted mean {np.sum(r[off] * wgt) / np.sum(wgt):.3f} (max lag {L * dt:.0f} fs)")
+        del acc, C, D
+    if write:
+        path = os.path.join(precompute_dir, "nac_correlation.npz")
+        old = dict(np.load(path)) if os.path.exists(path) else {}
+        old.update(result)
+        np.savez(path, **old)
+    return result["r_occ"], result["r_virt"]

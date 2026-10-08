@@ -187,6 +187,7 @@ def propagate_single_namd_origin(
     pme_tau_mats=None,
     n_atoms=775,
     nac_scheme="logm",
+    fssh_decoherence="damping",
     n_origins=1
 ):
     """
@@ -543,8 +544,9 @@ def propagate_single_namd_origin(
                             })
                         active_pairs[tr] = (i_c, new_a_val)
                         hopped_e_traj[tr] = True
-                        C_e[:, tr] = 0.0
-                        C_e[new_a_sub, tr] = 1.0
+                        if fssh_decoherence != "none":       # collapse onto the new state
+                            C_e[:, tr] = 0.0
+                            C_e[new_a_sub, tr] = 1.0
                     elif zeta < total_hop:
                         p_norm = probs_j / total_j
                         new_i_sub = np.random.choice(n_occ_dyn, p=p_norm)
@@ -559,8 +561,9 @@ def propagate_single_namd_origin(
                             })
                         active_pairs[tr] = (new_i_val, a_c)
                         hopped_h_traj[tr] = True
-                        C_h[:, tr] = 0.0
-                        C_h[new_i_sub, tr] = 1.0
+                        if fssh_decoherence != "none":
+                            C_h[:, tr] = 0.0
+                            C_h[new_i_sub, tr] = 1.0
                     else:
                         if ecsh_auger and k_auger_fs is not None:
                             e_diff_all = np.abs(E_mat_kplus1[dyn_occ_active[:, None], dyn_virt_active[None, :]] - E_curr)
@@ -594,7 +597,7 @@ def propagate_single_namd_origin(
                 curr_a_sub_after = virt_to_sub[np.array([p[1] for p in active_pairs])]
                 curr_i_sub_after = occ_to_sub[np.array([p[0] for p in active_pairs])]
 
-                non_hopped_e = ~hopped_e_traj & ok_e
+                non_hopped_e = ~hopped_e_traj & ok_e & (fssh_decoherence == "damping")
                 if np.any(non_hopped_e):
                     idx_e = np.where(non_hopped_e)[0]
                     C_e[:, idx_e] = apply_edc_decoherence_batch(
@@ -607,7 +610,7 @@ def propagate_single_namd_origin(
                         decay_type=decoherence_decay_type,
                     )
 
-                non_hopped_h = ~hopped_h_traj & ok_h
+                non_hopped_h = ~hopped_h_traj & ok_h & (fssh_decoherence == "damping")
                 if np.any(non_hopped_h):
                     idx_h = np.where(non_hopped_h)[0]
                     C_h[:, idx_h] = apply_edc_decoherence_batch(
@@ -1010,17 +1013,32 @@ def run_namd_dynamics(config):
             cc = dict(np.load(cf)) if os.path.exists(cf) else nac_correlation(precompute_dir)
             if cc is None:
                 raise ValueError("pme_tau: pairs_nac needs the stored couplings (qdex --namd-nac).")
-            tc_o, tc_v = float(cc["tau_c_occ_fs"]), float(cc["tau_c_virt_fs"])
-            t_o = 1.0 / (1.0 / t_o + 1.0 / tc_o)
-            t_v = 1.0 / (1.0 / t_v + 1.0 / tc_v)
-            if method == "master_equation":
-                logger.info(f"  [NAMD] PME line widths: pair dephasing + coupling correlation "
-                            f"(tau_c holes {tc_o:.2f} fs, electrons {tc_v:.2f} fs)")
+            if "r_occ" in cc and "r_virt" in cc and cc["r_occ"].shape[0] >= n_occ and cc["r_virt"].shape[0] >= n_virt:
+                # pair-resolved: tau_eff_ij = r_ij tau_ij (pair_coupling_reduction)
+                t_o = t_o * np.asarray(cc["r_occ"], float)[:n_occ, :n_occ]
+                t_v = t_v * np.asarray(cc["r_virt"], float)[:n_virt, :n_virt]
+                if method == "master_equation":
+                    logger.info("  [NAMD] PME line widths: pair dephasing x pair-resolved coupling correlation")
+            else:
+                tc_o, tc_v = float(cc["tau_c_occ_fs"]), float(cc["tau_c_virt_fs"])
+                t_o = 1.0 / (1.0 / t_o + 1.0 / tc_o)
+                t_v = 1.0 / (1.0 / t_v + 1.0 / tc_v)
+                if method == "master_equation":
+                    logger.info(f"  [NAMD] PME line widths: pair dephasing + coupling correlation per channel "
+                                f"(tau_c holes {tc_o:.2f} fs, electrons {tc_v:.2f} fs)")
+            t_o = np.maximum(t_o, 0.1); t_v = np.maximum(t_v, 0.1)
         elif method == "master_equation":
             logger.info("  [NAMD] PME line widths from the state-pair dephasing times (as DISH).")
         pme_tau_mats = (t_o, t_v)
     n_atoms_meta = int(meta["n_atoms"]) if "n_atoms" in meta.files else 775
     nac_scheme = str(dyn_cfg.get("nac_scheme", "logm")).lower()
+    # FSSH decoherence: damping (inactive amplitudes damped with tau_IJ, collapse on hops; default),
+    # collapse (collapse on hops only) or none (original Tully FSSH, fully coherent)
+    fssh_decoherence = str(dyn_cfg.get("fssh_decoherence", "damping")).lower()
+    if fssh_decoherence not in ("damping", "collapse", "none"):
+        raise ValueError(f"dynamics.fssh_decoherence must be damping, collapse or none, not '{fssh_decoherence}'.")
+    if method in ("cpa_fssh", "fssh", "cpa_fssh_edc", "cpa_fssh_gdc", "fssh_gdc", "fssh_edc"):
+        logger.info(f"  [NAMD] FSSH decoherence: {fssh_decoherence}")
     logger.info(f"  [NAMD] Non-adiabatic couplings: {nac_scheme} "
                 f"({'stored' if os.path.exists(os.path.join(precompute_dir, 'nac_00000_to_00001.npz')) else 'computed per step'})")
 
@@ -1252,6 +1270,7 @@ def run_namd_dynamics(config):
             pme_tau_mats=pme_tau_mats,
             n_atoms=n_atoms_meta,
             nac_scheme=nac_scheme,
+            fssh_decoherence=fssh_decoherence,
         )
         origin_results.append(res_m)
 
