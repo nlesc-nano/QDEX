@@ -119,6 +119,10 @@ def compute_nac_files(precompute_dir, scheme="logm", workers=None, threads_per_w
             if (i + 1) % max(1, len(todo) // 20) == 0:
                 logger.info(f"  [NAMD NAC] {i + 1}/{len(todo)} steps ({time.time() - t0:.0f} s)")
     logger.info(f"[NAMD NAC] Done in {time.time() - t0:.1f} s")
+    try:
+        nac_correlation(precompute_dir)
+    except Exception as exc:
+        logger.warning(f"[NAMD NAC] Coupling correlation not computed: {exc}")
     return len(todo)
 
 
@@ -138,3 +142,44 @@ def step_nacs(precompute_dir, k, S_occ, S_virt, dt, scheme="logm"):
             logger.warning(f"  [NAMD:Warn] No stored logm couplings in {precompute_dir}: computing them on the fly "
                            f"(slow for large windows; run 'qdex --namd-nac' once after the precompute).")
     return nac_from_overlap(S_occ, dt, scheme), nac_from_overlap(S_virt, dt, scheme)
+
+
+def nac_correlation(precompute_dir, max_steps=500, max_lag=25, neighbours=5, n_pairs=4000, write=True):
+    """Time correlation of the couplings of each channel and its correlation time.
+
+    For the pairs that carry the flux (labels i, i+1 .. i+neighbours, the strongest n_pairs by <|d|^2>),
+    C(s) = <d_ij(t) d_ij(t+s)> / <d_ij^2>, averaged over the pairs (weighted by <d_ij^2>), and
+    tau_c = int_0^s0 C(s) ds up to the first zero of C. In the golden rule of a coupling that fluctuates
+    (pure dephasing D(s) = e^{-s/tau}, C(s) = e^{-s/tau_c}) the Lorentzian width is 1/tau + 1/tau_c:
+    k = 2 <|d|^2> tau_eff / (1 + (dE tau_eff/hbar)^2), tau_eff = (1/tau + 1/tau_c)^-1. Constant-coupling
+    rates (tau_eff = tau) overestimate the transfer when tau_c << tau, as in a dense valence band whose
+    states reshuffle within femtoseconds. Writes nac_correlation.npz (C_occ, C_virt, tau_c_occ_fs,
+    tau_c_virt_fs, lags_fs). Returns that dict."""
+    files = sorted(glob.glob(os.path.join(precompute_dir, "nac_*_to_*.npz")))[:max_steps]
+    if len(files) < max_lag + 5:
+        return None
+    z0 = np.load(files[0])
+    dt = float(z0["dt_fs"]) if "dt_fs" in z0.files else 2.0
+    out = {"lags_fs": np.arange(max_lag + 1) * dt}
+    for ch, key in (("occ", "d_occ"), ("virt", "d_virt")):
+        n = z0[key].shape[0]
+        ii = np.concatenate([np.arange(n - k) for k in range(1, neighbours + 1)])
+        jj = np.concatenate([np.arange(k, n) for k in range(1, neighbours + 1)])
+        X = np.array([np.load(f)[key][ii, jj] for f in files])          # (T, pairs), complex for spinors
+        w = np.mean(np.abs(X) ** 2, axis=0)
+        keep = np.argsort(w)[-min(n_pairs, len(w)):]
+        X, w = X[:, keep], w[keep]
+        X = X - X.mean(axis=0)
+        T = X.shape[0]
+        C = np.array([np.real(np.sum(np.mean(np.conj(X[:T - s]) * X[s:], axis=0))) / np.sum(np.mean(np.abs(X) ** 2, axis=0))
+                      for s in range(max_lag + 1)])
+        s0 = int(np.argmax(C <= 0)) if np.any(C <= 0) else len(C)
+        trap = getattr(np, "trapezoid", None) or np.trapz
+        tau_c = float(trap(C[:max(s0, 2)], dx=dt))
+        out[f"C_{ch}"] = C
+        out[f"tau_c_{ch}_fs"] = max(tau_c, 1e-3)
+    if write:
+        np.savez(os.path.join(precompute_dir, "nac_correlation.npz"), **out)
+    logger.info(f"[NAMD NAC] Coupling correlation time: holes {out['tau_c_occ_fs']:.2f} fs, "
+                f"electrons {out['tau_c_virt_fs']:.2f} fs")
+    return out

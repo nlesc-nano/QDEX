@@ -999,11 +999,26 @@ def run_namd_dynamics(config):
     # decoherence_times.npz exists) or the single tau / EDC of tau_dec_fs (pme_tau: uniform)
     pme_tau_mode = str(dyn_cfg.get("pme_tau", "pairs")).lower()
     pme_tau_mats = None
-    if pme_tau_mode == "pairs" and tau_occ_mat is not None and tau_virt_mat is not None \
+    if pme_tau_mode in ("pairs", "pairs_nac") and tau_occ_mat is not None and tau_virt_mat is not None \
             and tau_occ_mat.shape[0] >= n_occ and tau_virt_mat.shape[0] >= n_virt:
-        pme_tau_mats = (np.asarray(tau_occ_mat, float)[:n_occ, :n_occ], np.asarray(tau_virt_mat, float)[:n_virt, :n_virt])
-        if method == "master_equation":
+        t_o = np.asarray(tau_occ_mat, float)[:n_occ, :n_occ]
+        t_v = np.asarray(tau_virt_mat, float)[:n_virt, :n_virt]
+        if pme_tau_mode == "pairs_nac":
+            # golden rule with a fluctuating coupling: width 1/tau_ij + 1/tau_c (coupling correlation time)
+            from qdex.namd.nac import nac_correlation
+            cf = os.path.join(precompute_dir, "nac_correlation.npz")
+            cc = dict(np.load(cf)) if os.path.exists(cf) else nac_correlation(precompute_dir)
+            if cc is None:
+                raise ValueError("pme_tau: pairs_nac needs the stored couplings (qdex --namd-nac).")
+            tc_o, tc_v = float(cc["tau_c_occ_fs"]), float(cc["tau_c_virt_fs"])
+            t_o = 1.0 / (1.0 / t_o + 1.0 / tc_o)
+            t_v = 1.0 / (1.0 / t_v + 1.0 / tc_v)
+            if method == "master_equation":
+                logger.info(f"  [NAMD] PME line widths: pair dephasing + coupling correlation "
+                            f"(tau_c holes {tc_o:.2f} fs, electrons {tc_v:.2f} fs)")
+        elif method == "master_equation":
             logger.info("  [NAMD] PME line widths from the state-pair dephasing times (as DISH).")
+        pme_tau_mats = (t_o, t_v)
     n_atoms_meta = int(meta["n_atoms"]) if "n_atoms" in meta.files else 775
     nac_scheme = str(dyn_cfg.get("nac_scheme", "logm")).lower()
     logger.info(f"  [NAMD] Non-adiabatic couplings: {nac_scheme} "

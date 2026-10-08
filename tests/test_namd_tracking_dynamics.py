@@ -144,3 +144,20 @@ def test_pair_dephasing_cumulant_limits():
     g = np.concatenate([[0], np.cumsum(0.5 * (I1[1:] + I1[:-1]) * dt)]) / hbar ** 2
     k = np.argmax(g >= 1.0)
     assert t1e[0, 1] == pytest.approx((k - 1 + (1 - g[k - 1]) / (g[k] - g[k - 1])) * dt, rel=1e-6)
+
+
+def test_nac_correlation_time_of_an_exponential_coupling(tmp_path):
+    from qdex.namd.nac import nac_correlation
+    rng = np.random.default_rng(11)
+    n, T, dt, tau_c = 12, 3000, 2.0, 6.0
+    phi = np.exp(-dt / tau_c)                       # AR(1): C(s) = phi^(s/dt) = exp(-s/tau_c)
+    x = np.zeros((T, n, n))
+    for t in range(1, T):
+        x[t] = phi * x[t - 1] + np.sqrt(1 - phi ** 2) * rng.normal(size=(n, n))
+    for t in range(T):
+        d = np.triu(x[t], 1); d = d - d.T            # antisymmetric couplings
+        np.savez(tmp_path / f"nac_{t:05d}_to_{t + 1:05d}.npz", d_occ=d, d_virt=d, dt_fs=dt)
+    out = nac_correlation(str(tmp_path), max_steps=T, max_lag=30, write=False)
+    # exact integral of exp(-s/tau_c) up to the first zero crossing ~ tau_c (minus the trapezoid offset)
+    assert out["tau_c_occ_fs"] == pytest.approx(tau_c, rel=0.15)
+    assert out["C_virt"][1] == pytest.approx(phi, abs=0.05)
