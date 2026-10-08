@@ -64,14 +64,38 @@ over the trajectory with a buffer of the last 30 couplings. ``pme_tau: pairs_nac
 the channel :math:`\tau_c` only when the pair values are missing.
 
 In the CsPbX\ :sub:`3` dots the couplings decorrelate within one or two frames (:math:`C_d(2\,\mathrm{fs})`
-= 0.17–0.32 for the holes, 0.45–0.81 for the electrons; :math:`\tau_c` = 1.6–2.8 fs against
-:math:`\tau_{IJ}` = 6–40 fs), so the constant-coupling PME is about twice as fast as DISH, which integrates
-the actual :math:`d(t)`, and the ``pairs_nac`` PME, with one :math:`\tau_c` per channel, about twice as
-slow (spin-free, 2 ps runs, time to lose 1/e of the excess energy: CsPbCl\ :sub:`3` 0.51 / 0.99 / 1.64 ps,
-PME / DISH / PME ``pairs_nac``). The coupling correlation varies over the window (near the conduction-band
-edge of CsPbBr\ :sub:`3` it lasts about twice the channel average), which a single :math:`\tau_c` misses.
-DISH and FSSH need no assumption on the coupling dynamics and are the reference here; the PME brackets
-them.
+= 0.17–0.32 for the holes, 0.45–0.81 for the electrons; :math:`\tau_c` = 1.6–3.9 fs against
+:math:`\tau_{IJ}` = 6–100 fs): a pair keeps 5–15 % of its constant-coupling rate (:math:`|d|^2`-weighted
+mean of :math:`r_{IJ}`). Time to lose :math:`1/e` of the exciton excess energy (spin-free, pump
+2 E\ :sub:`g`, 2 ps run from frame 0; values beyond 2 ps from the exponential fit):
+
+.. list-table::
+   :header-rows: 1
+
+   * -
+     - PME ``pairs``
+     - PME ``pairs_nac``
+     - DISH
+     - FSSH
+   * - CsPbCl\ :sub:`3`
+     - 0.51 ps
+     - 1.27 ps
+     - 0.99 ps
+     - 1.38 ps
+   * - CsPbBr\ :sub:`3`
+     - 0.94 ps
+     - 2.6 ps
+     - 1.64 ps
+     - 2.6 ps
+   * - CsPbI\ :sub:`3`
+     - 1.20 ps
+     - 3.5 ps
+     - 2.1 ps
+     - 3.7 ps
+
+The constant-coupling PME is 2× faster than DISH; with the pair-resolved coupling correlation the PME
+coincides with decoherence-corrected FSSH, and both are 1.3–1.7× slower than DISH. The channel-averaged
+:math:`\tau_c` (one value per channel) gave 1.6, 3.3 and 5.4 ps.
 
 Exciton populations from electron and hole rates
 ------------------------------------------------

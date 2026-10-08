@@ -70,7 +70,11 @@ One nuclear step
 
 ``fssh_decoherence`` selects the decoherence of FSSH: ``damping`` (default, the damping above and the
 collapse on hops), ``collapse`` (collapse on hops only, no damping) or ``none`` (Tully's original FSSH:
-the amplitudes stay coherent, also after a hop). The last two are for tests of over-coherence.
+the amplitudes stay coherent, also after a hop). The last two are for tests of over-coherence. On the
+spin-free CsPbX\ :sub:`3` dots (pump 2 E\ :sub:`g`, 6 origins × 500 fs) the fitted exciton cooling times
+are 0.17 / 0.30 / 0.41 ps (Cl / Br / I) without decoherence, against 1.6 / 2.9 / 3.6 ps with collapse only
+and 1.8 / 3.3 / 4.1 ps with damping: without decoherence the amplitudes spread coherently over the
+dense manifold and the flux hops follow them, so cooling is 5–10× too fast.
 
 QDEX's ``cpa_fssh`` and ``dish`` are separate methods, not one scheme: FSSH hops on the coupling flux
 and adds decoherence as damping; DISH has no flux hops and hops only at decoherence events.

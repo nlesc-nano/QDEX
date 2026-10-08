@@ -48,10 +48,11 @@ When to use which
 
 * **Dense bands, fast dephasing** (hot-carrier cooling in dots of hundreds of atoms, dephasing times of
   10–30 fs): DISH and FSSH integrate the actual time dependence of the couplings and are the reference;
-  they agree within a factor 1.4–1.7 on the CsPbX\ :sub:`3` dots. The PME agrees with them only if the
+  they agree within a factor 1.3–1.7 on the CsPbX\ :sub:`3` dots. The PME agrees with them only if the
   couplings stay correlated over the dephasing time; when they decorrelate faster (dense valence bands,
-  :doc:`pme`), the constant-coupling PME is too fast and the ``pairs_nac`` PME too slow, and the two
-  bracket DISH.
+  :doc:`pme`), the constant-coupling PME is 2× too fast, and the PME with the pair-resolved coupling
+  correlation (``pme_tau: pairs_nac``) coincides with FSSH. FSSH without decoherence is 5–10× too fast
+  (over-coherence).
 * **Sparse levels** (the :math:`1P_e \to 1S_e` gap of a dot, a phonon bottleneck): transitions across
   gaps much larger than the phonon energies are rare and coherent effects matter; FSSH and DISH follow
   them explicitly, the PME only through the Lorentzian tails of its rates.
