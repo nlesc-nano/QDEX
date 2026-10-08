@@ -37,7 +37,7 @@ in DISH; ``pme_tau: uniform`` uses one time, ``tau_dec_fs`` (the lowest-exciton 
 couplings of the step (:doc:`states_couplings`); the rates are rebuilt at every nuclear step.
 
 Fluctuating couplings (``pme_tau: pairs_nac``)
----------------------------------------------
+----------------------------------------------
 
 The rate above assumes that the coupling keeps its phase for the whole dephasing time. For a coupling
 that fluctuates, the golden rule reads
