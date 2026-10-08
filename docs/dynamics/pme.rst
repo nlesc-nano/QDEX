@@ -7,7 +7,7 @@ Part of :doc:`/dynamics/index`.
 
 * Callable: ``qdex.namd.master_equation.propagate_pme_tensor``
 * CLI: ``--namd-run`` (``--namd-method pme``)
-* YAML: ``namd.dynamics.method: master_equation``, ``pme_tau`` (``pairs``, default, or ``uniform``),
+* YAML: ``namd.dynamics.method: master_equation``, ``pme_tau`` (``pairs``, default, ``pairs_nac`` or ``uniform``),
   ``tau_dec_fs``, ``temperature_k``
 
 Idea
@@ -35,6 +35,32 @@ the same rate that DISH produces on average (:doc:`dish`). With ``pme_tau: pairs
 in DISH; ``pme_tau: uniform`` uses one time, ``tau_dec_fs`` (the lowest-exciton cumulant time with
 ``decoherence: cumulant``) or the energy-based estimate with ``tau_dec_fs: edc``. :math:`d` are the
 couplings of the step (:doc:`states_couplings`); the rates are rebuilt at every nuclear step.
+
+Fluctuating couplings (``pme_tau: pairs_nac``)
+---------------------------------------------
+
+The rate above assumes that the coupling keeps its phase for the whole dephasing time. For a coupling
+that fluctuates, the golden rule reads
+
+.. math::
+
+   k_{I \to J} = 2 \langle |d_{IJ}|^2 \rangle\, \operatorname{Re} \int_0^\infty C_d(s)\, D_{IJ}(s)\, e^{i (E_J - E_I) s/\hbar}\, ds ,
+
+with :math:`C_d` the normalised autocorrelation of the coupling; with exponential decays it keeps the
+Lorentzian form with :math:`\tau_{IJ} \to \tau^{\mathrm{eff}}_{IJ} = (1/\tau_{IJ} + 1/\tau_c)^{-1}`.
+``--namd-nac`` stores :math:`C_d(s)` and :math:`\tau_c` of each channel (``nac_correlation.npz``: pairs of
+nearby labels with the largest couplings, integral of :math:`C_d` up to its first zero), and
+``pme_tau: pairs_nac`` uses :math:`\tau^{\mathrm{eff}}`.
+
+In the CsPbX\ :sub:`3` dots the couplings decorrelate within one or two frames (:math:`C_d(2\,\mathrm{fs})`
+= 0.17–0.32 for the holes, 0.45–0.81 for the electrons; :math:`\tau_c` = 1.6–2.8 fs against
+:math:`\tau_{IJ}` = 6–40 fs), so the constant-coupling PME is about twice as fast as DISH, which integrates
+the actual :math:`d(t)`, and the ``pairs_nac`` PME, with one :math:`\tau_c` per channel, about twice as
+slow (spin-free, 2 ps runs, time to lose 1/e of the excess energy: CsPbCl\ :sub:`3` 0.51 / 0.99 / 1.64 ps,
+PME / DISH / PME ``pairs_nac``). The coupling correlation varies over the window (near the conduction-band
+edge of CsPbBr\ :sub:`3` it lasts about twice the channel average), which a single :math:`\tau_c` misses.
+DISH and FSSH need no assumption on the coupling dynamics and are the reference here; the PME brackets
+them.
 
 Exciton populations from electron and hole rates
 ------------------------------------------------

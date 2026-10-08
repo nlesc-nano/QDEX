@@ -47,9 +47,11 @@ When to use which
 -----------------
 
 * **Dense bands, fast dephasing** (hot-carrier cooling in dots of hundreds of atoms, dephasing times of
-  10–30 fs): the three should agree on the cooling rates. PME is the cheapest; DISH gives the same rates
-  with trajectories; FSSH is the check that the result does not depend on the hopping scheme. A
-  disagreement points to a regime where coherence matters or to unconverged sub-steps or ensembles.
+  10–30 fs): DISH and FSSH integrate the actual time dependence of the couplings and are the reference;
+  they agree within a factor 1.4–1.7 on the CsPbX\ :sub:`3` dots. The PME agrees with them only if the
+  couplings stay correlated over the dephasing time; when they decorrelate faster (dense valence bands,
+  :doc:`pme`), the constant-coupling PME is too fast and the ``pairs_nac`` PME too slow, and the two
+  bracket DISH.
 * **Sparse levels** (the :math:`1P_e \to 1S_e` gap of a dot, a phonon bottleneck): transitions across
   gaps much larger than the phonon energies are rare and coherent effects matter; FSSH and DISH follow
   them explicitly, the PME only through the Lorentzian tails of its rates.
@@ -57,5 +59,6 @@ When to use which
   DISH give their statistics, the PME a mean rate. Trapping needs trajectories much longer than the
   cooling (tens of picoseconds) and the trap states inside the active window.
 
-For a new system, run PME and DISH with the same pair dephasing times first; if they agree, the PME can
-be used for scans (pump energy, temperature, window), and FSSH and DISH for the trajectory statistics.
+For a new system, run DISH and FSSH, and the PME with ``pairs`` and ``pairs_nac``; check the coupling
+correlation time in ``nac_correlation.npz`` against the dephasing times. If the PME variants agree with
+DISH, the PME can be used for scans (pump energy, temperature, window).
