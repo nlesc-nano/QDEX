@@ -1416,6 +1416,12 @@ def run_namd_dynamics(config):
 
         w_max_cm = float(tr_sd_cfg.get("w_max_cm", 400.0))
         sigma_t = float(tr_sd_cfg.get("sigma_t_fs", 15.0))
+        if hop_records:
+            import pandas as pd
+            hops_file = tr_sd_cfg.get("hops_csv", "hops.csv")
+            pd.DataFrame(hop_records).to_csv(hops_file, index=False)
+            logger.info(f"  [NAMD] {len(hop_records)} hops written to {hops_file} (time_fs, channel, from, to, traj; "
+                        f"from/to are tracked orbital labels)")
 
         tr_sd_res = compute_time_resolved_spectral_density(
             times_fs=times,
