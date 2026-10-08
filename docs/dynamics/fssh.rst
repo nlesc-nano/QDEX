@@ -7,8 +7,8 @@ Part of :doc:`/dynamics/index`.
 
 * Module: ``qdex.namd.surface_hopping`` (``run_namd_dynamics``), ``qdex.namd.integrator``
 * CLI: ``--namd-run`` (``--namd-method cpa_fssh``)
-* YAML: ``namd.dynamics.method: cpa_fssh``, ``n_trajectories``, ``temperature_k``, ``detailed_balance``,
-  ``nac_scheme``, ``seed``
+* YAML: ``namd.dynamics.method: cpa_fssh``, ``fssh_decoherence``, ``n_trajectories``, ``temperature_k``,
+  ``detailed_balance``, ``nac_scheme``, ``seed``
 
 Idea
 ----
@@ -67,6 +67,13 @@ One nuclear step
    amplitudes are **not** reset to the active state at every step: resetting would project the
    wavefunction every 2 fs and freeze the transitions (quantum Zeno effect), while keeping them without
    damping lets the trajectories stay coherent for ever (over-coherence) and hop back and forth.
+
+``fssh_decoherence`` selects the decoherence of FSSH: ``damping`` (default, the damping above and the
+collapse on hops), ``collapse`` (collapse on hops only, no damping) or ``none`` (Tully's original FSSH:
+the amplitudes stay coherent, also after a hop). The last two are for tests of over-coherence.
+
+QDEX's ``cpa_fssh`` and ``dish`` are separate methods, not one scheme: FSSH hops on the coupling flux
+and adds decoherence as damping; DISH has no flux hops and hops only at decoherence events.
 
 Without ``decoherence_times.npz`` a warning is printed and all pairs get one time: ``tau_dec_fs`` (with
 ``decoherence: cumulant`` the lowest-exciton cumulant time) or 20 fs. ``method: cpa_fssh_gdc`` damps with :math:`e^{-(\Delta t/\tau)^2/2}` per step instead; applied

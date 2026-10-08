@@ -48,9 +48,20 @@ that fluctuates, the golden rule reads
 
 with :math:`C_d` the normalised autocorrelation of the coupling; with exponential decays it keeps the
 Lorentzian form with :math:`\tau_{IJ} \to \tau^{\mathrm{eff}}_{IJ} = (1/\tau_{IJ} + 1/\tau_c)^{-1}`.
-``--namd-nac`` stores :math:`C_d(s)` and :math:`\tau_c` of each channel (``nac_correlation.npz``: pairs of
-nearby labels with the largest couplings, integral of :math:`C_d` up to its first zero), and
-``pme_tau: pairs_nac`` uses :math:`\tau^{\mathrm{eff}}`.
+``--namd-nac`` stores in ``nac_correlation.npz`` the correlation of each channel (:math:`C_d(s)`,
+:math:`\tau_c`) and, for every pair, the fraction of the constant-coupling rate that survives the
+fluctuations,
+
+.. math::
+
+   r_{IJ} = \frac{\sum_s w_s\, C_{IJ}(s)\, D_{IJ}(s)}{\sum_s w_s\, D_{IJ}(s)}, \qquad
+   C_{IJ}(s) = \frac{\operatorname{Re}\langle d_{IJ}^*(t)\, d_{IJ}(t+s) \rangle_t}{\langle |d_{IJ}|^2 \rangle_t},
+   \qquad D_{IJ}(s) = e^{-s^2/2\tau_{IJ}^2},
+
+(trapezoid weights :math:`w_s`, lags up to 60 fs, :math:`C_{IJ}` cut at its first zero), accumulated
+over the trajectory with a buffer of the last 30 couplings. ``pme_tau: pairs_nac`` uses
+:math:`\tau^{\mathrm{eff}}_{IJ} = r_{IJ}\, \tau_{IJ}` (``r = 1`` for a coupling that keeps its phase), and
+the channel :math:`\tau_c` only when the pair values are missing.
 
 In the CsPbX\ :sub:`3` dots the couplings decorrelate within one or two frames (:math:`C_d(2\,\mathrm{fs})`
 = 0.17–0.32 for the holes, 0.45–0.81 for the electrons; :math:`\tau_c` = 1.6–2.8 fs against
