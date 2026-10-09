@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import time
 from pymatgen.core import Structure
@@ -259,137 +260,19 @@ def compute_fuzzy_intensity(C_dense, shells, kpts_cart, nthreads, fold_to_bz=Fal
     return W[0]
 
 
-def kspace_descriptors(intensity, kpts_cart, gamma_radius=0.12):
-    """Bulk-likeness of each state from its fuzzy-band profile P(k) = I(k) / sum_k I(k) along the path.
-
-    gamma: weight within ``gamma_radius`` (1/A) of Gamma (the CdSe-type band edges sit at Gamma);
-    entropy: -sum_k P ln P / ln N_k, from 0 (one k-point) to 1 (spread evenly over the path, as a
-    state localized in real space). Returns (gamma, entropy, uniform), where uniform is the Gamma
-    weight of a flat profile (the fraction of path points within gamma_radius)."""
-    intensity = np.atleast_2d(np.asarray(intensity, dtype=float))
-    total = intensity.sum(axis=1, keepdims=True)
-    P = np.divide(intensity, total, out=np.zeros_like(intensity), where=total > 0)
-    near = np.linalg.norm(np.asarray(kpts_cart, dtype=float), axis=1) < gamma_radius
-    gamma = P[:, near].sum(axis=1)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        plogp = np.where(P > 0, P * np.log(P), 0.0)
-    entropy = -plogp.sum(axis=1) / np.log(P.shape[1])
-    return gamma, entropy, float(near.mean())
-
-
-def frontier_kspace_descriptors(cif, C_dense, mo_indices, n_mo, shells, syms, coords_ang, nthreads,
-                                fold_to_bz=True, g_shell=2, gamma_radius=0.12):
-    """kspace_descriptors for the MOs ``mo_indices`` on the fuzzy-band k-path of ``cif`` (same path,
-    BZ folding and G shell as the fuzzy bands). Returns a dict with ``gamma`` and ``entropy`` arrays
-    of length n_mo (NaN for the MOs not evaluated), plus ``gamma_radius`` and ``gamma_uniform``."""
-    mo_indices = np.asarray(mo_indices, dtype=int)
-    kpts_cart, _labels, reciprocal_matrix = generate_automated_kpath(
-        cif, coords_ang, line_density=50, return_reciprocal=True, syms=syms)
-    intensity = compute_fuzzy_intensity(np.asarray(C_dense, dtype=float), shells, kpts_cart, nthreads,
-                                        fold_to_bz=fold_to_bz, g_shell=g_shell,
-                                        reciprocal_matrix=reciprocal_matrix, mo_indices=mo_indices)
-    g, s, uniform = kspace_descriptors(intensity, kpts_cart, gamma_radius)
-    gamma = np.full(n_mo, np.nan)
-    entropy = np.full(n_mo, np.nan)
-    gamma[mo_indices] = g
-    entropy[mo_indices] = s
-    return {"gamma": gamma, "entropy": entropy, "gamma_radius": float(gamma_radius), "gamma_uniform": uniform}
-
-
-def bz_grid_kpoints(reciprocal_matrix, n):
-    """n x n x n Monkhorst-Pack grid (Gamma-free, centred) of the primitive BZ, Cartesian 1/A."""
-    g = (np.arange(n) + 0.5) / n - 0.5
-    frac = np.array(np.meshgrid(g, g, g, indexing="ij")).reshape(3, -1).T
-    return frac @ np.asarray(reciprocal_matrix, dtype=float)
-
-
-def k_participation(W):
-    """1 / (N sum_k P_k^2) of each row of W (P = W / sum_k W): 1 when the weight is spread evenly over
-    the N k-points (a state localized in real space), ~1/N when it sits on one k-point."""
-    W = np.atleast_2d(np.asarray(W, dtype=float))
-    tot = W.sum(axis=1, keepdims=True)
-    P = np.divide(W, tot, out=np.zeros_like(W), where=tot > 0)
-    s2 = (P ** 2).sum(axis=1)
-    return np.divide(1.0, W.shape[1] * s2, out=np.ones(len(W)), where=s2 > 0)
-
-
-def bulk_bands_on_path(material, cif, semicore_rel, semicore_label, kpts_frac, soc=False, bs_path=None):
-    """Bulk bands aligned on the dot's semicore level, interpolated onto every point of the fuzzy path.
-    Returns dict(Eb (n_k, n_bands), valence (n_bands,) bool, vbm, cbm) or None (no semicore anchor)."""
-    if semicore_rel is None:
-        return None
-    from qdex.bulk_bands import get_aligned_bulk_bands
-    res = get_aligned_bulk_bands(material=material, bs_path=bs_path, alignment_mode="core_level", ewin=(-50.0, 50.0),
-                                 qd_semicore_rel=semicore_rel, path_frac=kpts_frac, soc=soc, cif=cif,
-                                 qd_semicore_label=semicore_label)
-    if res is None or res.get("alignment_mode") != "core_level" or not res.get("segments"):
-        return None
-    n_k = len(kpts_frac)
-    n_b = res["segments"][0][1].shape[1]
-    Eb = np.full((n_k, n_b), np.nan)
-    kk = np.arange(n_k)
-    for x, b in res["segments"]:
-        lo, hi = int(np.ceil(np.min(x))), int(np.floor(np.max(x)))
-        for j in range(n_b):
-            Eb[lo:hi + 1, j] = np.interp(kk[lo:hi + 1], x, b[:, j])
-    top = np.nanmax(Eb, axis=0)
-    return {"Eb": Eb, "valence": top <= res["vbm_aligned"] + 1e-6,
-            "vbm": float(res["vbm_aligned"]), "cbm": float(res["cbm_aligned"])}
-
-
-def onband_weight(intensity, energies, occupied, bulk, delta=0.20):
-    """Share of each state's path weight P(k) at the k-points where a bulk band of its own side
-    (valence for occupied, conduction for empty states) lies within ``delta`` eV of its energy:
-    sum_k P(k) max_b exp(-(E - E_b(k))^2 / 2 delta^2). NaN without aligned bulk bands."""
-    intensity = np.atleast_2d(np.asarray(intensity, dtype=float))
-    energies = np.asarray(energies, dtype=float)
-    out = np.full(len(energies), np.nan)
-    if bulk is None or len(energies) == 0:
-        return out
-    tot = intensity.sum(axis=1, keepdims=True)
-    P = np.divide(intensity, tot, out=np.zeros_like(intensity), where=tot > 0)
-    occupied = np.asarray(occupied, dtype=bool)
-    for side, bands in ((occupied, bulk["valence"]), (~occupied, ~bulk["valence"])):
-        if not side.any() or not bands.any():
-            continue
-        Eb = bulk["Eb"][:, bands]                                         # (n_k, n_b)
-        g = np.exp(-0.5 * ((energies[side, None, None] - Eb[None, :, :]) / delta) ** 2)
-        near = np.nan_to_num(np.nanmax(np.where(np.isnan(g), -1.0, g), axis=2).clip(0.0))
-        out[side] = (P[side] * near).sum(axis=1)
-    return out
-
-
-def classify_band_edges(energies, occupied, kpart, onband, bulk, kpart_max=0.5, onband_min=0.25, gap_tol=0.10,
-                        kpart_margin=0.30, ref_window=1.5):
-    """Delocalized band edges and the trap states between them and the nominal HOMO/LUMO.
-
-    A state is localized (trap-like) if its weight is spread over the Brillouin zone, i.e. its
-    k-participation is at least max(kpart_max, ref + kpart_margin), where ref is the smallest
-    k-participation on its side within ref_window eV of the gap (the most band-like state of the dot:
-    in a 1 nm cluster even delocalized orbitals are broad in k), or if it is off the bulk bands
-    (on-band weight < onband_min) while lying more than gap_tol eV inside the aligned bulk gap. The
-    delocalized HOMO/LUMO are the first states that are neither, counted inward from the gap; the
-    states passed on the way are the traps.
-    Returns dict(flag, homo, lumo, deloc_homo, deloc_lumo, localized), flag = 0 band, 1 trap, 2 delocalized HOMO,
-    3 delocalized LUMO; homo/lumo/deloc_* are indices into ``energies`` (None if not found); localized marks
-    every state that fails the band test."""
+def classify_edges(energies, occupied, labels):
+    """Band edges from the angular-coverage classes (qdex.angular: S-like, P-like, D-like, Facet, Localized), the
+    same rule as the population table. Counting inward from the gap, the first S/P/D-like state is the delocalized
+    HOMO (LUMO); the states passed on the way are flagged 1 (Localized) or 4 (Facet).
+    Returns dict(flag, homo, lumo, deloc_homo, deloc_lumo, localized), flag 0 other, 1 localized, 2 delocalized
+    HOMO, 3 delocalized LUMO, 4 facet; indices into ``energies`` (None if not found); localized marks every state
+    that is not S/P/D-like."""
+    from qdex.angular import BAND_CLASSES
     E = np.asarray(energies, dtype=float)
     occ = np.asarray(occupied, dtype=bool)
-    kp = np.asarray(kpart, dtype=float)
-    ob = np.nan_to_num(np.asarray(onband, dtype=float), nan=1.0)
-    if bulk is not None:
-        inside = np.where(occ, E > bulk["vbm"] + gap_tol, E < bulk["cbm"] - gap_tol)
-    else:
-        inside = np.zeros(len(E), dtype=bool)
-    thr = np.full(len(E), float(kpart_max))
-    res = {"homo": None, "lumo": None, "deloc_homo": None, "deloc_lumo": None, "kpart_threshold": {}}
-    for side, key, edge in ((occ, "homo", E[occ].max() if occ.any() else 0.0), (~occ, "lumo", E[~occ].min() if (~occ).any() else 0.0)):
-        near = side & (np.abs(E - edge) <= ref_window)
-        if near.any():
-            t = max(float(kpart_max), float(kp[near].min()) + float(kpart_margin))
-            thr[side] = t
-            res["kpart_threshold"][key] = t
-    localized = (kp >= thr) | ((ob < onband_min) & inside)
+    lab = np.asarray([str(x) for x in labels])
+    band = np.isin(lab, BAND_CLASSES)
+    res = {"homo": None, "lumo": None, "deloc_homo": None, "deloc_lumo": None}
     flag = np.zeros(len(E), dtype=np.int8)
     for side, key, order in ((occ, "homo", np.argsort(-E)), (~occ, "lumo", np.argsort(E))):
         idx = [int(i) for i in order if side[i]]
@@ -397,32 +280,52 @@ def classify_band_edges(energies, occupied, kpart, onband, bulk, kpart_max=0.5, 
             continue
         res[key] = idx[0]
         for i in idx:
-            if not localized[i]:
+            if band[i]:
                 res["deloc_" + key] = i
                 flag[i] = 2 if key == "homo" else 3
                 break
-            flag[i] = 1
+            flag[i] = 1 if lab[i] == "Localized" else 4
     res["flag"] = flag
-    res["localized"] = localized
+    res["localized"] = ~band
     return res
 
 
-def trap_summary(prefix, energies, res, bulk):
-    """Log line of classify_band_edges."""
+def edge_summary(prefix, energies, res):
+    """Log line [Traps:SF|SOC] of the delocalized band edges and the states between them and the nominal edges."""
     E = np.asarray(energies, dtype=float)
     if res["deloc_homo"] is None or res["deloc_lumo"] is None:
-        logger.info(f"  [Traps:{prefix}] Delocalized band edges not found in the window.")
+        logger.info(f"  [Traps:{prefix}] No S/P/D-like state on one side of the gap in the fuzzy window.")
         return
-    n_h = int(np.sum((res["flag"] == 1) & (E <= E[res["homo"]] + 1e-9) & (E > E[res["deloc_homo"]])))
-    n_e = int(np.sum(res["flag"] == 1) - n_h)
-    b = (f"; bulk VBM/CBM {bulk['vbm']:+.3f}/{bulk['cbm']:+.3f} eV" if bulk is not None else "")
-    t = res.get("kpart_threshold", {})
-    if t:
-        b += f"; k-participation thresholds VB/CB {t.get('homo', float('nan')):.2f}/{t.get('lumo', float('nan')):.2f}"
-    logger.info(f"  [Traps:{prefix}] Delocalized HOMO {E[res['deloc_homo']]:+.3f} eV ({n_h} trap states above the HOMO "
-                f"{E[res['homo']]:+.3f}), delocalized LUMO {E[res['deloc_lumo']]:+.3f} eV ({n_e} below the LUMO "
-                f"{E[res['lumo']]:+.3f}); gap {E[res['lumo']] - E[res['homo']]:.3f} -> "
-                f"{E[res['deloc_lumo']] - E[res['deloc_homo']]:.3f} eV{b}")
+    f = res["flag"]
+    def count(hi, lo):
+        m = (E <= hi + 1e-9) & (E >= lo - 1e-9)
+        return int(np.sum(m & (f == 4))), int(np.sum(m & (f == 1)))
+    fh, lh = count(E[res["homo"]], E[res["deloc_homo"]])
+    fe, le = count(E[res["deloc_lumo"]], E[res["lumo"]])
+    logger.info(f"  [Traps:{prefix}] Delocalized HOMO {E[res['deloc_homo']]:+.3f} eV ({fh} Facet + {lh} Localized states "
+                f"above, nominal HOMO {E[res['homo']]:+.3f}); delocalized LUMO {E[res['deloc_lumo']]:+.3f} eV ({fe} + {le} "
+                f"below, nominal LUMO {E[res['lumo']]:+.3f}); gap {E[res['lumo']] - E[res['homo']]:.3f} -> "
+                f"{E[res['deloc_lumo']] - E[res['deloc_homo']]:.3f} eV")
+
+
+def state_classes(args, pops, shells, coords_ang, syms):
+    """Angular-coverage class, IPR and Omega of the states whose Mulliken AO populations are the columns of
+    ``pops`` (qdex.angular.states_omega), and the AngularCoverage with the class boundaries."""
+    from qdex.angular import states_omega
+    om, cls, ipr, cov = states_omega(pops, shells, coords_ang, syms,
+                                     core_elements=getattr(args, "centroid_core_elements", None))
+    return cls, ipr, om, cov
+
+
+def spinor_ao_pops(C_dense, S_dense, active_indices, U, beta_C=None, beta_indices=None):
+    """Mulliken AO populations of the spinors U (columns, rows: alpha MOs then beta MOs of the active space):
+    P_mu = sum_sigma Re[c_sigma,mu* (S c_sigma)_mu], c_alpha = C[:, active] U_alpha, c_beta likewise."""
+    n_a = len(active_indices)
+    Cb = C_dense if beta_C is None else beta_C
+    ib = active_indices if beta_indices is None else beta_indices
+    ca = C_dense[:, active_indices] @ U[:n_a, :]
+    cb = Cb[:, ib] @ U[n_a:, :]
+    return np.real(np.conj(ca) * (S_dense @ ca)) + np.real(np.conj(cb) * (S_dense @ cb))
 
 
 def build_qp_energies(eps_dft, homo_index, scissor_ev=None, sigma_occ=None, sigma_virt=None):
@@ -561,7 +464,7 @@ def spinor_soc_energy(soc_E, soc_U, eps_spin):
 
 def deloc_edge_mos(cls, energies, mo_indices, n_homos, n_lumos):
     """MO indices of the first n_homos band states from the delocalized HOMO down and the first n_lumos from the
-    delocalized LUMO up (states that pass the band test of classify_band_edges), as {mo: label}, labels
+    delocalized LUMO up (S/P/D-like states of classify_edges), as {mo: label}, labels
     dHOMO, dHOMO-1, ..., dLUMO, dLUMO+1, ..."""
     E = np.asarray(energies, dtype=float)
     mo = np.asarray(mo_indices)
@@ -612,15 +515,14 @@ def write_deloc_cubes(args, cls, energies, mo_indices, homo_index, C_dense, shel
 
 
 def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="sf", export=True, kpts_frac=None,
-                           soc_energy=None, kpts_cart=None, gamma_radius=0.12, trap=None):
+                           soc_energy=None, trap=None):
     """Write fuzzy_data_<prefix>.npz for the dashboard: the energy-smeared map of the raw weights
     (intensity), of the per-state normalised weights (intensity_norm), the k-peaks of every state
     (peak_*) and, for spinors, their spin-orbit energy <V_SOC> (soc_energy: per state, NaN where
-    no SOC was applied) as a weighted map (soc_energy_map) and on the peaks. With kpts_cart (1/A)
-    the k-space descriptors of every state (kspace_descriptors) are stored too, for the trap
-    detector panel (state_energy, state_gamma, state_entropy, gamma_uniform, gamma_radius). ``trap``
-    (rows as intensity: kpart, onband, flag from classify_band_edges) adds state_kpart, state_onband
-    and state_flag, from which the dashboard draws the trap panel and the delocalized band edges."""
+    no SOC was applied) as a weighted map (soc_energy_map) and on the peaks. ``trap`` (rows as
+    intensity: flag from classify_edges, ipr, omega; plus thresholds and L of qdex.angular) adds state_energy,
+    state_flag, state_ipr, state_omega, omega_thresholds (Facet, D, P, S lower bounds) and omega_L, from which the
+    dashboard draws the angular-coverage panel and the delocalized band edges."""
     if not export:
         return
     t0 = time.time()
@@ -660,16 +562,15 @@ def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="
 
     out_name = f"fuzzy_data_{prefix}.npz"
     extra = {} if kpts_frac is None else {"kpath_frac": np.asarray(kpts_frac, dtype=np.float64)}
-    if kpts_cart is not None and len(eps_plot):
-        g, e, uniform = kspace_descriptors(intensity, kpts_cart, gamma_radius)
-        extra.update(state_energy=np.asarray(eps_plot, dtype=np.float32), state_gamma=g.astype(np.float32),
-                     state_entropy=e.astype(np.float32), gamma_uniform=np.float32(uniform),
-                     gamma_radius=np.float32(gamma_radius))
     if trap is not None and len(eps_plot):
         extra.update(state_energy=np.asarray(eps_plot, dtype=np.float32),
-                     state_kpart=np.asarray(trap["kpart"], dtype=np.float32),
-                     state_onband=np.asarray(trap["onband"], dtype=np.float32),
-                     state_flag=np.asarray(trap["flag"], dtype=np.int8))
+                     state_flag=np.asarray(trap["flag"], dtype=np.int8),
+                     state_ipr=np.asarray(trap["ipr"], dtype=np.float32),
+                     state_omega=np.asarray(trap["omega"], dtype=np.float32))
+        if trap.get("thresholds"):
+            t = trap["thresholds"]
+            extra.update(omega_thresholds=np.array([t["Facet"], t["D"], t["P"], t["S"]], dtype=np.float32),
+                         omega_L=np.int32(trap.get("L", 0)))
     np.savez_compressed(
         out_name,
         **extra,
@@ -912,20 +813,6 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
     def _rows(W, pos, indices):
         return W[[pos[int(i)] for i in indices]] if len(indices) else np.zeros((0, W.shape[1]))
 
-    # Same orbitals and spinors on a full BZ grid: k-participation (trap detector, classify_band_edges)
-    n_kgrid = int(getattr(args, "trap_kgrid", 8) or 0)
-    Wg_blocks = Wg_spinor = None
-    if n_kgrid > 0:
-        t_g = time.time()
-        kgrid = bz_grid_kpoints(reciprocal_matrix, n_kgrid)
-        Wg_blocks, Wg_spinor = folded_plane_wave_weights(shells, kgrid, G_vecs, args.nthreads, blocks, spinor_parts)
-        logger.info(f"  [Traps] k-participation on a {n_kgrid}^3 BZ grid ({len(kgrid)} k-points) in {time.time() - t_g:.1f} s")
-    trap_opts = dict(kpart_max=float(getattr(args, "trap_kpart_max", 0.5)),
-                     kpart_margin=float(getattr(args, "trap_kpart_margin", 0.30)),
-                     onband_min=float(getattr(args, "trap_onband_min", 0.25)),
-                     gap_tol=float(getattr(args, "trap_gap_tol", 0.10)))
-    onband_delta = float(getattr(args, "trap_onband_delta", 0.20))
-
     intensity_sf = _rows(W_blocks[0], pos_a, fuzzy_indices)
 
     if fold_to_bz and g_shell == 0:
@@ -961,28 +848,24 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
                    spread_ev=semicore["spread_ev"], all_atoms_level_ev=semicore["all_atoms_level_ev"],
                    note="semicore level of the interior bulk-like atoms on the fuzzy energy axis")
 
-    trap_sf = None
-    if Wg_blocks is not None:
-        occ_f = np.asarray(fuzzy_indices) <= homo_index
-        bulk_sf = bulk_bands_on_path(args.material, args.cif, semicore_rel.get("sf"), semicore_label, kpts_frac,
-                                     soc=False, bs_path=getattr(args, "bulk_bs", None))
-        kp_sf = k_participation(_rows(Wg_blocks[0], pos_a, fuzzy_indices))
-        ob_sf = onband_weight(intensity_sf, eps_fuzzy, occ_f, bulk_sf, onband_delta)
-        cls_sf = classify_band_edges(eps_fuzzy, occ_f, kp_sf, ob_sf, bulk_sf, **trap_opts)
-        trap_summary("SF", eps_fuzzy, cls_sf, bulk_sf)
-        trap_sf = dict(kpart=kp_sf, onband=ob_sf, flag=cls_sf["flag"])
-        write_deloc_cubes(args, cls_sf, eps_fuzzy, fuzzy_indices, homo_index, C_dense, shells, syms, coords_ang)
+    # surface / core labels of the population analysis (one rule for table, log, dashboard and cubes)
+    occ_f = np.asarray(fuzzy_indices) <= homo_index
+    lab_sf, ipr_sf, om_sf, cov = state_classes(args, np.asarray(pops_sf)[:, fuzzy_indices], shells, coords_ang, syms)
+    cls_sf = classify_edges(eps_fuzzy, occ_f, lab_sf)
+    edge_summary("SF", eps_fuzzy, cls_sf)
+    trap_sf = dict(flag=cls_sf["flag"], ipr=ipr_sf, omega=om_sf, thresholds=cov.thresholds, L=cov.L)
+    write_deloc_cubes(args, cls_sf, eps_fuzzy, fuzzy_indices, homo_index, C_dense, shells, syms, coords_ang)
 
     smear_and_export_fuzzy(intensity_sf, eps_fuzzy, labels, dft_ewin, sigma_use, prefix="sf", export=export_files, kpts_frac=kpts_frac,
-                           kpts_cart=kpts_cart, gamma_radius=float(getattr(args, "kspace_gamma_radius", 0.12)), trap=trap_sf)
+                           trap=trap_sf)
     if store is not None:
         from qdex.store import put_fuzzy
         put_fuzzy(store, "sf", kpts_cart, labels, eps_fuzzy, intensity_sf, sigma_use, dft_ewin, indices=fuzzy_indices,
                   kpts_frac=kpts_frac, cif=args.cif)
-        if trap_sf is not None:
-            store.put("electronic", "sf/fuzzy/k_participation", np.asarray(trap_sf["kpart"], float))
-            store.put("electronic", "sf/fuzzy/onband_weight", np.asarray(trap_sf["onband"], float))
-            store.put("electronic", "sf/fuzzy/trap_flag", np.asarray(trap_sf["flag"], np.int8))
+        store.put("electronic", "sf/fuzzy/trap_flag", np.asarray(trap_sf["flag"], np.int8))
+        store.put("electronic", "sf/fuzzy/ipr", np.asarray(trap_sf["ipr"], float))
+        store.put("electronic", "sf/fuzzy/omega", np.asarray(trap_sf["omega"], float))
+        store.attr("electronic", "sf/fuzzy", omega_L=int(cov.L), omega_thresholds=json.dumps(cov.thresholds))
 
     pdos_analysis_sf = None
     if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
@@ -1007,7 +890,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             logger.warning(f"  [Warning] {msg} Skipping QP dashboard.")
         else:
             smear_and_export_fuzzy(intensity_sf, qp_fuzzy, labels, qp_ewin, sigma_use, prefix="sf_qp", kpts_frac=kpts_frac,
-                                   kpts_cart=kpts_cart, gamma_radius=float(getattr(args, "kspace_gamma_radius", 0.12)), trap=trap_sf)
+                                   trap=trap_sf)
             if pdos_analysis_sf is not None:
                 export_pdos_coop_data(
                     pdos_analysis_sf, qp_plot_energies, args.pdos_atoms, args.coop_pairs, qp_ewin,
@@ -1063,24 +946,24 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             v_act[plot_keep[n_core_rows:n_core_rows + n_act]],
             np.full(int(plot_keep[n_core_rows + n_act:].sum()), np.nan),
         ])
-        trap_soc_u = None
-        if Wg_blocks is not None:
-            if soc_uks:
-                Ig_core = np.vstack([_rows(Wg_blocks[0], pos_a, core_idx), _rows(Wg_blocks[1], pos_b, core_idx_b)])
-                Ig_virt = np.vstack([_rows(Wg_blocks[0], pos_a, virt_idx), _rows(Wg_blocks[1], pos_b, virt_idx_b)])
-            else:
-                Ig_core = np.vstack([_rows(Wg_blocks[0], pos_a, core_idx)] * 2)
-                Ig_virt = np.vstack([_rows(Wg_blocks[0], pos_a, virt_idx)] * 2)
-            Ig_plot_unsorted = np.vstack([Ig_core[plot_keep[:n_core_rows]], Wg_spinor,
-                                          Ig_virt[plot_keep[n_core_rows + n_act:]]])
-            occ_u = eps_soc_unsorted[plot_keep] <= 0.0
-            bulk_soc = bulk_bands_on_path(args.material, args.cif, semicore_rel.get("soc"), semicore_label, kpts_frac,
-                                          soc=True, bs_path=getattr(args, "bulk_bs", None))
-            kp_u = k_participation(Ig_plot_unsorted)
-            ob_u = onband_weight(I_plot_unsorted, eps_soc_unsorted[plot_keep], occ_u, bulk_soc, onband_delta)
-            cls_u = classify_band_edges(eps_soc_unsorted[plot_keep], occ_u, kp_u, ob_u, bulk_soc, **trap_opts)
-            trap_summary("SOC", eps_soc_unsorted[plot_keep], cls_u, bulk_soc)
-            trap_soc_u = dict(kpart=kp_u, onband=ob_u, flag=cls_u["flag"])
+        # surface / core labels of the plotted rows: spin-free MOs (core, virtual) and the SOC spinors
+        P_sf_all = np.asarray(pops_sf)
+        if soc_uks:
+            P_beta_all = np.real(C_beta_dense * (S_dense @ C_beta_dense))
+            P_core = np.hstack([P_sf_all[:, core_idx], P_beta_all[:, core_idx_b]])
+            P_virt = np.hstack([P_sf_all[:, virt_idx], P_beta_all[:, virt_idx_b]])
+            P_act = spinor_ao_pops(C_dense, S_dense, soc_active_indices, soc_U_act, C_beta_dense, soc_active_indices_beta)
+        else:
+            P_core = np.hstack([P_sf_all[:, core_idx]] * 2)
+            P_virt = np.hstack([P_sf_all[:, virt_idx]] * 2)
+            P_act = spinor_ao_pops(C_dense, S_dense, soc_active_indices, soc_U_act)
+        P_plot_unsorted = np.hstack([P_core[:, plot_keep[:n_core_rows]], P_act[:, plot_keep[n_core_rows:n_core_rows + n_act]],
+                                     P_virt[:, plot_keep[n_core_rows + n_act:]]])
+        lab_u, ipr_u, om_u, cov = state_classes(args, P_plot_unsorted, shells, coords_ang, syms)
+        cls_u = classify_edges(eps_soc_unsorted[plot_keep], eps_soc_unsorted[plot_keep] <= 0.0, lab_u)
+        edge_summary("SOC", eps_soc_unsorted[plot_keep], cls_u)
+        trap_soc_u = dict(flag=cls_u["flag"], ipr=ipr_u, omega=om_u)
+        soc_meta = dict(thresholds=cov.thresholds, L=cov.L)
         sort_idx = np.argsort(eps_soc_plot_unsorted)
         eps_soc = eps_soc_plot_unsorted[sort_idx]
         intensity_soc = I_plot_unsorted[sort_idx, :]
@@ -1095,16 +978,16 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         logger.info(f"  [Fuzzy-SOC] ----------------------------------") 
         
         smear_and_export_fuzzy(intensity_soc, eps_soc, labels, soc_ewin, sigma_use, prefix="soc", export=export_files,
-                               kpts_frac=kpts_frac, soc_energy=soc_energy_plot, kpts_cart=kpts_cart, gamma_radius=float(getattr(args, "kspace_gamma_radius", 0.12)),
-                               trap=None if trap_soc_u is None else {k: v[sort_idx] for k, v in trap_soc_u.items()})
+                               kpts_frac=kpts_frac, soc_energy=soc_energy_plot,
+                               trap={**{k: v[sort_idx] for k, v in trap_soc_u.items()}, **soc_meta})
         if store is not None:
             from qdex.store import put_fuzzy
             put_fuzzy(store, "soc", kpts_cart, labels, eps_soc, intensity_soc, sigma_use, soc_ewin, kpts_frac=kpts_frac,
                       cif=args.cif, soc_energy=soc_energy_plot)
-            if trap_soc_u is not None:
-                store.put("electronic", "soc/fuzzy/k_participation", np.asarray(trap_soc_u["kpart"][sort_idx], float))
-                store.put("electronic", "soc/fuzzy/onband_weight", np.asarray(trap_soc_u["onband"][sort_idx], float))
-                store.put("electronic", "soc/fuzzy/trap_flag", np.asarray(trap_soc_u["flag"][sort_idx], np.int8))
+            store.put("electronic", "soc/fuzzy/trap_flag", np.asarray(trap_soc_u["flag"][sort_idx], np.int8))
+            store.put("electronic", "soc/fuzzy/ipr", np.asarray(trap_soc_u["ipr"][sort_idx], float))
+            store.put("electronic", "soc/fuzzy/omega", np.asarray(trap_soc_u["omega"][sort_idx], float))
+            store.attr("electronic", "soc/fuzzy", omega_L=int(soc_meta["L"]), omega_thresholds=json.dumps(soc_meta["thresholds"]))
 
         eps_soc_qp = None
         sort_idx_qp = None
@@ -1123,8 +1006,8 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
             eps_soc_qp = eps_soc_qp_unsorted[sort_idx_qp]
             intensity_soc_qp = I_plot_unsorted[sort_idx_qp, :]
             smear_and_export_fuzzy(intensity_soc_qp, eps_soc_qp, labels, soc_qp_ewin, sigma_use, prefix="soc_qp", kpts_frac=kpts_frac,
-                                   soc_energy=v_soc_plot_unsorted[sort_idx_qp], kpts_cart=kpts_cart, gamma_radius=float(getattr(args, "kspace_gamma_radius", 0.12)),
-                                   trap=None if trap_soc_u is None else {k: v[sort_idx_qp] for k, v in trap_soc_u.items()})
+                                   soc_energy=v_soc_plot_unsorted[sort_idx_qp],
+                                   trap={**{k: v[sort_idx_qp] for k, v in trap_soc_u.items()}, **soc_meta})
         
         if getattr(args, 'pdos_atoms', None) and getattr(args, 'coop_pairs', None):
             logger.info("  [PDOS/COOP] Computing SOC Spinor population analysis...")

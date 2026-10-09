@@ -86,10 +86,19 @@ def _fuzzy_file(fz, prefix):
                            float(a["sigma_ev"]), prefix=prefix,
                            kpts_frac=fz["kpoints_frac"][:] if "kpoints_frac" in fz else None,
                            soc_energy=fz["soc_energy_ev"][:] if "soc_energy_ev" in fz else None,
-                           kpts_cart=fz["kpoints_inv_ang"][:],
-                           trap=dict(kpart=fz["k_participation"][:], onband=fz["onband_weight"][:],
-                                     flag=fz["trap_flag"][:]) if "trap_flag" in fz else None)
+                           trap=_trap_from_h5(fz, a))
     return ewin
+
+
+def _trap_from_h5(fz, a):
+    """Angular-coverage classes of a stored fuzzy group (sf|soc/fuzzy/{trap_flag, ipr, omega}), or None."""
+    if not all(k in fz for k in ("trap_flag", "ipr", "omega")):
+        return None
+    import json
+    thr = a.get("omega_thresholds")
+    thr = json.loads(thr) if isinstance(thr, (str, bytes)) else None
+    return dict(flag=fz["trap_flag"][:], ipr=fz["ipr"][:], omega=fz["omega"][:], thresholds=thr,
+                L=int(a["omega_L"]) if "omega_L" in a else 0)
 
 
 def _edges(E, occupation=None):

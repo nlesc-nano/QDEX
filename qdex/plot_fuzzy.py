@@ -34,8 +34,11 @@ def load_fuzzy(npz_path):
                      soc_energy=np.asarray(d["peak_soc_energy"], float) if "peak_soc_energy" in d else None)
     trap = None
     if "state_flag" in d:
-        trap = dict(energy=np.asarray(d["state_energy"], float), kpart=np.asarray(d["state_kpart"], float),
-                    onband=np.asarray(d["state_onband"], float), flag=np.asarray(d["state_flag"], int))
+        trap = dict(energy=np.asarray(d["state_energy"], float), flag=np.asarray(d["state_flag"], int),
+                    ipr=np.asarray(d["state_ipr"], float) if "state_ipr" in d else None,
+                    omega=np.asarray(d["state_omega"], float) if "state_omega" in d else None,
+                    thresholds=np.asarray(d["omega_thresholds"], float) if "omega_thresholds" in d else None,
+                    L=int(d["omega_L"]) if "omega_L" in d else None)
     return dict(
         trap=trap,
         centres=centres, Z=Z, Z_norm=Zn, soc_energy_map=vmap, peaks=peaks,
@@ -56,6 +59,10 @@ def load_dict_csv(csv_path):
     if not os.path.exists(csv_path): return np.array([]), [], {}
     df = pd.read_csv(csv_path)
     return df.iloc[:, 0].to_numpy(dtype=float), list(df.columns[1:]), {p: df[p].to_numpy(dtype=float) for p in df.columns[1:]}
+
+# Default isosurface value of the 3D cube panel (MO amplitudes ± and densities); the page has a box to change it
+CUBE_ISO_DEFAULT = 0.004
+
 
 def load_ipr_csv(csv_path):
     if not os.path.exists(csv_path): return np.array([]), np.array([])
@@ -202,9 +209,9 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     fig = make_subplots(
         rows=1, cols=5, 
         shared_yaxes=True, 
-        column_widths=[0.32, 0.19, 0.17, 0.10, 0.22],
-        horizontal_spacing=0.015, 
-        subplot_titles=(f"{lbl} Fuzzy Bands", "PDOS", "Trap detector", "Surf/Core", "COOP")
+        column_widths=[0.29, 0.16, 0.25, 0.09, 0.21],
+        horizontal_spacing=0.015,
+        subplot_titles=(f"{lbl} Fuzzy Bands", "PDOS", "", "Surf/Core", "COOP")
     )
     
     # Header above the panels, laid out in pixels from the top of the figure so that nothing
@@ -236,7 +243,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         font=dict(family="Helvetica, Arial, sans-serif", size=24, color="#222"),
         margin=dict(l=100, r=40, t=top, b=bottom),
         legend=legend("Atoms", 2), legend2=legend("Localization", 4), legend3=legend("Bonds", 5),
-        legend4=legend("Trap detector", 3),
+        legend4=legend("Localization", 3),
     )
 
     for annotation in fig['layout']['annotations']: annotation['font'] = dict(size=24, family="Helvetica", color="#111")
@@ -439,29 +446,64 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         fig.add_trace(go.Scatter(x=total, y=pdos_E, mode="lines", line=dict(color="black", width=3), name="Total DOS", showlegend=False), row=1, col=2)
         fig.update_xaxes(range=[0, float(max(total.max(), 1e-12)) * 1.05], row=1, col=2)
 
-    # Trap detector: per-state localization measures on one 0..1 axis (see the glossary)
+    # Localization panel: angular coverage Omega (qdex.angular) on a 0..1 axis, with the class bands shaded
+    # (Localized, Facet, D-, P-, S-like) and their boundaries; the IPR on the same axis. States between the nominal
+    # and the delocalized band edges are outlined (red Localized, orange Facet). See the glossary.
     trap = fuzzy.get("trap")
-    if len(ipr_E) > 0:
+    deloc = {}
+    band_colors = (("Localized", "rgba(215,38,61,0.13)"), ("Facet", "rgba(255,127,14,0.13)"),
+                   ("D", "rgba(44,160,44,0.10)"), ("P", "rgba(31,119,180,0.10)"), ("S", "rgba(148,103,189,0.12)"))
+    if trap is not None and trap.get("omega") is not None:
+        f = trap["flag"]
+        t = trap.get("thresholds")
+        if t is not None:
+            edges = [0.0, *[float(x) for x in t], 1.0]
+            for (name, col), x0, x1 in zip(band_colors, edges[:-1], edges[1:]):
+                fig.add_vrect(x0=x0, x1=x1, fillcolor=col, line_width=0, layer="below", row=1, col=3,
+                              exclude_empty_subplots=False)
+                full = name if name in ("Localized", "Facet") else name + "-like"
+                fig.add_annotation(x=0.5 * (x0 + x1), y=0.995, xref="x3", yref="y3 domain", yanchor="top",
+                                   text=f"<b>{full}</b>", showarrow=False, font=dict(size=13, color="#333"),
+                                   textangle=-90 if x1 - x0 < 0.12 else 0)
+            for x in t:
+                fig.add_vline(x=float(x), line_dash="dash", line_color="rgba(0,0,0,0.45)", line_width=1.5, row=1, col=3,
+                              exclude_empty_subplots=False)
+        edge = np.where(f == 1, "#D7263D", np.where(f == 4, "#ff7f0e", "black"))
+        out = (f == 1) | (f == 4)
+        tag = np.where(f == 1, "Localized", np.where(f == 4, "Facet",
+                       np.where(f == 2, "delocalized HOMO", np.where(f == 3, "delocalized LUMO", ""))))
+        fig.add_trace(go.Scatter(
+            x=trap["omega"], y=trap["energy"], mode="markers", name="Ω (angular coverage)", legend="legend4",
+            marker=dict(size=np.where(out, 11, 8), color="#1f3b73", symbol="circle",
+                        line=dict(width=np.where(out, 2.5, 1), color=edge)),
+            customdata=np.stack([tag, np.array([f"{v:.4f}" for v in trap["ipr"]])], axis=1),
+            hovertemplate="Ω: %{x:.2f}<br>IPR: %{customdata[1]}<br>E: %{y:.3f} eV<br>%{customdata[0]}<extra></extra>"),
+            row=1, col=3)
+        fig.update_xaxes(range=[0, 1.0], row=1, col=3)
+        # IPR on its own logarithmic axis along the top of the panel, 10^-4 .. 1 (delocalized states sit near
+        # 1/N_AO, a state on one atom near 0.1-1)
+        ipr_low = float(np.floor(np.log10(max(float(np.nanmin(trap["ipr"][trap["ipr"] > 0])), 1e-6)))) \
+            if np.any(trap["ipr"] > 0) else -4.0
+        ipr_low = min(ipr_low, -3.0)
+        fig.add_trace(go.Scatter(
+            x=np.maximum(trap["ipr"], 10 ** ipr_low), y=trap["energy"], mode="markers", name="IPR (top axis, log)", legend="legend4",
+            marker=dict(size=6, color="#b07aa1", symbol="diamond", line=dict(width=0.5, color="black")),
+            xaxis="x6", yaxis="y3",
+            hovertemplate="IPR: %{x:.4f}<br>E: %{y:.3f} eV<extra></extra>"))
+        fig.update_layout(xaxis6=dict(overlaying="x3", side="top", anchor="y3", type="log", range=[ipr_low, 0.0],
+                                      showgrid=False, tickfont=dict(size=14, color="#8a4f7d"), zeroline=False,
+                                      dtick=1, exponentformat="power",
+                                      title=dict(text="<b>IPR</b>", font=dict(size=18, color="#8a4f7d"), standoff=4)))
+    elif len(ipr_E) > 0:
         fig.add_trace(go.Scatter(x=ipr_V, y=ipr_E, mode="markers", name="IPR", legend="legend4",
                                  marker=dict(size=7, color="#440154", symbol="circle", line=dict(width=1, color="black")),
                                  hovertemplate="IPR: %{x:.4f}<br>E: %{y:.3f} eV<extra></extra>"), row=1, col=3)
-    deloc = {}
+        fig.update_xaxes(range=[0, max(float(np.max(ipr_V)), 1e-3) * 1.08], row=1, col=3)
     if trap is not None:
-        is_trap = trap["flag"] == 1
-        for key, name, color, symbol in (("kpart", "k-particip.", "#E69F00", "diamond"),
-                                         ("onband", "on-band", "#009E73", "triangle-left")):
-            fig.add_trace(go.Scatter(
-                x=trap[key], y=trap["energy"], mode="markers", name=name, legend="legend4",
-                marker=dict(size=np.where(is_trap, 10, 7), color=color, symbol=symbol,
-                            line=dict(width=np.where(is_trap, 2.5, 1), color=np.where(is_trap, "#D7263D", "black"))),
-                customdata=np.where(is_trap, "trap", ""),
-                hovertemplate=f"{name}: %{{x:.2f}}<br>E: %{{y:.3f}} eV<br>%{{customdata}}<extra></extra>"), row=1, col=3)
         for flag, key in ((2, "homo"), (3, "lumo")):
             hit = np.where(trap["flag"] == flag)[0]
             if hit.size:
                 deloc[key] = float(trap["energy"][hit[0]])
-    if len(ipr_E) > 0 or trap is not None:
-        fig.update_xaxes(range=[0, 1.05], row=1, col=3)
 
     if len(sc_E) > 0:
         surf, core = sc_V["Surface"], sc_V["Core"]
@@ -529,7 +571,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     fig.update_yaxes(range=[ewin[0], ewin[1]], title_text=f"<b>{energy_label}</b>", title_font=dict(size=28), row=1, col=1)
     fig.update_xaxes(title_text="<b>k-Path</b>", title_font=dict(size=28), tickangle=0, tickfont=dict(size=17), row=1, col=1)
     fig.update_xaxes(title_text="<b>DOS</b>", title_font=dict(size=28), row=1, col=2)
-    fig.update_xaxes(title_text="<b>0 – 1</b>", title_font=dict(size=28), tickvals=[0, 0.5, 1.0], row=1, col=3)
+    fig.update_xaxes(title_text="<b>Ω</b> (rel. to 1S)", title_font=dict(size=24), tickvals=[0, 0.25, 0.5, 0.75, 1.0], row=1, col=3)
     fig.update_xaxes(title_text="<b>Char</b>", title_font=dict(size=28), tickvals=[0, 0.5, 1.0], row=1, col=4)
     fig.update_xaxes(title_text="<b>COOP</b>", title_font=dict(size=28), row=1, col=5)
 
@@ -602,7 +644,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     cube_files.sort(key=extract_idx)
     
     plot_3d_html = ""
-    first_iso_val = 0.0001
+    first_iso_val = CUBE_ISO_DEFAULT
     
     if len(cube_files) > 0:
         # nominal frontier cubes (the four around the gap) plus the delocalized band-edge cubes
@@ -642,7 +684,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
             is_density = (v_min >= -1e-6)
             
             if prefix == "soc" or is_density:
-                iso_val = 0.0001
+                iso_val = CUBE_ISO_DEFAULT
                 iso_pos = min(iso_val, v_max * 0.95)
                 if iso_pos < 1e-6: iso_pos = v_max * 0.50
                 fig_3d.add_trace(go.Isosurface(
@@ -652,7 +694,9 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                     caps=dict(x_show=False, y_show=False, z_show=False), opacity=0.6, name="Density"
                 ), row=row_i, col=col_i)
             else:
-                iso_val = max(abs(v_max), abs(v_min)) * 0.15
+                iso_val = CUBE_ISO_DEFAULT
+                if iso_val >= 0.95 * max(abs(v_max), abs(v_min)):   # a very diffuse orbital: half its maximum
+                    iso_val = 0.5 * max(abs(v_max), abs(v_min))
                 iso_pos = min(iso_val, v_max * 0.95)
                 iso_neg = max(-iso_val, v_min * 0.95)
                 
@@ -758,12 +802,11 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                         <p>Shows how much specific elements (or orbitals) contribute to the overall electronic density at a given energy. The peaks correspond to available molecular orbitals.</p>
                     </div>
                     <div class="glossary-item trap-indicator">
-                        <strong>3. Trap detector (IPR, k-participation, on-band weight)</strong>
-                        <p>Three numbers per state, all between 0 and 1, plotted at the state's energy.</p>
-                        <p><span style="color:#440154">&#9679;</span> <strong>IPR</strong> (real space): near 0 for a state spread over many atoms, near 1 for a state on one atom.</p>
-                        <p><span style="color:#E69F00">&#9670;</span> <strong>k-participation</strong>: how evenly the state's fuzzy-band weight is spread over a full grid of the Brillouin zone, 1/(N&nbsp;&Sigma;<sub>k</sub>P<sub>k</sub><sup>2</sup>). A band state concentrates its weight on a few k-points (small value); a state localized in real space, such as a ligand or dangling-bond orbital, spreads it evenly over k (close to 1).</p>
-                        <p><span style="color:#009E73">&#9664;</span> <strong>on-band weight</strong>: the share of the state's weight along the path that sits where a bulk band of its own side (valence for occupied, conduction for empty states, aligned on the semicore level) lies within 0.2 eV of its energy. States that follow the bulk bands score high; states in the bulk gap score low. Strongly confined conduction states of small dots also score low, because confinement lifts them above the bulk band.</p>
-                        <p><strong>Band edges:</strong> a state is a trap when its k-participation is clearly above that of the most band-like state of the dot (by 0.3, and at least 0.5; very small clusters are broad in k even when delocalized), or when its on-band weight is below 0.25 while it lies more than 0.1 eV inside the aligned bulk gap. Counting inward from the gap, the first state that is neither is the <em>delocalized HOMO</em> (solid blue line) or <em>delocalized LUMO</em> (solid red line); the dotted lines are the nominal DFT HOMO and LUMO, and the states between the two (red-outlined markers) are the traps.</p>
+                        <strong>3. Localization: angular coverage &Omega; and IPR</strong>
+                        <p><span style="color:#1f3b73">&#9679;</span> <strong>&Omega;</strong> (bottom axis), the fraction of directions (seen from the centre of the inorganic core) a state covers. With the normalized Mulliken atom populations p<sub>A</sub> and directions <b>u</b><sub>A</sub>: a<sub>lm</sub> = &Sigma;<sub>A</sub> p<sub>A</sub> Y<sup>*</sup><sub>lm</sub>(<b>u</b><sub>A</sub>), C<sub>l</sub> = &Sigma;<sub>m</sub>|a<sub>lm</sub>|<sup>2</sup>, &Omega;<sub>L</sub> = C<sub>0</sub> / &Sigma;<sub>even l&le;L</sub> C<sub>l</sub> (odd l are left out: they come from the dot's field and shape, not from the envelope symmetry). It is shown relative to the ideal 1S envelope on this dot's atoms, so 1 means as isotropic as a 1S state; a 1P envelope, with no density at the centre, still covers the sphere (about 0.55), a patch on one facet about 0.15-0.2, one atom about 0.01-0.08. L grows with the dot so that the resolution stays about two bonds on the surface.</p>
+                        <p><strong>Shaded bands</strong> (dashed lines = boundaries, set for this dot from reference densities on its own atoms): S-, P- and D-like envelope states (midpoints between the ideal 1S, 1P and 1D values), <em>Facet</em> (down to the geometric mean of one facet and one atom) and <em>Localized</em>.</p>
+                        <p><span style="color:#b07aa1">&#9670;</span> <strong>IPR</strong> = &Sigma;<sub>&mu;</sub>P<sub>&mu;</sub><sup>2</sup> of the normalized Mulliken AO populations (top axis, logarithmic): about 1/N<sub>AO</sub> for a state spread over the whole dot, 0.1-1 for a state on one atom.</p>
+                        <p><strong>Band edges:</strong> counting inward from the gap, the first S/P/D-like state is the <em>delocalized HOMO</em> (solid blue line) or <em>delocalized LUMO</em> (solid red line); the dotted lines are the nominal DFT HOMO and LUMO. The states between them are outlined, red Localized and orange Facet. The population table in the log uses the same classes (Description column).</p>
                     </div>
                     <div class="glossary-item trap-indicator">
                         <strong>4. Surface vs. Core Character</strong>

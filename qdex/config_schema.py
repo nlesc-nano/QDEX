@@ -121,8 +121,7 @@ SECTIONS = {
         "pdos_sigma", "ewin", "fold_to_bz", "g_shell", "dashboard_energy_mode",
         "bulk_overlay", "bulk_alignment", "bulk_unfolded", "bulk_anchor",
         "trap_filter", "xi_core_threshold", "xi_trap_threshold",
-        "centroid_core_elements", "f_core_min", "f_core_trap", "kspace_descriptors", "kspace_gamma_radius",
-        "trap_kgrid", "trap_kpart_max", "trap_kpart_margin", "trap_onband_min", "trap_onband_delta", "trap_gap_tol")},
+        "centroid_core_elements", "f_core_min", "f_core_trap")},
         "xi_core": "xi_core_threshold", "xi_trap": "xi_trap_threshold"},
     "output": {k: k for k in (
         "broadening", "sigma", "plot", "show", "cube", "cube_spacing", "disable_cpp_cube", "cube_nhomos",
