@@ -17,7 +17,13 @@ def lowdin_factor(S):
     k = _key(S)
     if k not in _FACTOR_CACHE:
         _FACTOR_CACHE.clear()
-        w, V = np.linalg.eigh(S)
+        if S.shape[0] > 32000:
+            # numpy's syevd needs a 1 + 6n + 2n^2 workspace, which overflows 32-bit LAPACK integers past
+            # n = 32767 (MemoryError); syevr needs 26n
+            from scipy.linalg import eigh
+            w, V = eigh(S, driver="evr", overwrite_a=False, check_finite=False)
+        else:
+            w, V = np.linalg.eigh(S)
         _FACTOR_CACHE[k] = (np.clip(w, 1e-15, None), V)
     return _FACTOR_CACHE[k]
 
