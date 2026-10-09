@@ -38,3 +38,17 @@ def test_deloc_edge_mos_skips_traps():
     cls = {"deloc_homo": 2, "deloc_lumo": 4, "localized": localized}
     out = deloc_edge_mos(cls, E, mo, 2, 2)
     assert out == {12: "dHOMO", 10: "dHOMO-1", 14: "dLUMO", 16: "dLUMO+1"}
+
+
+def test_omega_trap_sets_band_boundary():
+    import qdex.angular as qa
+    u = _sphere(400) * 10.0
+    syms = ["Cd"] * len(u)
+    try:
+        qa.set_omega_trap(0.40)
+        assert abs(qa.AngularCoverage(u, syms).thresholds["D"] - 0.40) < 1e-12
+        qa.set_omega_trap("auto")
+        a = qa.AngularCoverage(u, syms)
+        assert abs(a.thresholds["D"] - 0.5 * (a.references["D"] + a.references["facet"])) < 1e-12
+    finally:
+        qa.set_omega_trap(0.40)

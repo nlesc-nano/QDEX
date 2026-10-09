@@ -23,17 +23,33 @@ and the dot faceted).
 
 The class boundaries come from reference densities evaluated on the dot's own atoms with the same L: hard-wall
 envelopes 1S, 1P, 1D (|j_l(x_l1 r / R_env) Y_l0|^2, R_env = R + d/2), a cap of one facet (the outer layer within
-the half-angle of 1/8 of the sphere, averaged over directions) and a single atom:
+the half-angle of 1/8 of the sphere, averaged over directions) and a single atom. The band/trap boundary omega_trap
+(analysis.omega_trap, default 0.40, just below the 1D value) is a setting; 'auto' uses (D + facet)/2:
 
     S-like     Omega >= (S + P)/2
     P-like     (P + D)/2 <= Omega < (S + P)/2
-    D-like     (D + facet)/2 <= Omega < (P + D)/2
-    Facet      sqrt(facet * atom) <= Omega < (D + facet)/2
+    D-like     omega_trap <= Omega < (P + D)/2
+    Facet      sqrt(facet * atom) <= Omega < omega_trap
     Localized  Omega < sqrt(facet * atom)
 """
 import numpy as np
 
 CLASS_NAMES = ("S-like", "P-like", "D-like", "Facet", "Localized")
+# Lower bound of the band (S/P/D-like) states, i.e. the trap threshold (analysis.omega_trap, set by the CLI); None
+# uses the midpoint between the 1D and the one-facet references. 0.40 sits just below the 1D value (0.46-0.53).
+OMEGA_TRAP = 0.40
+
+
+def set_omega_trap(value=0.40):
+    global OMEGA_TRAP
+    if value is None or (isinstance(value, str) and value.strip().lower() in ("auto", "none", "")):
+        OMEGA_TRAP = None
+    else:
+        v = float(value)
+        if not 0.0 < v < 1.0:
+            raise ValueError(f"analysis.omega_trap must be in (0, 1) or 'auto', not {value}")
+        OMEGA_TRAP = v
+    _CACHE.clear()
 BAND_CLASSES = ("S-like", "P-like", "D-like")
 PASSIVANTS = {"H", "C", "N", "O", "F", "Cl", "Br", "I", "P", "S"}
 
@@ -165,7 +181,7 @@ class AngularCoverage:
         thr = {
             "S": 0.5 * (refs["S"] + refs["P"]),
             "P": 0.5 * (refs["P"] + refs["D"]),
-            "D": 0.5 * (refs["D"] + refs["facet"]),
+            "D": float(OMEGA_TRAP) if OMEGA_TRAP is not None else 0.5 * (refs["D"] + refs["facet"]),
             "Facet": float(np.sqrt(refs["facet"] * refs["atom"])),
         }
         return thr, refs
@@ -191,6 +207,8 @@ class AngularCoverage:
         t, r = self.thresholds, self.references
         note = ("; the dot is too small for S, P and D envelopes to differ in Omega"
                 if r["S"] - r["D"] < 0.15 else "")
+        if t["D"] >= t["P"]:
+            note += f"; omega_trap {t['D']:.2f} is above the P boundary: no D-like class"
         return (f"L = {self.L} (R = {self.R:.2f} A, bond {self.bond:.2f} A), relative to the ideal 1S value {self.norm:.2f}; "
                 f"references S {r['S']:.2f}, P {r['P']:.2f}, "
                 f"D {r['D']:.2f}, facet {r['facet']:.3f}, atom {r['atom']:.4f}; boundaries S >= {t['S']:.2f}, "
@@ -211,7 +229,7 @@ _CACHE = {}
 def coverage_for(coords_ang, syms, core_elements=None):
     """AngularCoverage of a geometry, cached (the same dot is classified several times per run)."""
     X = np.asarray(coords_ang, dtype=float)
-    key = (X.shape, float(X.sum()), float(np.abs(X).sum()), tuple(core_elements or ()))
+    key = (X.shape, float(X.sum()), float(np.abs(X).sum()), tuple(core_elements or ()), OMEGA_TRAP)
     if key not in _CACHE:
         _CACHE.clear()
         _CACHE[key] = AngularCoverage(X, syms, core_elements)

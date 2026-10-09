@@ -1090,6 +1090,10 @@ def _build_parser():
                         help="Project on plane waves at k only (G = 0); p-like band edges then lose their weight at Gamma.")
     parser.add_argument("--g_shell", type=int, default=2,
                         help="Reciprocal-vector shell for folded fuzzy-band weights; 0, 1, 2 (default) and 3 use 1, 27, 125 and 343 replicas.")
+    parser.add_argument("--omega_trap", type=str, default="0.40",
+                        help="Angular coverage (relative to 1S) below which a state counts as a trap (Facet / Localized) "
+                             "rather than an S/P/D-like band state; default 0.40, 'auto' = midpoint of the 1D and one-facet "
+                             "references. YAML: analysis.omega_trap")
     parser.add_argument("--dashboard_energy_mode", choices=["dft", "qp", "both"], default="dft", help="Generate fuzzy dashboards on DFT, QP-corrected, or both energy axes.")
     parser.add_argument("--bulk_overlay", action="store_true", default=True,
                         help="Draw the bulk band structure over the DFT fuzzy maps (default). YAML: fuzzy.bulk_overlay")
@@ -1296,6 +1300,8 @@ def _prepare_run(args, *, config_path, parser):
         args.qdex_store = ResultStore()
     import qdex.hardness as _hardness
     _hardness.RADIUS_DEFINITION = str(getattr(args, "qp_radius", "saxs") or "saxs").lower()
+    from qdex.angular import set_omega_trap
+    set_omega_trap(getattr(args, "omega_trap", "0.40"))
     _hardness.set_dft_functional(getattr(args, "functional", "pbe"))
     from qdex.bulk_bands import set_bulk_functional
     set_bulk_functional(getattr(args, "functional", "pbe"))

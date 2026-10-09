@@ -294,7 +294,9 @@ bonds d on the surface (L = 8 for Cd\ :sub:`177`, 12 for Cd\ :sub:`600`).
 
 **Classes.** The boundaries are set for each dot from reference densities on its own atoms, with the same L:
 hard-wall envelopes 1S, 1P and 1D, a cap of one facet (the outer layer within 1/8 of the sphere) and one atom.
-S-like, P-like and D-like are bounded by the midpoints between the 1S, 1P and 1D values and the D/facet midpoint;
+S-like and P-like are bounded by the midpoints between the 1S, 1P and 1D values. D-like reaches down to
+``analysis.omega_trap`` (default 0.40, just below the 1D value of 0.46-0.53; ``auto`` uses the midpoint of the 1D and
+one-facet values): a state below it covers less of the dot than any S, P or D envelope and counts as a trap.
 *Facet* reaches down to the geometric mean of the facet and atom values; below is *Localized*. The log prints the
 references and boundaries (``[Omega]``). Very small clusters (Cd\ :sub:`16`) cannot separate S, P and D, and the log
 says so.
