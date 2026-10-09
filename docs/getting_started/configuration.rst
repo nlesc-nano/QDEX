@@ -288,7 +288,8 @@ analysis and output
   ``bulk_overlay``, ``bulk_alignment``, ``bulk_anchor``, ``bulk_unfolded``
   (:doc:`/electronic_structure/index`).
 * ``output``: ``plot``, ``show``, ``broadening``, ``sigma``, ``write_csv``, ``csv_roots``, ``save_xia``,
-  ``time``, ``cube``, ``cube_spacing``, ``cube_nhomos``, ``cube_nlumos``, ``nbse``, ``bse_states``,
+  ``time``, ``cube``, ``cube_spacing``, ``cube_nhomos``, ``cube_nlumos``, ``cube_nhomos_deloc``,
+  ``cube_nlumos_deloc``, ``nbse``, ``bse_states``,
   ``nto``, ``nto_states``, ``nto_top``, ``nto_csv`` (:doc:`/exciton_analysis/index`), ``verbosity``.
 
 Database output
@@ -324,6 +325,15 @@ people), ``output`` has:
   around the gap (HOMO-1, HOMO, LUMO, LUMO+1 by default) on a coarse
   ``mo_cube_spacing`` grid (default 0.8 Å), without the spinor and exciton
   cubes of ``cube``.
+* ``cube_nhomos_deloc`` / ``cube_nlumos_deloc`` (default 0) also write the first
+  N band states from the delocalized HOMO down and from the delocalized LUMO up
+  (the trap detector of the fuzzy bands, so ``analysis.run_fuzzy`` and
+  ``analysis.cif`` are needed), as ``spatial_MO_HOMO-20_dHOMO.cube``,
+  ``spatial_MO_HOMO-21_dHOMO-1.cube``, ... An MO that is already among the
+  nominal cubes (``cube`` / ``mo_cubes`` with ``cube_nhomos`` and ``cube_nlumos``)
+  is not written again: without traps the delocalized and nominal edges coincide
+  and no extra cube is made. The spin-free dashboard shows them in a second row
+  of its 3D panel.
 * ``verbosity: quiet`` keeps the console to warnings; the log file keeps everything.
 
 The HTML pages of a database run can be made later from its two HDF5 files,

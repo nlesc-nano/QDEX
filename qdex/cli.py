@@ -981,6 +981,12 @@ def _build_parser():
                         help="Stored absorption spectrum: first, last energy and step (eV).")
     parser.add_argument("--spectrum-sigmas", dest="spectrum_sigmas", type=float, nargs="+", default=[0.03, 0.10],
                         help="Gaussian broadenings (eV) of the stored spectrum, one curve each.")
+    parser.add_argument("--cube-nhomos-deloc", dest="cube_nhomos_deloc", type=int, default=0,
+                        help="Also write cubes of the first N band states from the delocalized HOMO down (trap detector of "
+                             "the fuzzy bands; needs analysis.run_fuzzy and analysis.cif). MOs already among the nominal "
+                             "cubes are not repeated.")
+    parser.add_argument("--cube-nlumos-deloc", dest="cube_nlumos_deloc", type=int, default=0,
+                        help="Same from the delocalized LUMO up.")
     parser.add_argument("--mo-cubes", dest="mo_cubes", action="store_true",
                         help="Write spin-free MO cubes (cube_nhomos below and cube_nlumos above the gap) on a "
                              "coarse grid, without the spinor and exciton cubes of --cube.")

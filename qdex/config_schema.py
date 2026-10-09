@@ -126,7 +126,7 @@ SECTIONS = {
         "xi_core": "xi_core_threshold", "xi_trap": "xi_trap_threshold"},
     "output": {k: k for k in (
         "broadening", "sigma", "plot", "show", "cube", "cube_spacing", "disable_cpp_cube", "cube_nhomos",
-        "cube_nlumos", "nbse", "bse_states", "write_csv", "csv_roots", "time", "save_xia", "nto",
+        "cube_nlumos", "cube_nhomos_deloc", "cube_nlumos_deloc", "nbse", "bse_states", "write_csv", "csv_roots", "time", "save_xia", "nto",
         "nto_states", "nto_top", "nto_csv", "verbosity", "h5", "html", "excitations_emax",
         "excitations_min_states", "mo_cubes", "mo_cube_spacing", "spectrum_grid", "spectrum_sigmas")},
 }

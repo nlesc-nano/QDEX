@@ -605,21 +605,35 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     first_iso_val = 0.0001
     
     if len(cube_files) > 0:
-        if len(cube_files) >= 4:
-            mid = len(cube_files) // 2
-            cube_files = cube_files[mid-2 : mid+2]
-            cube_titles = ["HOMO-1", "HOMO", "LUMO", "LUMO+1"]
-        else:
-            cube_titles = [os.path.basename(f).replace('.cube', '') for f in cube_files]
+        # nominal frontier cubes (the four around the gap) plus the delocalized band-edge cubes
+        # (spatial_MO_HOMO-20_dHOMO.cube, output.cube_nhomos_deloc / cube_nlumos_deloc) as extra panels
+        deloc = [f for f in cube_files if re.search(r"_d(HOMO|LUMO)", f)]
+        nominal = [f for f in cube_files if f not in deloc]
+        if len(nominal) >= 4:
+            mid = len(nominal) // 2
+            nominal = nominal[mid-2 : mid+2]
+        cube_files = nominal + deloc
+
+        def cube_title(f):
+            t = os.path.basename(f).replace('.cube', '')
+            t = re.sub(r'^(spatial_|spinor_)(MO_|sp_)?', '', t).replace('_density', '')
+            m = re.match(r'(.+?)_(d(?:HOMO|LUMO)[-+0-9]*)$', t)
+            return f"{m.group(2)} ({m.group(1)})" if m else t
+        cube_titles = [cube_title(f) for f in cube_files]
+        # one row of nominal cubes, a second row with the delocalized band edges
+        rows_of = [nominal, deloc] if (nominal and deloc) else [cube_files]
+        n_cols = max(len(r) for r in rows_of)
+        cube_pos = [(ri + 1, ci + 1) for ri, r in enumerate(rows_of) for ci in range(len(r))]
             
         fig_3d = make_subplots(
-            rows=1, cols=len(cube_files),
-            specs=[[{'type': 'scene'}] * len(cube_files)],
+            rows=len(rows_of), cols=n_cols,
+            specs=[[{'type': 'scene'} if ci < len(r) else None for ci in range(n_cols)] for r in rows_of],
             subplot_titles=cube_titles,
-            horizontal_spacing=0.02
+            horizontal_spacing=0.02, vertical_spacing=0.06
         )
         
         for idx, cfile in enumerate(cube_files):
+            row_i, col_i = cube_pos[idx]
             logger.info(f"    -> Parsing and mapping {cfile} to 3D grid...")
             X_grid, Y_grid, Z_grid, V_data, atoms = parse_cube(cfile)
             
@@ -636,7 +650,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                     isomin=iso_pos, isomax=iso_pos, surface_count=1,
                     colorscale=[[0, 'blue'], [1, 'blue']], showscale=False,
                     caps=dict(x_show=False, y_show=False, z_show=False), opacity=0.6, name="Density"
-                ), row=1, col=idx+1)
+                ), row=row_i, col=col_i)
             else:
                 iso_val = max(abs(v_max), abs(v_min)) * 0.15
                 iso_pos = min(iso_val, v_max * 0.95)
@@ -649,7 +663,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                         colorscale=[[0, 'blue'], [1, 'blue']], showscale=False,
                         caps=dict(x_show=False, y_show=False, z_show=False), opacity=0.35, name="Pos Lobe",
                         flatshading=False,
-                    ), row=1, col=idx+1)
+                    ), row=row_i, col=col_i)
                 
                 if iso_neg < -1e-6:
                     fig_3d.add_trace(go.Isosurface(
@@ -658,25 +672,25 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                         colorscale=[[0, 'red'], [1, 'red']], showscale=False,
                         caps=dict(x_show=False, y_show=False, z_show=False), opacity=0.35, name="Neg Lobe",
                         flatshading=False,
-                    ), row=1, col=idx+1)
+                    ), row=row_i, col=col_i)
                     
             if idx == 0: first_iso_val = iso_val
             
             b_xs, b_ys, b_zs = build_wireframe_agnostic(atoms)
-            fig_3d.add_trace(go.Scatter3d(x=b_xs, y=b_ys, z=b_zs, mode='lines', line=dict(color='#555555', width=3), showlegend=False, hoverinfo='skip'), row=1, col=idx+1)
+            fig_3d.add_trace(go.Scatter3d(x=b_xs, y=b_ys, z=b_zs, mode='lines', line=dict(color='#555555', width=3), showlegend=False, hoverinfo='skip'), row=row_i, col=col_i)
             
             atom_colors = {1: '#FFFFFF', 6: '#777777', 7: '#0000FF', 8: '#FF0000', 16: '#CCCC00', 14: '#FFC0CB', 15: '#FFA500'}
             ax, ay, az, ac = [], [], [], []
             for a in atoms:
                 ax.append(a[1]); ay.append(a[2]); az.append(a[3]); ac.append(atom_colors.get(a[0], '#A0A0A0'))
-            fig_3d.add_trace(go.Scatter3d(x=ax, y=ay, z=az, mode='markers', marker=dict(size=4, color=ac, line=dict(width=1, color='black')), showlegend=False, hoverinfo='skip'), row=1, col=idx+1)
+            fig_3d.add_trace(go.Scatter3d(x=ax, y=ay, z=az, mode='markers', marker=dict(size=4, color=ac, line=dict(width=1, color='black')), showlegend=False, hoverinfo='skip'), row=row_i, col=col_i)
             
         scene_config = dict(xaxis=dict(showbackground=False, showgrid=False, zeroline=False, showticklabels=False, title=''), yaxis=dict(showbackground=False, showgrid=False, zeroline=False, showticklabels=False, title=''), zaxis=dict(showbackground=False, showgrid=False, zeroline=False, showticklabels=False, title=''), aspectmode='data')
         layout_update = {f"scene{i+1}" if i > 0 else "scene": scene_config for i in range(len(cube_files))}
         
         fig_3d.update_layout(
             **layout_update, paper_bgcolor="#fdfdfd", plot_bgcolor="#fdfdfd",
-            margin=dict(l=10, r=10, t=50, b=10), height=500, font=dict(family="Helvetica, Arial, sans-serif", size=24, color="#222")
+            margin=dict(l=10, r=10, t=50, b=10), height=500 * len(rows_of), font=dict(family="Helvetica, Arial, sans-serif", size=24, color="#222")
         )
         
         plot_3d_html = fig_3d.to_html(full_html=False, include_plotlyjs=False, div_id="mo_3d_plot")

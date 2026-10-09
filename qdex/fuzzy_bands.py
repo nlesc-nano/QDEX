@@ -370,8 +370,9 @@ def classify_band_edges(energies, occupied, kpart, onband, bulk, kpart_max=0.5, 
     (on-band weight < onband_min) while lying more than gap_tol eV inside the aligned bulk gap. The
     delocalized HOMO/LUMO are the first states that are neither, counted inward from the gap; the
     states passed on the way are the traps.
-    Returns dict(flag, homo, lumo, deloc_homo, deloc_lumo), flag = 0 band, 1 trap, 2 delocalized HOMO,
-    3 delocalized LUMO; homo/lumo/deloc_* are indices into ``energies`` (None if not found)."""
+    Returns dict(flag, homo, lumo, deloc_homo, deloc_lumo, localized), flag = 0 band, 1 trap, 2 delocalized HOMO,
+    3 delocalized LUMO; homo/lumo/deloc_* are indices into ``energies`` (None if not found); localized marks
+    every state that fails the band test."""
     E = np.asarray(energies, dtype=float)
     occ = np.asarray(occupied, dtype=bool)
     kp = np.asarray(kpart, dtype=float)
@@ -402,6 +403,7 @@ def classify_band_edges(energies, occupied, kpart, onband, bulk, kpart_max=0.5, 
                 break
             flag[i] = 1
     res["flag"] = flag
+    res["localized"] = localized
     return res
 
 
@@ -555,6 +557,58 @@ def spinor_soc_energy(soc_E, soc_U, eps_spin):
     soc_U = np.asarray(soc_U)
     v = np.asarray(soc_E, float) - (np.abs(soc_U) ** 2 * np.asarray(eps_spin, float)[:, None]).sum(axis=0)
     return v - v.mean()
+
+
+def deloc_edge_mos(cls, energies, mo_indices, n_homos, n_lumos):
+    """MO indices of the first n_homos band states from the delocalized HOMO down and the first n_lumos from the
+    delocalized LUMO up (states that pass the band test of classify_band_edges), as {mo: label}, labels
+    dHOMO, dHOMO-1, ..., dLUMO, dLUMO+1, ..."""
+    E = np.asarray(energies, dtype=float)
+    mo = np.asarray(mo_indices)
+    band = ~np.asarray(cls["localized"], dtype=bool)
+    out = {}
+    for key, n, sign in (("homo", n_homos, -1), ("lumo", n_lumos, +1)):
+        i0 = cls.get("deloc_" + key)
+        if i0 is None or n <= 0:
+            continue
+        occ_side = mo <= mo[i0] if key == "homo" else mo >= mo[i0]
+        cand = [int(i) for i in np.argsort(sign * E) if band[i] and occ_side[i] and sign * (E[i] - E[i0]) >= -1e-9]
+        name = "dHOMO" if key == "homo" else "dLUMO"
+        for k, i in enumerate(cand[:n]):
+            out[int(mo[i])] = name if k == 0 else f"{name}{'-' if key == 'homo' else '+'}{k}"
+    return out
+
+
+def write_deloc_cubes(args, cls, energies, mo_indices, homo_index, C_dense, shells, syms, coords_ang):
+    """Cubes of the delocalized band edges (output.cube_nhomos_deloc / cube_nlumos_deloc): spatial_MO_<nominal
+    label>_<dHOMO|dLUMO...>.cube. MOs already written as nominal cubes (cube / mo_cubes, cube_nhomos and
+    cube_nlumos around the gap) are not written again."""
+    n_h, n_l = int(getattr(args, "cube_nhomos_deloc", 0) or 0), int(getattr(args, "cube_nlumos_deloc", 0) or 0)
+    if n_h <= 0 and n_l <= 0:
+        return []
+    wanted = deloc_edge_mos(cls, energies, mo_indices, n_h, n_l)
+    nominal = set()
+    if getattr(args, "cube", False) or getattr(args, "mo_cubes", False):
+        nh0, nl0 = getattr(args, "cube_nhomos", 2), getattr(args, "cube_nlumos", 2)
+        nominal = {homo_index - i for i in range(nh0)} | {homo_index + 1 + i for i in range(nl0)}
+    skipped = {m: lbl for m, lbl in wanted.items() if m in nominal}
+    todo = {m: lbl for m, lbl in wanted.items() if m not in nominal}
+    if skipped:
+        logger.info("  [Cube] Delocalized edges already among the nominal cubes: "
+                    + ", ".join(f"{lbl} = MO {m}" for m, lbl in sorted(skipped.items())))
+    if not todo:
+        return []
+    from qdex.exciton_cube import generate_cubes
+    from types import SimpleNamespace
+    spacing = getattr(args, "mo_cube_spacing", 0.8) if (getattr(args, "mo_cubes", False) or not getattr(args, "cube", False)) \
+        else getattr(args, "cube_spacing", 0.5)
+    logger.info(f"\n--- Delocalized band-edge cubes ({len(todo)} spin-free MOs, {spacing} A grid): "
+                + ", ".join(f"{lbl} = MO {m}" for m, lbl in sorted(todo.items())) + " ---")
+    mo_list = sorted(todo)
+    generate_cubes(solver=SimpleNamespace(C=C_dense, homo_index=homo_index), bse_states_dict={}, mo_list=mo_list,
+                   spinor_list=[], soc_U=None, shells=shells, symbols=syms, coords=coords_ang, spacing_ang=spacing,
+                   nthreads=args.nthreads, use_cpp=not getattr(args, "disable_cpp_cube", False), mo_suffix=todo)
+    return mo_list
 
 
 def smear_and_export_fuzzy(intensity, eps_plot, labels, ewin, sigma_ev, prefix="sf", export=True, kpts_frac=None,
@@ -917,6 +971,7 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         cls_sf = classify_band_edges(eps_fuzzy, occ_f, kp_sf, ob_sf, bulk_sf, **trap_opts)
         trap_summary("SF", eps_fuzzy, cls_sf, bulk_sf)
         trap_sf = dict(kpart=kp_sf, onband=ob_sf, flag=cls_sf["flag"])
+        write_deloc_cubes(args, cls_sf, eps_fuzzy, fuzzy_indices, homo_index, C_dense, shells, syms, coords_ang)
 
     smear_and_export_fuzzy(intensity_sf, eps_fuzzy, labels, dft_ewin, sigma_use, prefix="sf", export=export_files, kpts_frac=kpts_frac,
                            kpts_cart=kpts_cart, gamma_radius=float(getattr(args, "kspace_gamma_radius", 0.12)), trap=trap_sf)

@@ -27,3 +27,14 @@ def test_k_participation_and_band_edges():
     r = classify_band_edges(E, occ, kpart, onband, bulk)
     assert r["homo"] == 0 and r["deloc_homo"] == 2 and r["lumo"] == 3 and r["deloc_lumo"] == 4
     assert list(r["flag"]) == [1, 1, 2, 1, 3]
+
+
+def test_deloc_edge_mos_skips_traps():
+    import numpy as np
+    from qdex.fuzzy_bands import deloc_edge_mos
+    E = np.array([-1.2, -1.0, -0.8, -0.5, 0.5, 0.7, 0.9])          # MOs 10..16, HOMO = 13
+    mo = np.arange(10, 17)
+    localized = np.array([False, True, False, True, False, True, False])
+    cls = {"deloc_homo": 2, "deloc_lumo": 4, "localized": localized}
+    out = deloc_edge_mos(cls, E, mo, 2, 2)
+    assert out == {12: "dHOMO", 10: "dHOMO-1", 14: "dLUMO", 16: "dLUMO+1"}

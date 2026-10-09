@@ -66,7 +66,9 @@ def write_cube(filename, symbols, coords, origin, spacing, N, density, use_cpp=T
     append_time = end_time - header_time
     logger.info(f"  [Cube] Exported {filename} ({mode_used}): Total {total_time:.3f}s (Data {append_time:.3f}s)")
 
-def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells, symbols, coords, spacing_ang=0.5, margin_ang=3.5, nthreads=4, use_cpp=True):
+def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells, symbols, coords, spacing_ang=0.5, margin_ang=3.5, nthreads=4, use_cpp=True,
+                   mo_suffix=None):
+    """mo_suffix: optional {mo: tag} appended to the spatial cube names (spatial_MO_HOMO-3_dHOMO.cube)."""
     import libint_cpp
     ANG_TO_BOHR = 1.8897259886
     
@@ -198,6 +200,8 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
     
     for mo in mo_list:
         lbl = get_lbl(mo, solver.homo_index, False)
+        if mo_suffix and mo in mo_suffix:
+            lbl = f"{lbl}_{mo_suffix[mo]}"
         write_cube(f"spatial_{lbl}.cube", symbols, coords, origin_bohr, spacing_bohr, (Nx,Ny,Nz), rho_mo[mo], use_cpp)
         
     for sp in spinor_list:
