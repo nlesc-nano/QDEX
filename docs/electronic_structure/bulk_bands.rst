@@ -51,6 +51,33 @@ the gap is zero; the table gives the s-p band order :math:`E(\Gamma_1) - E(\Gamm
 (spin-free) and :math:`E(\Gamma_6) - E(\Gamma_8)` (with SOC), negative when inverted. Their
 spin-orbit splittings are well defined and shown in the overlay.
 
+Orbitals from another functional
+-------------------------------
+
+``system.functional`` names the functional of the dot's orbitals (``pbe``, the default, or ``hle17``). The bulk
+bands then come from ``<name>_<functional>[_soc].bs.gz`` and ``<name>_<functional>.json``, for the fuzzy-band
+overlay, the semicore anchor and the on-band test of the trap detector (:doc:`fuzzy_bands`). The dashboards label
+the overlay with the functional. PBE bands are never used for another functional: they would be misplaced, because
+the semicore level that anchors them moves with the functional. When no bands of that functional exist, the overlay
+is left out and the trap detector uses its k-participation rule alone.
+
+The QP models start from the bulk gaps of the same functional (``MATERIAL_DB_BULK_DFT`` in ``qdex/hardness.py``,
+the keys of ``MATERIAL_DB_BULK_PBE``; ``a_pbe`` and ``gap_pbe_lattice`` hold the functional's own lattice).
+:math:`\Delta_\Sigma` is then QSGW+SOC minus the functional's +SOC gap at :math:`a_\text{exp}`, and
+:math:`\Delta_\text{geom}` uses its own lattice. Available: HLE17 for zinc-blende CdSe
+(``benchmarks/bulk_bands/hle17``):
+
+========================= ======= ======== ==================
+quantity                  PBE     HLE17    experiment
+========================= ======= ======== ==================
+lattice constant (Å)      6.217   6.108    6.05
+gap at own lattice        0.474   1.452
++SOC                      0.352   1.322
+gap at a_exp (+SOC)       0.522   1.405    1.675 (MATERIAL_DB)
+Cd 4d below the VBM (eV)  7.51    8.63
+Delta_Sigma (eV)          1.642   0.759
+========================= ======= ======== ==================
+
 Bulk quasiparticle reference
 ----------------------------
 

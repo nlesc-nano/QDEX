@@ -236,9 +236,9 @@ def estimate_periodic_bulk_gw_scissor(material_name):
     if entry is None or len(entry) < 9:
         return None, None
 
-    from qdex.hardness import bulk_pbe_gap_dot
+    from qdex.hardness import bulk_pbe_gap_dot, bulk_gw_gap_sf
     gap_pbe_bulk = bulk_pbe_gap_dot(m_name)       # at the dot's lattice (bulk_geometry)
-    gap_gw_bulk = float(entry[8])
+    gap_gw_bulk = bulk_gw_gap_sf(m_name)
     scissor = gap_gw_bulk - gap_pbe_bulk
     details = {
         "qp_model": "bulk_gw_hardness_dictionary",
@@ -890,6 +890,10 @@ def _build_parser():
     parser.add_argument("--use_cohsex_gap", action="store_true", help="Override the tabulated GW gap with the pure COHSEX computed gap")
     parser.add_argument("--vxc_ao", type=str, default=None, help="Path to cleaned CP2K AO-basis Vxc matrix text file")
     parser.add_argument("--material", type=str, default="DEFAULT")
+    parser.add_argument("--functional", type=str, default="pbe",
+                        help="DFT functional of the orbitals: 'pbe' (default) or 'hle17'. Selects the bulk bands of the "
+                             "fuzzy-band overlay and trap detector (<cif stem>_<functional>.bs) and the bulk gaps of the "
+                             "QP models (MATERIAL_DB_BULK_DFT).")
     parser.add_argument("--eps-out", type=float, default=2.0)
     parser.add_argument("--qp-regularization-length", dest="qp_regularization_length", type=float, default=1.0,
                         help="Regularization length ell in angstrom for the anchor-scaled QP model.")
@@ -1080,6 +1084,28 @@ def _build_parser():
                         help="Project on plane waves at k only (G = 0); p-like band edges then lose their weight at Gamma.")
     parser.add_argument("--g_shell", type=int, default=2,
                         help="Reciprocal-vector shell for folded fuzzy-band weights; 0, 1, 2 (default) and 3 use 1, 27, 125 and 343 replicas.")
+    parser.add_argument("--kspace_descriptors", action="store_true", default=True,
+                        help="With a CIF (analysis.cif): fuzzy-band Gamma weight and k-entropy of the orbitals printed in "
+                             "the population analysis (default). YAML: analysis.kspace_descriptors")
+    parser.add_argument("--no-kspace-descriptors", dest="kspace_descriptors", action="store_false",
+                        help="Leave the k-space columns out of the population analysis.")
+    parser.add_argument("--kspace_gamma_radius", type=float, default=0.12,
+                        help="Radius (1/A) around Gamma for the Γ_k weight of the population analysis (default 0.12). "
+                             "YAML: analysis.kspace_gamma_radius")
+    parser.add_argument("--trap_kgrid", type=int, default=8,
+                        help="Fuzzy bands: n of the n^3 BZ grid for the k-participation of each state (trap detector "
+                             "and delocalized band edges; 0 turns them off). YAML: analysis.trap_kgrid")
+    parser.add_argument("--trap_kpart_max", type=float, default=0.5,
+                        help="k-participation at or above which a state counts as localized (default 0.5).")
+    parser.add_argument("--trap_kpart_margin", type=float, default=0.30,
+                        help="A state is k-spread if its k-participation exceeds that of the most band-like state on its side "
+                             "(within 1.5 eV of the gap) by this margin, or trap_kpart_max, whichever is larger (default 0.30).")
+    parser.add_argument("--trap_onband_min", type=float, default=0.25,
+                        help="On-band weight below which a state inside the bulk gap counts as off the bulk bands (default 0.25).")
+    parser.add_argument("--trap_onband_delta", type=float, default=0.20,
+                        help="Energy tolerance (eV) between a state and the aligned bulk bands for the on-band weight (default 0.20).")
+    parser.add_argument("--trap_gap_tol", type=float, default=0.10,
+                        help="How far (eV) inside the aligned bulk gap an off-band state must lie to count as a trap (default 0.10).")
     parser.add_argument("--dashboard_energy_mode", choices=["dft", "qp", "both"], default="dft", help="Generate fuzzy dashboards on DFT, QP-corrected, or both energy axes.")
     parser.add_argument("--bulk_overlay", action="store_true", default=True,
                         help="Draw the bulk band structure over the DFT fuzzy maps (default). YAML: fuzzy.bulk_overlay")
@@ -1286,6 +1312,9 @@ def _prepare_run(args, *, config_path, parser):
         args.qdex_store = ResultStore()
     import qdex.hardness as _hardness
     _hardness.RADIUS_DEFINITION = str(getattr(args, "qp_radius", "saxs") or "saxs").lower()
+    _hardness.set_dft_functional(getattr(args, "functional", "pbe"))
+    from qdex.bulk_bands import set_bulk_functional
+    set_bulk_functional(getattr(args, "functional", "pbe"))
     _hardness.set_bulk_vertex(getattr(args, "bulk_vertex", "none"), getattr(args, "bulk_vertex_factor", 0.8))
     _hardness.set_bulk_geometry(getattr(args, "bulk_geometry", "strain"))
     _hardness.set_bulk_residual(getattr(args, "bulk_residual", "none"))
@@ -1767,12 +1796,13 @@ def _quasiparticle_correction(args, *,
         elif args.qp_gap.lower() == "bulk":
             if str(getattr(args, "qp_reference", "pbe")).lower() == "gxtb":
                 raise ValueError("quasiparticles.reference: gxtb is only supported by the NAMD precompute (g-xTB frames).")
-            logger.info("  [QP] Bulk GW correction (bulk QSGW - bulk PBE). Valid only for PBE orbitals.")
+            logger.info(f"  [QP] Bulk GW correction (bulk QSGW - bulk {str(getattr(args, 'functional', 'pbe')).upper()}).")
             from qdex.hardness import bulk_qp_shift
             scissor, bulk_vertex_info = bulk_qp_shift(args.material, dft_gap)
             if entry is not None and len(entry) >= 9:
                 pbe_bulk_gap = float(bulk_vertex_info.get("bulk_pbe_gap_dot_lattice_ev", entry[7]))
-                gw_bulk_gap = float(entry[8])
+                from qdex.hardness import bulk_gw_gap_sf
+                gw_bulk_gap = bulk_gw_gap_sf(args.material)
             target_qp_gap = dft_gap + scissor
             f_homo, f_b_source = bulk_homo_fraction(args.material)
             f_lumo = 1.0 - f_homo
@@ -2418,6 +2448,21 @@ def _active_space_and_soc(args, *,
     f_core_min_thr = float(getattr(args, "f_core_min", 0.60))
     f_core_trap_thr = float(getattr(args, "f_core_trap", 0.40))
 
+    kspace_alpha = None
+    if getattr(args, "cif", None) and getattr(args, "kspace_descriptors", True):
+        from qdex.fuzzy_bands import frontier_kspace_descriptors
+        k_range = max(0, int(getattr(args, "population_print_range", 15)))
+        k_idx = np.arange(max(0, homo_index - k_range + 1), min(len(eps), homo_index + 1 + k_range))
+        t_k = time.time()
+        try:
+            kspace_alpha = frontier_kspace_descriptors(
+                args.cif, C_dense, k_idx, len(eps), shells, syms, coords_ang, args.nthreads,
+                fold_to_bz=getattr(args, "fold_to_bz", True), g_shell=int(getattr(args, "g_shell", 2)),
+                gamma_radius=float(getattr(args, "kspace_gamma_radius", 0.12)))
+            logger.debug(f"  -> k-space descriptors of {len(k_idx)} frontier MOs in {time.time() - t_k:.1f} s")
+        except Exception as exc:   # the population analysis must not stop on the k-path
+            logger.warning(f"  [k-space] Descriptors skipped: {exc}")
+
     centroid_info_alpha = None
     if C_beta is not None:
         pop_range = max(0, int(getattr(args, "population_print_range", 15)))
@@ -2427,7 +2472,8 @@ def _active_space_and_soc(args, *,
             eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False,
             print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha,
             coords_ang=coords_ang, core_elements=centroid_core_els,
-            xi_core=xi_core_thr, xi_trap=xi_trap_thr, f_core_min=f_core_min_thr, f_core_trap=f_core_trap_thr
+            xi_core=xi_core_thr, xi_trap=xi_trap_thr, f_core_min=f_core_min_thr, f_core_trap=f_core_trap_thr,
+            kspace=kspace_alpha
         )
         logger.info("\n--- Spin-Free Beta MO Population Analysis ---")
         print_orbital_summary(
@@ -2444,7 +2490,8 @@ def _active_space_and_soc(args, *,
             eps_shifted, occ, homo_index, pops_sf, syms, shells, is_soc=False,
             print_range=pop_range, population_bars=pop_tags, qp_breakdown=qp_breakdown_alpha,
             coords_ang=coords_ang, core_elements=centroid_core_els,
-            xi_core=xi_core_thr, xi_trap=xi_trap_thr, f_core_min=f_core_min_thr, f_core_trap=f_core_trap_thr
+            xi_core=xi_core_thr, xi_trap=xi_trap_thr, f_core_min=f_core_min_thr, f_core_trap=f_core_trap_thr,
+            kspace=kspace_alpha
         )
 
     # Frontier Orbital Localization Diagnostic
@@ -2453,6 +2500,11 @@ def _active_space_and_soc(args, *,
         xi_vals = centroid_info_alpha["xi"]
         d_com_vals = centroid_info_alpha["d_com"]
         r_c = centroid_info_alpha["r_core"]
+
+        def _kdiag(i):
+            if kspace_alpha is None or np.isnan(kspace_alpha["gamma"][i]):
+                return ""
+            return f", Γ_k = {kspace_alpha['gamma'][i]:.2f}, S_k = {kspace_alpha['entropy'][i]:.2f}"
         
         core_vbm_idx = None
         for i in range(homo_index, -1, -1):
@@ -2468,23 +2520,23 @@ def _active_space_and_soc(args, *,
 
         logger.info(f"\n--- Frontier Orbital Localization Diagnostic (Core Radius: {r_c:.2f} Å) ---")
         homo_loc = loc_labels[homo_index]
-        logger.info(f"  Nominal HOMO  (MO {homo_index:4d}, {eps[homo_index]:7.3f} eV): {homo_loc:>11} | ξ = {xi_vals[homo_index]:.2f}, d_COM = {d_com_vals[homo_index]:.2f} Å")
+        logger.info(f"  Nominal HOMO  (MO {homo_index:4d}, {eps[homo_index]:7.3f} eV): {homo_loc:>11} | ξ = {xi_vals[homo_index]:.2f}, d_COM = {d_com_vals[homo_index]:.2f} Å{_kdiag(homo_index)}")
         
         if core_vbm_idx is not None and core_vbm_idx != homo_index:
             vbm_offset = eps[homo_index] - eps[core_vbm_idx]
             rel_vbm = core_vbm_idx - homo_index
-            logger.info(f"  True Core VBM (MO {core_vbm_idx:4d}, {eps[core_vbm_idx]:7.3f} eV): {'[Core]':>11} | ξ = {xi_vals[core_vbm_idx]:.2f}, d_COM = {d_com_vals[core_vbm_idx]:.2f} Å (offset: {vbm_offset:+.3f} eV, HOMO{rel_vbm})")
+            logger.info(f"  True Core VBM (MO {core_vbm_idx:4d}, {eps[core_vbm_idx]:7.3f} eV): {'[Core]':>11} | ξ = {xi_vals[core_vbm_idx]:.2f}, d_COM = {d_com_vals[core_vbm_idx]:.2f} Å{_kdiag(core_vbm_idx)} (offset: {vbm_offset:+.3f} eV, HOMO{rel_vbm})")
         elif core_vbm_idx == homo_index:
             logger.info("  True Core VBM coincides with Nominal HOMO (no surface hole traps detected).")
             
         if core_cbm_idx is not None:
             lumo_idx = homo_index + 1
             lumo_loc = loc_labels[lumo_idx]
-            logger.info(f"  Nominal LUMO  (MO {lumo_idx:4d}, {eps[lumo_idx]:7.3f} eV): {lumo_loc:>11} | ξ = {xi_vals[lumo_idx]:.2f}, d_COM = {d_com_vals[lumo_idx]:.2f} Å")
+            logger.info(f"  Nominal LUMO  (MO {lumo_idx:4d}, {eps[lumo_idx]:7.3f} eV): {lumo_loc:>11} | ξ = {xi_vals[lumo_idx]:.2f}, d_COM = {d_com_vals[lumo_idx]:.2f} Å{_kdiag(lumo_idx)}")
             if core_cbm_idx != lumo_idx:
                 cbm_offset = eps[core_cbm_idx] - eps[lumo_idx]
                 rel_cbm = core_cbm_idx - lumo_idx
-                logger.info(f"  True Core CBM (MO {core_cbm_idx:4d}, {eps[core_cbm_idx]:7.3f} eV): {'[Core]':>11} | ξ = {xi_vals[core_cbm_idx]:.2f}, d_COM = {d_com_vals[core_cbm_idx]:.2f} Å (offset: {cbm_offset:+.3f} eV, LUMO+{rel_cbm})")
+                logger.info(f"  True Core CBM (MO {core_cbm_idx:4d}, {eps[core_cbm_idx]:7.3f} eV): {'[Core]':>11} | ξ = {xi_vals[core_cbm_idx]:.2f}, d_COM = {d_com_vals[core_cbm_idx]:.2f} Å{_kdiag(core_cbm_idx)} (offset: {cbm_offset:+.3f} eV, LUMO+{rel_cbm})")
             
             if core_vbm_idx is not None:
                 core_core_gap = eps[core_cbm_idx] - eps[core_vbm_idx]
@@ -2565,7 +2617,7 @@ def _active_space_and_soc(args, *,
         "C_dense_beta", "bse_n_occ", "bse_n_occ_beta", "bse_n_virt", "bse_n_virt_beta", "bse_soc_E",
         "bse_soc_U", "bse_spinor_homo_idx", "calculated_soc_gap", "compute_spinor_subspace",
         "compute_spinor_subspace_uks", "confinement_energy", "db_gap", "is_uks_sp", "soc_overlap_cache",
-        "pops_soc_act", "bse_soc_midgap_ev", "centroid_info_alpha", "centroid_info_soc"
+        "pops_soc_act", "bse_soc_midgap_ev", "centroid_info_alpha", "centroid_info_soc", "kspace_alpha"
     ))
 
 
@@ -2708,7 +2760,7 @@ def _store_electronic_and_mo_cubes(args, *,
         C_dense, bse_soc_E, bse_soc_U, bse_soc_midgap_ev, bse_spinor_homo_idx, calculated_soc_gap, confinement_energy, coords_ang,
         dft_gap, e_fermi_raw, eps, eps_dft_shifted, eps_qp_active, homo_index, occ, pops_sf, pops_soc_act,
         qp_homo, qp_lumo, qp_provenance, scissor, shells, syms, target_qp_gap, tracker,
-        centroid_info_alpha=None, centroid_info_soc=None):
+        centroid_info_alpha=None, centroid_info_soc=None, kspace_alpha=None):
     """Spin-free MOs and SOC spinors into qdex_electronic.h5 (output.h5)."""
     store = getattr(args, "qdex_store", None)
     if store is not None:
@@ -2720,7 +2772,7 @@ def _store_electronic_and_mo_cubes(args, *,
         pdos_sigma = getattr(args, "pdos_sigma", 0.10)
         store.put("electronic", "structure/symbols", list(syms))
         store.put("electronic", "structure/coords_ang", np.asarray(coords_ang, float))
-        store.attr("electronic", "structure", material=str(args.material),
+        store.attr("electronic", "structure", material=str(args.material), functional=str(getattr(args, "functional", "pbe")),
                    cluster_size=getattr(args, "cluster_size_info", None) or {})
         if eps_qp_active is not None:
             qp_abs = np.asarray(eps_qp_active, float)
@@ -2745,6 +2797,9 @@ def _store_electronic_and_mo_cubes(args, *,
                 "centroid/f_core": np.asarray(centroid_info_alpha["f_core"], float),
                 "centroid/labels": list(centroid_info_alpha["labels"]),
             })
+        if kspace_alpha is not None:
+            extra_sf.update({"centroid/k_gamma": np.asarray(kspace_alpha["gamma"], float),
+                             "centroid/k_entropy": np.asarray(kspace_alpha["entropy"], float)})
         put_orbitals(store, "sf/mo", eps_dft_shifted, occ,
                      {"P_weights": P, "surface_ao_mask": surface_mask, "IPR": np.sum(P ** 2, axis=0),
                       "coop_results": {}},
@@ -2756,6 +2811,10 @@ def _store_electronic_and_mo_cubes(args, *,
             store.attr("electronic", "sf/mo/centroid",
                        r_core_ang=float(centroid_info_alpha["r_core"]),
                        com_core_ang=list(map(float, centroid_info_alpha["com_core"])))
+        if kspace_alpha is not None:
+            store.attr("electronic", "sf/mo/centroid", k_gamma_radius_inv_ang=kspace_alpha["gamma_radius"],
+                       k_gamma_uniform=kspace_alpha["gamma_uniform"],
+                       k_note="k_gamma / k_entropy: fuzzy-band Gamma weight and normalized k-entropy (NaN = not evaluated)")
         if bse_soc_E is not None and pops_soc_act is not None:
             n_sp = len(bse_soc_E)
             h = int(bse_spinor_homo_idx)

@@ -12,6 +12,27 @@ DEFAULT_BULK_DIR = os.path.join(os.path.dirname(__file__), "data", "bulk_bands")
 # qdex.bulk_soc; <name> is the stem of the CIF the fuzzy bands are computed with (e.g. CdSe_zb).
 STRUCTURE_PREFERENCE = ("zb", "rs", "cubic", "wz")
 
+# Functional of the bulk bands: PBE files are <name>[_soc].bs, those of another functional
+# <name>_<functional>[_soc].bs (e.g. CdSe_zb_hle17.bs, CdSe_zb_hle17.json). A run uses the bands of the
+# functional of its orbitals (system.functional), set once by the CLI with set_bulk_functional.
+BULK_FUNCTIONAL = "pbe"
+FUNCTIONAL_LABELS = {"pbe": "PBE", "hle17": "HLE17"}
+
+
+def set_bulk_functional(functional="pbe"):
+    global BULK_FUNCTIONAL
+    BULK_FUNCTIONAL = str(functional or "pbe").strip().lower()
+
+
+def functional_label(functional=None):
+    f = str(functional or BULK_FUNCTIONAL).lower()
+    return FUNCTIONAL_LABELS.get(f, f.upper())
+
+
+def _ftag(functional=None):
+    f = str(functional or BULK_FUNCTIONAL).lower()
+    return "" if f == "pbe" else f"_{f}"
+
 
 def parse_cp2k_bs(filepath):
     """
@@ -120,18 +141,20 @@ def _stem(path):
     return os.path.splitext(os.path.basename(str(path)))[0]
 
 
-def find_bulk_bs(material="CdSe", custom_path=None, soc=False, cif=None):
+def find_bulk_bs(material="CdSe", custom_path=None, soc=False, cif=None, functional=None):
     """
-    Bulk band file for a run: the bands of its CIF (data/bulk_bands/<cif stem>[_soc].bs) or, failing
-    that, of the material (<Material>_<structure>[_soc].bs, preferring zb, rs, cubic, wz).
+    Bulk band file for a run: the bands of its CIF (data/bulk_bands/<cif stem>[_<functional>][_soc].bs) or,
+    failing that, of the material (<Material>_<structure>[_<functional>][_soc].bs, preferring zb, rs, cubic,
+    wz). functional: that of the dot's orbitals (default BULK_FUNCTIONAL; PBE files carry no tag).
     custom_path: an explicit spin-free .bs file.
     """
+    ftag = _ftag(functional)
     tag = "_soc" if soc else ""
     if custom_path and not soc and os.path.exists(custom_path):
         return custom_path
     if cif:
         for ext in (".bs", ".bs.gz"):
-            p = os.path.join(DEFAULT_BULK_DIR, f"{_stem(cif)}{tag}{ext}")
+            p = os.path.join(DEFAULT_BULK_DIR, f"{_stem(cif)}{ftag}{tag}{ext}")
             if os.path.exists(p):
                 return p
     if not material:
@@ -144,6 +167,9 @@ def find_bulk_bs(material="CdSe", custom_path=None, soc=False, cif=None):
             continue
         name = g[: -len(f"{tag}.bs")]
         parts = name.split("_")
+        # <Material>_<structure> for PBE, <Material>_<structure>_<functional> otherwise
+        if (len(parts) > 2) != bool(ftag) or (ftag and not name.endswith(ftag)):
+            continue
         if parts[0].upper() == mat:
             found[parts[1].lower() if len(parts) > 1 else ""] = os.path.join(DEFAULT_BULK_DIR, f)
     for key in STRUCTURE_PREFERENCE:
@@ -291,7 +317,7 @@ def qd_semicore_level(material, C, S, shells, syms, coords_ang, energies, homo_i
         logger.warning(f"  [Bulk Bands] The anchored bulk VBM ({bulk_vbm_rel:.2f} eV) lies "
                        f"{energies[homo_index] - bulk_vbm_rel:.2f} eV below the dot's HOMO; a confined hole lies "
                        f"below the bulk VBM. Was the dot computed at another level of theory (functional, basis, "
-                       f"pseudopotential) than the bulk bands (PBE, DZVP-MOLOPT-PBE-GTH)?")
+                       f"pseudopotential) than the bulk bands ({functional_label()}, DZVP-MOLOPT-PBE-GTH)? Set system.functional to that of the orbitals.")
     result["bulk_vbm_rel_ev"] = bulk_vbm_rel
     result.update(level_ev=float(np.mean(levels[use])), spread_ev=float(np.std(levels[use])),
                   n_atoms=int(use.size), element=elem, label=cfg.get("label", elem), bulk_file=os.path.basename(path))
@@ -340,7 +366,9 @@ def map_bulk_to_path(segments, path_frac, atol=1e-4):
 
 def find_unfolded(material=None, cif=None):
     """Unfolded supercell bands for a run: data/bulk_bands/<cif stem>_unfolded.npz, else
-    <Material>_<structure>_unfolded.npz (qdex.bulk_unfold), or None."""
+    <Material>_<structure>_unfolded.npz (qdex.bulk_unfold), or None. PBE only."""
+    if _ftag():
+        return None
     if cif:
         p = os.path.join(DEFAULT_BULK_DIR, f"{_stem(cif)}_unfolded.npz")
         if os.path.exists(p):
@@ -469,6 +497,9 @@ def get_aligned_bulk_bands(
     if not soc_bands:
         path = find_bulk_bs(material=material, custom_path=bs_path, cif=cif)
     if not path:
+        if _ftag():
+            logger.warning(f"  [Bulk Bands] No {functional_label()} bulk bands for {cif or material} in {DEFAULT_BULK_DIR}: "
+                           f"no overlay (PBE bands would be misplaced on the {functional_label()} energy axis).")
         return None
 
     data = parse_cp2k_bs(path)

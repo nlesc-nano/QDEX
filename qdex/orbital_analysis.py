@@ -453,7 +453,7 @@ def compute_orbital_centroids(
 def print_orbital_summary(
     energies_eV, occ, homo_idx, pops, syms, shells, is_soc=False, offset=0,
     print_range=15, population_bars=None, qp_breakdown=None, coords_ang=None,
-    core_elements=None, xi_core=0.35, xi_trap=0.55, f_core_min=0.60, f_core_trap=0.40
+    core_elements=None, xi_core=0.35, xi_trap=0.55, f_core_min=0.60, f_core_trap=0.40, kspace=None
 ):
     """
     Fast Mulliken population analysis broken down by Element and Angular Momentum (s, p, d).
@@ -461,6 +461,8 @@ def print_orbital_summary(
     If qp_breakdown is provided, also displays the microscopic breakdown of each orbital's QP shift.
     If coords_ang is provided, computes electronic centroids <r>, displacement xi = d_COM / R_core,
     orbital spread sigma/R, and core/trap classification.
+    If kspace is given (fuzzy_bands.frontier_kspace_descriptors), two more columns show the fuzzy-band
+    Gamma weight (Γ_k) and the normalized k-entropy (S_k) of each printed orbital.
     """
     has_qp = (qp_breakdown is not None) and (not is_soc)
     has_coords = coords_ang is not None
@@ -472,20 +474,33 @@ def print_orbital_summary(
             xi_core=xi_core, xi_trap=xi_trap, f_core_min=f_core_min, f_core_trap=f_core_trap
         )
 
+    has_k = has_coords and kspace is not None
+    k_head = f" | {'Γ_k':>5} | {'S_k':>5}" if has_k else ""
+    k_sep = f" | {'-----':>5} | {'-----':>5}" if has_k else ""
+
+    def k_cols(i):
+        if not has_k:
+            return ""
+        g, e = kspace["gamma"][i], kspace["entropy"][i]
+        return " | " + ("  -  " if np.isnan(g) else f"{g:5.2f}") + " | " + ("  -  " if np.isnan(e) else f"{e:5.2f}")
+
     if has_coords:
-        table_width = 145 if has_qp else 136
+        table_width = (145 if has_qp else 136) + (16 if has_k else 0)
     else:
         table_width = 115 if has_qp else 115
+    if has_k:
+        logger.info(f"  [k-space] Γ_k: fuzzy-band weight within {kspace['gamma_radius']:.2f} 1/Å of Gamma "
+                    f"(flat profile: {kspace['gamma_uniform']:.2f}); S_k: normalized k-entropy (1 = spread over the path)")
 
     logger.info("\n" + "=" * table_width)
     if has_qp:
         if has_coords:
-            logger.info(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'QP (eV)':>10} | {'Occ':>5} | {'d_COM (Å)':>9} | {'ξ':>6} | {'σ/R':>5} | {'Loc':>11} | {'Main Contributions':>40}")
+            logger.info(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'QP (eV)':>10} | {'Occ':>5} | {'d_COM (Å)':>9} | {'ξ':>6} | {'σ/R':>5}{k_head} | {'Loc':>11} | {'Main Contributions':>40}")
         else:
             logger.info(f"{'Orbital':>14} | {'Index':>6} | {'DFT (eV)':>10} | {'QP (eV)':>10} | {'Occ':>5} | {'Main Contributions':>45}")
     else:
         if has_coords:
-            logger.info(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'d_COM (Å)':>9} | {'ξ':>6} | {'σ/R':>5} | {'Loc':>11} | {'Main Contributions':>40}")
+            logger.info(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'d_COM (Å)':>9} | {'ξ':>6} | {'σ/R':>5}{k_head} | {'Loc':>11} | {'Main Contributions':>40}")
         else:
             logger.info(f"{'Orbital':>14} | {'Index':>6} | {'Energy (eV)':>12} | {'Occ':>5} | {'Main Contributions':>45}")
     logger.info("-" * table_width)
@@ -552,7 +567,7 @@ def print_orbital_summary(
                 x_c = centroid_info["xi"][idx]
                 s_c = centroid_info["sigma_tilde"][idx]
                 loc_c = centroid_info["labels"][idx]
-                logger.info(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {d_c:9.2f} | {x_c:6.2f} | {s_c:5.2f} | {loc_c:>11} | {contrib_str}")
+                logger.info(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {d_c:9.2f} | {x_c:6.2f} | {s_c:5.2f}{k_cols(idx)} | {loc_c:>11} | {contrib_str}")
             else:
                 logger.info(f"{label:>14} | {idx + offset:6d} | {e_dft:10.4f} | {e_qp:10.4f} | {occ[idx]:5.1f} | {contrib_str}")
         else:
@@ -561,19 +576,19 @@ def print_orbital_summary(
                 x_c = centroid_info["xi"][idx]
                 s_c = centroid_info["sigma_tilde"][idx]
                 loc_c = centroid_info["labels"][idx]
-                logger.info(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {d_c:9.2f} | {x_c:6.2f} | {s_c:5.2f} | {loc_c:>11} | {contrib_str}")
+                logger.info(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {d_c:9.2f} | {x_c:6.2f} | {s_c:5.2f}{k_cols(idx)} | {loc_c:>11} | {contrib_str}")
             else:
                 logger.info(f"{label:>14} | {idx + offset:6d} | {energies_eV[idx]:12.4f} | {occ[idx]:5.1f} | {contrib_str}")
         
         if idx == homo_idx + 1:
             if has_qp:
                 if has_coords:
-                    logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'-----':>5} | {'---------':>9} | {'------':>6} | {'-----':>5} | {'-----------':>11} | {'-'*40}")
+                    logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'-----':>5} | {'---------':>9} | {'------':>6} | {'-----':>5}{k_sep} | {'-----------':>11} | {'-'*40}")
                 else:
                     logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'----------':>10} | {'----------':>10} | {'-----':>5} | {'-'*45}")
             else:
                 if has_coords:
-                    logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'---------':>9} | {'------':>6} | {'-----':>5} | {'-----------':>11} | {'-'*40}")
+                    logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'---------':>9} | {'------':>6} | {'-----':>5}{k_sep} | {'-----------':>11} | {'-'*40}")
                 else:
                     logger.info(f"   {'-- FERMI --':>11} | {'------':>6} | {'------------':>12} | {'-----':>5} | {'-'*45}")
     logger.info("=" * table_width + "\n")

@@ -27,6 +27,7 @@ SECTIONS = {
         "basis_txt": "basis_txt",
         "basis_name": "basis_name",
         "material": "material",
+        "functional": "functional",
         "gth_file": "gth_file",
         "nthreads": "nthreads",
         "device": "device",
@@ -115,12 +116,14 @@ SECTIONS = {
         "gth_file": "gth_file",
         "gth_functional": "gth_functional",
     },
-    "analysis": {k: k for k in (
+    "analysis": {**{k: k for k in (
         "run_fuzzy", "cif", "pdos_atoms", "coop_pairs", "population_print_range", "fuzzy_sigma",
         "pdos_sigma", "ewin", "fold_to_bz", "g_shell", "dashboard_energy_mode",
         "bulk_overlay", "bulk_alignment", "bulk_unfolded", "bulk_anchor",
-        "trap_filter", "xi_core_threshold", "xi_core", "xi_trap_threshold", "xi_trap",
-        "centroid_core_elements", "f_core_min", "f_core_trap")},
+        "trap_filter", "xi_core_threshold", "xi_trap_threshold",
+        "centroid_core_elements", "f_core_min", "f_core_trap", "kspace_descriptors", "kspace_gamma_radius",
+        "trap_kgrid", "trap_kpart_max", "trap_kpart_margin", "trap_onband_min", "trap_onband_delta", "trap_gap_tol")},
+        "xi_core": "xi_core_threshold", "xi_trap": "xi_trap_threshold"},
     "output": {k: k for k in (
         "broadening", "sigma", "plot", "show", "cube", "cube_spacing", "disable_cpp_cube", "cube_nhomos",
         "cube_nlumos", "nbse", "bse_states", "write_csv", "csv_roots", "time", "save_xia", "nto",

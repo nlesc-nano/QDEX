@@ -208,6 +208,64 @@ MATERIAL_DB_BULK_PBE = {
                    delta_sigma=1.731, B0=53.5),
 }
 
+# Bulk data of other DFT starting points (system.functional), with the keys of MATERIAL_DB_BULK_PBE; there
+# a_pbe, gap_pbe_lattice and gap_soc_pbe_lattice are at the equilibrium lattice of that functional, and
+# delta_sigma = qsgw_soc_exp_lattice - gap_soc_exp_lattice is the self-energy correction of its orbitals.
+# Same level of theory as the PBE table (CP2K 2026.2, GPW 400 Ry, DZVP-MOLOPT-PBE-GTH, GTH-PBE, 8x8x8);
+# inputs and analysis in benchmarks/bulk_bands (hle17).
+MATERIAL_DB_BULK_DFT = {
+    # HLE17: a = 6.108 A (energy-volume scan, B-M; PBE 6.217, exp 6.05), Cd 4d 8.63 eV below the VBM (PBE 7.51);
+    # delta_sigma = QSGW+SOC 2.164 - HLE17+SOC 1.405 at a_exp
+    "hle17": {
+        "CDSE": dict(a_exp=6.050, gap_exp_lattice=1.535, gap_soc_exp_lattice=1.405, a_pbe=6.108, gap_pbe_lattice=1.452,
+                     gap_soc_pbe_lattice=1.322, qsgw_soc_exp_lattice=2.164, delta_sigma=0.759, B0=51.4),
+    },
+}
+DFT_FUNCTIONAL = "pbe"
+
+
+def set_dft_functional(functional="pbe", verbose=True):
+    """Functional of the dot's orbitals: 'pbe' (default) or one of MATERIAL_DB_BULK_DFT. Selects the bulk
+    gaps the bulk QP shift and the confinement energy start from."""
+    global DFT_FUNCTIONAL
+    f = str(functional or "pbe").strip().lower()
+    if f != "pbe" and f not in MATERIAL_DB_BULK_DFT:
+        raise ValueError(f"system.functional must be 'pbe' or one of {', '.join(sorted(MATERIAL_DB_BULK_DFT))}, not '{functional}'")
+    DFT_FUNCTIONAL = f
+    if verbose and f != "pbe":
+        logger.info(f"  [QP] Orbitals from {f.upper()}: bulk gaps and lattice of {f.upper()} (MATERIAL_DB_BULK_DFT)")
+
+
+def bulk_dft_table(m_name):
+    """Bulk gaps and lattices of the functional of this run (MATERIAL_DB_BULK_PBE for PBE), or None."""
+    m_name = str(m_name).upper()
+    if DFT_FUNCTIONAL == "pbe":
+        return MATERIAL_DB_BULK_PBE.get(m_name)
+    return MATERIAL_DB_BULK_DFT[DFT_FUNCTIONAL].get(m_name)
+
+
+def bulk_dft_gap_exp(m_name):
+    """Spin-free bulk DFT gap at a_exp of the functional of this run (MATERIAL_DB index 7 for PBE)."""
+    m_name = str(m_name).upper()
+    if DFT_FUNCTIONAL == "pbe":
+        return float(MATERIAL_DB.get(m_name, MATERIAL_DB["DEFAULT"])[7])
+    d = bulk_dft_table(m_name)
+    if not d or d.get("gap_exp_lattice") is None:
+        raise ValueError(f"No {DFT_FUNCTIONAL.upper()} bulk data for {m_name} (MATERIAL_DB_BULK_DFT): the QP models need it.")
+    return float(d["gap_exp_lattice"])
+
+
+def bulk_gw_gap_sf(m_name):
+    """Spin-free equivalent of the bulk QSGW+SOC gap for the functional of this run: E_g^DFT(a_exp) + Delta_Sigma
+    (MATERIAL_DB index 8 for PBE)."""
+    m_name = str(m_name).upper()
+    if DFT_FUNCTIONAL == "pbe":
+        return float(MATERIAL_DB.get(m_name, MATERIAL_DB["DEFAULT"])[8])
+    d = bulk_dft_table(m_name)
+    if not d or d.get("delta_sigma") is None:
+        raise ValueError(f"No {DFT_FUNCTIONAL.upper()} bulk QSGW reference for {m_name} (MATERIAL_DB_BULK_DFT).")
+    return float(d["gap_exp_lattice"]) + float(d["delta_sigma"])
+
 # Literature QSGW gaps WITH spin-orbit coupling (100 % QSGW, RPA W; SOC added to the converged QSGW
 # Hamiltonian), the reference of the bulk self-energy correction (see "BULK QP SHIFT" above MATERIAL_DB):
 #   material: (gap_eV, a_lit_A, transition, source, dEg/dlnV_eV or None)
@@ -481,7 +539,7 @@ def estimate_gw_qp_gap(
     # Extract Bulk Data
     eps_inf = entry[0]
     gap_pbe_bulk = bulk_pbe_gap_dot(m_name)     # bulk PBE gap at the dot's lattice (geometry correction)
-    gap_gw_bulk = entry[8]
+    gap_gw_bulk = bulk_gw_gap_sf(m_name)
     
     if gap_gw_bulk == 0.0:
         logger.warning(f"  [Warning] Missing GW bulk gap for {m_name}. GW estimation failed.")
@@ -944,7 +1002,7 @@ def anchor_edge_curves(material_name, radius_ang, eps_out, residual_power=2.0,
     if entry is None or len(entry) < 14:
         return None
     eps_inf = float(entry[0])
-    d_bulk = float(entry[8]) - bulk_pbe_gap_dot(m_name)
+    d_bulk = bulk_gw_gap_sf(m_name) - bulk_pbe_gap_dot(m_name)
     R0 = float(entry[9])
     d_h0 = -(float(entry[12]) - float(entry[10]))
     d_l0 = float(entry[13]) - float(entry[11])
@@ -1192,7 +1250,7 @@ def dot_lattice_strain(material_name, atom_symbols, coords_ang, interior=0.6):
     when the material has no bulk PBE lattice data or the dot has no cation-anion bonds."""
     from scipy.spatial import cKDTree
     m_name = str(material_name).upper()
-    data = MATERIAL_DB_BULK_PBE.get(m_name)
+    data = bulk_dft_table(m_name)
     elements = MATERIAL_ELEMENTS.get(m_name)
     if not data or data.get("a_exp") is None or not elements:
         return None, {}
@@ -1238,7 +1296,7 @@ def structure_is_bb(m_name):
 def set_dot_strain(material_name, atom_symbols, coords_ang):
     """Measure the strain fraction of the dot of this run (bulk_geometry 'strain'); returns (s, info)."""
     m_name = str(material_name).upper() if material_name else "DEFAULT"
-    if BULK_GEOMETRY != "strain" or m_name not in MATERIAL_DB_BULK_PBE:
+    if BULK_GEOMETRY != "strain" or bulk_dft_table(m_name) is None:
         return None, {}
     s, info = dot_lattice_strain(m_name, atom_symbols, coords_ang)
     if s is None:
@@ -1253,7 +1311,7 @@ def set_dot_strain(material_name, atom_symbols, coords_ang):
                        f"Was it relaxed with PBE? s = 0.")
     DOT_STRAIN[m_name] = float(np.clip(s, 0.0, 1.0))
     logger.info(f"  [QP] Dot lattice: interior {info['bond']} {'distance' if structure_is_bb(m_name) else 'bond'} {info['bond_dot_ang']:.4f} A over {info['n_bonds']} "
-                f"bonds (bulk {info['bond_exp_ang']:.4f} A at a_exp, {info['bond_pbe_ang']:.4f} A at a_PBE): "
+                f"bonds (bulk {info['bond_exp_ang']:.4f} A at a_exp, {info['bond_pbe_ang']:.4f} A at a_{DFT_FUNCTIONAL.upper()}): "
                 f"strain fraction s = {s:.3f}")
     return DOT_STRAIN[m_name], info
 
@@ -1261,7 +1319,7 @@ def set_dot_strain(material_name, atom_symbols, coords_ang):
 def bulk_geometry_shift(material_name):
     """Delta_geom = s * [E_g^PBE(a_exp) - E_g^PBE(a_PBE)] (spin-free) for the dot of this run. Returns (shift, s)."""
     m_name = str(material_name).upper() if material_name else "DEFAULT"
-    data = MATERIAL_DB_BULK_PBE.get(m_name)
+    data = bulk_dft_table(m_name)
     if BULK_GEOMETRY == "none" or not data or data.get("gap_exp_lattice") is None:
         return 0.0, 0.0
     s = 1.0 if BULK_GEOMETRY == "full" else DOT_STRAIN.get(m_name, 1.0)
@@ -1272,8 +1330,7 @@ def bulk_pbe_gap_dot(material_name):
     """Bulk PBE gap at the lattice of the dot of this run: the bulk limit of its PBE gap
     (MATERIAL_DB index 7, at a_exp, minus the geometry correction)."""
     m_name = str(material_name).upper() if material_name else "DEFAULT"
-    entry = MATERIAL_DB.get(m_name, MATERIAL_DB["DEFAULT"])
-    return float(entry[7]) - bulk_geometry_shift(m_name)[0]
+    return bulk_dft_gap_exp(m_name) - bulk_geometry_shift(m_name)[0]
 
 
 def bulk_structure_opening(material_name):
@@ -1282,7 +1339,7 @@ def bulk_structure_opening(material_name):
     spin-free PBE gaps at a_exp and at the PBE volume and s the strain fraction of the geometry correction.
     0 for materials whose measured structure is the reference one. Returns (T, s)."""
     m_name = str(material_name).upper() if material_name else "DEFAULT"
-    data = MATERIAL_DB_BULK_PBE.get(m_name) or {}
+    data = bulk_dft_table(m_name) or {}
     if data.get("gap_exp_structure") is None or data.get("gap_exp_lattice") is None:
         return 0.0, 0.0
     t_exp = float(data["gap_exp_structure"]) - float(data["gap_exp_lattice"])
@@ -1344,7 +1401,7 @@ def experimental_bulk_gap(material_name):
 def material_vertex_factor(material_name):
     """a_m = (E_exp - E_PBE+SOC(a_exp)) / Delta_Sigma; None without the bulk data. Returns (a_m, info)."""
     m_name = str(material_name).upper()
-    b = MATERIAL_DB_BULK_PBE.get(m_name, {})
+    b = bulk_dft_table(m_name) or {}
     if b.get("delta_sigma") is None or b.get("gap_soc_exp_lattice") is None:
         return None, {}
     e_exp = experimental_bulk_gap(m_name)
@@ -1396,7 +1453,7 @@ def set_bulk_residual(mode="none", verbose=True):
 def bulk_residual_shift(material_name, a_bulk):
     """delta_res = E_exp - (E_PBE+SOC of the measured structure + a_bulk Delta_Sigma); (0, {}) without data."""
     m_name = str(material_name).upper()
-    b = MATERIAL_DB_BULK_PBE.get(m_name, {})
+    b = bulk_dft_table(m_name) or {}
     if BULK_RESIDUAL == "none" or b.get("delta_sigma") is None or b.get("gap_soc_exp_lattice") is None:
         return 0.0, {}
     e_exp = experimental_bulk_gap(m_name)
@@ -1434,7 +1491,7 @@ def bulk_qp_shift(material_name, dft_gap=None):
     if entry is None or len(entry) < 9:
         info.update(bulk_qsgw_shift_ev=0.0, bulk_vertex_fraction=0.0, bulk_vertex_correction_ev=0.0)
         return 0.0, info
-    eps_inf, pbe_gap, gw_gap = float(entry[0]), float(entry[7]), float(entry[8])
+    eps_inf, pbe_gap, gw_gap = float(entry[0]), bulk_dft_gap_exp(m_name), bulk_gw_gap_sf(m_name)
     d_qsgw = gw_gap - pbe_gap                        # Delta_Sigma: QSGW - PBE, both at a_exp
     d_geom, s = bulk_geometry_shift(m_name)          # PBE gap at a_exp - PBE gap at the dot's lattice
     pbe_gap_dot = pbe_gap - d_geom
@@ -1473,7 +1530,7 @@ def bulk_qp_shift(material_name, dft_gap=None):
                     f"Delta_Sigma {d_qsgw:.3f} -> {d_sigma:.3f} eV")
     if BULK_GEOMETRY != "none" and d_geom != 0.0:
         logger.info(f"  [QP] Bulk geometry correction ({BULK_GEOMETRY}, s = {s:.3f}): Delta_geom {d_geom:+.3f} eV "
-                    f"(bulk PBE gap {pbe_gap:.3f} eV at a_exp, {pbe_gap_dot:.3f} eV at the dot's lattice)")
+                    f"(bulk {DFT_FUNCTIONAL.upper()} gap {pbe_gap:.3f} eV at a_exp, {pbe_gap_dot:.3f} eV at the dot's lattice)")
     if BULK_RESIDUAL != "none":
         logger.info(f"  [QP] Bulk residual (experimental): {d_res:+.3f} eV (E_exp {r_info.get('bulk_gap_exp_ev', float('nan')):.3f} eV)")
     logger.info(f"  [QP] Bulk shift = Delta_Sigma {d_sigma:.3f} + residual {d_res:+.3f} + Delta_geom {d_geom:+.3f} "
@@ -2256,7 +2313,7 @@ def estimate_sgw_qp_gap(coords, atom_symbols, material_name=None, eps_out=1.0,
 
     eps_bulk = float(entry[0])
     pbe_bulk_gap = bulk_pbe_gap_dot(m_name)    # at the dot's lattice (bulk_geometry)
-    gw_bulk_gap = float(entry[8])
+    gw_bulk_gap = bulk_gw_gap_sf(m_name)
     bulk_shift = gw_bulk_gap - pbe_bulk_gap
 
     # 1. Compute microscopic W^{QD} using sBSE kernel builder
@@ -2488,7 +2545,7 @@ class _ScreeningModel:
 
         self.eps_bulk = eps_bulk = float(entry[0])
         self.pbe_bulk_gap = bulk_pbe_gap_dot(m_name)   # bulk limit of the dot's PBE gap (its lattice)
-        self.gw_bulk_gap = float(entry[8])
+        self.gw_bulk_gap = bulk_gw_gap_sf(m_name)
         self.bulk_shift = self.gw_bulk_gap - self.pbe_bulk_gap
         # confinement reference: the measured (tilted) structure for perovskites
         self.structure_opening = bulk_structure_opening(m_name)[0]

@@ -32,7 +32,12 @@ def load_fuzzy(npz_path):
         peaks = dict(k=np.asarray(d["peak_k"], float), energy=np.asarray(d["peak_energy"], float),
                      weight=np.asarray(d["peak_weight"], float), state=np.asarray(d["peak_state"], int),
                      soc_energy=np.asarray(d["peak_soc_energy"], float) if "peak_soc_energy" in d else None)
+    trap = None
+    if "state_flag" in d:
+        trap = dict(energy=np.asarray(d["state_energy"], float), kpart=np.asarray(d["state_kpart"], float),
+                    onband=np.asarray(d["state_onband"], float), flag=np.asarray(d["state_flag"], int))
     return dict(
+        trap=trap,
         centres=centres, Z=Z, Z_norm=Zn, soc_energy_map=vmap, peaks=peaks,
         spinpol=spinpol,
         tick_positions=np.asarray(d.get("tick_positions", []), dtype=float), 
@@ -197,9 +202,9 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     fig = make_subplots(
         rows=1, cols=5, 
         shared_yaxes=True, 
-        column_widths=[0.34, 0.22, 0.11, 0.11, 0.22],
+        column_widths=[0.32, 0.19, 0.17, 0.10, 0.22],
         horizontal_spacing=0.015, 
-        subplot_titles=(f"{lbl} Fuzzy Bands", "PDOS", "IPR", "Surf/Core", "COOP")
+        subplot_titles=(f"{lbl} Fuzzy Bands", "PDOS", "Trap detector", "Surf/Core", "COOP")
     )
     
     # Header above the panels, laid out in pixels from the top of the figure so that nothing
@@ -230,7 +235,8 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         height=fig_height,
         font=dict(family="Helvetica, Arial, sans-serif", size=24, color="#222"),
         margin=dict(l=100, r=40, t=top, b=bottom),
-        legend=legend("Atoms", 2), legend2=legend("Localization", 3), legend3=legend("Bonds", 5),
+        legend=legend("Atoms", 2), legend2=legend("Localization", 4), legend3=legend("Bonds", 5),
+        legend4=legend("Trap detector", 3),
     )
 
     for annotation in fig['layout']['annotations']: annotation['font'] = dict(size=24, family="Helvetica", color="#111")
@@ -348,7 +354,8 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     has_bulk = False
     if bulk_overlay:
         try:
-            from qdex.bulk_bands import get_aligned_bulk_bands
+            from qdex.bulk_bands import get_aligned_bulk_bands, functional_label
+            fl = functional_label()
             bulk_data = get_aligned_bulk_bands(
                 material=material,
                 bs_path=bulk_bs_path,
@@ -371,7 +378,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                                  bulk_data["bands_aligned"])]
                 if bulk_data.get("unfolded"):
                     # unfolded supercell bands: one marker per (k, band), opacity = unfolding weight
-                    bulk_name = "Bulk PBE+SOC, unfolded" if bulk_data.get("soc") else "Bulk PBE, unfolded"
+                    bulk_name = f"Bulk {fl}+SOC, unfolded" if bulk_data.get("soc") else f"Bulk {fl}, unfolded"
                     xs, ys, cs = [], [], []
                     for x_seg, b_seg, w_seg in segments:
                         mask = w_seg >= bulk_data.get("min_weight", 0.03)
@@ -389,9 +396,9 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                     logger.info(f"  [Plotter] Overlaid unfolded bulk bands from {os.path.basename(bulk_data['source_file'])} "
                                 f"({bulk_data['alignment_mode']} alignment).")
                 elif bulk_data.get("soc"):
-                    bulk_name = "Bulk PBE+SOC"
+                    bulk_name = f"Bulk {fl}+SOC"
                 else:
-                    bulk_name = "Bulk PBE, no SOC" if lbl == "SOC" else "Bulk PBE"
+                    bulk_name = f"Bulk {fl}, no SOC" if lbl == "SOC" else f"Bulk {fl}"
                 first = True
                 for x_seg, b_seg in ([] if bulk_data.get("unfolded") else segments):
                     for b_i in range(b_seg.shape[1]):
@@ -411,7 +418,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                         first = False
                 has_bulk = True
                 if not bulk_data.get("unfolded"):
-                    logger.info(f"  [Plotter] Overlaid {len(bulk_data['band_indices'])} bulk PBE bands from "
+                    logger.info(f"  [Plotter] Overlaid {len(bulk_data['band_indices'])} bulk {fl} bands from "
                                 f"{os.path.basename(bulk_data['source_file'])} ({bulk_data['alignment_mode']} alignment).")
         except Exception as exc:
             logger.debug(f"  [Plotter] Bulk band overlay skipped: {exc}")
@@ -432,8 +439,28 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         fig.add_trace(go.Scatter(x=total, y=pdos_E, mode="lines", line=dict(color="black", width=3), name="Total DOS", showlegend=False), row=1, col=2)
         fig.update_xaxes(range=[0, float(max(total.max(), 1e-12)) * 1.05], row=1, col=2)
 
+    # Trap detector: per-state localization measures on one 0..1 axis (see the glossary)
+    trap = fuzzy.get("trap")
     if len(ipr_E) > 0:
-        fig.add_trace(go.Scatter(x=ipr_V, y=ipr_E, mode="markers", marker=dict(size=6, color="#440154", line=dict(width=1, color="black")), showlegend=False, hovertemplate="IPR: %{x:.4f}<br>E: %{y:.3f} eV<extra></extra>"), row=1, col=3)
+        fig.add_trace(go.Scatter(x=ipr_V, y=ipr_E, mode="markers", name="IPR", legend="legend4",
+                                 marker=dict(size=7, color="#440154", symbol="circle", line=dict(width=1, color="black")),
+                                 hovertemplate="IPR: %{x:.4f}<br>E: %{y:.3f} eV<extra></extra>"), row=1, col=3)
+    deloc = {}
+    if trap is not None:
+        is_trap = trap["flag"] == 1
+        for key, name, color, symbol in (("kpart", "k-particip.", "#E69F00", "diamond"),
+                                         ("onband", "on-band", "#009E73", "triangle-left")):
+            fig.add_trace(go.Scatter(
+                x=trap[key], y=trap["energy"], mode="markers", name=name, legend="legend4",
+                marker=dict(size=np.where(is_trap, 10, 7), color=color, symbol=symbol,
+                            line=dict(width=np.where(is_trap, 2.5, 1), color=np.where(is_trap, "#D7263D", "black"))),
+                customdata=np.where(is_trap, "trap", ""),
+                hovertemplate=f"{name}: %{{x:.2f}}<br>E: %{{y:.3f}} eV<br>%{{customdata}}<extra></extra>"), row=1, col=3)
+        for flag, key in ((2, "homo"), (3, "lumo")):
+            hit = np.where(trap["flag"] == flag)[0]
+            if hit.size:
+                deloc[key] = float(trap["energy"][hit[0]])
+    if len(ipr_E) > 0 or trap is not None:
         fig.update_xaxes(range=[0, 1.05], row=1, col=3)
 
     if len(sc_E) > 0:
@@ -474,6 +501,8 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
             fig.add_hline(y=reference_y, line_dash="dash", line_color=line_col_ref, line_width=2.5, row=1, col=col, layer="above")
         if e_homo is not None: fig.add_hline(y=e_homo, line_dash="dot", line_color="royalblue", line_width=3, row=1, col=col, layer="above")
         if e_lumo is not None: fig.add_hline(y=e_lumo, line_dash="dot", line_color="crimson", line_width=3, row=1, col=col, layer="above")
+        if "homo" in deloc: fig.add_hline(y=deloc["homo"], line_dash="solid", line_color="royalblue", line_width=2.5, row=1, col=col, layer="above")
+        if "lumo" in deloc: fig.add_hline(y=deloc["lumo"], line_dash="solid", line_color="crimson", line_width=2.5, row=1, col=col, layer="above")
 
     if e_homo is not None and e_lumo is not None:
         gap = e_lumo - e_homo
@@ -482,6 +511,16 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         fig.add_annotation(x=0.97, y=reference_y, xref="x2 domain", yref="y", text=f"<b>E<sub>g</sub> = {gap:.3f} eV</b>", showarrow=False, font=dict(color="#222", size=17), xanchor="right", yanchor="middle", bgcolor="white")
         fig.add_annotation(x=0.97, y=e_homo, xref="x2 domain", yref="y", text="<b>HOMO</b>", showarrow=False, font=dict(color="royalblue", size=16), xanchor="right", yanchor="top", yshift=-4)
         fig.add_annotation(x=0.97, y=e_lumo, xref="x2 domain", yref="y", text="<b>LUMO</b>", showarrow=False, font=dict(color="crimson", size=16), xanchor="right", yanchor="bottom", yshift=4)
+    if "homo" in deloc and "lumo" in deloc:
+        # labels only where the delocalized edge differs from the nominal one (they would overlap)
+        if e_homo is None or abs(deloc["homo"] - e_homo) > 0.02:
+            fig.add_annotation(x=0.97, y=deloc["homo"], xref="x2 domain", yref="y", text="<b>deloc. HOMO</b>", showarrow=False, font=dict(color="royalblue", size=14), xanchor="right", yanchor="top", yshift=-4)
+        if e_lumo is None or abs(deloc["lumo"] - e_lumo) > 0.02:
+            fig.add_annotation(x=0.97, y=deloc["lumo"], xref="x2 domain", yref="y", text="<b>deloc. LUMO</b>", showarrow=False, font=dict(color="crimson", size=14), xanchor="right", yanchor="bottom", yshift=4)
+        if reference_y is not None:
+            fig.add_annotation(x=0.97, y=reference_y, xref="x2 domain", yref="y",
+                               text=f"deloc. E<sub>g</sub> = {deloc['lumo'] - deloc['homo']:.3f} eV", showarrow=False,
+                               font=dict(color="#222", size=14), xanchor="right", yanchor="top", yshift=-14, bgcolor="white")
 
     for col in range(1, 6):
         fig.update_xaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks="outside", gridcolor='rgba(0,0,0,0.1)', zeroline=False, row=1, col=col)
@@ -490,7 +529,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     fig.update_yaxes(range=[ewin[0], ewin[1]], title_text=f"<b>{energy_label}</b>", title_font=dict(size=28), row=1, col=1)
     fig.update_xaxes(title_text="<b>k-Path</b>", title_font=dict(size=28), tickangle=0, tickfont=dict(size=17), row=1, col=1)
     fig.update_xaxes(title_text="<b>DOS</b>", title_font=dict(size=28), row=1, col=2)
-    fig.update_xaxes(title_text="<b>IPR</b>", title_font=dict(size=28), tickvals=[0, 0.5, 1.0], row=1, col=3)
+    fig.update_xaxes(title_text="<b>0 – 1</b>", title_font=dict(size=28), tickvals=[0, 0.5, 1.0], row=1, col=3)
     fig.update_xaxes(title_text="<b>Char</b>", title_font=dict(size=28), tickvals=[0, 0.5, 1.0], row=1, col=4)
     fig.update_xaxes(title_text="<b>COOP</b>", title_font=dict(size=28), row=1, col=5)
 
@@ -705,8 +744,12 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                         <p>Shows how much specific elements (or orbitals) contribute to the overall electronic density at a given energy. The peaks correspond to available molecular orbitals.</p>
                     </div>
                     <div class="glossary-item trap-indicator">
-                        <strong>3. IPR (Inverse Participation Ratio)</strong>
-                        <p>A mathematical measure of spatial localization running from 0 to 1. An IPR near <strong>0.0</strong> indicates a delocalized "bulk" state spread across many atoms. An IPR near <strong>1.0</strong> indicates a state strictly localized onto a single atomic site (a strong indicator of a trap state).</p>
+                        <strong>3. Trap detector (IPR, k-participation, on-band weight)</strong>
+                        <p>Three numbers per state, all between 0 and 1, plotted at the state's energy.</p>
+                        <p><span style="color:#440154">&#9679;</span> <strong>IPR</strong> (real space): near 0 for a state spread over many atoms, near 1 for a state on one atom.</p>
+                        <p><span style="color:#E69F00">&#9670;</span> <strong>k-participation</strong>: how evenly the state's fuzzy-band weight is spread over a full grid of the Brillouin zone, 1/(N&nbsp;&Sigma;<sub>k</sub>P<sub>k</sub><sup>2</sup>). A band state concentrates its weight on a few k-points (small value); a state localized in real space, such as a ligand or dangling-bond orbital, spreads it evenly over k (close to 1).</p>
+                        <p><span style="color:#009E73">&#9664;</span> <strong>on-band weight</strong>: the share of the state's weight along the path that sits where a bulk band of its own side (valence for occupied, conduction for empty states, aligned on the semicore level) lies within 0.2 eV of its energy. States that follow the bulk bands score high; states in the bulk gap score low. Strongly confined conduction states of small dots also score low, because confinement lifts them above the bulk band.</p>
+                        <p><strong>Band edges:</strong> a state is a trap when its k-participation is clearly above that of the most band-like state of the dot (by 0.3, and at least 0.5; very small clusters are broad in k even when delocalized), or when its on-band weight is below 0.25 while it lies more than 0.1 eV inside the aligned bulk gap. Counting inward from the gap, the first state that is neither is the <em>delocalized HOMO</em> (solid blue line) or <em>delocalized LUMO</em> (solid red line); the dotted lines are the nominal DFT HOMO and LUMO, and the states between the two (red-outlined markers) are the traps.</p>
                     </div>
                     <div class="glossary-item trap-indicator">
                         <strong>4. Surface vs. Core Character</strong>

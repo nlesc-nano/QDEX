@@ -85,7 +85,10 @@ def _fuzzy_file(fz, prefix):
     smear_and_export_fuzzy(fz["intensity"][:].astype(float), fz["energy_ev"][:], labels, ewin,
                            float(a["sigma_ev"]), prefix=prefix,
                            kpts_frac=fz["kpoints_frac"][:] if "kpoints_frac" in fz else None,
-                           soc_energy=fz["soc_energy_ev"][:] if "soc_energy_ev" in fz else None)
+                           soc_energy=fz["soc_energy_ev"][:] if "soc_energy_ev" in fz else None,
+                           kpts_cart=fz["kpoints_inv_ang"][:],
+                           trap=dict(kpart=fz["k_participation"][:], onband=fz["onband_weight"][:],
+                                     flag=fz["trap_flag"][:]) if "trap_flag" in fz else None)
     return ewin
 
 
@@ -100,6 +103,8 @@ def _edges(E, occupation=None):
 def fuzzy_dashboards(el, run_dir: Path, out: Path, cubes: bool = True):
     from qdex.plot_fuzzy import generate_interactive_plot
     material = _str(el["structure"].attrs.get("material", "DEFAULT"))
+    from qdex.bulk_bands import set_bulk_functional
+    set_bulk_functional(_str(el["structure"].attrs.get("functional", "pbe")))
     if cubes:                     # the 3D panel embeds every cube found (several MB per page)
         for cube in list(run_dir.glob("spatial_*.cube")) + list(run_dir.glob("spinor_*.cube")):
             shutil.copy(cube, cube.name)

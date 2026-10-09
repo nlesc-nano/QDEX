@@ -269,3 +269,67 @@ Bloch sums of the projector overlaps, and the two-component problem is solved in
 AO basis. The run checks the AO basis against CP2K's overlap and the spin-free bands
 against CP2K's band structure. For zinc-blende CdSe (PBE, DZVP-MOLOPT-PBE-GTH): the
 spin-free bands agree with CP2K to 0.06 meV and :math:`\Delta_{so}(\Gamma) = 0.36` eV.
+
+k-space descriptors in the population analysis
+----------------------------------------------
+
+When a CIF is given (``analysis.cif``), the spin-free population analysis prints two more
+columns for each listed orbital (``population_print_range`` on each side of the gap), next to
+the centroid displacement ξ and the spread σ/R. Both come from the folded fuzzy-band profile of
+the orbital along the k-path of the crystal (same path, folding and ``g_shell`` as the fuzzy
+bands), normalized per state, :math:`P_n(\mathbf{k}) = I_n(\mathbf{k}) / \sum_\mathbf{k} I_n(\mathbf{k})`:
+
+* :math:`\Gamma_k = \sum_{|\mathbf{k}| < k_\Gamma} P_n(\mathbf{k})`, the weight within
+  :math:`k_\Gamma` = ``analysis.kspace_gamma_radius`` (default 0.12 Å\ :sup:`-1`) of Γ. The log
+  also prints the value of a flat profile (the fraction of path points within :math:`k_\Gamma`).
+  Band-edge states of Γ-gap materials (CdSe) carry a large Γ weight.
+* :math:`S_k = -\sum_\mathbf{k} P_n \ln P_n / \ln N_k`, the normalized k-entropy: 0 for a single
+  k-point, 1 for a state spread evenly over the path, as for an orbital localized in real space.
+
+The values are also written to ``qdex_electronic.h5`` as ``sf/mo/centroid/k_gamma`` and
+``k_entropy`` (NaN for the orbitals outside the printed range), and to the frontier-orbital
+localization diagnostic. They are descriptors only; the ``[Core]``/``[Surf/Trap]`` labels still
+come from ξ and the core fraction. ``analysis.kspace_descriptors: false`` leaves them out.
+
+Trap detector and delocalized band edges
+----------------------------------------
+
+The third panel of the fuzzy dashboards ("Trap detector") shows three numbers per state on a
+0–1 axis, and the dashboards draw the delocalized HOMO and LUMO (solid lines) next to the nominal
+DFT HOMO and LUMO (dotted lines). The same result is logged (``[Traps:SF]``, ``[Traps:SOC]``) and
+stored in ``qdex_electronic.h5`` (``sf|soc/fuzzy/k_participation``, ``onband_weight``, ``trap_flag``).
+
+* **IPR** (real space, as before).
+* **k-participation** :math:`1/(N\sum_\mathbf{k} P_n(\mathbf{k})^2)`, with :math:`P_n` the folded
+  fuzzy-band weight of the state on a full :math:`n^3` grid of the Brillouin zone
+  (``analysis.trap_kgrid``, default 8; same folding and ``g_shell`` as the fuzzy bands). A band
+  state puts its weight on a few k-points (small value); a state localized in real space (a ligand
+  or dangling-bond orbital) spreads it evenly over the zone (close to 1). The full grid is used
+  because a band state peaked off the plotted path would look spread along it.
+* **on-band weight**: the share of the state's weight along the path that lies where a bulk band
+  of its own side (valence bands for occupied, conduction bands for empty states), aligned on the
+  semicore level of the interior atoms, is within ``trap_onband_delta`` (0.20 eV) of the state's
+  energy. Surface states that are extended along a facet concentrate their weight in k like band
+  states, but they lie where the bulk has no band, and score low.
+
+A state is localized if its k-participation is at least max(``trap_kpart_max``, ref +
+``trap_kpart_margin``) (defaults 0.5 and 0.30), where ref is the smallest k-participation on its side of
+the gap within 1.5 eV of the edge, i.e. the most band-like state of the dot. In dots of 2 nm and more
+ref is 0.1–0.4 and the threshold stays at 0.5; in a 1 nm cluster such as Cd\ :sub:`16`\ Se\ :sub:`13`\ Cl\ :sub:`6`
+even delocalized orbitals are broad in k (ref 0.56) and the threshold rises to 0.86. A state is also
+localized if its on-band weight is below ``trap_onband_min`` (0.25) while it lies more than ``trap_gap_tol`` (0.10 eV) inside
+the aligned bulk gap. The energy condition is needed because strongly confined conduction states of
+small dots also score low on-band: confinement lifts them above the bulk band. Counting inward from
+the gap, the first state that is not localized is the delocalized HOMO (LUMO); the states passed on
+the way are the traps (red-outlined markers). Without a semicore anchor only the k-participation is used.
+
+Tests on Cl-capped CdSe dots: in Cd\ :sub:`92`\ Se\ :sub:`55`\ Cl\ :sub:`74` the 36 orbitals between the
+HOMO and −1.13 eV are Cl 3p states (k-participation 0.7–1.0, 80–96 % on Cl) and the delocalized gap
+is 1.67 eV against the nominal 1.07 eV; in Cd\ :sub:`768`\ Se\ :sub:`632`\ Cl\ :sub:`272` the LUMO and the
+two states above it are surface states on undercoordinated Cd (on-band weight 0.09–0.17, the LUMO
+0.29 eV inside the bulk gap), while the 1S\ :sub:`e` state (on-band 0.53) lies 0.62 eV higher.
+The Γ\ :sub:`k` and S\ :sub:`k` descriptors of the population analysis remain available in
+``fuzzy_data_<prefix>.npz`` (``state_gamma``, ``state_entropy``).
+
+The PDOS, trap-detector, surface/core and COOP panels need ``analysis.pdos_atoms`` and
+``analysis.coop_pairs`` (e.g. ``[Cd, Se, Cl]`` and ``[Cd-Se, Cd-Cl]``).
