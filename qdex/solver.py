@@ -11,6 +11,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _dense_eigh(H):
+    """Eigenpairs of the dense BSE matrix. numpy's syevd/heevd workspace (1 + 5n + 2n^2 reals for the complex
+    SOC matrix) overflows 32-bit LAPACK integers past n ~ 32767 ("Parameter 10 was incorrect on entry to ZHEEVD");
+    the MRRR driver (syevr/heevr) needs O(n) workspace, as in lowdin.lowdin_factor."""
+    if H.shape[0] > 32000:
+        from scipy.linalg import eigh
+        return eigh(H, driver="evr", overwrite_a=True, check_finite=False)
+    return np.linalg.eigh(H)
+
+
 def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_full_elements=12_000_000, device="numpy"):
     """Build K[p,q] = sum_A q_hole[i_p,i_q,A]^* W_elec[a_p,a_q,A]."""
     n_p = len(vi)
@@ -704,7 +714,7 @@ class ExcitonSolver:
                 self.J_mat = to_numpy(J_mat)
                 self.K_mat = to_numpy(K_mat)
             else:
-                evals, evecs = np.linalg.eigh(H)
+                evals, evecs = _dense_eigh(H)
                 self.J_mat = J_mat
                 self.K_mat = K_mat
             logger.debug(f"    -> Diagonalization complete in {time.time()-t_diag:.2f}s")
