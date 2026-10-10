@@ -2918,7 +2918,7 @@ def _solve_excitons(args, *,
     args.qp_gap_num = target_qp_gap
 
     # ---------------------------------------------------------------
-    # Trap state masking: exclude transitions involving [Surf/Trap] states
+    # Trap state masking: exclude transitions involving Facet or Localized states (angular coverage)
     # ---------------------------------------------------------------
     hole_trap_mask = None
     elec_trap_mask = None

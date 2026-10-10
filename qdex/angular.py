@@ -218,8 +218,13 @@ class AngularCoverage:
 def atom_populations(pops, shells, n_atoms):
     """Atom populations (n_atoms, n_states) summed from Mulliken AO populations (n_ao, n_states)."""
     ao_atom = np.concatenate([[int(sh.get("atom_idx", 0))] * (2 * int(sh["l"]) + 1) for sh in shells])
-    P = np.zeros((n_atoms, np.asarray(pops).shape[1]))
-    np.add.at(P, ao_atom, np.asarray(pops, dtype=float))
+    pops = np.asarray(pops, dtype=float)
+    P = np.zeros((n_atoms, pops.shape[1]))
+    if np.all(np.diff(ao_atom) >= 0):              # AOs grouped by atom (the usual order): contiguous row sums
+        starts = np.flatnonzero(np.r_[True, np.diff(ao_atom) > 0])
+        P[ao_atom[starts]] = np.add.reduceat(pops, starts, axis=0)
+    else:
+        np.add.at(P, ao_atom, pops)
     return P
 
 

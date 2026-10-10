@@ -323,9 +323,13 @@ def spinor_ao_pops(C_dense, S_dense, active_indices, U, beta_C=None, beta_indice
     n_a = len(active_indices)
     Cb = C_dense if beta_C is None else beta_C
     ib = active_indices if beta_indices is None else beta_indices
-    ca = C_dense[:, active_indices] @ U[:n_a, :]
-    cb = Cb[:, ib] @ U[n_a:, :]
-    return np.real(np.conj(ca) * (S_dense @ ca)) + np.real(np.conj(cb) * (S_dense @ cb))
+    Ca, Cbb = C_dense[:, active_indices], Cb[:, ib]
+    # S c = (S C_active) U: one real S product over the active MOs instead of one complex product per spinor
+    SCa = S_dense @ Ca
+    SCb = SCa if (beta_C is None and beta_indices is None) else S_dense @ Cbb
+    Ua, Ub = U[:n_a, :], U[n_a:, :]
+    ca, cb = Ca @ Ua, Cbb @ Ub
+    return np.real(np.conj(ca) * (SCa @ Ua)) + np.real(np.conj(cb) * (SCb @ Ub))
 
 
 def build_qp_energies(eps_dft, homo_index, scissor_ev=None, sigma_occ=None, sigma_virt=None):
@@ -948,16 +952,17 @@ def run_fuzzy_bands_and_pdos(args, C_dense, S_dense, eps_shifted, occ, homo_inde
         ])
         # surface / core labels of the plotted rows: spin-free MOs (core, virtual) and the SOC spinors
         P_sf_all = np.asarray(pops_sf)
+        U_kept_act = soc_U_act[:, plot_keep[n_core_rows:n_core_rows + n_act]]
         if soc_uks:
             P_beta_all = np.real(C_beta_dense * (S_dense @ C_beta_dense))
             P_core = np.hstack([P_sf_all[:, core_idx], P_beta_all[:, core_idx_b]])
             P_virt = np.hstack([P_sf_all[:, virt_idx], P_beta_all[:, virt_idx_b]])
-            P_act = spinor_ao_pops(C_dense, S_dense, soc_active_indices, soc_U_act, C_beta_dense, soc_active_indices_beta)
+            P_act = spinor_ao_pops(C_dense, S_dense, soc_active_indices, U_kept_act, C_beta_dense, soc_active_indices_beta)
         else:
             P_core = np.hstack([P_sf_all[:, core_idx]] * 2)
             P_virt = np.hstack([P_sf_all[:, virt_idx]] * 2)
-            P_act = spinor_ao_pops(C_dense, S_dense, soc_active_indices, soc_U_act)
-        P_plot_unsorted = np.hstack([P_core[:, plot_keep[:n_core_rows]], P_act[:, plot_keep[n_core_rows:n_core_rows + n_act]],
+            P_act = spinor_ao_pops(C_dense, S_dense, soc_active_indices, U_kept_act)
+        P_plot_unsorted = np.hstack([P_core[:, plot_keep[:n_core_rows]], P_act,
                                      P_virt[:, plot_keep[n_core_rows + n_act:]]])
         lab_u, ipr_u, om_u, cov = state_classes(args, P_plot_unsorted, shells, coords_ang, syms)
         cls_u = classify_edges(eps_soc_unsorted[plot_keep], eps_soc_unsorted[plot_keep] <= 0.0, lab_u)

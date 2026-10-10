@@ -417,7 +417,7 @@ class ExcitonHamiltonian:
         if self.hole_trap_mask is not None or self.elec_trap_mask is not None:
             n_traps_filtered = int((mask_e & mask_f).sum() - self.valid_mask.sum())
             if n_traps_filtered > 0:
-                logger.info(f"    [Trap Filter] Excluded {n_traps_filtered} transitions involving [Surf/Trap] states.")
+                logger.info(f"    [Trap Filter] Excluded {n_traps_filtered} transitions involving Facet or Localized states.")
         pt_shift = None
         if self.selection == "perturbative":
             if self.diagonal_mode or self.soc_flag or not hasattr(self, "q_ov"):
@@ -1076,7 +1076,7 @@ class ExcitonHamiltonian:
         if self.hole_trap_mask_soc is not None or self.elec_trap_mask_soc is not None:
             n_sp_traps_filtered = n_sp_before_trap - int(self.valid_spinor_mask.sum())
             if n_sp_traps_filtered > 0:
-                logger.info(f"  [Trap Filter-SOC] Excluded {n_sp_traps_filtered} spinor transitions involving [Surf/Trap] states.")
+                logger.info(f"  [Trap Filter-SOC] Excluded {n_sp_traps_filtered} spinor transitions involving Facet or Localized states.")
 
         self.valid_spinor_idx = np.where(self.valid_spinor_mask)[0]
         self.D_spinor = raw_D_spinor[self.valid_spinor_mask]
@@ -1245,7 +1245,7 @@ class ExcitonHamiltonian:
         if self.hole_trap_mask_soc is not None or self.elec_trap_mask_soc is not None:
             n_sp_traps_filtered = n_sp_before_trap - int(self.valid_spinor_mask.sum())
             if n_sp_traps_filtered > 0:
-                logger.info(f"  [Trap Filter-SOC UKS] Excluded {n_sp_traps_filtered} spinor transitions involving [Surf/Trap] states.")
+                logger.info(f"  [Trap Filter-SOC UKS] Excluded {n_sp_traps_filtered} spinor transitions involving Facet or Localized states.")
 
         self.valid_spinor_idx = np.where(self.valid_spinor_mask)[0]
         self.D_spinor = raw_D_spinor[self.valid_spinor_mask]

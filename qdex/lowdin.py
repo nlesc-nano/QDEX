@@ -11,12 +11,31 @@ def _key(S):
     return (S.shape, float(np.trace(S)), float(S[::97, ::89].sum()), float(S[-1, ::53].sum()))
 
 
+def _disk_cache_path(S, k):
+    """File of the eigen-decomposition of S in $QDEX_LOWDIN_CACHE (a directory), or None. Runs on the same orbital
+    file (e.g. several QP models or trap settings of one dot) then diagonalize S once."""
+    import os
+    d = os.environ.get("QDEX_LOWDIN_CACHE")
+    if not d:
+        return None
+    import hashlib
+    h = hashlib.sha1(repr(k).encode() + np.ascontiguousarray(S[:: max(1, S.shape[0] // 64)]).tobytes()).hexdigest()[:16]
+    os.makedirs(d, exist_ok=True)
+    return os.path.join(d, f"lowdin_{S.shape[0]}_{h}")
+
+
 def lowdin_factor(S):
-    """Eigen-decomposition of S (eigenvalues, eigenvectors), computed once per S and cached."""
+    """Eigen-decomposition of S (eigenvalues, eigenvectors), computed once per S and cached (in memory, and on disk
+    when $QDEX_LOWDIN_CACHE names a directory)."""
+    import os
     S = S.toarray() if hasattr(S, "toarray") else np.asarray(S, dtype=np.float64)
     k = _key(S)
     if k not in _FACTOR_CACHE:
         _FACTOR_CACHE.clear()
+        path = _disk_cache_path(S, k)
+        if path and os.path.exists(path + "_V.npy") and os.path.exists(path + "_w.npy"):
+            _FACTOR_CACHE[k] = (np.load(path + "_w.npy"), np.load(path + "_V.npy"))
+            return _FACTOR_CACHE[k]
         if S.shape[0] > 32000:
             # numpy's syevd needs a 1 + 6n + 2n^2 workspace, which overflows 32-bit LAPACK integers past
             # n = 32767 (MemoryError); syevr needs 26n
@@ -25,6 +44,10 @@ def lowdin_factor(S):
         else:
             w, V = np.linalg.eigh(S)
         _FACTOR_CACHE[k] = (np.clip(w, 1e-15, None), V)
+        if path:
+            tmp = f"{path}.{os.getpid()}"
+            np.save(tmp + "_V.npy", _FACTOR_CACHE[k][1]); np.save(tmp + "_w.npy", _FACTOR_CACHE[k][0])
+            os.replace(tmp + "_V.npy", path + "_V.npy"); os.replace(tmp + "_w.npy", path + "_w.npy")
     return _FACTOR_CACHE[k]
 
 
