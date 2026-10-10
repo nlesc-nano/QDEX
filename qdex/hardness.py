@@ -216,9 +216,13 @@ MATERIAL_DB_BULK_PBE = {
 MATERIAL_DB_BULK_DFT = {
     # HLE17: a = 6.108 A (energy-volume scan, B-M; PBE 6.217, exp 6.05), Cd 4d 8.63 eV below the VBM (PBE 7.51);
     # delta_sigma = QSGW+SOC 2.164 - HLE17+SOC 1.405 at a_exp
+    # InAs: a = 6.053 A (PBE 6.204, exp 6.06), In 4d 16.08 eV below the VBM (PBE 14.31); Gamma6 - Gamma8 is +0.02
+    # eV spin-free but inverted with SOC (-0.094 eV at a_exp); delta_sigma = QSGW+SOC 0.675 - (-0.094)
     "hle17": {
         "CDSE": dict(a_exp=6.050, gap_exp_lattice=1.535, gap_soc_exp_lattice=1.405, a_pbe=6.108, gap_pbe_lattice=1.452,
                      gap_soc_pbe_lattice=1.322, qsgw_soc_exp_lattice=2.164, delta_sigma=0.759, B0=51.4),
+        "INAS": dict(a_exp=6.060, gap_exp_lattice=0.023, gap_soc_exp_lattice=-0.094, a_pbe=6.053, gap_pbe_lattice=0.044,
+                     gap_soc_pbe_lattice=-0.073, qsgw_soc_exp_lattice=0.675, delta_sigma=0.769, B0=57.4),
     },
 }
 DFT_FUNCTIONAL = "pbe"
