@@ -249,20 +249,28 @@ def export_population_bar_plot(analysis, eps_eV, pdos_atoms, ewin, prefix="sf", 
 
     fig_h = max(5.0, min(16.0, 0.018 * len(energies) + 4.0))
     fig, ax = plt.subplots(figsize=(4.2, fig_h))
+    # One PolyCollection of rectangles per label instead of barh: barh makes one Rectangle patch per state,
+    # whose Python-side bookkeeping took ~25 s per figure for 7,000 states (the same image in ~2 s).
+    from matplotlib.collections import PolyCollection
+    from matplotlib.patches import Patch
     left = np.zeros(len(energies))
+    lo, hi = energies - height / 2, energies + height / 2
+    handles = []
     for j, lab in enumerate(labels):
-        ax.barh(
-            energies, frac[:, j], left=left, height=height,
-            color=colors[j], edgecolor="none", label=lab
-        )
-        left += frac[:, j]
+        right = left + frac[:, j]
+        keep = frac[:, j] > 0
+        verts = np.stack([np.column_stack([left, lo]), np.column_stack([right, lo]),
+                          np.column_stack([right, hi]), np.column_stack([left, hi])], axis=1)[keep]
+        ax.add_collection(PolyCollection(verts, facecolors=colors[j], edgecolors="none", linewidths=0))
+        handles.append(Patch(color=colors[j], label=lab))
+        left = right
 
     ax.axhline(0.0, color="black", linewidth=0.8, linestyle="--", alpha=0.6)
     ax.set_xlim(0.0, 1.0)
     ax.set_ylim(float(ewin[0]), float(ewin[1]))
     ax.set_xlabel("Population fraction")
     ax.set_ylabel("Energy (eV)")
-    ax.legend(frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.04), ncol=max(1, min(len(labels), 4)))
+    ax.legend(handles=handles, frameon=False, loc="upper center", bbox_to_anchor=(0.5, 1.04), ncol=max(1, min(len(labels), 4)))
     ax.tick_params(direction="out", width=1.0)
     for spine in ax.spines.values():
         spine.set_linewidth(1.0)
