@@ -64,13 +64,19 @@ def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_ful
         idx = vi * n_virt + va
         return np.ascontiguousarray(K_2d[np.ix_(idx, idx)])
 
+    # Larger grids: one GEMM over the atom index per block of holes i, M[i, j, a, b] = sum_A q*[i,j,A] w[a,b,A],
+    # and the rows p with i_p in the block are gathered from it. Gathering (pairs x pairs x atoms) blocks and
+    # reducing them instead is memory-bound (Cs112Pb64Br240 SOC, 36808 pairs: 1 h vs seconds).
     K = np.empty((n_p, n_p), dtype=dtype)
-
-    for p0 in range(0, n_p, block_size):
-        p1 = min(p0 + block_size, n_p)
-        qh = q_hole[vi[p0:p1, None], vi[None, :], :].conj()
-        we = w_elec[va[p0:p1, None], va[None, :], :]
-        K[p0:p1, :] = np.einsum("pqA,pqA->pq", qh, we, optimize=True)
+    w_mat = w_elec.reshape(n_virt * n_virt, n_atoms).T
+    n_i = max(1, int(2.5e8 // max(1, n_occ * n_virt * n_virt)))     # <= 2.5e8 elements of M per block
+    for i0 in range(0, n_occ, n_i):
+        i1 = min(i0 + n_i, n_occ)
+        rows = np.where((vi >= i0) & (vi < i1))[0]
+        if len(rows) == 0:
+            continue
+        M = (q_hole[i0:i1].conj().reshape(-1, n_atoms) @ w_mat).reshape(i1 - i0, n_occ, n_virt, n_virt)
+        K[rows, :] = M[(vi[rows] - i0)[:, None], vi[None, :], va[rows][:, None], va[None, :]]
 
     return K
 
