@@ -174,6 +174,10 @@ quasiparticles
    * - ``window`` [``--qp-window``], ``window_size`` [``--qp-window-size``]
      - ``active``
      - orbitals evaluated explicitly by ΔCOHSEX: the BSE active space (``active``) or ``all``
+   * - ``cohsex_occ_window`` [``--cohsex-occ-window``]
+     - all occupied
+     - screened-exchange density of ΔCOHSEX from the occupied MOs within this many eV of the HOMO only; 5 eV
+       changes the QP gap and E₁ by ≤ 5 meV (CdSe, 1.5–3.5 nm) and lets the h5 hold only those occupied MOs
    * - ``solvent_term`` [``--qp-solvent-term``]
      - ``sphere``
      - environment part of ΔW: dielectric-sphere reaction field, or the older ``born`` form

@@ -271,6 +271,10 @@ These are the continuous formulas with the integrals represented on the basis (:
 * **Classical option.** ``quasiparticles.selfenergy: classical`` replaces ΔΣ_n by ±½ q_nᵀΔW q_n, with q_n the
   atomic populations.
 * **Cost.** One cached eigendecomposition of S and three matrix products for all orbitals.
+* **Occupied window.** ``quasiparticles.cohsex_occ_window: 5`` builds P from the occupied orbitals within 5 eV of
+  the HOMO. Deeper orbitals form transition densities φ_nφ_i of zero net charge with the frontier orbitals,
+  which the smooth ΔW barely sees: for CdSe dots of 1.5–3.5 nm the QP gap and E₁ change by at most 5 meV
+  (14 meV for Cd₁₆). Only those occupied orbitals then need to be in the orbital file.
 
 5. Quasiparticle weight Z
 -------------------------

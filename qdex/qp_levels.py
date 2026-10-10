@@ -178,7 +178,7 @@ def orbital_qp_energies(eps, q_occ, q_virt, occ_idx, virt_idx, dW,
     return eps_qp, info
 
 
-def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None, eval_indices=None):
+def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None, eval_indices=None, occ_density=None):
     """Static Delta-COHSEX diagonal <n|Sigma|n> in the Löwdin basis (c = S^1/2 C):
 
         COH_n = 1/2 sum_mu c_{mu n}^2 dW_{mu mu}
@@ -197,6 +197,10 @@ def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None, 
         returning (coh, sex) of length n_mo where eval_indices have exact values
         and outer indices are clamped to the window edges.
         If None, evaluates all n_mo orbitals in memory-efficient chunks.
+    occ_density : array-like of int, optional
+        Occupied orbitals that build the screened-exchange density matrix P (default: all occupied). The SEX term is
+        -sum_i <ni|dW|ni> over these i; states far below the gap have transition densities phi_n phi_i of zero net
+        charge, which a smooth dW sees little (quasiparticles.cohsex_occ_window).
     """
     from qdex.lowdin import lowdin_apply
     C = C.toarray() if hasattr(C, "toarray") else np.asarray(C, dtype=float)
@@ -205,9 +209,24 @@ def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None, 
     n_occ = homo_index + 1
 
     # Form the 1-RDM P = 2 c_occ c_occ^T in the Löwdin basis (only occupied orbitals are needed)
-    Cl_occ = lowdin_apply(S, C[:, :n_occ])
-    P = Cl_occ @ Cl_occ.T
-    P *= 2.0
+    if occ_density is not None and eval_indices is not None:
+        # truncated density: the occupied orbitals of P plus the occupied orbitals to evaluate, Löwdin-transformed once
+        occ_d = np.asarray(occ_density, dtype=int)
+        eval_occ = np.asarray(eval_indices, dtype=int)
+        cols = np.union1d(occ_d, eval_occ[eval_occ < n_occ])
+        Cl_cols = lowdin_apply(S, C[:, cols])
+        pos = {int(c): k for k, c in enumerate(cols)}
+        Cl_d = Cl_cols[:, [pos[int(i)] for i in occ_d]]
+        P = Cl_d @ Cl_d.T
+        P *= 2.0
+        del Cl_d
+        Cl_occ = None
+        Cl_occ_map = (Cl_cols, pos)
+    else:
+        Cl_occ = lowdin_apply(S, C[:, :n_occ])
+        P = Cl_occ @ Cl_occ.T
+        P *= 2.0
+        Cl_occ_map = None
 
     if dW_ao is None:
         owner = _owner(atom_ao_ranges, n_ao)
@@ -233,12 +252,15 @@ def cohsex_diagonal(C, S, homo_index, atom_ao_ranges, dW_atom=None, dW_ao=None, 
 
         n_eval = len(eval_idx)
         Cl_eval = np.empty((n_ao, n_eval), dtype=float)
-        if np.any(occ_mask):
+        if np.any(occ_mask) and Cl_occ_map is not None:
+            Cl_cols, pos = Cl_occ_map
+            Cl_eval[:, occ_mask] = Cl_cols[:, [pos[int(i)] for i in eval_idx[occ_mask]]]
+        elif np.any(occ_mask):
             Cl_eval[:, occ_mask] = Cl_occ[:, eval_idx[occ_mask]]
         if len(virt_indices) > 0:
             Cl_eval[:, ~occ_mask] = Cl_virt
 
-        del Cl_occ
+        del Cl_occ, Cl_occ_map
         del Cl_virt
 
         MC_eval = P @ Cl_eval

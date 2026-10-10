@@ -43,6 +43,7 @@ SECTIONS = {
     "quasiparticles": {
         "model": "qp_gap",
         "reference": "qp_reference",
+        "cohsex_occ_window": "cohsex_occ_window",
         "bulk_vertex": "bulk_vertex",
         "bulk_vertex_factor": "bulk_vertex_factor",
         "bulk_geometry": "bulk_geometry",

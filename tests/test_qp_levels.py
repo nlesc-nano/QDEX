@@ -107,6 +107,33 @@ class QPLevelTests(unittest.TestCase):
         self.assertEqual(coh_act[-1], coh_act[6])
         self.assertEqual(sex_act[-1], sex_act[6])
 
+    def test_cohsex_occ_density_window(self):
+        rng = np.random.default_rng(7)
+        n_ao, homo = 12, 4
+        A = rng.normal(size=(n_ao, n_ao))
+        S = A @ A.T / n_ao + np.eye(n_ao)
+        w, V = np.linalg.eigh(S)
+        C = V / np.sqrt(w)
+        ranges = [(0, 4), (4, 8), (8, 12)]
+        dW = rng.uniform(0.5, 2.0, (3, 3))
+        dW = 0.5 * (dW + dW.T)
+        eval_idx = np.array([3, 4, 5, 6])
+
+        coh_ref, sex_ref = cohsex_diagonal(C, S, homo, ranges, dW_atom=dW, eval_indices=eval_idx)
+        coh_all, sex_all = cohsex_diagonal(C, S, homo, ranges, dW_atom=dW, eval_indices=eval_idx,
+                                           occ_density=np.arange(homo + 1))
+        np.testing.assert_allclose(coh_all[eval_idx], coh_ref[eval_idx], atol=1e-14)
+        np.testing.assert_allclose(sex_all[eval_idx], sex_ref[eval_idx], atol=1e-14)
+
+        # window {2, 3, 4}: COH unchanged, SEX_n = -sum_{i in window} q^{ni} dW q^{ni} (Löwdin transition charges)
+        occ_d = np.array([2, 3, 4])
+        coh_w, sex_w = cohsex_diagonal(C, S, homo, ranges, dW_atom=dW, eval_indices=eval_idx, occ_density=occ_d)
+        np.testing.assert_allclose(coh_w[eval_idx], coh_ref[eval_idx], atol=1e-14)
+        c = (V * np.sqrt(w)) @ V.T @ C
+        for n in eval_idx:
+            q = np.array([[np.sum(c[a0:a1, n] * c[a0:a1, i]) for a0, a1 in ranges] for i in occ_d])
+            self.assertAlmostEqual(sex_w[n], -np.einsum("ia,ab,ib->", q, dW, q), places=12)
+
     def test_residual_scale_econf(self):
         e = MATERIAL_DB["CDSE"]
         gap0 = e[11] - e[10]

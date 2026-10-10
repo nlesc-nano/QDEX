@@ -845,6 +845,9 @@ def _build_parser():
                         help="Geometry correction of the bulk QP shift for PBE-relaxed dots: 'strain' (default; bulk PBE "
                              "gap change between a_exp and the dot's measured lattice), 'full' (dot at the bulk PBE "
                              "lattice) or 'none' (dot taken at a_exp).")
+    parser.add_argument("--cohsex-occ-window", dest="cohsex_occ_window", type=float, default=None,
+                        help="sgw-* models: build the screened-exchange density of the Delta-COHSEX levels only from the "
+                             "occupied MOs within this many eV of the HOMO (default: all occupied MOs).")
     parser.add_argument("--qp-reference", dest="qp_reference", choices=["pbe", "gxtb"], default="pbe",
                         help="Orbitals the 'bulk' QP shift corrects: 'pbe' (default, bulk QSGW - bulk PBE) or 'gxtb' "
                              "(g-xTB frames: spin-free experimental gap - g-xTB bulk gap; NAMD precompute only).")
@@ -1936,10 +1939,17 @@ def _qp_levels_and_kernel(args, *,
             selfenergy = "classical" if is_anchor_model else str(getattr(args, "qp_selfenergy", "cohsex")).lower()
             if selfenergy == "cohsex":
                 t0c = time.time()
+                occ_window = getattr(args, "cohsex_occ_window", None)
+                occ_density = None
+                if occ_window not in (None, "", "all") and eval_indices is not None:
+                    e_occ = np.asarray(eps[:homo_index + 1], float)
+                    occ_density = np.where(e_occ >= e_occ[homo_index] - float(occ_window))[0]
+                    logger.info(f"  [QP Levels] Screened-exchange density from the {len(occ_density)} of {homo_index + 1} "
+                                f"occupied MOs within {float(occ_window):.2f} eV of the HOMO (quasiparticles.cohsex_occ_window)")
                 coh, sex = cohsex_diagonal(C, S, homo_index, atom_ao_ranges,
                                            dW_atom=None if use_xs else dW_levels,
                                            dW_ao=dW_levels if use_xs else None,
-                                           eval_indices=eval_indices)
+                                           eval_indices=eval_indices, occ_density=occ_density)
                 eps_qp, lev_info = cohsex_qp_energies(
                     eps, coh, sex, homo_index, float(w_parts.get("bulk_shift", 0.0)), z_mode, z_fixed,
                     w_parts.get("eps_z"), args.material, homo_fraction_bulk=fb,
