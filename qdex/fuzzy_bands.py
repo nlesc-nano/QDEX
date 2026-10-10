@@ -209,37 +209,46 @@ def folded_plane_wave_weights(shells, kpts_cart, G_vecs, nthreads, coeff_blocks,
     components ``sum_r U_part[r, n] phi_{block, rows[r]}`` of two-component spinors. The
     components are orthogonal in spin, so their weights add: ``|U_a^T F|^2 + |U_b^T F|^2``.
 
-    Each G replica is transformed once (n_AO x n_k plane waves) and projected onto every
-    block with two real GEMMs; all k+G points at once would need n_AO x n_k x n_G complex
-    numbers (~25 GB for 2,000 atoms at g_shell 2).
+    The G replicas are transformed in batches (n_AO x n_batch n_k plane waves, real and imaginary
+    parts side by side) and projected onto every block with one real GEMM per batch: one replica
+    at a time gives GEMMs only n_k (~200) columns wide, which ran at a fraction of the BLAS peak
+    (Cs324Pb216Br756: 60 s). All k+G points at once would need n_AO x n_k x n_G complex numbers
+    (~25 GB for 2,000 atoms at g_shell 2); a batch is kept below ~1.5e8 numbers per array.
     Returns ([W_block (n_b, n_k)], W_spinor (n_spinor, n_k) or None).
     """
     import libint_cpp
 
     n_k = len(kpts_cart)
+    G_vecs = np.atleast_2d(G_vecs)
     CT = [np.ascontiguousarray(np.asarray(C, dtype=float).T) for C in coeff_blocks]
     W = [np.zeros((C.shape[0], n_k)) for C in CT]
     parts = [(b, np.asarray(rows, dtype=int), np.ascontiguousarray(np.asarray(U).T))
              for b, rows, U in (spinor_parts or [])]
     W_spin = np.zeros((parts[0][2].shape[0], n_k)) if parts else None
     need_amp = {b for b, _, _ in parts}
-    for G in np.atleast_2d(G_vecs):
-        F_ao = libint_cpp.ao_ft_complex(shells, (kpts_cart + G) / 1.8897259886, nthreads)
-        F_re = np.ascontiguousarray(F_ao.real)
-        F_im = np.ascontiguousarray(F_ao.imag)
+    n_rows = max([CT[0].shape[1]] + [C.shape[0] for C in CT] + [p[2].shape[0] for p in parts])
+    n_batch = int(np.clip(1.5e8 // (2 * n_rows * n_k), 1, len(G_vecs)))
+    for g0 in range(0, len(G_vecs), n_batch):
+        Gb = G_vecs[g0:g0 + n_batch]
+        nb = len(Gb)
+        kq = (kpts_cart[None, :, :] + Gb[:, None, :]).reshape(-1, 3)
+        F_ao = libint_cpp.ao_ft_complex(shells, kq / 1.8897259886, nthreads)     # (n_AO, nb n_k)
+        F_ri = np.empty((F_ao.shape[0], 2 * nb * n_k))
+        F_ri[:, :nb * n_k] = F_ao.real
+        F_ri[:, nb * n_k:] = F_ao.imag
+        del F_ao
         amp = {}
         for b, C in enumerate(CT):
-            re = C @ F_re
-            im = C @ F_im
-            W[b] += re * re + im * im
+            RI = C @ F_ri
+            re, im = RI[:, :nb * n_k], RI[:, nb * n_k:]
+            W[b] += (re * re + im * im).reshape(-1, nb, n_k).sum(axis=1)
             if b in need_amp:
                 amp[b] = re + 1j * im
+            del RI
         if parts:
-            spin_sum = np.zeros_like(W_spin)
             for b, rows, UT in parts:
                 A = UT @ amp[b][rows]           # <k+G|spin component of each spinor>
-                spin_sum += A.real ** 2 + A.imag ** 2
-            W_spin += spin_sum
+                W_spin += (A.real ** 2 + A.imag ** 2).reshape(-1, nb, n_k).sum(axis=1)
     return W, W_spin
 
 
