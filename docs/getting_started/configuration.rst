@@ -288,7 +288,8 @@ soc
 ---
 
 * ``enabled`` [``--soc_flag``]: two-component spinor BSE.
-* ``window`` [``--soc_window``]: energy window (eV) around the Fermi level for full SOC mixing.
+* ``window`` [``--soc_window``]: energy window (eV) around the Fermi level for full SOC mixing in the fuzzy bands (default: largest ``|ewin|`` + 1 eV).
+* ``bse_window`` [``--soc_bse_window``]: SOC window the BSE spinors are projected from (default: ``window`` when set, else largest ``|ewin|`` + 2 eV).
 * The GTH SOC file is ``system.gth_file``.
 
 analysis and output

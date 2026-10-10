@@ -697,18 +697,29 @@ def _apply_config(args, config_data, explicit_cli_args=None):
                 raise ValueError(f"Unknown YAML key '{section}'")
 
 
+def _ewin_edge(args):
+    ewin = getattr(args, "ewin", None) or [-5.0, 5.0]
+    return max(abs(float(e)) for e in ewin)
+
+
 def _soc_window_ev(args):
-    """SOC active window (eV from mid-gap): soc.window, or the largest |ewin| + 2 eV."""
+    """SOC active window of the fuzzy bands (eV from mid-gap): soc.window, or the largest |ewin| + 1 eV.
+    A 1 eV margin keeps the spinor levels inside the plot window within a few meV of a 2 eV margin
+    (Cs324Pb216Br756: <= 7 meV for the 1000 spinors nearest the gap) and cuts the spinor diagonalization
+    by about 40%."""
     w = getattr(args, "soc_window", None)
-    if w is None:
-        ewin = getattr(args, "ewin", None) or [-5.0, 5.0]
-        w = max(abs(float(e)) for e in ewin) + 2.0
-    return float(w)
+    return float(_ewin_edge(args) + 1.0 if w is None else w)
 
 
 def _bse_soc_window_ev(args):
+    """SOC window the BSE spinors are projected from: soc.bse_window, else soc.window when it is set,
+    else the largest |ewin| + 2 eV (the BSE spinors do not follow the narrower fuzzy default)."""
     w = getattr(args, "soc_bse_window", None)
-    return _soc_window_ev(args) if w is None else float(w)
+    if w is not None:
+        return float(w)
+    if getattr(args, "soc_window", None) is not None:
+        return float(args.soc_window)
+    return float(_ewin_edge(args) + 2.0)
 
 
 def _select_soc_window_indices(eps_shifted, homo_index, soc_window):
@@ -1081,11 +1092,11 @@ def _build_parser():
     parser.add_argument("--cif", type=str)
     parser.add_argument("--soc_window", type=float, default=None,
                         help="SOC active space of the fuzzy bands: MOs within this many eV of mid-gap "
-                             "(default: largest |ewin| + 2 eV). YAML: soc.window")
+                             "(default: largest |ewin| + 1 eV). YAML: soc.window")
     parser.add_argument("--soc_bse_window", type=float, default=None,
                         help="SOC is diagonalized for the MOs within this many eV of mid-gap and the BSE spinors are "
                              "taken from it (des Cloizeaux projection onto the BSE window); 0 uses the BSE window "
-                             "alone (default: the soc_window value). YAML: soc.bse_window")
+                             "alone (default: soc_window when it is given, else largest |ewin| + 2 eV). YAML: soc.bse_window")
     parser.add_argument("--pdos_atoms", type=str, nargs='+')
     parser.add_argument("--coop_pairs", type=str, nargs='+')
     parser.add_argument("--population_print_range", type=int, default=15)

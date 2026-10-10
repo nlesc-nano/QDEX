@@ -41,10 +41,10 @@ Command-Line Arguments
      - ``PBE``
      - Functional of the SOC constants read from the GTH file (entry ``GTH-<name>-q<n>``). Use the functional of the DFT calculation; the constants differ between functionals.
    * - ``--soc_window <float>``
-     - largest ``|ewin|`` + 2 eV
-     - SOC active space of the fuzzy bands: MOs within this many eV of mid-gap. The spinor diagonalization scales as the cube of the number of MOs; levels inside the plot window converge to a few meV with a 2 eV margin.
+     - largest ``|ewin|`` + 1 eV
+     - SOC active space of the fuzzy bands: MOs within this many eV of mid-gap. The spinor diagonalization scales as the cube of the number of MOs; levels inside the plot window converge to a few meV with a 1 eV margin (Cs\ :sub:`324`\ Pb\ :sub:`216`\ Br\ :sub:`756`: at most 7 meV against a 2 eV margin for the 1000 spinors nearest the gap).
    * - ``--soc_bse_window <float>``
-     - ``soc_window``
+     - ``soc_window`` when given, else largest ``|ewin|`` + 2 eV
      - SOC is diagonalized for the MOs within this many eV of mid-gap and the BSE spinors are the window spinors living in the BSE MO window (des Cloizeaux projection), so their energies include the SOC coupling to orbitals outside the BSE window. ``0`` diagonalizes in the BSE window alone.
    * - ``--device <choice>``
      - ``auto``
@@ -61,8 +61,8 @@ YAML Configuration Example
 
    soc:
      enabled: true
-     window: 7.0          # default: largest |ewin| + 2 eV
-     bse_window: 7.0      # default: soc.window
+     window: 6.0          # default: largest |ewin| + 1 eV
+     bse_window: 7.0      # default: soc.window when set, else largest |ewin| + 2 eV
      gth_functional: PBE
 
    system:
