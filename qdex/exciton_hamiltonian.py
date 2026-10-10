@@ -114,11 +114,10 @@ class ExcitonHamiltonian:
             logger.info(f"\n  Building hole/electron/transition density blocks for Active Space ({'Xs-QDEX (AO-resolved)' if self.is_xs else 'MNOK (Atom-resolved)'})...")
             t_den = time.time()
             if self.is_xs or self.charge_type == 'lowdin':
-                from qdex.lowdin import lowdin_sqrt
+                from qdex.lowdin import lowdin_columns
                 S_dense = overlap.toarray() if hasattr(overlap, "toarray") else overlap
-                S_half = lowdin_sqrt(S_dense, device=device)
-                self.C_occ_low = S_half @ C_occ_act
-                self.C_virt_low = S_half @ C_virt_act
+                self.C_occ_low = lowdin_columns(S_dense, C_occ_act, device)
+                self.C_virt_low = lowdin_columns(S_dense, C_virt_act, device)
 
             if self.is_xs:
                 if self.diagonal_mode:
@@ -221,10 +220,9 @@ class ExcitonHamiltonian:
                 if hasattr(C_val_occ, "toarray"): C_val_occ = C_val_occ.toarray()
                 
                 if self.is_xs:
-                    from qdex.lowdin import lowdin_sqrt
+                    from qdex.lowdin import lowdin_columns
                     S_dense = overlap.toarray() if hasattr(overlap, "toarray") else overlap
-                    S_half = lowdin_sqrt(S_dense, device=device)
-                    C_val_occ_low = S_half @ C_val_occ
+                    C_val_occ_low = lowdin_columns(S_dense, C_val_occ, device)
                     q_act_occ_val = np.einsum("mi,mj->ijm", self.C_occ_low.conj(), C_val_occ_low, optimize=True)
                     q_act_virt_val = np.einsum("ma,mj->ajm", self.C_virt_low.conj(), C_val_occ_low, optimize=True)
                 else:
@@ -729,12 +727,11 @@ class ExcitonHamiltonian:
 
         if self.is_xs:
             logger.info(f"  Building Xs-QDEX transition densities (alpha + beta channels)...")
-            from qdex.lowdin import lowdin_sqrt
-            S_half = lowdin_sqrt(S, device=device)
-            self.C_occ_a_low = S_half @ C_occ_a
-            self.C_virt_a_low = S_half @ C_virt_a
-            self.C_occ_b_low = S_half @ C_occ_b
-            self.C_virt_b_low = S_half @ C_virt_b
+            from qdex.lowdin import lowdin_columns
+            self.C_occ_a_low = lowdin_columns(S, C_occ_a, device)
+            self.C_virt_a_low = lowdin_columns(S, C_virt_a, device)
+            self.C_occ_b_low = lowdin_columns(S, C_occ_b, device)
+            self.C_virt_b_low = lowdin_columns(S, C_virt_b, device)
 
             q_flat_a = (self.C_occ_a_low[:, vi_a].conj() * self.C_virt_a_low[:, va_a]).T if dim_a else np.zeros((0, self.n_features), dtype=np.float64)
             q_flat_b = (self.C_occ_b_low[:, vi_b].conj() * self.C_virt_b_low[:, va_b]).T if dim_b else np.zeros((0, self.n_features), dtype=np.float64)

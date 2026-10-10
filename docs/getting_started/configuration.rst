@@ -95,6 +95,13 @@ system
      - GTH SOC pseudopotential file
    * - ``nthreads``, ``device``
      - CPU threads; ``auto``, ``cpu``, ``cuda`` or ``mps``
+   * - ``lowdin_device`` [``--lowdin-device``]
+     - where the overlap matrix S is diagonalized for the Löwdin quantities: ``auto`` (the compute device),
+       ``cpu`` or ``cuda``/``cuda:N``. On the CPU, LAPACK divide and conquer; past 32 767 AOs the 64-bit-integer
+       ``dsyevd_64`` of MKL (oneMKL ≥ 2023), else scipy's slower syevr. On a GPU, cuSOLVER ``cusolverDnXsyevd``
+       (cuSOLVER ≥ 12 beyond ~32k AOs; library from ``$QDEX_CUSOLVER`` or next to torch), when ~40 n² bytes
+       are free on the GPU, otherwise the CPU. 42.6k AOs: syevr > 2000 s, MKL ILP64 900 s (192 cores), one
+       H200 28 s. ``$QDEX_LOWDIN_CACHE`` (a directory) keeps the result for later runs on the same orbitals
    * - ``skip_orthonormality_check``
      - skip the Cᵀ S C test of the MO file (saves one n_ao³ product)
    * - ``inorganic_elements``

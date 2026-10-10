@@ -1062,6 +1062,11 @@ def _build_parser():
                         help="Abort when max|C^dagger S C-I| exceeds this tolerance.")
     parser.add_argument("--nthreads", type=int, default=1)
     parser.add_argument("--device", choices=["auto", "cpu", "cuda", "mps", "numpy"], default="auto")
+    parser.add_argument("--lowdin-device", dest="lowdin_device", default="auto",
+                        help="Device of the diagonalization of the overlap matrix S (Löwdin quantities): 'auto' (default; "
+                             "the compute device), 'cpu', or 'cuda'/'cuda:N' (cuSOLVER cusolverDnXsyevd; needs cuSOLVER "
+                             ">= 12 beyond ~32k AOs and ~40 n^2 bytes of free GPU memory, else the CPU is used). "
+                             "YAML: system.lowdin_device")
 
     # Auger arguments
     parser.add_argument("--auger", action="store_true", help="Compute non-radiative Auger recombination rates and biexciton lifetimes.")
@@ -1315,6 +1320,9 @@ def _prepare_run(args, *, config_path, parser):
     _hardness.set_mnok_options(getattr(args, "mnok_exponent", 2.0), getattr(args, "mnok_exponent_exchange", None),
                                getattr(args, "mnok_onsite", "ip_ea"))
     compute_device, dev_obj = resolve_device(args.device, verbose=True)
+    from qdex.lowdin import set_lowdin_device
+    _ld = str(getattr(args, "lowdin_device", "auto") or "auto").lower()
+    set_lowdin_device(compute_device if _ld == "auto" else _ld)
     if config_path:
         logger.info(f"Loading configuration from {config_path}...")
 

@@ -237,9 +237,8 @@ class ExcitonSolver:
 
         need_lowdin = is_atom_sbse or is_ao_sbse or (is_xs and any(x in k_name for x in ["rpa", "dim", "sbse"]))
         if need_lowdin:
-            from qdex.lowdin import lowdin_sqrt
+            from qdex.lowdin import lowdin_columns
             S_dense = overlap.toarray() if hasattr(overlap, 'toarray') else overlap
-            S_half = lowdin_sqrt(S_dense, device=device)
 
             n_occ_tot = homo_index + 1
             n_virt_tot = min(1000, len(eps) - n_occ_tot)
@@ -247,8 +246,8 @@ class ExcitonSolver:
             virt_idx_a = np.arange(n_occ_tot, n_occ_tot + n_virt_tot)
             C_occ_act = C[:, occ_idx_a].toarray() if hasattr(C, 'toarray') else C[:, occ_idx_a]
             C_virt_act = C[:, virt_idx_a].toarray() if hasattr(C, 'toarray') else C[:, virt_idx_a]
-            C_occ_low = S_half @ C_occ_act
-            C_virt_low = S_half @ C_virt_act
+            C_occ_low = lowdin_columns(S_dense, C_occ_act, device)
+            C_virt_low = lowdin_columns(S_dense, C_virt_act, device)
             eps_occ_act = eps[occ_idx_a]
             eps_virt_act = eps[virt_idx_a]
 
@@ -259,8 +258,8 @@ class ExcitonSolver:
                 virt_idx_b = np.arange(n_o_b_tot, n_o_b_tot + n_v_b_tot)
                 C_occ_b_act = C_beta[:, occ_idx_b].toarray() if hasattr(C_beta, 'toarray') else C_beta[:, occ_idx_b]
                 C_virt_b_act = C_beta[:, virt_idx_b].toarray() if hasattr(C_beta, 'toarray') else C_beta[:, virt_idx_b]
-                C_occ_b_low = S_half @ C_occ_b_act
-                C_virt_b_low = S_half @ C_virt_b_act
+                C_occ_b_low = lowdin_columns(S_dense, C_occ_b_act, device)
+                C_virt_b_low = lowdin_columns(S_dense, C_virt_b_act, device)
                 eps_occ_b_act = eps_beta[occ_idx_b]
                 eps_virt_b_act = eps_beta[virt_idx_b]
 
