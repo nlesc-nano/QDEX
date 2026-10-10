@@ -2782,11 +2782,17 @@ def _store_electronic_and_mo_cubes(args, *,
             Ps = np.asarray(pops_soc_act)
             occ_sp = np.zeros(n_sp)
             occ_sp[:h + 1] = 1.0
+            # spinor levels vs vacuum, on the axis the spinors were built from: QP energies when the
+            # model corrects orbital by orbital (eps_qp_active), DFT energies otherwise
             e_abs = np.asarray(bse_soc_E, float) + bse_soc_midgap_ev
-            # QP: the spin-free occupied / virtual shifts, as the SOC QP gap = SOC gap + scissor
+            # the spin-free occupied / virtual edge shifts, as the SOC QP gap = SOC gap + scissor
             occ_shift, virt_shift = qp_homo - eps[homo_index], qp_lumo - eps[homo_index + 1]
-            e_qp = e_abs + np.where(occ_sp > 0, occ_shift, virt_shift)
-            extra_soc = {"energy_dft_abs_ev": e_abs, "energy_qp_abs_ev": e_qp}
+            shift = np.where(occ_sp > 0, occ_shift, virt_shift)
+            if eps_qp_active is not None:
+                e_qp, e_dft = e_abs, e_abs - shift
+            else:
+                e_dft, e_qp = e_abs, e_abs + shift
+            extra_soc = {"energy_dft_abs_ev": e_dft, "energy_qp_abs_ev": e_qp}
             if centroid_info_soc is not None:
                 extra_soc.update({
                     "centroid/d_com_ang": np.asarray(centroid_info_soc["d_com"], float),
@@ -2809,7 +2815,7 @@ def _store_electronic_and_mo_cubes(args, *,
                 store.attr("electronic", "soc/bse_spinor/centroid",
                            r_core_ang=float(centroid_info_soc["r_core"]),
                            com_core_ang=list(map(float, centroid_info_soc["com_core"])))
-            store.attr("electronic", "qp", soc_dft_homo_ev=float(e_abs[h]), soc_dft_lumo_ev=float(e_abs[h + 1]),
+            store.attr("electronic", "qp", soc_dft_homo_ev=float(e_dft[h]), soc_dft_lumo_ev=float(e_dft[h + 1]),
                        soc_qp_homo_ev=float(e_qp[h]), soc_qp_lumo_ev=float(e_qp[h + 1]))
             store.cache["soc_spinor_atom_pops"] = _atom_pops(Ps, build_atom_ao_ranges(shells))
 
