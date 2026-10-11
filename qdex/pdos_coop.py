@@ -314,14 +314,13 @@ def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, si
     coop_idx = np.where(mask_coop)[0]
     n_mo_total = len(eps_eV)
 
-    if is_soc:
-        n_ao = S_dense.shape[0]
-        C_a = C_dense[:n_ao, coop_idx]
-        C_b = C_dense[n_ao:, coop_idx]
-    else:
-        C_sub = C_dense[:, coop_idx]
-
+    n_ao = S_dense.shape[0]
     if is_gpu(device) and len(coop_pairs) > 0 and len(coop_idx) > 0:
+        if is_soc:
+            C_a = C_dense[:n_ao, coop_idx]
+            C_b = C_dense[n_ao:, coop_idx]
+        else:
+            C_sub = C_dense[:, coop_idx]
         import torch
         dev = torch.device(device)
         for pair in coop_pairs:
@@ -360,6 +359,12 @@ def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, si
             coop_full[coop_idx] = coop_val
             coop_results[pair] = coop_full
     else:
+        # COOP_AB(n) = 2 Re sum_{mu in A, nu in B} C*_mu,n S_mu,nu C_nu,n, in blocks of states: a complex block is
+        # viewed as interleaved real/imaginary columns, so S_AB (real) multiplies it in one real GEMM and
+        # Re(a* b) = a_re b_re + a_im b_im is a sum over adjacent columns. Gathering the full A/B rows of every state
+        # (and their real/imaginary parts) at once took >15 min and >300 GB for 39k AOs x 17k SOC spinors.
+        offsets = [0, n_ao] if is_soc else [0]          # spin-up and spin-down AO rows of a spinor
+        n_sel = len(coop_idx)
         for pair in coop_pairs:
             a_sym, b_sym = pair.split("-")
             idx_A = np.where(ao_to_sym == a_sym)[0]
@@ -369,33 +374,20 @@ def compute_pdos_and_coop(C, S, eps_eV, shells, pdos_atoms, coop_pairs, ewin, si
 
             S_AB = S_dense[np.ix_(idx_A, idx_B)]
             coop_full = np.zeros(n_mo_total, dtype=float)
-
-            if is_soc:
-                Ca_A = C_a[idx_A, :]
-                Ca_B = C_a[idx_B, :]
-                Cb_A = C_b[idx_A, :]
-                Cb_B = C_b[idx_B, :]
-
-                XB_a_re = S_AB @ np.real(Ca_B)
-                XB_a_im = S_AB @ np.imag(Ca_B)
-                XB_b_re = S_AB @ np.real(Cb_B)
-                XB_b_im = S_AB @ np.imag(Cb_B)
-
-                term_a = np.sum(np.real(Ca_A) * XB_a_re + np.imag(Ca_A) * XB_a_im, axis=0)
-                term_b = np.sum(np.real(Cb_A) * XB_b_re + np.imag(Cb_A) * XB_b_im, axis=0)
-                coop_val = 2.0 * (term_a + term_b)
-            else:
-                CA = C_sub[idx_A, :]
-                CB = C_sub[idx_B, :]
-                if np.iscomplexobj(CA):
-                    XB_re = S_AB @ np.real(CB)
-                    XB_im = S_AB @ np.imag(CB)
-                    coop_val = 2.0 * np.sum(np.real(CA) * XB_re + np.imag(CA) * XB_im, axis=0)
-                else:
-                    XB = S_AB @ CB
-                    coop_val = 2.0 * np.sum(CA * XB, axis=0)
-
-            coop_full[coop_idx] = coop_val
+            coop_val = np.zeros(n_sel)
+            chunk = max(1, int(5.0e7 // (len(idx_A) + len(idx_B))))
+            for k0 in range(0, n_sel, chunk):
+                k1 = min(k0 + chunk, n_sel)
+                cols = coop_idx[k0:k1]
+                for off in offsets:
+                    CA = np.ascontiguousarray(C_dense[np.ix_(idx_A + off, cols)])
+                    CB = np.ascontiguousarray(C_dense[np.ix_(idx_B + off, cols)])
+                    if np.iscomplexobj(CB):
+                        XB = S_AB @ CB.view(np.float64)
+                        coop_val[k0:k1] += np.sum(CA.view(np.float64) * XB, axis=0).reshape(-1, 2).sum(axis=1)
+                    else:
+                        coop_val[k0:k1] += np.sum(CA * (S_AB @ CB), axis=0)
+            coop_full[coop_idx] = 2.0 * coop_val
             coop_results[pair] = coop_full
 
     analysis = {
