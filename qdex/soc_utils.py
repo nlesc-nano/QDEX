@@ -295,6 +295,104 @@ def _spinor_cache_key(*parts):
     return h.hexdigest()
 
 
+def _spinor_cache_dir():
+    """$QDEX_SPINOR_CACHE (default: $QDEX_LOWDIN_CACHE), or None."""
+    import os
+    return os.environ.get("QDEX_SPINOR_CACHE") or os.environ.get("QDEX_LOWDIN_CACHE") or None
+
+
+def _spinor_fingerprint(H):
+    """Diagonal and a strided sample of H. Runs of one dot rebuild the same spinor Hamiltonian only up to the last bits
+    (threaded BLAS reductions with different thread counts), so cache entries are matched by these values with a
+    tolerance rather than by an exact hash."""
+    n = H.shape[0]
+    return np.concatenate([np.diagonal(H), H[:: max(1, n // 97), :: max(1, n // 89)].ravel()])
+
+
+def _spinor_cache_lookup(H, atol=1e-9):
+    """(E, U) of a cached spinor Hamiltonian that matches H within atol (Hartree) on its fingerprint, else None."""
+    import glob, os
+    d = _spinor_cache_dir()
+    if not d:
+        return None
+    fp = None
+    for f in sorted(glob.glob(os.path.join(d, f"spinor_{H.shape[0]}_*_fp.npy"))):
+        try:
+            ref = np.load(f)
+            fp = _spinor_fingerprint(H) if fp is None else fp
+            if ref.shape == fp.shape and np.max(np.abs(ref - fp)) <= atol:
+                stem = f[: -len("_fp.npy")]
+                E, U = np.load(stem + "_E.npy"), np.load(stem + "_U.npy")
+                logger.info(f"  -> Spinors read from the cache ({os.path.basename(stem)})")
+                return E, U
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def _spinor_cache_store(H, E, U):
+    """Write E, U and the fingerprint of H (write-then-rename, the fingerprint last: a concurrent run only sees
+    complete entries)."""
+    import os, uuid
+    d = _spinor_cache_dir()
+    if not d:
+        return
+    os.makedirs(d, exist_ok=True)
+    stem = os.path.join(d, f"spinor_{H.shape[0]}_{uuid.uuid4().hex[:12]}")
+    for tag, arr in (("_E", E), ("_U", U), ("_fp", _spinor_fingerprint(H))):
+        tmp = f"{stem}{tag}.tmp.npy"
+        np.save(tmp, arr)
+        os.replace(tmp, stem + tag + ".npy")
+
+
+def _zheevd_mkl_ilp64(H):
+    """w, V of a complex Hermitian H by MKL's Fortran zheevd_64 (64-bit integers): the 32-bit LAPACK workspaces
+    overflow for n > ~32000. The C-ordered array is H^T = conj(H) in column-major order, so its eigenvectors come back
+    conjugated, in the rows of the C array."""
+    import ctypes
+    from qdex.lowdin import _mkl_rt
+    f = _mkl_rt().zheevd_64
+    f.restype = None
+    n = H.shape[0]
+    A = np.array(H, dtype=np.complex128, order="C", copy=True)
+    w = np.empty(n)
+    i64 = ctypes.c_int64
+    N, info = i64(n), i64(0)
+
+    def call(work, lwork, rwork, lrwork, iwork, liwork):
+        f(ctypes.c_char_p(b"V"), ctypes.c_char_p(b"L"), ctypes.byref(N), A.ctypes.data_as(ctypes.c_void_p),
+          ctypes.byref(N), w.ctypes.data_as(ctypes.c_void_p), work.ctypes.data_as(ctypes.c_void_p), ctypes.byref(lwork),
+          rwork.ctypes.data_as(ctypes.c_void_p), ctypes.byref(lrwork), iwork.ctypes.data_as(ctypes.c_void_p),
+          ctypes.byref(liwork), ctypes.byref(info), ctypes.c_size_t(1), ctypes.c_size_t(1))
+
+    wq, rq, iq = np.zeros(1, dtype=np.complex128), np.zeros(1), np.zeros(1, dtype=np.int64)
+    call(wq, i64(-1), rq, i64(-1), iq, i64(-1))  # workspace query
+    lw, lr, li = int(wq[0].real) + 1, int(rq[0]) + 1, int(iq[0]) + 1
+    call(np.empty(lw, dtype=np.complex128), i64(lw), np.empty(lr), i64(lr), np.empty(li, dtype=np.int64), i64(li))
+    if info.value != 0:
+        raise RuntimeError(f"zheevd_64 info = {info.value}")
+    return w, A.T.conj()
+
+
+def _spinor_eigh(H):
+    """Eigen-decomposition of the spinor Hamiltonian, read from the cache when another run of the same dot (another QP
+    model or trap setting) already did it. numpy's LAPACK zheevd (MKL here) up to n = 32000: 1.4x faster than scipy's
+    evd wrapper of the same routine (n = 18000: 230 vs 318 s); beyond, MKL's ILP64 zheevd_64, and scipy's evr only
+    without it."""
+    hit = _spinor_cache_lookup(H)
+    if hit is not None:
+        return hit
+    if H.shape[0] <= 32000:
+        E, U = np.linalg.eigh(H)
+    else:
+        try:
+            E, U = _zheevd_mkl_ilp64(H)
+        except (OSError, AttributeError, RuntimeError) as e:
+            logger.info(f"  -> MKL ILP64 zheevd_64 not available ({e}); using scipy evr")
+            E, U = eigh(H, driver="evr", check_finite=False)
+    _spinor_cache_store(H, E, U)
+    return E, U
+
 def spinor_weighted_shifts(parts):
     """Energy shift of each spinor: the shifts of its MOs averaged with weights ``|U|^2``.
 
@@ -431,7 +529,7 @@ def compute_spinor_subspace(
     H_total[:n_mo, n_mo:] = Hab
     H_total[n_mo:, :n_mo] = Hab.conj().T
 
-    soc_E, soc_U = eigh(H_total, driver="evd")   # divide and conquer: ~1.6x faster than evr (OpenBLAS)
+    soc_E, soc_U = _spinor_eigh(H_total)
     memo[key] = (soc_E.copy(), soc_U.copy())
 
     if verbose:
@@ -522,7 +620,7 @@ def compute_spinor_subspace_uks(
         [Hx_ba + 1j * Hy_ba, -Hz_bb],
     ])
     H_total = H0 + H_SO
-    soc_E, soc_U = eigh(H_total, driver="evd")   # divide and conquer: ~1.6x faster than evr (OpenBLAS)
+    soc_E, soc_U = _spinor_eigh(H_total)
     memo[key] = (soc_E.copy(), soc_U.copy())
 
     logger.debug(f"  -> UKS spinor diagonalization completed in {time.time() - t0:.2f}s")
