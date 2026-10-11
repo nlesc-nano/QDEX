@@ -8,6 +8,55 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def _spinor_mulliken_exchange_diag(C_occ, SC_occ, C_virt, SC_virt, atom_ao_ranges, gamma, valid_idx, n_virt):
+    """Diagonal exchange K^x_p = sum_AB q_p(A)* gamma[B, A] q_p(B) of the transitions p = (i, a) in valid_idx
+    (= i * n_virt + a, any order), with Mulliken transition charges summed over the spin components s of the tuples
+    (two for spinors, one for spin-free MOs; real or complex coefficients),
+
+        q_ia(A) = 1/2 sum_s sum_{mu in A} [ C^s*_mu,i (S C^s)_mu,a + (S C^s)*_mu,i C^s_mu,a ].
+
+    For each atom the products are one GEMM of stacked rows [C_s...; SC_s...] (holes) against [SC_s...; C_s...]
+    (electrons), for a block of holes against every electron; gamma is then applied to the whole block with one real
+    GEMM (complex viewed as interleaved re/im). Gathering the AO rows of every pair and atom instead took 1190 s for
+    Cs704Pb512Br1728 (957 216 SOC pairs)."""
+    blocks_o = [np.asarray(x) for x in list(C_occ) + list(SC_occ)]
+    blocks_v = [np.asarray(x) for x in list(SC_virt) + list(C_virt)]
+    nb = len(blocks_o)
+    order = np.concatenate([np.arange(a0, a1) for a0, a1 in atom_ao_ranges])
+    n_ao = blocks_o[0].shape[0]
+    sizes = np.array([a1 - a0 for a0, a1 in atom_ao_ranges])
+    starts = np.concatenate([[0], np.cumsum(sizes)])
+    rows = np.concatenate([order + k * n_ao for k in range(nb)])
+    # atom A's rows in the stacked arrays: its AOs in each block, contiguous after reordering
+    seg = [np.concatenate([starts[A] + np.arange(sizes[A]) + k * len(order) for k in range(nb)]) for A in range(len(sizes))]
+    L = np.ascontiguousarray(np.vstack(blocks_o)[rows])
+    R = np.ascontiguousarray(np.vstack(blocks_v)[rows])
+    cplx = np.iscomplexobj(L) or np.iscomplexobj(R)
+    n_occ, n_atoms = L.shape[1], len(sizes)
+    gT = np.ascontiguousarray(np.asarray(gamma, dtype=np.float64).T)
+    valid_idx = np.asarray(valid_idx)
+    srt = np.argsort(valid_idx, kind="stable")
+    vs = valid_idx[srt]
+    out_s = np.zeros(len(vs))
+    n_i = max(1, int(1.5e8 // max(1, n_atoms * n_virt)))
+    for i0 in range(0, n_occ, n_i):
+        i1 = min(i0 + n_i, n_occ)
+        lo, hi = np.searchsorted(vs, [i0 * n_virt, i1 * n_virt])
+        if lo == hi:
+            continue
+        Q = np.empty((n_atoms, i1 - i0, n_virt), dtype=np.complex128 if cplx else np.float64)
+        for A in range(n_atoms):
+            Q[A] = 0.5 * (L[seg[A], i0:i1].conj().T @ R[seg[A]])
+        Qf = Q.reshape(n_atoms, -1).view(np.float64)
+        kx = np.einsum("Ak,Ak->k", Qf, gT @ Qf)
+        if cplx:
+            kx = kx.reshape(-1, 2).sum(axis=1)
+        out_s[lo:hi] = kx[vs[lo:hi] - i0 * n_virt]
+    out = np.empty_like(out_s)
+    out[srt] = out_s
+    return out
+
 class ExcitonHamiltonian:
     def __init__(self, C, eps, overlap, atom_ao_ranges, homo_index, n_occ, n_virt, scissor_ev, gamma_qp, gamma_bse, material=None, 
                  gamma_bare=None, gamma_penalty=None, alpha=1.0, include_exchange=True, estimate_qp=False, e_thresh=None, f_thresh=0.0, mu_ia_x=None, mu_ia_y=None, mu_ia_z=None,
@@ -502,19 +551,10 @@ class ExcitonHamiltonian:
                         if hasattr(SC_occ, "toarray"): SC_occ = SC_occ.toarray()
                         if hasattr(SC_virt, "toarray"): SC_virt = SC_virt.toarray()
 
-                        for p0 in range(0, self.dim, chunk_size):
-                            p1 = min(p0 + chunk_size, self.dim)
-                            vi_ch = self.valid_i[p0:p1]
-                            va_ch = self.valid_a[p0:p1]
-                            q_ch = np.zeros((p1 - p0, self.n_atoms), dtype=np.float64)
-                            for A, (a0, a1) in enumerate(atom_ao_ranges):
-                                Ci_A = C_occ_act[a0:a1, :][:, vi_ch]
-                                SCa_A = SC_virt[a0:a1, :][:, va_ch]
-                                Ca_A = C_virt_act[a0:a1, :][:, va_ch]
-                                SCi_A = SC_occ[a0:a1, :][:, vi_ch]
-                                q_ch[:, A] = 0.5 * (np.sum(Ci_A * SCa_A, axis=0) + np.sum(Ca_A * SCi_A, axis=0))
-                            V_ch = q_ch @ gamma
-                            self.kx_diag[p0:p1] = factor * np.sum(q_ch * V_ch, axis=1)
+                        n_va = C_virt_act.shape[1]
+                        self.kx_diag[:] = factor * _spinor_mulliken_exchange_diag(
+                            (C_occ_act,), (SC_occ,), (C_virt_act,), (SC_virt,), atom_ao_ranges, gamma,
+                            np.asarray(self.valid_i) * n_va + np.asarray(self.valid_a), n_va)
 
             logger.debug(f"    Charges & diagonal kernels built in {time.time() - start_q:2.4f} s")
         else:
@@ -1114,26 +1154,10 @@ class ExcitonHamiltonian:
                             V_ch = q_ch @ gamma
                             self.kx_diag[p0:p1] = np.sum(q_ch.conj() * V_ch, axis=1).real
                     else:
-                        for p0 in range(0, self.dim, chunk_size):
-                            p1 = min(p0 + chunk_size, self.dim)
-                            full_idx_ch = self.valid_spinor_idx[p0:p1]
-                            I_ch = full_idx_ch // self.n_virt_spinor
-                            A_ch = full_idx_ch % self.n_virt_spinor
-                            q_ch = np.zeros((p1 - p0, self.n_atoms), dtype=np.complex128)
-                            for at, (a0, a1) in enumerate(self.atom_ao_ranges):
-                                Co_a = C_sp_occ_a[a0:a1, I_ch]
-                                SCo_a = SC_sp_occ_a[a0:a1, I_ch]
-                                Cv_a = C_sp_virt_a[a0:a1, A_ch]
-                                SCv_a = SC_sp_virt_a[a0:a1, A_ch]
-                                Co_b = C_sp_occ_b[a0:a1, I_ch]
-                                SCo_b = SC_sp_occ_b[a0:a1, I_ch]
-                                Cv_b = C_sp_virt_b[a0:a1, A_ch]
-                                SCv_b = SC_sp_virt_b[a0:a1, A_ch]
-                                term_a = 0.5 * (np.sum(Co_a.conj() * SCv_a + SCo_a.conj() * Cv_a, axis=0))
-                                term_b = 0.5 * (np.sum(Co_b.conj() * SCv_b + SCo_b.conj() * Cv_b, axis=0))
-                                q_ch[:, at] = term_a + term_b
-                            V_ch = q_ch @ gamma
-                            self.kx_diag[p0:p1] = np.sum(q_ch.conj() * V_ch, axis=1).real
+                        self.kx_diag[:] = _spinor_mulliken_exchange_diag(
+                            (C_sp_occ_a, C_sp_occ_b), (SC_sp_occ_a, SC_sp_occ_b),
+                            (C_sp_virt_a, C_sp_virt_b), (SC_sp_virt_a, SC_sp_virt_b),
+                            self.atom_ao_ranges, gamma, self.valid_spinor_idx, self.n_virt_spinor)
 
             del C_sp_occ_a, C_sp_occ_b
             if not self.is_xs:
