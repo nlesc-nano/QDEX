@@ -31,6 +31,7 @@ SECTIONS = {
         "gth_file": "gth_file",
         "nthreads": "nthreads",
         "device": "device",
+        "lowdin_device": "lowdin_device",
         "cache_mos": "cache_mos",
         "skip_orthonormality_check": "skip_orthonormality_check",
         "orthonormality_tol": "orthonormality_tol",

@@ -217,8 +217,13 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
     # Header above the panels, laid out in pixels from the top of the figure so that nothing
     # overlaps at any window width: one row of controls, the colour bars stacked over the fuzzy
     # panel, and one vertical legend over each of the panels it belongs to.
-    fig_height, top, bottom = 960, 270, 100
-    plot_h = fig_height - top - bottom
+    # The Atoms legend has two columns (the PDOS elements split in half, ~25 px per row from 52 px down) and the
+    # bulk-band entry on a line of its own below them; the header grows with it, the panels keep their height.
+    pdos_E, pdos_L, pdos_Y = load_pdos_csv(f"pdos_data_{prefix}.csv")
+    n_atom_rows = (len(pdos_L) + 1) // 2
+    plot_h, bottom = 590, 100
+    top = max(270, 52 + 27 + 25 * (n_atom_rows + 1) + 45)
+    fig_height = top + plot_h + bottom
 
     def y_px(d):
         """Paper y of a point `d` pixels below the top of the figure."""
@@ -228,14 +233,20 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         return float(fig.layout[f"xaxis{'' if col == 1 else col}"].domain[0])
 
     def colorbar(title, row, **kw):
-        """Horizontal colour bar over the fuzzy panel, title on top; row 0 or 1 of the stack."""
-        return dict(title=dict(text=title, side="top", font=dict(size=16)), orientation="h", len=0.30, thickness=14,
-                    x=0.0, xanchor="left", y=y_px(52 + 70 * row), yanchor="top", tickfont=dict(size=14), **kw)
+        """Horizontal colour bar over the fuzzy panel, title on top; row 0 or 1 of the stack. Kept inside the
+        width of the fuzzy panel so that it never reaches the Atoms legend over the PDOS panel."""
+        dom = fig.layout.xaxis.domain
+        return dict(title=dict(text=title, side="top", font=dict(size=16)), orientation="h",
+                    len=0.85 * (float(dom[1]) - float(dom[0])), xpad=0, thickness=14,
+                    x=float(dom[0]), xanchor="left", y=y_px(52 + 70 * row), yanchor="top", tickfont=dict(size=14), **kw)
 
-    def legend(title, col):
-        return dict(title=dict(text=f"<b>{title}</b>", font=dict(size=17), side="top"), orientation="v",
-                    x=x_col(col), xanchor="left", y=y_px(52), yanchor="top", font=dict(size=15),
-                    bgcolor="rgba(255,255,255,0)", tracegroupgap=2)
+    def legend(title, col, dx=0.0, d_px=52):
+        """Vertical legend over panel `col`, `dx` (paper) right of its left edge and `d_px` below the figure top."""
+        return dict(title=dict(text=f"<b>{title}</b>" if title else "", font=dict(size=17), side="top"), orientation="v",
+                    x=x_col(col) + dx, xanchor="left", y=y_px(d_px), yanchor="top", font=dict(size=15),
+                    bgcolor="rgba(255,255,255,0)", tracegroupgap=2, traceorder="normal")
+
+    pdos_w = float(fig.layout.xaxis2.domain[1]) - float(fig.layout.xaxis2.domain[0])
 
     fig.update_layout(
         template="plotly_white", paper_bgcolor="white", plot_bgcolor="white",
@@ -243,14 +254,14 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         font=dict(family="Helvetica, Arial, sans-serif", size=24, color="#222"),
         margin=dict(l=100, r=40, t=top, b=bottom),
         legend=legend("Atoms", 2), legend2=legend("Localization", 4), legend3=legend("Bonds", 5),
-        legend4=legend("Localization", 3),
+        legend4=legend("Localization", 3), legend5=legend("&nbsp;", 2, dx=0.5 * pdos_w),
+        legend6=legend("", 2, d_px=52 + 27 + 25 * n_atom_rows + 8),
     )
 
     for annotation in fig['layout']['annotations']: annotation['font'] = dict(size=24, family="Helvetica", color="#111")
     palette = ["#636EFA","#EF553B","#00CC96","#AB63FA","#FFA15A","#19D3F3","#FF6692"]
     
     fuzzy = load_fuzzy(f"fuzzy_data_{prefix}.npz")
-    pdos_E, pdos_L, pdos_Y = load_pdos_csv(f"pdos_data_{prefix}.csv")
     coop_E, coop_P, coop_V = load_dict_csv(f"coop_data_{prefix}.csv")
     sc_E, sc_P, sc_V = load_dict_csv(f"surf_core_data_{prefix}.csv")
     ipr_E, ipr_V = load_ipr_csv(f"ipr_data_{prefix}.csv")
@@ -394,7 +405,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                     xs, ys, cs = np.concatenate(xs), np.concatenate(ys), np.clip(np.concatenate(cs), 0, 1)
                     order = np.argsort(cs)              # strongest on top
                     fig.add_trace(go.Scattergl(
-                        x=xs[order], y=ys[order], mode="markers", name=bulk_name, legendgroup="bulk_bands",
+                        x=xs[order], y=ys[order], mode="markers", name=bulk_name, legendgroup="bulk_bands", legend="legend6",
                         marker=dict(size=3.5 + 3.0 * cs[order], color=[f"rgba(0,240,255,{0.15 + 0.85 * c:.2f})" for c in cs[order]],
                                     line=dict(width=0)),
                         customdata=cs[order].tolist(),   # plain list: read back by the bulk-band controls
@@ -416,7 +427,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
                                 mode="lines",
                                 line=dict(color="rgba(0, 240, 255, 0.85)", width=2.0),
                                 name=bulk_name,
-                                legendgroup="bulk_bands",
+                                legendgroup="bulk_bands", legend="legend6",
                                 showlegend=first,
                                 hovertemplate=f"{bulk_name}: E = %{{y:.3f}} eV<extra></extra>",
                             ),
@@ -441,7 +452,7 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
  
     if len(pdos_L) > 0:
         for j, lab in enumerate(pdos_L):
-            fig.add_trace(go.Scatter(x=pdos_Y[:, j], y=pdos_E, mode="lines", fill="tonextx" if j > 0 else "tozerox", line=dict(width=1.0, color="rgba(0,0,0,0)"), fillcolor=palette[j % len(palette)], name=lab, showlegend=True, legend="legend", hovertemplate=f"{lab}: %{{x:.3f}}<br>E=%{{y:.3f}} eV<extra></extra>"), row=1, col=2)
+            fig.add_trace(go.Scatter(x=pdos_Y[:, j], y=pdos_E, mode="lines", fill="tonextx" if j > 0 else "tozerox", line=dict(width=1.0, color="rgba(0,0,0,0)"), fillcolor=palette[j % len(palette)], name=lab, showlegend=True, legend="legend" if j < n_atom_rows else "legend5", hovertemplate=f"{lab}: %{{x:.3f}}<br>E=%{{y:.3f}} eV<extra></extra>"), row=1, col=2)
         total = pdos_Y[:, -1]
         fig.add_trace(go.Scatter(x=total, y=pdos_E, mode="lines", line=dict(color="black", width=3), name="Total DOS", showlegend=False), row=1, col=2)
         fig.update_xaxes(range=[0, float(max(total.max(), 1e-12)) * 1.05], row=1, col=2)
@@ -569,6 +580,10 @@ def generate_interactive_plot(prefix="sf", material="DEFAULT", ef=0.0, e_homo=No
         fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=True, ticks="outside", gridcolor='rgba(0,0,0,0.1)', zeroline=False, row=1, col=col)
         
     fig.update_yaxes(range=[ewin[0], ewin[1]], title_text=f"<b>{energy_label}</b>", title_font=dict(size=28), row=1, col=1)
+    # fixed k range (the heatmap cells): autoranging pads it for the state markers, so the map shrank inside its
+    # frame whenever a view with markers was selected
+    dk = float(kx[1] - kx[0]) if kx.size > 1 else 0.5
+    fig.update_xaxes(range=[float(kx[0]) - 0.5 * dk, float(kx[-1]) + 0.5 * dk], autorange=False, row=1, col=1)
     fig.update_xaxes(title_text="<b>k-Path</b>", title_font=dict(size=28), tickangle=0, tickfont=dict(size=17), row=1, col=1)
     fig.update_xaxes(title_text="<b>DOS</b>", title_font=dict(size=28), row=1, col=2)
     fig.update_xaxes(title_text="<b>Ω</b> (rel. to 1S)", title_font=dict(size=24), tickvals=[0, 0.25, 0.5, 0.75, 1.0], row=1, col=3)
