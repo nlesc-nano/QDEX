@@ -58,7 +58,8 @@ def read_real_space_matrices(run_dir, kind, n_ao, out_file):
         img = int(re.search(r"_R_(\d+)-1_0\.csr$", os.path.basename(f)).group(1))
         dat = np.loadtxt(f, ndmin=2)
         M = np.zeros((n_ao, n_ao))
-        M[dat[:, 0].astype(int) - 1, dat[:, 1].astype(int) - 1] = dat[:, 2]
+        if dat.size:  # hybrid (RI-HFX) runs write images beyond the range of S: empty files, zero matrices
+            M[dat[:, 0].astype(int) - 1, dat[:, 1].astype(int) - 1] = dat[:, 2]
         mats[cells[img]] = M
     if not mats:
         raise FileNotFoundError(f"No {kind} real-space CSR files in {run_dir}")
