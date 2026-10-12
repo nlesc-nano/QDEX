@@ -224,6 +224,13 @@ MATERIAL_DB_BULK_DFT = {
         "INAS": dict(a_exp=6.060, gap_exp_lattice=0.023, gap_soc_exp_lattice=-0.094, a_pbe=6.053, gap_pbe_lattice=0.044,
                      gap_soc_pbe_lattice=-0.073, qsgw_soc_exp_lattice=0.675, delta_sigma=0.769, B0=57.4),
     },
+    # PBE0 (ADMM2, k-point RI-HFX, truncated Coulomb R_c 8 A, 8x8x8): at the PBE lattice 6.217 A (the dots keep PBE
+    # geometries; no PBE0 lattice scan, so B0 is the PBE value), Cd 4d 8.15 eV below the VBM (8.34 at a_exp);
+    # delta_sigma = QSGW+SOC 2.164 - PBE0+SOC 1.704 at a_exp
+    "pbe0": {
+        "CDSE": dict(a_exp=6.050, gap_exp_lattice=1.823, gap_soc_exp_lattice=1.704, a_pbe=6.217, gap_pbe_lattice=1.617,
+                     gap_soc_pbe_lattice=1.498, qsgw_soc_exp_lattice=2.164, delta_sigma=0.460, B0=45.3),
+    },
 }
 DFT_FUNCTIONAL = "pbe"
 

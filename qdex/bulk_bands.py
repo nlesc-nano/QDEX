@@ -16,7 +16,7 @@ STRUCTURE_PREFERENCE = ("zb", "rs", "cubic", "wz")
 # <name>_<functional>[_soc].bs (e.g. CdSe_zb_hle17.bs, CdSe_zb_hle17.json). A run uses the bands of the
 # functional of its orbitals (system.functional), set once by the CLI with set_bulk_functional.
 BULK_FUNCTIONAL = "pbe"
-FUNCTIONAL_LABELS = {"pbe": "PBE", "hle17": "HLE17"}
+FUNCTIONAL_LABELS = {"pbe": "PBE", "hle17": "HLE17", "pbe0": "PBE0"}
 
 
 def set_bulk_functional(functional="pbe"):

@@ -905,7 +905,7 @@ def _build_parser():
     parser.add_argument("--vxc_ao", type=str, default=None, help="Path to cleaned CP2K AO-basis Vxc matrix text file")
     parser.add_argument("--material", type=str, default="DEFAULT")
     parser.add_argument("--functional", type=str, default="pbe",
-                        help="DFT functional of the orbitals: 'pbe' (default) or 'hle17'. Selects the bulk bands of the "
+                        help="DFT functional of the orbitals: 'pbe' (default), 'hle17' or 'pbe0'. Selects the bulk bands of the "
                              "fuzzy-band overlay and trap detector (<cif stem>_<functional>.bs) and the bulk gaps of the "
                              "QP models (MATERIAL_DB_BULK_DFT).")
     parser.add_argument("--eps-out", type=float, default=2.0)
