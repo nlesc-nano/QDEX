@@ -105,11 +105,14 @@ reference and in the dots.
 
 Gaps are signed band-edge transitions (negative = inverted): :math:`E(\Gamma_6) - E(\Gamma_8)` for the
 direct zinc blendes and the Hg compounds (:math:`E(\Gamma_1) - E(\Gamma_{15})` spin-free), the
-fundamental gap (X) for the indirect AlP, AlAs, AlSb and GaP, L in PbS and PbSe, R in the
-perovskites. PBE+SOC inverts PbS, PbSe and CsPbI\ :sub:`3` at :math:`a_\text{exp}` (as LDA/PBE+SOC is
+fundamental gap (X) for the indirect AlP, AlAs, AlSb and GaP, L in PbS, PbSe and PbTe, R in the
+perovskites. PBE+SOC inverts PbS, PbSe, PbTe and CsPbI\ :sub:`3` at :math:`a_\text{exp}` (as LDA/PBE+SOC is
 known to do for the lead chalcogenides); there the gap is signed by the character of the edge states
 (``edge_band_order`` in the ``qdex.bulk_soc`` metadata), since counting bands only gives the size of
-the anticrossing. HgS has a negative :math:`\Delta_\text{so}` (:math:`\Gamma_7` above :math:`\Gamma_8`,
+the anticrossing. In PbTe spin-orbit coupling mixes the spin-free conduction edge at L with the next Pb 6p
+doublet, so ``qdex.bulk_soc`` flags its edge order unreliable; the highest occupied spinor doublet lies
+entirely on the Pb 6p conduction manifold (weights 0.53 + 0.24 + 0.24) and the lowest empty one on the
+spin-free valence edge (0.95), so the gap is inverted, -0.109 eV (``benchmarks/bulk_bands/edge_manifold_weights.py``). HgS has a negative :math:`\Delta_\text{so}` (:math:`\Gamma_7` above :math:`\Gamma_8`,
 -0.115 eV; LDA -0.11 eV in Svane et al.).
 
 Sources (``QSGW_SOC_LITERATURE`` in ``qdex/hardness.py``): Deguchi16 = D. Deguchi, K. Sato, H. Kino,
@@ -119,8 +122,8 @@ Table I (QSGW :math:`E_0`); Huang16 = L.-y. Huang and W. R. L. Lambrecht, *Phys.
 (2016), Table II, at the cubic lattices 6.289 / 5.874 / 5.605 Å, carried to :math:`a_\text{exp}` with
 their QSGW :math:`dE_g/d\ln V` (6.4 / 7.5 / 7.7 eV); Svane10 = A. Svane et al., *Phys. Rev. B* 81,
 245120 (2010), Table I (QSGW, SOC added after self-consistency) at their low-temperature lattices
-5.909 / 6.098 Å, carried to :math:`a_\text{exp}` with their QSGW :math:`dE_g/d\ln V` (Table V: 5.3 /
-4.9 eV); Deguchi16 gives 0.49 eV for PbS at 5.936 Å, about 0.1 eV higher. The other sources used
+5.909 / 6.098 / 6.428 Å (PbS / PbSe / PbTe), carried to :math:`a_\text{exp}` with their QSGW
+:math:`dE_g/d\ln V` (Table V: 5.3 / 4.9 / 3.6 eV); Deguchi16 gives 0.49 eV for PbS at 5.936 Å, about 0.1 eV higher. The other sources used
 lattices within 0.2 % of :math:`a_\text{exp}` (carried with the PBE deformation potential, ≤ 0.01 eV).
 ``old Δ`` is :math:`\Delta_\text{bulk}` before this table: the III–V values
 were the spin-free QSGW of Deguchi16 (hence nearly unchanged), while the II–VI, Hg and perovskite
@@ -153,6 +156,7 @@ INAS     6.060 -0.247 -0.360  +0.680 (6.058, Deguchi16) +0.675            1.035 
 INSB     6.480 -0.153 -0.394  +0.540 (6.479, Deguchi16) +0.537            0.931 +0.778  0.92  6.661 -0.622       +0.469
 PBS      5.940 +0.253 -0.037  +0.310 (5.909, Svane10)   +0.393            0.430 +0.683  0.48  6.040 +0.421       -0.168
 PBSE     6.120 +0.139 -0.180  +0.210 (6.098, Svane10)   +0.263            0.443 +0.582  0.51  6.241 +0.325       -0.186
+PBTE     6.462 +0.505 -0.109  +0.290 (6.428, Svane10)   +0.347            0.456 +0.960  --    6.584 +0.616       -0.111
 ======== ===== ====== ======= ========================= ================= ===== ======= ===== ===== ============ ============
 
 **Geometry part.** A dot relaxed with PBE has (almost) the PBE lattice, and its PBE gap carries the
@@ -190,7 +194,9 @@ scales :math:`\Delta_\Sigma` by the factor that puts the bulk limit on the measu
 temperature of the sizing experiments) and the PBE+SOC gap of the measured structure. Experimental
 gaps: ``MATERIAL_DB`` index 3; zinc-blende CdSe 1.675 eV and wurtzite CdSe 1.751 eV from Aubert et al.,
 *Nano Lett.* 22, 1778 (2022) (the bulk gaps of their sizing curves); the Hg compounds the experimental
-:math:`E_0` of Svane11; CdS 2.42 eV for both polytypes (the wurtzite value; room-temperature zinc-blende
+:math:`E_0` of Svane11; PbTe 0.31 eV at 300 K (Madelung, Rössler and Schulz, Landolt-Börnstein
+III/41 (Springer, 2005), as quoted in J. M. Skelton et al., *Phys. Rev. B* 89, 205203 (2014), Table 3;
+:math:`a_\text{exp}` = 6.462 Å at 300 K from the same work); CdS 2.42 eV for both polytypes (the wurtzite value; room-temperature zinc-blende
 CdS is not well established, 2.37–2.50 eV in films). "QSGW − exp" is the error of QSGW for the measured
 structure; "residual at a = 0.8" is :math:`E_g^\text{exp} - (E_g^\text{PBE+SOC} + 0.8\,\Delta_\Sigma)`, what
 a universal factor of 0.8 leaves.
@@ -221,6 +227,7 @@ INAS     +0.350     -0.360  +0.675   +0.33      0.69 -0.12
 INSB     +0.170     -0.394  +0.537   +0.37      0.61 -0.18
 PBS      +0.410     -0.037  +0.393   -0.02      1.04 +0.10
 PBSE     +0.270     -0.180  +0.263   -0.01      1.02 +0.10
+PBTE     +0.310     -0.109  +0.347   +0.04      0.92 +0.05
 CDSE_WZ  +1.751     +0.554  +2.196   +0.45      0.73 -0.12
 CDS_WZ   +2.420     +1.189  +2.920   +0.50      0.71 -0.15
 ======== ========== ======= ======== ========== ==== ===================

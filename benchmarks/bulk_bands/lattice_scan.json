@@ -857,7 +857,11 @@
     0.6591,
     0.724
    ]
-  }
+  },
+  "a_exp": 6.462,
+  "gap_exp_lattice": 0.5045,
+  "gap_exp_lattice_from_scan": 0.5043,
+  "inverted": false
  },
  "CDSE_WZ": {
   "name": "CdSe_wz",

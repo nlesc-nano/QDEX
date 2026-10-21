@@ -89,7 +89,7 @@ HARDNESS_DICT = {
 # the PBE/GTH-SOC one in both the bulk reference and the dots (the QDEX spinors). Gaps are band-edge
 # transitions, signed (negative = inverted): E(Gamma1/Gamma6) - E(Gamma15/Gamma8) for direct zinc blende
 # (inverted in PBE for HgS, HgSe, HgTe, InAs, InSb; with SOC also GaSb), the fundamental gap for the
-# indirect zinc blendes (X), L in rock salt and R in the cubic perovskites (PBS, PBSE and CSPBI3 are
+# indirect zinc blendes (X), L in rock salt and R in the cubic perovskites (PBS, PBSE, PBTE and CSPBI3 are
 # inverted in PBE+SOC at a_exp). Earlier versions converted literature gaps to spin-free ones with
 # Delta_so/3 (zinc blende) or 2/3 Delta_so(CB) (perovskites); the III-V values were in fact the
 # spin-free QSGW of Deguchi et al., and the II-VI, Hg and perovskite values matched no QSGW source
@@ -146,6 +146,24 @@ MATERIAL_DB = {
     # IV–VI Semiconductors
     "PBS": (17.2, 200.0, 5.94, 0.41, 23.0, 0.09, 0.027, 0.253, 0.683, 7.2378, -6.638, -4.3253, -8.128, -2.3724),
     "PBSE": (22.9, 460.0, 6.12, 0.27, 30.0, 0.07, 0.017, 0.139, 0.582, 7.3935, -6.5104, -4.2415, -7.8234, -2.3177),
+    # PbTe (rock salt), 300 K unless noted:
+    #   eps_inf 33: Lowney & Senturia, J. Appl. Phys. 47, 1771 (1976) (31.8 in Cochran et al. 1966);
+    #   Bohr 1520 A: transverse exciton Bohr radius 152 nm, Murphy et al., J. Am. Chem. Soc. 128, 3241 (2006), as
+    #     quoted by Biesterfeld et al., Chem. Mater. (2024), arXiv:2406.09223 (the PbS/PbSe entries are radii too);
+    #   a 6.462 A: Dalven (1969) and Kastbjerg et al., Adv. Funct. Mater. 23, 5477 (2013), as quoted by Skelton et
+    #     al., Phys. Rev. B 89, 205203 (2014); gap 0.31 eV: Landolt-Boernstein III/41 (Madelung, Roessler, Schulz
+    #     2005), as quoted by Skelton et al. 2014, Table 3 (0.41 eV for PbS there, as above);
+    #   eps_static 400: Butenko et al., arXiv:0808.1475 (2008), junction capacitance (412 in Cochran et al. 1966);
+    #   m_eff 0.034: electron conductivity mass 3 / (2/m_t + 1/m_l), m_l 0.24, m_t 0.024 (experiment, Svane10 Table
+    #     III; hole 0.032; the same mass gives 0.087 for PbS);
+    #   E_LO 0.0141 eV: LO(Gamma) 114.1 cm^-1 (3.42 THz), neutron scattering of Cochran, Cowley, Dolling and
+    #     Elcombe, Proc. R. Soc. A 293, 433 (1966);
+    #   indices 7-8: MATERIAL_DB_BULK_PBE["PBTE"] (index 8 = 0.505 + Delta_Sigma 0.456);
+    #   monomer: Pb14Te13Cl2, the campaign's PBE-relaxed geometry (records/PbTe-Te-Pb14Te13Cl2-clean), R_mono its
+    #     hull radius (get_cluster_size_metrics); PBE single point and evGW@PBE0 (25 + 25 MOs, Pade, DZVP-MOLOPT-
+    #     GGA + RI_MOLOPT, PERIODIC NONE), the inputs of the CdSe anchor. The PbS/PbSe monomers were other
+    #     (unrecorded) clusters: their R_mono and levels are not comparable with these.
+    "PBTE": (33.0, 1520.0, 6.462, 0.31, 400.0, 0.034, 0.0141, 0.505, 0.960, 5.4546, -4.6393, -3.0756, -5.4799, -1.0579),
 
     "DEFAULT": (1.0, 1.0, 5.0, 0.0, 1.0, 1.0, 0.02, 0.00, 0.00)
 
@@ -170,8 +188,10 @@ MATERIAL_DB = {
 # of the self-energy shift. Wurtzite: a_exp/c_exp (hexagonal) of the room-temperature structure, isotropic PBE scan.
 # Signed band-edge transitions (negative = inverted; see the header
 # of MATERIAL_DB). Lattice constants in A (conventional cell; wurtzite: hexagonal a, isotropic scan
-# with c/a and u of the CIF). B0: bulk modulus of the energy-volume fit (GPa). PBTE and CDSE_WZ: overlay
-# bands only.
+# with c/a and u of the CIF). B0: bulk modulus of the energy-volume fit (GPa). PBTE: rock salt at
+# a_exp = 6.462 A (300 K; Dalven 1969 and Kastbjerg et al., Adv. Funct. Mater. 23, 5477 (2013), as quoted by
+# Skelton et al., Phys. Rev. B 89, 205203 (2014)), PBE+SOC inverted at L (the highest occupied
+# spinor doublet lies on the spin-free Pb 6p conduction manifold, benchmarks/bulk_bands/edge_manifold_weights.py).
 MATERIAL_DB_BULK_PBE = {
     "CSPBCL3": dict(a_exp=5.600, gap_exp_lattice=1.771, gap_soc_exp_lattice=0.870, a_pbe=5.759, gap_pbe_lattice=2.113, gap_soc_pbe_lattice=1.211, qsgw_soc_exp_lattice=2.657, delta_sigma=1.787, B0=21.6,
                     gap_exp_structure=2.389, gap_soc_exp_structure=1.549, gap_pbe_structure=2.607),   # Pnma, PBE tilts: upper bound
@@ -199,7 +219,7 @@ MATERIAL_DB_BULK_PBE = {
     "INSB": dict(a_exp=6.480, gap_exp_lattice=-0.153, gap_soc_exp_lattice=-0.394, a_pbe=6.661, gap_pbe_lattice=-0.622, gap_soc_pbe_lattice=-0.855, qsgw_soc_exp_lattice=0.537, delta_sigma=0.931, B0=36.6),
     "PBS": dict(a_exp=5.940, gap_exp_lattice=0.253, gap_soc_exp_lattice=-0.037, a_pbe=6.040, gap_pbe_lattice=0.421, gap_soc_pbe_lattice=0.134, qsgw_soc_exp_lattice=0.393, delta_sigma=0.430, B0=52.7),
     "PBSE": dict(a_exp=6.120, gap_exp_lattice=0.139, gap_soc_exp_lattice=-0.180, a_pbe=6.241, gap_pbe_lattice=0.325, gap_soc_pbe_lattice=0.006, qsgw_soc_exp_lattice=0.263, delta_sigma=0.443, B0=46.6),
-    "PBTE": dict(a_exp=None, gap_exp_lattice=None, a_pbe=6.584, gap_pbe_lattice=0.616, B0=39.8),
+    "PBTE": dict(a_exp=6.462, gap_exp_lattice=0.505, gap_soc_exp_lattice=-0.109, a_pbe=6.584, gap_pbe_lattice=0.616, gap_soc_pbe_lattice=0.012, qsgw_soc_exp_lattice=0.347, delta_sigma=0.456, B0=39.8),
     "CDSE_WZ": dict(a_exp=4.299, c_exp=7.013, gap_exp_lattice=0.675, gap_soc_exp_lattice=0.554, a_pbe=4.399,
                     c_pbe=7.177, gap_pbe_lattice=0.522, gap_soc_pbe_lattice=0.401, qsgw_soc_exp_lattice=2.196,
                     delta_sigma=1.642, B0=45.1),   # Delta_Sigma of zinc blende (no QSGW+SOC for wurtzite CdSe)
@@ -289,8 +309,9 @@ def bulk_gw_gap_sf(m_name):
 #   Svane11:   A. Svane et al., Phys. Rev. B 84, 205205 (2011), Table I (QSGW E0).
 #   Huang16:   L.-y. Huang and W. R. L. Lambrecht, Phys. Rev. B 93, 195211 (2016), Tables I-II.
 #   Svane10:   A. Svane et al., Phys. Rev. B 81, 245120 (2010), Table I (QSGW) at the low-temperature
-#              lattices of its Ref. 43, Table V (QSGW deformation potentials). Deguchi16 gives 0.49 eV for
-#              PbS at 5.936 A, about 0.1 eV above Svane10 carried to the same lattice.
+#              lattices of its Ref. 43 (5.909, 6.098, 6.428 A), Table V (QSGW deformation potentials).
+#              Deguchi16 gives 0.49 eV for PbS at 5.936 A, about 0.1 eV above Svane10 carried to the same
+#              lattice.
 QSGW_SOC_LITERATURE = {
     "ALP": (2.72, 5.467, "Gamma-X (indirect)", "Deguchi16", None),
     "ALAS": (2.36, 5.661, "Gamma-X (indirect)", "Deguchi16", None),
@@ -313,6 +334,7 @@ QSGW_SOC_LITERATURE = {
     "HGTE": (0.09, 6.47, "E0 = Gamma6-Gamma8", "Svane11", None),
     "PBS": (0.31, 5.909, "L6+-L6-", "Svane10", 5.3),
     "PBSE": (0.21, 6.098, "L6+-L6-", "Svane10", 4.9),
+    "PBTE": (0.29, 6.428, "L6+-L6-", "Svane10", 3.6),
     "CSPBCL3": (2.678, 5.605, "R", "Huang16", 7.7),
     "CSPBBR3": (1.868, 5.874, "R", "Huang16", 7.5),
     "CSPBI3": (1.331, 6.289, "R", "Huang16", 6.4),
@@ -328,7 +350,7 @@ MATERIAL_ELEMENTS = {
     "ALP":     ["Al", "P"], "ALAS":    ["Al", "As"], "ALSB":    ["Al", "Sb"],
     "GAP":     ["Ga", "P"], "GAAS":    ["Ga", "As"], "GASB":    ["Ga", "Sb"],
     "INP":     ["In", "P"], "INAS":    ["In", "As"], "INSB":    ["In", "Sb"],
-    "PBS":     ["Pb", "S"], "PBSE":    ["Pb", "Se"]
+    "PBS":     ["Pb", "S"], "PBSE":    ["Pb", "Se"], "PBTE":    ["Pb", "Te"]
 }
 
 # Optical Refractive Indices (at optical / band-edge frequencies)
@@ -360,6 +382,7 @@ REFRACTIVE_INDEX_DICT = {
     "INSB": 3.96,       # sqrt(15.7)
     "PBS": 4.15,        # sqrt(17.2)
     "PBSE": 4.79,       # sqrt(22.9)
+    "PBTE": 5.74,       # sqrt(33.0)
     "DEFAULT": 2.0
 }
 
@@ -761,7 +784,7 @@ PLASMON_DATA = {
     "ALP": (8, 0.25), "ALAS": (8, 0.25), "ALSB": (8, 0.25),
     "GAP": (8, 0.25), "GAAS": (8, 0.25), "GASB": (8, 0.25),
     "INP": (8, 0.25), "INAS": (8, 0.25), "INSB": (8, 0.25),
-    "PBS": (10, 0.25), "PBSE": (10, 0.25),
+    "PBS": (10, 0.25), "PBSE": (10, 0.25), "PBTE": (10, 0.25),
     "CSPBCL3": (26, 1.0), "CSPBBR3": (26, 1.0), "CSPBI3": (26, 1.0),
 }
 

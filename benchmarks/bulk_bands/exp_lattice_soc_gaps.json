@@ -159,6 +159,14 @@
   "inverted_soc": true,
   "a": null
  },
+ "PbTe_rs": {
+  "gap_sf": 0.5045,
+  "gap_soc": -0.1088,
+  "delta_soc": 0.6133,
+  "delta_so": null,
+  "inverted_soc": true,
+  "a": null
+ },
  "ZnS_zb": {
   "gap_sf": 2.0512,
   "gap_soc": 2.0302,

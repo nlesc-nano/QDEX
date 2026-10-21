@@ -22,9 +22,10 @@ NAMES = {"CSPBCL3": "CsPbCl3_cubic", "CSPBBR3": "CsPbBr3_cubic", "CSPBI3": "CsPb
          "ZNS": "ZnS_zb", "ZNSE": "ZnSe_zb", "ZNTE": "ZnTe_zb", "CDS": "CdS_zb", "CDSE": "CdSe_zb",
          "CDTE": "CdTe_zb", "HGS": "HgS_zb", "HGSE": "HgSe_zb", "HGTE": "HgTe_zb", "ALP": "AlP_zb",
          "ALAS": "AlAs_zb", "ALSB": "AlSb_zb", "GAP": "GaP_zb", "GAAS": "GaAs_zb", "GASB": "GaSb_zb",
-         "INP": "InP_zb", "INAS": "InAs_zb", "INSB": "InSb_zb", "PBS": "PbS_rs", "PBSE": "PbSe_rs"}
+         "INP": "InP_zb", "INAS": "InAs_zb", "INSB": "InSb_zb", "PBS": "PbS_rs", "PBSE": "PbSe_rs",
+         "PBTE": "PbTe_rs"}
 # in data/bulk_bands but not in MATERIAL_DB: energy-volume scan only (isotropic; wurtzite keeps c/a and u)
-EXTRA = {"PBTE": "PbTe_rs", "CDSE_WZ": "CdSe_wz"}
+EXTRA = {"CDSE_WZ": "CdSe_wz"}
 BAND_ORDER = {"HgS_zb", "HgSe_zb", "HgTe_zb", "InAs_zb", "InSb_zb", "GaAs_zb", "GaSb_zb"}
 SCAN = (0.970, 0.985, 1.000, 1.015, 1.030)
 
