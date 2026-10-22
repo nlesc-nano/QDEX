@@ -159,11 +159,13 @@ MATERIAL_DB = {
     #   E_LO 0.0141 eV: LO(Gamma) 114.1 cm^-1 (3.42 THz), neutron scattering of Cochran, Cowley, Dolling and
     #     Elcombe, Proc. R. Soc. A 293, 433 (1966);
     #   indices 7-8: MATERIAL_DB_BULK_PBE["PBTE"] (index 8 = 0.505 + Delta_Sigma 0.456);
-    #   monomer: Pb14Te13Cl2, the campaign's PBE-relaxed geometry (records/PbTe-Te-Pb14Te13Cl2-clean), R_mono its
-    #     hull radius (get_cluster_size_metrics); PBE single point and evGW@PBE0 (25 + 25 MOs, Pade, DZVP-MOLOPT-
-    #     GGA + RI_MOLOPT, PERIODIC NONE), the inputs of the CdSe anchor. The PbS/PbSe monomers were other
-    #     (unrecorded) clusters: their R_mono and levels are not comparable with these.
-    "PBTE": (33.0, 1520.0, 6.462, 0.31, 400.0, 0.034, 0.0141, 0.505, 0.960, 5.4546, -4.6393, -3.0756, -5.4799, -1.0579),
+    #   monomer: Pb38Te21Cl34, the campaign's PBE-relaxed geometry (records/PbTe-Te-Pb38Te21Cl34-clean), chosen for
+    #     an R_mono (hull radius, get_cluster_size_metrics) close to those of PbS/PbSe, whose monomer geometries are
+    #     not recorded; PBE single point and evGW@PBE0 (25 + 25 MOs, Pade, DZVP-MOLOPT-GGA + RI_MOLOPT, PERIODIC
+    #     NONE), the inputs of the CdSe anchor; GW HOMO/LUMO = highest occupied / lowest empty QP level (MO 262
+    #     after the evGW reordering). Pb14Te13Cl2 with the same recipe: R 5.4546, PBE -4.6393 / -3.0756, evGW
+    #     -5.4799 / -1.0579 eV.
+    "PBTE": (33.0, 1520.0, 6.462, 0.31, 400.0, 0.034, 0.0141, 0.505, 0.960, 7.7897, -5.5319, -3.8038, -6.1663, -2.0731),
 
     "DEFAULT": (1.0, 1.0, 5.0, 0.0, 1.0, 1.0, 0.02, 0.00, 0.00)
 
