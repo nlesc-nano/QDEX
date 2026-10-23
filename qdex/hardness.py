@@ -1183,7 +1183,7 @@ _KERNEL_DESCRIPTION = {
 def format_integrals_block(representation, charges, kernel, symbols, stda_info=None, stda_ax_source=None,
                            include_direct=True, include_exchange=True, hubbard_beta=0.0,
                            eta_dict=HARDNESS_DICT, one_centre=False, one_centre_cutoff=0.0,
-                           one_centre_tail="dipole"):
+                           one_centre_tail="dipole", one_centre_direct=False):
     """Printable description of the two-electron integrals actually used in the run."""
     rep = str(representation).lower()
     kern = str(kernel).lower() if kernel is not None else "none"
@@ -1220,6 +1220,8 @@ def format_integrals_block(representation, charges, kernel, symbols, stda_info=N
             lines.append("  Beyond         : xs (mu mu|nu nu)" + (" + charge-dipole and dipole-dipole of the one-centre "
                          "densities" if str(one_centre_tail).lower() == "dipole" else "")
                          + f"  (integrals.one_centre_tail: {one_centre_tail})")
+            lines.append("  One-centre in  : exchange (bare)" + (" and direct term (screened with W/v per atom pair)"
+                         if one_centre_direct else " only (integrals.one_centre_direct: false)"))
     else:
         s = MNOK_ONSITE_SCALE
         lines += [

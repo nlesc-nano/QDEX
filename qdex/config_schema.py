@@ -83,6 +83,7 @@ SECTIONS = {
         "one_centre": "one_centre",
         "one_centre_cutoff": "one_centre_cutoff",
         "one_centre_tail": "one_centre_tail",
+        "one_centre_direct": "one_centre_direct",
         "beta": "beta",
     },
     "excitations": {

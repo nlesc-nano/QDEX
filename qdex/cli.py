@@ -1047,6 +1047,11 @@ def _build_parser():
     parser.add_argument("--one-centre-cutoff", "--one_centre_cutoff", dest="one_centre_cutoff", type=float, default=0.0,
                         help="Atom pairs within this distance (Angstrom) also get exact one-centre blocks; 0 = on-site "
                              "only. Beyond it the xs integrals (mu mu|nu nu) are kept.")
+    parser.add_argument("--one-centre-direct", "--one_centre_direct", dest="one_centre_direct",
+                        type=lambda v: str(v).lower() in ("1", "true", "yes", "on"), default=False,
+                        help="Also add the one-centre correction to the screened direct term (screened with the kernel's "
+                             "W/v per atom pair). Default false: the correction enters the bare exchange only and the "
+                             "direct term stays the xs/model W.")
     parser.add_argument("--one-centre-tail", "--one_centre_tail", dest="one_centre_tail", choices=["dipole", "none"],
                         default="dipole",
                         help="Atom pairs outside the exact blocks: 'dipole' adds the charge-dipole and dipole-dipole "
@@ -2126,7 +2131,8 @@ def _qp_levels_and_kernel(args, *,
             hubbard_beta=float(getattr(args, "beta", 0.0) or 0.0),
             one_centre=bool(getattr(args, "one_centre", False)),
             one_centre_cutoff=float(getattr(args, "one_centre_cutoff", 0.0) or 0.0),
-            one_centre_tail=str(getattr(args, "one_centre_tail", "dipole"))))
+            one_centre_tail=str(getattr(args, "one_centre_tail", "dipole")),
+            one_centre_direct=bool(getattr(args, "one_centre_direct", False))))
 
     logger.info(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
     logger.info(f"  [QP]  Target Gap   : {target_qp_gap:.4f} eV")
@@ -3025,7 +3031,7 @@ def _solve_excitons(args, *,
         eps_dft=eps_dft_solver,
         hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
         one_centre=args.one_centre, one_centre_cutoff=args.one_centre_cutoff,
-            one_centre_tail=args.one_centre_tail,
+            one_centre_tail=args.one_centre_tail, one_centre_direct=args.one_centre_direct,
     )
 
     if args.estimate_qp:
@@ -3077,7 +3083,7 @@ def _solve_excitons(args, *,
             hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
             hole_trap_mask_soc=hole_trap_mask_soc, elec_trap_mask_soc=elec_trap_mask_soc,
             one_centre=args.one_centre, one_centre_cutoff=args.one_centre_cutoff,
-            one_centre_tail=args.one_centre_tail,
+            one_centre_tail=args.one_centre_tail, one_centre_direct=args.one_centre_direct,
         )
  
         run_solver_and_analysis(solver_soc, np.array(coords_ang), syms, shells, mu_ia_x, mu_ia_y, mu_ia_z, 

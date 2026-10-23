@@ -212,7 +212,7 @@ class ExcitonSolver:
                   selection_pt=1e-4, selection_shift=True,
                   hole_trap_mask=None, elec_trap_mask=None,
                   hole_trap_mask_soc=None, elec_trap_mask_soc=None,
-                  one_centre=False, one_centre_cutoff=0.0, one_centre_tail="dipole"):
+                  one_centre=False, one_centre_cutoff=0.0, one_centre_tail="dipole", one_centre_direct=False):
 
         self.C = C
         self.eps = eps
@@ -427,7 +427,8 @@ class ExcitonSolver:
             # the direct term screens the correction with the kernel's own atom-pair ratio W/v (exchange: bare);
             # each solver gets its own view of the shared blocks with its own screening
             W_direct = w_resta if np.shape(w_resta) == (n_ao_tot, n_ao_tot) else None
-            onecentre = onecentre.with_screening(None if W_direct is None else to_numpy(W_direct))
+            onecentre = onecentre.with_screening(None if W_direct is None else to_numpy(W_direct),
+                                                 include_direct=bool(one_centre_direct))
 
         self.ham = ExcitonHamiltonian(
             C=C, eps=eps, overlap=overlap, atom_ao_ranges=atom_ao_ranges,

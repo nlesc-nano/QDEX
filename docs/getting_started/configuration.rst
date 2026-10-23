@@ -230,6 +230,9 @@ integrals
    * - ``one_centre_cutoff`` [``--one-centre-cutoff``]
      - 0
      - Å; atom pairs closer than this also get exact one-centre blocks (0: on-site only)
+   * - ``one_centre_direct`` [``--one-centre-direct``]
+     - false
+     - also add the correction to the screened direct term (screened with W/v per atom pair); default: exchange only
    * - ``one_centre_tail`` [``--one-centre-tail``]
      - ``dipole``
      - outside the exact blocks: ``dipole`` adds the charge–dipole and dipole–dipole interactions of the

@@ -18,6 +18,7 @@ represented on the atomic basis.
      # one_centre: true        # xs only: same-atom AO products with exact one-centre integrals
      # one_centre_cutoff: 0    # also exact for atom pairs closer than this (A); 0: on-site only
      # one_centre_tail: dipole # charge-dipole and dipole-dipole of the one-centre densities beyond
+     # one_centre_direct: false # exchange only (default); true: also the screened direct term
 
 .. toctree::
    :maxdepth: 1

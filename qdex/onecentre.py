@@ -17,7 +17,8 @@ The model is therefore the xs kernel plus a block-sparse correction,
     Delta_AB = (lambda_mu lambda_nu | lambda_ka lambda_la) - delta_{mu nu} delta_{ka la} (chi_mu chi_mu | chi_ka chi_ka).
 
 Delta is the bare Coulomb interaction. It is added unchanged to the exchange K^x, where it completes the
-bare xs kernel. In the direct term K^d the xs part carries the screened W of the kernel, and every atom-pair
+bare xs kernel; by default (integrals.one_centre_direct: false) that is all, and the direct term stays the
+screened xs/model W. With one_centre_direct: true, in the direct term K^d the xs part carries the screened W of the kernel, and every atom-pair
 block of the correction is screened with the same ratio xs uses, S_AB = sum_AB W / sum_AB (mu mu|nu nu)
 (set_screening): W_1c = W_xs + S_AB Delta_AB. For the Resta-type kernels S_AA = 1, so the on-site blocks stay
 bare and the dipole tail between atoms is screened like the xs charges. Only the near blocks are stored,
@@ -132,6 +133,7 @@ class OneCentreKernel:
         if self.tail not in ("dipole", "none"):
             raise ValueError(f"one_centre_tail must be 'dipole' or 'none', not '{tail}'")
         self._tail_cache = {}
+        self.include_direct = True
         if self.tail == "dipole":
             self._build_dipole_tail(shells, start, element, Xel, coords, pairs, nthreads)
         logger.info(f"  [One-centre] {self.n_atoms} on-site blocks + {n_near} atom pairs within "
@@ -203,12 +205,14 @@ class OneCentreKernel:
         logger.info(f"  [One-centre] direct-term screening S_AB = W/v: on-site {np.mean(np.diag(S)):.3f}, "
                     f"between atoms {np.min(S[off]) if off.any() else 1.0:.3f} - {np.max(S[off]) if off.any() else 1.0:.3f}")
 
-    def with_screening(self, W_ev):
-        """A view of this kernel (shared blocks and tail coupling) with its own direct-term screening."""
+    def with_screening(self, W_ev, include_direct=True):
+        """A view of this kernel (shared blocks and tail coupling) with its own direct-term screening;
+        include_direct=False keeps the correction out of the direct term (exchange only)."""
         import copy
         view = copy.copy(self)
         view.groups = [dict(g) for g in self.groups]
         view._tail_cache = {}
+        view.include_direct = bool(include_direct)
         view.set_screening(W_ev)
         return view
 
@@ -293,6 +297,8 @@ class OneCentreKernel:
         dtype = np.result_type(X, *[a for (T, V) in comps for a in (T, V)])
         n_o, n_v = X.shape
         kd = np.zeros(X.shape, dtype=dtype)
+        if not self.include_direct:
+            return kd
         Tk = [{nA: T[idx] for nA, idx in self.kinds.items()} for (T, _) in comps]            # (n, nA, n_o)
         Vk = [{nA: V[idx] for nA, idx in self.kinds.items()} for (_, V) in comps]            # (n, nA, n_v)
         Yk = []
@@ -333,43 +339,66 @@ class OneCentreKernel:
         return kd
 
     # ------------------------------------------------------------------ diagonal elements
-    def exchange_diag(self, comps, vi, va, chunk=256, batch=128):
-        """(ia|Delta|ia) for the transitions (vi, va) of one channel."""
-        vi, va = np.asarray(vi), np.asarray(va)
-        out = np.zeros(len(vi), dtype=float)
-        for t0 in range(0, len(vi), chunk):
-            i, a = vi[t0:t0 + chunk], va[t0:t0 + chunk]
-            Q = {}
-            for nA, idx in self.kinds.items():
-                q = 0.0
-                for (T, V) in comps:
-                    Ti, Va = T[:, i][idx], V[:, a][idx]                           # (n, nA, t): only the chunk
-                    # q[n, t, mu, nu] = conj(T_mu i) V_nu a
-                    q = q + np.conj(Ti).transpose(0, 2, 1)[:, :, :, None] * Va.transpose(0, 2, 1)[:, :, None, :]
-                Q[nA] = q.reshape(len(idx), len(i), nA * nA)
+    def exchange_diag(self, comps, vi, va):
+        """(ia|Delta|ia) for the transitions (vi, va) of one channel.
+
+        Rearranged per atom pair so that no per-transition work is needed:
+            K_ia,ia = sum_st sum_AB [T_s mu i conj(T_t ka i)] Delta[(mu nu),(ka la)] [conj(V_s nu a) V_t la a]
+        with the direct layout dd [(mu ka), (nu la)]; the dipole tail goes through the moments
+        m_Ak^{ia} = sum_s conj(T_s,A i) m_k V_s,A a, in chunks of occupied orbitals."""
+        full = self.exchange_diag_matrix(comps)
+        return full[np.asarray(vi), np.asarray(va)]
+
+    def exchange_diag_matrix(self, comps):
+        n_o, n_v = comps[0][0].shape[1], comps[0][1].shape[1]
+        nc = len(comps)
+        full = np.zeros((n_o, n_v))
+        Vk = [{nA: V[idx] for nA, idx in self.kinds.items()} for (_, V) in comps]          # (n, nA, n_v)
+        ochunk = 64
+        for o0 in range(0, n_o, ochunk):
+            oc = slice(o0, min(n_o, o0 + ochunk))
+            k_o = oc.stop - oc.start
+            Tk = [{nA: T[:, oc][idx] for nA, idx in self.kinds.items()} for (T, _) in comps]  # (n, nA, k_o)
             for g in self.groups:
                 nA, nB = g["nA"], g["nB"]
                 w = 1.0 if g["onsite"] else 2.0
+                batch = max(1, int(3e7 // (nA * nB * max(n_v, k_o))))
                 for b0 in range(0, len(g["A"]), batch):
                     sl = slice(b0, b0 + batch)
-                    QA, QB = Q[nA][g["posA"][sl]], Q[nB][g["posB"][sl]]
-                    DQ = _rmatmul(g["dx"][sl], QB.transpose(0, 2, 1)).transpose(0, 2, 1)   # (p, t, nA^2)
-                    val = np.sum(np.conj(QA) * DQ, axis=(0, 2)).real
-                    out[t0:t0 + chunk] += w * val
-            if self.tail == "dipole":
-                m = np.zeros((self.n_atoms, 4, len(i)), dtype=np.result_type(*[a for c in comps for a in c]))
+                    ddT = g["dd"][sl].transpose(0, 2, 1)                                     # [(nu la), (mu ka)]
+                    p = ddT.shape[0]
+                    for a in range(nc):
+                        for b in range(nc):
+                            TA, TB = Tk[a][nA][g["posA"][sl]], Tk[b][nB][g["posB"][sl]]
+                            h = (TA[:, :, None, :] * np.conj(TB)[:, None, :, :]).reshape(p, nA * nB, k_o)
+                            VA, VB = Vk[a][nA][g["posA"][sl]], Vk[b][nB][g["posB"][sl]]
+                            e = (np.conj(VA)[:, :, None, :] * VB[:, None, :, :]).reshape(p, nA * nB, n_v)
+                            L = _rmatmul(ddT, h)                                             # (p, (nu la), k_o)
+                            full[oc] += w * (L.transpose(2, 0, 1).reshape(k_o, -1)
+                                             @ e.reshape(-1, n_v)).real
+        if self.tail == "dipole":
+            N = self.n_atoms
+            G = {nA: [np.einsum("nkmv,nva->nkma", self.kmom[nA], V[idx], optimize=True) for (_, V) in comps]
+                 for nA, idx in self.kinds.items()}                                          # m_k V (n, 4, nA, n_v)
+            ochunk = max(1, int(4e7 // (4 * N * n_v)))
+            for o0 in range(0, n_o, ochunk):
+                oc = slice(o0, min(n_o, o0 + ochunk))
+                k_o = oc.stop - oc.start
+                m = np.zeros((N, 4, k_o, n_v), dtype=np.result_type(*[a for c in comps for a in c]))
                 for nA, idx in self.kinds.items():
                     atoms = np.where(self.size == nA)[0]
-                    m[atoms] += np.einsum("ntab,nkab->nkt", Q[nA].reshape(len(idx), len(i), nA, nA),
-                                          self.kmom[nA], optimize=True)
-                m = m.reshape(4 * self.n_atoms, len(i))
-                out[t0:t0 + chunk] += np.sum(np.conj(m) * (self.M @ m), axis=0).real
-        return out
+                    for s_, (T, _) in enumerate(comps):
+                        m[atoms] += np.einsum("nmi,nkma->nkia", np.conj(T[:, oc][idx]), G[nA][s_], optimize=True)
+                m = m.reshape(4 * N, k_o * n_v)
+                full[oc] += np.sum(np.conj(m) * (self.M @ m), axis=0).real.reshape(k_o, n_v)
+        return full
 
     def direct_diag(self, comps, ochunk=256, vchunk=256, batch=128):
         """(ii|Delta|aa) as an (n_o x n_v) matrix for one channel, in chunks of occupied and virtual orbitals."""
         n_o, n_v = comps[0][0].shape[1], comps[0][1].shape[1]
         out = np.zeros((n_o, n_v), dtype=float)
+        if not self.include_direct:
+            return out
 
         def moments(cols, which, nA, idx):
             m = 0.0

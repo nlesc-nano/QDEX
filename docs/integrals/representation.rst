@@ -227,18 +227,21 @@ block-sparse correction
 
    \Delta_{AB} = (\lambda_\mu\lambda_\nu|\lambda_\kappa\lambda_\lambda) - \delta_{\mu\nu}\delta_{\kappa\lambda}(\chi_\mu\chi_\mu|\chi_\kappa\chi_\kappa).
 
-Δ (with the dipole tail) is the bare interaction. In the exchange K\ :sup:`x` it completes the bare xs
-kernel. In the direct term K\ :sup:`d`, where xs carries the screened W of the kernel, every atom pair of the
-correction is screened with the ratio that xs applies to the same atoms,
+Δ (with the dipole tail) is the bare interaction. By default it enters only the exchange K\ :sup:`x`, where it
+completes the bare xs kernel; the direct term K\ :sup:`d` stays the screened xs (or model) W, so triplets and
+the calibrated electron–hole attraction are unchanged. With ``one_centre_direct: true`` it also enters the
+direct term, every atom pair of the correction screened with the ratio that xs applies to the same atoms,
 
 .. math::
 
    W_{1c} = W_{\rm xs} + S_{AB}\,\Delta_{AB},\qquad
    S_{AB} = \frac{\sum_{\mu\in A,\nu\in B} W_{\mu\nu}}{\sum_{\mu\in A,\nu\in B}(\mu\mu|\nu\nu)} .
 
-For the Resta-type kernels S\ :sub:`AA` = 1: the on-site blocks stay bare and the dipole tail between atoms is
-screened like the xs charges. Without this, the bare tail overbinds the triplet of Cd\ :sub:`16` by 0.4 eV
-with the strongly screened Resta W. The BSE products never form pair densities:
+In the exact test (below) the direct version is the most accurate, because there the on-site blocks and the
+tail are screened consistently by the same RPA. With the model kernels of QDEX they are not: the Resta W leaves
+the on-site blocks bare (S\ :sub:`AA` = 1) but screens the neighbours to 0.2, and in QDEX runs the triplet of
+Cd\ :sub:`16` drops by 0.4 eV against ~0.01 eV expected. The exchange-only default avoids that. The BSE
+products never form pair densities:
 
 .. math::
 
@@ -275,17 +278,22 @@ representation, virtual levels scissored to the QP gap; errors in meV):
    * - xs + one-centre, R_c = 8 Å
      - −79 / −50 / −29
      - +24 / −45 / +69
-   * - **xs + one-centre, on-site + dipole tail (default)**
-     - **−41 / −2 / −40**
-     - **+65 / −5 / +70**
+   * - **xs + one-centre (on-site + dipole tail) in the exchange only (default)**
+     - **−85 / +9 / −94**
+     - **+26 / −17 / +43**
+   * - xs + one-centre, on-site + dipole tail, exchange and direct
+     - −41 / −2 / −40
+     - +65 / −5 / +70
    * - all one-centre blocks (NDDO)
      - −51 / −21 / −30
      - +68 / +2 / +66
 
-The on-site blocks restore the exchange (ΔST within 10–40 meV instead of 165–250 meV too small). The
-absolute S₁ and T₁ also depend on how the on-site densities interact with their neighbours up to ~8 Å; the
-dipole tail recovers that (W within 1.8 % of the reference in both clusters, as with all one-centre blocks),
-so exact blocks beyond the atom itself are not needed.
+The on-site blocks restore the exchange (ΔST within 10–40 meV instead of 165–250 meV too small when the
+direct term is treated consistently). The absolute S₁ and T₁ also depend on how the on-site densities interact
+with their neighbours up to ~8 Å; the dipole tail recovers that (W within 1.8 % of the reference in both
+clusters, as with all one-centre blocks), so exact blocks beyond the atom itself are not needed. In the
+exchange-only default the triplet is that of xs, and the singlet–triplet splitting and S₁ move 40–80 % of the
+way from xs to the exact values.
 
 **Cost.** One block of (n\ :sub:`A`\ ²)² numbers per atom (Cd 625², 3 MB, stored in two layouts; Se, Cl, Br
 169²) and one per atom pair within R\ :sub:`c`, batched by element pair; each BSE product costs
