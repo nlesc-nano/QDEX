@@ -185,6 +185,115 @@ QP populations and BSE densities both use Löwdin coefficients in this represent
 **Cost.** Several :math:`n_{\mathrm{ao}}^2` matrices (about 1.4 GB each at 13k basis functions) and the
 :math:`(\mu\mu|\nu\nu)` integrals.
 
+One-centre extension of xs (``one_centre``)
+--------------------------------------------
+
+**Densities.** xs drops every product of two different AOs, also when both sit on the same atom. Those
+on-site products (Se 4p·4s, Cd 4d·5p, Pb 6s·6p, …) carry the atomic transition dipoles that dominate the
+exchange of the band-edge transitions. ``one_centre: true`` keeps them (NDDO-type densities):
+
+.. math::
+
+   \rho_{pq}(\mathbf r) \to \sum_A\sum_{\mu,\nu\in A} c_{\mu p}c_{\nu q}\,\lambda_\mu(\mathbf r)\lambda_\nu(\mathbf r),
+   \qquad \lambda = \chi\,S_{AA}^{-1/2}\ \text{(AOs of each atom orthonormalized among themselves)},
+
+with the Löwdin coefficients :math:`c = S^{1/2}C` of xs. The orthonormalization within each atom keeps the
+charges :math:`\sum_\mu c_{\mu p}c_{\mu q}`; products of AOs on different atoms are still dropped.
+
+**Interaction.** The interaction of two one-centre products is exact, :math:`(\lambda_\mu\lambda_\nu|\lambda_\kappa\lambda_\lambda)`
+(Libint2, ``compute_onecentre_coulomb``), for the on-site blocks and for atom pairs closer than
+``one_centre_cutoff``. Farther apart the xs integrals :math:`(\mu\mu|\nu\nu)` are kept and, with
+``one_centre_tail: dipole`` (default), the one-centre densities also interact through their atomic dipoles:
+
+.. math::
+
+   E_{AB} = -q_A\,\mathbf t_{AB}\cdot\mathbf p_B + q_B\,\mathbf t_{AB}\cdot\mathbf p_A
+            + \mathbf p_A\cdot\frac{1-3\hat n\hat n}{R_{AB}^3}\cdot\mathbf p_B,\qquad
+   \mathbf t_{AB} = \frac{\mathbf R_B-\mathbf R_A}{R_{AB}^3},
+
+   q_A^{pq} = \sum_{\mu\in A} c_{\mu p}c_{\mu q},\qquad
+   \mathbf p_A^{pq} = \sum_{\mu,\nu\in A} c_{\mu p}c_{\nu q}\,\langle\lambda_\mu|\mathbf r-\mathbf R_A|\lambda_\nu\rangle .
+
+The charge–charge part is the xs kernel. The dipoles come from the s·p and p·d products on each atom; they
+are what the on-site blocks alone leave out at 3–8 Å. The point-multipole form is applied from the nearest neighbours on
+(2.5–3 Å, where the densities overlap); against exact integrals it reproduces the full one-centre result
+there (table below). ``one_centre_cutoff`` replaces it by exact blocks for the closest pairs if needed. QDEX writes the model as the xs kernel plus a
+block-sparse correction
+
+.. math::
+
+   (pq|X|rs) = (pq|X|rs)_{\rm xs} + \sum_{AB,\ R_{AB}\le R_c} D^{pq}_A\cdot\Delta_{AB}\cdot D^{rs}_B,\qquad
+   D^{pq}_A[\mu\nu] = \bar c_{\mu p}c_{\nu q},
+
+   \Delta_{AB} = (\lambda_\mu\lambda_\nu|\lambda_\kappa\lambda_\lambda) - \delta_{\mu\nu}\delta_{\kappa\lambda}(\chi_\mu\chi_\mu|\chi_\kappa\chi_\kappa).
+
+Δ (with the dipole tail) is the bare interaction. In the exchange K\ :sup:`x` it completes the bare xs
+kernel. In the direct term K\ :sup:`d`, where xs carries the screened W of the kernel, every atom pair of the
+correction is screened with the ratio that xs applies to the same atoms,
+
+.. math::
+
+   W_{1c} = W_{\rm xs} + S_{AB}\,\Delta_{AB},\qquad
+   S_{AB} = \frac{\sum_{\mu\in A,\nu\in B} W_{\mu\nu}}{\sum_{\mu\in A,\nu\in B}(\mu\mu|\nu\nu)} .
+
+For the Resta-type kernels S\ :sub:`AA` = 1: the on-site blocks stay bare and the dipole tail between atoms is
+screened like the xs charges. Without this, the bare tail overbinds the triplet of Cd\ :sub:`16` by 0.4 eV
+with the strongly screened Resta W. The BSE products never form pair densities:
+
+.. math::
+
+   (K^x x)_{ia} \mathrel{+}= \Big(T^{\mathsf T}U\bar V\Big)_{ia},\quad U_A=\sum_B\Delta_{AB}:\bar T_B X V_B^{\mathsf T};\qquad
+   (K^d x)_{ia} \mathrel{+}= \sum_{AB}\Big(T_A^{\mathsf T}\,\big[\Delta_{AB}:\bar T_A X V_B^{\mathsf T}\big]\,\bar V_B\Big)_{ia},
+
+with T and V the Löwdin coefficients of the active occupied and virtual orbitals (one pair per spin component
+for spinors) and X the amplitudes. The spin-free (singlet and triplet), SOC spinor and UKS solvers include it,
+in the Davidson products, the dense solver (``full_diag``) and the diagonal BSE; the GPU path adds the
+correction on the CPU. Not covered: SOC with a UKS reference (refused), the perturbative selection (its
+estimates use the xs couplings; a warning is printed) and the NAMD kernels.
+
+**Accuracy** (exact four-centre integrals over a 30 × 30 window, screened TDA with an RPA W in each
+representation, virtual levels scissored to the QP gap; errors in meV):
+
+.. list-table::
+   :header-rows: 1
+
+   * - Representation
+     - Cd\ :sub:`16`\ Se\ :sub:`13`\ Cl\ :sub:`6`: S₁ / T₁ / ΔST
+     - Cs\ :sub:`20`\ Pb\ :sub:`8`\ Br\ :sub:`36`: S₁ / T₁ / ΔST
+   * - mnok (Mulliken)
+     - −1 / +225 / −226
+     - +1089 / +1488 / −398
+   * - xs
+     - −156 / +9 / −165
+     - −269 / −17 / −252
+   * - xs + one-centre, on-site
+     - −166 / −155 / −11
+     - −53 / −85 / +32
+   * - xs + one-centre, R_c = 3.2 Å
+     - −174 / −155 / −20
+     - −8 / −49 / +41
+   * - xs + one-centre, R_c = 8 Å
+     - −79 / −50 / −29
+     - +24 / −45 / +69
+   * - **xs + one-centre, on-site + dipole tail (default)**
+     - **−41 / −2 / −40**
+     - **+65 / −5 / +70**
+   * - all one-centre blocks (NDDO)
+     - −51 / −21 / −30
+     - +68 / +2 / +66
+
+The on-site blocks restore the exchange (ΔST within 10–40 meV instead of 165–250 meV too small). The
+absolute S₁ and T₁ also depend on how the on-site densities interact with their neighbours up to ~8 Å; the
+dipole tail recovers that (W within 1.8 % of the reference in both clusters, as with all one-centre blocks),
+so exact blocks beyond the atom itself are not needed.
+
+**Cost.** One block of (n\ :sub:`A`\ ²)² numbers per atom (Cd 625², 3 MB, stored in two layouts; Se, Cl, Br
+169²) and one per atom pair within R\ :sub:`c`, batched by element pair; each BSE product costs
+O(n\ :sub:`ao`\ n\ :sub:`occ`\ n\ :sub:`virt`) plus the blocks. The dipole tail adds a 4N\ :sub:`at` × 4N\ :sub:`at`
+coupling and, for the Davidson products, the hole and electron moment matrices (4N\ :sub:`at`\ ·(n\ :sub:`occ`\ ² +
+n\ :sub:`virt`\ ²) numbers, four times those of the MNOK direct term); the diagonal BSE needs only their
+diagonals. The xs kernel is unchanged.
+
 Which to use
 ------------
 

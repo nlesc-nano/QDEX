@@ -80,6 +80,9 @@ SECTIONS = {
         "mnok_exponent": "mnok_exponent",
         "mnok_exponent_exchange": "mnok_exponent_exchange",
         "mnok_onsite": "mnok_onsite",
+        "one_centre": "one_centre",
+        "one_centre_cutoff": "one_centre_cutoff",
+        "one_centre_tail": "one_centre_tail",
         "beta": "beta",
     },
     "excitations": {

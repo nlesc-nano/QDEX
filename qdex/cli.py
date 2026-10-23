@@ -1040,6 +1040,17 @@ def _build_parser():
     parser.add_argument("--selection-shift", dest="selection_shift", choices=["on", "off"], default="on",
                         help="Lower the primary diagonal by the second-order contributions of the rejected "
                              "transitions (std2 behaviour, default on).")
+    parser.add_argument("--one-centre", "--one_centre", dest="one_centre", action="store_true", default=False,
+                        help="xs only: keep every product of two AOs on the same atom in the transition densities "
+                             "(exact one-centre integrals, qdex.onecentre) instead of only |chi_mu|^2. Restores the "
+                             "on-site exchange that xs drops (S-T splitting, dark excitons).")
+    parser.add_argument("--one-centre-cutoff", "--one_centre_cutoff", dest="one_centre_cutoff", type=float, default=0.0,
+                        help="Atom pairs within this distance (Angstrom) also get exact one-centre blocks; 0 = on-site "
+                             "only. Beyond it the xs integrals (mu mu|nu nu) are kept.")
+    parser.add_argument("--one-centre-tail", "--one_centre_tail", dest="one_centre_tail", choices=["dipole", "none"],
+                        default="dipole",
+                        help="Atom pairs outside the exact blocks: 'dipole' adds the charge-dipole and dipole-dipole "
+                             "interactions of the one-centre densities to xs (default); 'none' keeps xs only.")
     parser.add_argument("--mnok-exponent", dest="mnok_exponent", type=float, default=2.0,
                         help="Exponent beta of the MNOK interaction (r^beta + a^beta)^(-1/beta) for all interactions "
                              "(2 = Ohno-Klopman, default; 1 = Mataga-Nishimoto).")
@@ -2112,7 +2123,10 @@ def _qp_levels_and_kernel(args, *,
             stda_ax_source=ax_src if args.kernel == "stda" else None,
             include_direct=getattr(args, "include_direct_eh", True) is not False,
             include_exchange=bool(getattr(args, "include_exchange", True)) and not getattr(args, "triplet", False),
-            hubbard_beta=float(getattr(args, "beta", 0.0) or 0.0)))
+            hubbard_beta=float(getattr(args, "beta", 0.0) or 0.0),
+            one_centre=bool(getattr(args, "one_centre", False)),
+            one_centre_cutoff=float(getattr(args, "one_centre_cutoff", 0.0) or 0.0),
+            one_centre_tail=str(getattr(args, "one_centre_tail", "dipole"))))
 
     logger.info(f"\n  [DFT] Initial Gap  : {dft_gap:.4f} eV")
     logger.info(f"  [QP]  Target Gap   : {target_qp_gap:.4f} eV")
@@ -3010,6 +3024,8 @@ def _solve_excitons(args, *,
         shells=shells,
         eps_dft=eps_dft_solver,
         hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
+        one_centre=args.one_centre, one_centre_cutoff=args.one_centre_cutoff,
+            one_centre_tail=args.one_centre_tail,
     )
 
     if args.estimate_qp:
@@ -3060,6 +3076,8 @@ def _solve_excitons(args, *,
             eps_dft=eps_dft_solver,
             hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
             hole_trap_mask_soc=hole_trap_mask_soc, elec_trap_mask_soc=elec_trap_mask_soc,
+            one_centre=args.one_centre, one_centre_cutoff=args.one_centre_cutoff,
+            one_centre_tail=args.one_centre_tail,
         )
  
         run_solver_and_analysis(solver_soc, np.array(coords_ang), syms, shells, mu_ia_x, mu_ia_y, mu_ia_z, 

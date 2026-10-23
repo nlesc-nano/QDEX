@@ -1182,7 +1182,8 @@ _KERNEL_DESCRIPTION = {
 
 def format_integrals_block(representation, charges, kernel, symbols, stda_info=None, stda_ax_source=None,
                            include_direct=True, include_exchange=True, hubbard_beta=0.0,
-                           eta_dict=HARDNESS_DICT):
+                           eta_dict=HARDNESS_DICT, one_centre=False, one_centre_cutoff=0.0,
+                           one_centre_tail="dipole"):
     """Printable description of the two-electron integrals actually used in the run."""
     rep = str(representation).lower()
     kern = str(kernel).lower() if kernel is not None else "none"
@@ -1211,6 +1212,14 @@ def format_integrals_block(representation, charges, kernel, symbols, stda_info=N
     names = {1.0: "Mataga-Nishimoto", 2.0: "Ohno-Klopman"}
     if rep.startswith("xs"):
         lines.append("  Representation : xs, exact AO density-pair integrals (mu mu|nu nu) (Libint2, ZDO)")
+        if one_centre:
+            reach = (f"atom pairs within {float(one_centre_cutoff):.2f} A" if float(one_centre_cutoff) > 0.0
+                     else "on-site")
+            lines.append("  One-centre     : every same-atom product lambda_mu lambda_nu (AOs orthonormalized per atom), "
+                         f"exact (mu nu|ka la) for {reach}, bare (integrals.one_centre)")
+            lines.append("  Beyond         : xs (mu mu|nu nu)" + (" + charge-dipole and dipole-dipole of the one-centre "
+                         "densities" if str(one_centre_tail).lower() == "dipole" else "")
+                         + f"  (integrals.one_centre_tail: {one_centre_tail})")
     else:
         s = MNOK_ONSITE_SCALE
         lines += [

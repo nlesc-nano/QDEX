@@ -223,6 +223,17 @@ integrals
      - ``ip_ea``
      - on-site value IP − EA = 2η (``ip_ea``) or η (``eta``, earlier convention);
        :doc:`/integrals/representation`
+   * - ``one_centre`` [``--one-centre``]
+     - false
+     - xs only: keep every product of two AOs on the same atom in the transition densities, with exact
+       one-centre integrals (:doc:`/integrals/representation`). Restores the on-site exchange that xs drops.
+   * - ``one_centre_cutoff`` [``--one-centre-cutoff``]
+     - 0
+     - Å; atom pairs closer than this also get exact one-centre blocks (0: on-site only)
+   * - ``one_centre_tail`` [``--one-centre-tail``]
+     - ``dipole``
+     - outside the exact blocks: ``dipole`` adds the charge–dipole and dipole–dipole interactions of the
+       one-centre densities to xs; ``none`` keeps xs only
    * - ``beta`` [``--beta``]
      - 0
      - MNOK parameter of the bare γ

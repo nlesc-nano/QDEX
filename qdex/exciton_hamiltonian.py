@@ -66,7 +66,9 @@ class ExcitonHamiltonian:
                  include_direct_eh=True, eps_dft=None, selection=None, selection_energy=7.0,
                  selection_pt=1e-4, selection_shift=True,
                  hole_trap_mask=None, elec_trap_mask=None,
-                 hole_trap_mask_soc=None, elec_trap_mask_soc=None):
+                 hole_trap_mask_soc=None, elec_trap_mask_soc=None, onecentre=None):
+        # One-centre correction to the xs kernel (qdex.onecentre.OneCentreKernel); None = plain xs or MNOK
+        self.onecentre = onecentre
         self.selection_shift = bool(selection_shift)
         self.selection = (str(selection).lower() if selection not in (None, False) else "none")
         self.selection_energy = float(selection_energy if selection_energy is not None else 7.0)
@@ -471,6 +473,9 @@ class ExcitonHamiltonian:
                 logger.info("  [Selection] Perturbative selection applies to the coupled spin-free solvers only; skipped.")
             else:
                 from qdex.selection import perturbative_selection
+                if getattr(self, "onecentre", None) is not None:
+                    logger.warning("  [Selection] The perturbative selection estimates the couplings with the xs kernel; "
+                                   "the one-centre correction enters the solved Hamiltonian only.")
                 kx_factor = (2.0 if self.spin == 'singlet' else 0.0) if self.include_exchange else 0.0
                 w_virt = getattr(self, "W_virt", None) if self.include_direct_eh else None
                 n_before = int(self.valid_mask.sum())
@@ -553,6 +558,14 @@ class ExcitonHamiltonian:
                         self.kx_diag[:] = factor * _spinor_mulliken_exchange_diag(
                             (C_occ_act,), (SC_occ,), (C_virt_act,), (SC_virt,), atom_ao_ranges, gamma,
                             np.asarray(self.valid_i) * n_va + np.asarray(self.valid_a), n_va)
+
+            if getattr(self, "onecentre", None) is not None and not self.soc_flag:
+                comps = [(self.C_occ_low, self.C_virt_low)]
+                if (self.include_direct_eh and hasattr(self, 'W_virt_diag')
+                        and self.excitation_mode == "diagonal_bse"):
+                    self.kd_diag += self.onecentre.direct_diag(comps)[self.valid_i, self.valid_a]
+                if self.excitation_mode == "diagonal_bse" and self.include_exchange and self.spin == 'singlet':
+                    self.kx_diag += 2.0 * self.onecentre.exchange_diag(comps, self.valid_i, self.valid_a)
 
             logger.debug(f"    Charges & diagonal kernels built in {time.time() - start_q:2.4f} s")
         else:
@@ -955,6 +968,10 @@ class ExcitonHamiltonian:
 
         logger.info("  -> Rotating spatial charge tensors into the spinor basis...")
         t_sp = time.time()
+        if getattr(self, "onecentre", None) is not None:
+            # spinor Löwdin coefficients per spin component: D^pq = sum_s conj(C_sp_occ_s) C_sp_virt_s
+            self._oc_comps = [(self.C_occ_low @ U_occ_a, self.C_virt_low @ U_virt_a),
+                              (self.C_occ_low @ U_occ_b, self.C_virt_low @ U_virt_b)]
 
         if self.diagonal_mode:
             logger.info("  -> Computing spinor diagonal populations (low-memory streaming mode)...")
@@ -1156,6 +1173,14 @@ class ExcitonHamiltonian:
                             (C_sp_virt_a, C_sp_virt_b), (SC_sp_virt_a, SC_sp_virt_b),
                             self.atom_ao_ranges, gamma, self.valid_spinor_idx, self.n_virt_spinor)
 
+            if getattr(self, "onecentre", None) is not None:
+                I_all = self.valid_spinor_idx // self.n_virt_spinor
+                A_all = self.valid_spinor_idx % self.n_virt_spinor
+                if self.include_direct_eh and self.excitation_mode == "diagonal_bse":
+                    self.kd_diag += self.onecentre.direct_diag(self._oc_comps)[I_all, A_all]
+                if self.include_exchange and self.excitation_mode == "diagonal_bse":
+                    self.kx_diag += self.onecentre.exchange_diag(self._oc_comps, I_all, A_all)
+
             del C_sp_occ_a, C_sp_occ_b
             if not self.is_xs:
                 del SC_sp_occ_a, SC_sp_occ_b
@@ -1283,6 +1308,15 @@ class ExcitonHamiltonian:
         """Return Kx_bare@x and Kd_screened@x in the active transition space."""
         if has_torch():
             import torch
+            if isinstance(x, torch.Tensor) and getattr(self, "onecentre", None) is not None and not getattr(self, "_oc_gpu_skip", False):
+                # xs product on the device; the one-centre correction (CPU, NumPy) is added on top
+                self._oc_gpu_skip = True
+                try:
+                    kx, kd = self.kernel_actions(x)
+                finally:
+                    self._oc_gpu_skip = False
+                dkx, dkd = self._onecentre_actions(to_numpy(x))
+                return kx + to_tensor(dkx, x.device, dtype=kx.dtype), kd + to_tensor(dkd, x.device, dtype=kd.dtype)
             if isinstance(x, torch.Tensor):
                 dev = x.device
                 kx = torch.zeros(self.dim, dtype=x.dtype, device=dev)
@@ -1376,6 +1410,8 @@ class ExcitonHamiltonian:
                     xmat[self.valid_i, self.valid_a] = x
                     act = np.einsum("ijA,abA,jb->ia", self.q_occ.conj(), self.W_virt, xmat, optimize=True)
                     kd = act[self.valid_i, self.valid_a]
+            if getattr(self, "onecentre", None) is not None:
+                kx, kd = self._onecentre_actions(x, kx, kd)
             return kx, kd
 
         if getattr(self, 'include_exchange', True):
@@ -1390,6 +1426,56 @@ class ExcitonHamiltonian:
                 self.W_elec_spinor, xmat, optimize=True,
             ).reshape(-1)
             kd = act[self.valid_spinor_idx]
+        if getattr(self, "onecentre", None) is not None:
+            kx, kd = self._onecentre_actions(x, kx, kd)
+        return kx, kd
+
+    def _onecentre_actions(self, x, kx=None, kd=None):
+        """Add the one-centre correction (qdex.onecentre) to K^x x and K^d x (zeros when kx, kd are None)."""
+        oc = self.onecentre
+        spin = getattr(self, 'spin', 'singlet')
+        exch = getattr(self, 'include_exchange', True)
+        dt = np.result_type(x, complex if self.soc_flag else float)
+        kx = np.zeros(self.dim, dtype=dt) if kx is None else kx
+        kd = np.zeros(self.dim, dtype=dt) if kd is None else kd
+        if not exch and not self.include_direct_eh:
+            return kx, kd
+        if self.soc_flag:
+            if spin == 'uks_spin_preserving':
+                raise NotImplementedError("integrals.one_centre with SOC is implemented for closed-shell references only")
+            x_full = np.zeros(self.dim_spinor_full, dtype=np.result_type(x, complex))
+            x_full[self.valid_spinor_idx] = x
+            X = x_full.reshape(self.n_occ_spinor, self.n_virt_spinor)
+            if exch:
+                kx = kx + oc.exchange_action([(self._oc_comps, X)])[0].reshape(-1)[self.valid_spinor_idx]
+            if self.include_direct_eh:
+                kd = kd + oc.direct_action(self._oc_comps, X).reshape(-1)[self.valid_spinor_idx]
+        elif spin == 'uks_spin_preserving':
+            Xa = np.zeros((self.n_occ_act, self.n_virt_act), dtype=x.dtype)
+            Xa[self.vi_a, self.va_a] = x[:self.dim_a]
+            Xb = np.zeros((self.n_occ_act_b, self.n_virt_act_b), dtype=x.dtype)
+            Xb[self.vi_b, self.va_b] = x[self.dim_a:]
+            ca = [(self.C_occ_a_low, self.C_virt_a_low)]
+            cb = [(self.C_occ_b_low, self.C_virt_b_low)]
+            kx, kd = np.array(kx, copy=True), np.array(kd, copy=True)
+            if exch:
+                ka, kb = oc.exchange_action([(ca, Xa), (cb, Xb)])
+                kx = kx.astype(np.result_type(kx, ka))
+                kx[:self.dim_a] += ka[self.vi_a, self.va_a]
+                kx[self.dim_a:] += kb[self.vi_b, self.va_b]
+            if self.include_direct_eh:
+                da, db = oc.direct_action(ca, Xa), oc.direct_action(cb, Xb)
+                kd = kd.astype(np.result_type(kd, da))
+                kd[:self.dim_a] += da[self.vi_a, self.va_a]
+                kd[self.dim_a:] += db[self.vi_b, self.va_b]
+        else:
+            X = np.zeros((self.n_occ_act, self.n_virt_act), dtype=x.dtype)
+            X[self.valid_i, self.valid_a] = x
+            comps = [(self.C_occ_low, self.C_virt_low)]
+            if spin != 'triplet' and exch:
+                kx = kx + 2.0 * oc.exchange_action([(comps, X)])[0][self.valid_i, self.valid_a]
+            if self.include_direct_eh:
+                kd = kd + oc.direct_action(comps, X)[self.valid_i, self.valid_a]
         return kx, kd
 
     def independent_transition_energies(self, mode):
@@ -1458,7 +1544,39 @@ class ExcitonHamiltonian:
                 W_a = W_elec[a, a, :]
                 kd_diag = np.sum(Q_i.conj() * W_a, axis=-1).real
 
+        if getattr(self, "onecentre", None) is not None:
+            kx_diag, kd_diag = self._onecentre_diag(kx_diag, kd_diag)
         return np.asarray(self.D) + kx_diag - kd_diag, kx_diag, kd_diag
+
+    def _onecentre_diag(self, kx_diag, kd_diag):
+        """One-centre correction to the diagonal elements K^x_{ia,ia} and K^d_{ia,ia}."""
+        oc = self.onecentre
+        spin = getattr(self, 'spin', 'singlet')
+        exch = getattr(self, 'include_exchange', True)
+        kx_diag, kd_diag = np.array(kx_diag, dtype=float), np.array(kd_diag, dtype=float)
+        if self.soc_flag:
+            I = self.valid_spinor_idx // self.n_virt_spinor
+            A = self.valid_spinor_idx % self.n_virt_spinor
+            if exch:
+                kx_diag += oc.exchange_diag(self._oc_comps, I, A)
+            if self.include_direct_eh:
+                kd_diag += oc.direct_diag(self._oc_comps)[I, A]
+        elif spin == 'uks_spin_preserving':
+            ca = [(self.C_occ_a_low, self.C_virt_a_low)]
+            cb = [(self.C_occ_b_low, self.C_virt_b_low)]
+            if exch:
+                kx_diag[:self.dim_a] += oc.exchange_diag(ca, self.vi_a, self.va_a)
+                kx_diag[self.dim_a:] += oc.exchange_diag(cb, self.vi_b, self.va_b)
+            if self.include_direct_eh:
+                kd_diag[:self.dim_a] += oc.direct_diag(ca)[self.vi_a, self.va_a]
+                kd_diag[self.dim_a:] += oc.direct_diag(cb)[self.vi_b, self.va_b]
+        else:
+            comps = [(self.C_occ_low, self.C_virt_low)]
+            if exch and spin != 'triplet':
+                kx_diag += 2.0 * oc.exchange_diag(comps, self.valid_i, self.valid_a)
+            if self.include_direct_eh:
+                kd_diag += oc.direct_diag(comps)[self.valid_i, self.valid_a]
+        return kx_diag, kd_diag
 
     def matvec(self, x):
         """Hermitian BSE/TDA matrix-vector product: D_QP + Kx_bare - Kd_screened."""

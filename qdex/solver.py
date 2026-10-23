@@ -211,7 +211,8 @@ class ExcitonSolver:
                   shared_W=None, shared_gamma_bare=None, selection=None, selection_energy=7.0,
                   selection_pt=1e-4, selection_shift=True,
                   hole_trap_mask=None, elec_trap_mask=None,
-                  hole_trap_mask_soc=None, elec_trap_mask_soc=None):
+                  hole_trap_mask_soc=None, elec_trap_mask_soc=None,
+                  one_centre=False, one_centre_cutoff=0.0, one_centre_tail="dipole"):
 
         self.C = C
         self.eps = eps
@@ -409,6 +410,25 @@ class ExcitonSolver:
             logger.info(f"  [Solver] Exchange gamma with MNOK exponent {_hardness.MNOK_EXPONENT_K:g}")
         gamma_penalty = np.zeros_like(gamma_bare)
 
+        # One-centre extension of xs (integrals.one_centre): exact same-atom AO products on top of the xs kernel
+        onecentre = None
+        if one_centre:
+            n_ao_tot = C.shape[0]
+            if k_type != "xs" or np.shape(gamma_bare) != (n_ao_tot, n_ao_tot):
+                raise ValueError("integrals.one_centre needs the xs representation (integrals.representation: xs).")
+            if shells is None:
+                raise ValueError("integrals.one_centre needs the Libint2 shells.")
+            if self.soc_flag and spin == 'uks_spin_preserving':
+                raise ValueError("integrals.one_centre is not implemented for SOC with an open-shell (UKS) reference.")
+            from qdex.onecentre import get_onecentre_kernel
+            onecentre = get_onecentre_kernel(shells, atom_ao_ranges, atom_coords, overlap, gamma_bare,
+                                             cutoff_ang=one_centre_cutoff, nthreads=nthreads,
+                                             tail=one_centre_tail)
+            # the direct term screens the correction with the kernel's own atom-pair ratio W/v (exchange: bare);
+            # each solver gets its own view of the shared blocks with its own screening
+            W_direct = w_resta if np.shape(w_resta) == (n_ao_tot, n_ao_tot) else None
+            onecentre = onecentre.with_screening(None if W_direct is None else to_numpy(W_direct))
+
         self.ham = ExcitonHamiltonian(
             C=C, eps=eps, overlap=overlap, atom_ao_ranges=atom_ao_ranges,
             homo_index=homo_index, n_occ=n_occ, n_virt=n_virt, scissor_ev=scissor_ev,
@@ -433,6 +453,7 @@ class ExcitonSolver:
             selection_shift=selection_shift,
             hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
             hole_trap_mask_soc=hole_trap_mask_soc, elec_trap_mask_soc=elec_trap_mask_soc,
+            onecentre=onecentre,
         )
 
     def solve(self, nroots=10, full_diag=False, tol=1e-5, excitation_mode="bse"):
@@ -611,10 +632,11 @@ class ExcitonSolver:
                             logger.debug(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
                     else:
                         temp = self.ham.q_flat @ self.ham.gamma
-                        J_mat = temp @ self.ham.q_flat.T
-                        H = np.diag(self.ham.D)
-                        if self.ham.include_exchange:
-                            H = H + 2.0 * J_mat
+                        # singlet exchange 2 (ia|jb), stored with the factor (as on the GPU path) so that
+                        # expectation_components reports <Kx> as it enters H
+                        J_mat = 2.0 * (temp @ self.ham.q_flat.T) if self.ham.include_exchange else \
+                            np.zeros((self.ham.dim, self.ham.dim))
+                        H = np.diag(self.ham.D) + J_mat
                         K_mat = np.zeros_like(J_mat)
                         logger.debug(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
 
@@ -707,6 +729,31 @@ class ExcitonSolver:
                             K_mat = K_2d
 
                         logger.debug(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
+
+            # --- one-centre correction (integrals.one_centre), added column by column ---
+            if getattr(self.ham, "onecentre", None) is not None:
+                logger.info("  [Dense] Adding the one-centre correction to Kx and Kd...")
+                t1 = time.time()
+                dim = self.ham.dim
+                dt = complex if self.soc_flag else float
+                dKx = np.zeros((dim, dim), dtype=dt)
+                dKd = np.zeros((dim, dim), dtype=dt)
+                e = np.zeros(dim, dtype=dt)
+                for j in range(dim):
+                    e[j] = 1.0
+                    dKx[:, j], dKd[:, j] = self.ham._onecentre_actions(e)
+                    e[j] = 0.0
+                if not self.soc_flag:
+                    dKx, dKd = dKx.real, dKd.real
+                if use_gpu:
+                    H = H + to_tensor(dKx - dKd, dev, dtype=H.dtype)
+                    J_mat = J_mat + to_tensor(dKx, dev, dtype=H.dtype)
+                    K_mat = K_mat + to_tensor(dKd, dev, dtype=H.dtype)
+                else:
+                    H = H + (dKx - dKd)
+                    J_mat = J_mat + dKx
+                    K_mat = K_mat + dKd
+                logger.debug(f"    -> one-centre correction in {time.time()-t1:.2f}s")
 
             # --- 3. Diagonalization ---
             logger.info(f"  [Dense] Diagonalizing {self.ham.dim}x{self.ham.dim} matrix...")

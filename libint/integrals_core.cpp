@@ -434,4 +434,67 @@ Matrix compute_aabb_coulomb(const std::vector<libint2::Shell>& shells, int nthre
   return Gamma;
 }
 
+/* One-centre product blocks (mu nu | ka la), mu and nu on atom A, ka and la on atom B, for each requested
+   atom pair (A, B). atom_shell_start[A] .. atom_shell_start[A+1] are the shells of atom A (contiguous).
+   Block layout: row mu * nA + nu, column ka * nB + la, with local AO indices of A and B. */
+std::vector<Matrix> compute_onecentre_coulomb(const std::vector<libint2::Shell>& shells,
+                                              const std::vector<int>& atom_shell_start,
+                                              const std::vector<std::pair<int, int>>& atom_pairs,
+                                              int nthreads) {
+  const auto s2bf = map_shell_to_basis_function(shells);
+  const int npairs = static_cast<int>(atom_pairs.size());
+  std::vector<Matrix> blocks(npairs);
+
+  std::vector<libint2::Engine> engines(nthreads);
+  engines[0] = libint2::Engine(libint2::Operator::coulomb, max_nprim(shells), max_l(shells), 0);
+  for (int i = 1; i < nthreads; ++i) engines[i] = engines[0];
+
+  auto atom_nbf = [&](int A) {
+    int n = 0;
+    for (int s = atom_shell_start[A]; s < atom_shell_start[A + 1]; ++s) n += static_cast<int>(shells[s].size());
+    return n;
+  };
+  for (int p = 0; p < npairs; ++p) {
+    int nA = atom_nbf(atom_pairs[p].first), nB = atom_nbf(atom_pairs[p].second);
+    blocks[p] = Matrix::Zero(nA * nA, nB * nB);
+  }
+
+  auto worker = [&](int tid) {
+    auto& eng = engines[tid];
+    for (int p = tid; p < npairs; p += nthreads) {
+      const int A = atom_pairs[p].first, B = atom_pairs[p].second;
+      const int a0 = atom_shell_start[A], a1 = atom_shell_start[A + 1];
+      const int b0 = atom_shell_start[B], b1 = atom_shell_start[B + 1];
+      const int fA = static_cast<int>(s2bf[a0]), fB = static_cast<int>(s2bf[b0]);
+      const int nA = static_cast<int>(std::sqrt(static_cast<double>(blocks[p].rows())) + 0.5);
+      const int nB = static_cast<int>(std::sqrt(static_cast<double>(blocks[p].cols())) + 0.5);
+      Matrix& blk = blocks[p];
+      for (int s1 = a0; s1 < a1; ++s1) {
+        const int o1 = static_cast<int>(s2bf[s1]) - fA, n1 = static_cast<int>(shells[s1].size());
+        for (int s2 = a0; s2 < a1; ++s2) {
+          const int o2 = static_cast<int>(s2bf[s2]) - fA, n2 = static_cast<int>(shells[s2].size());
+          for (int s3 = b0; s3 < b1; ++s3) {
+            const int o3 = static_cast<int>(s2bf[s3]) - fB, n3 = static_cast<int>(shells[s3].size());
+            for (int s4 = b0; s4 < b1; ++s4) {
+              const int o4 = static_cast<int>(s2bf[s4]) - fB, n4 = static_cast<int>(shells[s4].size());
+              const auto& buf = eng.compute(shells[s1], shells[s2], shells[s3], shells[s4]);
+              if (buf.empty() || buf[0] == nullptr) continue;
+              const double* v = buf[0];
+              for (int f1 = 0; f1 < n1; ++f1)
+                for (int f2 = 0; f2 < n2; ++f2) {
+                  const int row = (o1 + f1) * nA + (o2 + f2);
+                  for (int f3 = 0; f3 < n3; ++f3)
+                    for (int f4 = 0; f4 < n4; ++f4)
+                      blk(row, (o3 + f3) * nB + (o4 + f4)) = v[((f1 * n2 + f2) * n3 + f3) * n4 + f4];
+                }
+            }
+          }
+        }
+      }
+    }
+  };
+  parallel_do(worker, nthreads);
+  return blocks;
+}
+
 } // namespace licpp

@@ -15,6 +15,9 @@ represented on the atomic basis.
      charges: mulliken         # MNOK population partition: mulliken or lowdin (xs uses Löwdin)
      # mnok_exponent: 2        # MNOK exponent beta
      # mnok_onsite: ip_ea      # on-site value IP - EA = 2 eta (benchmarked against xs)
+     # one_centre: true        # xs only: same-atom AO products with exact one-centre integrals
+     # one_centre_cutoff: 0    # also exact for atom pairs closer than this (A); 0: on-site only
+     # one_centre_tail: dipole # charge-dipole and dipole-dipole of the one-centre densities beyond
 
 .. toctree::
    :maxdepth: 1

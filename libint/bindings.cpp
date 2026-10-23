@@ -249,4 +249,17 @@ PYBIND11_MODULE(libint_cpp, m)
           py::arg("shells"), py::arg("nthreads") = 1,
           "Computes exact (mu mu | nu nu) 2-electron Coulomb integral matrix in Hartree.");
 
+  m.def("compute_onecentre_coulomb",
+          [](py::list py_shells, std::vector<int> atom_shell_start,
+             std::vector<std::pair<int, int>> atom_pairs, int nthreads) {
+              auto shells = convert_shells(py_shells);
+              libint2::initialize();
+              auto blocks = licpp::compute_onecentre_coulomb(shells, atom_shell_start, atom_pairs, nthreads);
+              libint2::finalize();
+              return blocks;
+          },
+          py::arg("shells"), py::arg("atom_shell_start"), py::arg("atom_pairs"), py::arg("nthreads") = 1,
+          "One-centre product blocks (mu nu|ka la) in Hartree, mu,nu on atom A and ka,la on atom B, for each "
+          "(A, B) in atom_pairs; block rows mu*nA+nu, columns ka*nB+la (local AO indices).");
+
 }
