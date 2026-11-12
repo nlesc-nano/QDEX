@@ -856,6 +856,11 @@ def _build_parser():
                         help="Geometry correction of the bulk QP shift for PBE-relaxed dots: 'strain' (default; bulk PBE "
                              "gap change between a_exp and the dot's measured lattice), 'full' (dot at the bulk PBE "
                              "lattice) or 'none' (dot taken at a_exp).")
+    parser.add_argument("--penn-gap", dest="penn_gap", choices=["nominal", "delocalized"], default="delocalized",
+                        help="DFT gap of the dot that drives the Penn screening (interior eps_in of the Resta Delta-W, "
+                             "vertex fraction of the bulk shift, Z): 'delocalized' (default; between the first "
+                             "S/P/D-like states by angular coverage, so that facet and localized states inside the gap do not count as bulk-like screening) or 'nominal' (HOMO-LUMO). "
+                             "The QP gap itself always starts from the nominal gap.")
     parser.add_argument("--cohsex-occ-window", dest="cohsex_occ_window", type=float, default=None,
                         help="sgw-* models: build the screened-exchange density of the Delta-COHSEX levels only from the "
                              "occupied MOs within this many eV of the HOMO (default: all occupied MOs).")
@@ -1511,11 +1516,46 @@ def _read_molecular_orbitals(args, *, n_ao, shells, tracker):
     ))
 
 
+def _delocalized_dft_gap(C, S, eps, homo_index, shells, coords_ang, syms, args, window_ev=3.0):
+    """Gap between the delocalized band edges: counting inward from the gap, the first S/P/D-like state (angular
+    coverage, qdex.angular) on each side, the rule of the frontier diagnostic. Classifies only the MOs within
+    window_ev of the nominal edges (widened to 8 eV if no band state is found). Returns (gap, dHOMO, dLUMO) or
+    None."""
+    from qdex.angular import states_omega, BAND_CLASSES
+    eps = np.asarray(eps, dtype=float)
+    lumo = homo_index + 1
+    for w in (window_ev, 8.0):
+        idx = np.where((eps >= eps[homo_index] - w) & (eps <= eps[lumo] + w))[0]
+        Cw = C[:, idx]
+        Cw = Cw.toarray() if hasattr(Cw, "toarray") else np.asarray(Cw, dtype=float)
+        SCw = S @ Cw
+        SCw = SCw.toarray() if hasattr(SCw, "toarray") else np.asarray(SCw)
+        _, cls, _, _ = states_omega(Cw * SCw, shells, coords_ang, syms,
+                                    core_elements=getattr(args, "centroid_core_elements", None))
+        band = {int(i): str(c) in BAND_CLASSES for i, c in zip(idx, cls)}
+        d_h = next((i for i in range(homo_index, int(idx[0]) - 1, -1) if band.get(i)), None)
+        d_l = next((i for i in range(lumo, int(idx[-1]) + 1) if band.get(i)), None)
+        if d_h is not None and d_l is not None:
+            return float(eps[d_l] - eps[d_h]), d_h, d_l
+    return None
+
+
 def _quasiparticle_correction(args, *,
         C, S, atom_ao_ranges, coords_ang, eps, eps_beta, homo_index, homo_index_beta, shells, syms, tracker):
     """QP model: gap correction and the screened interaction W it is built on."""
     tracker.start_stage("Quasiparticle (GW) Model")
     dft_gap = eps_beta[homo_index_beta + 1] - eps[homo_index]
+    # Gap that drives the Penn screening (eps_in, vertex fraction, Z); the QP gap still starts from dft_gap
+    penn_gap = dft_gap
+    if str(getattr(args, "penn_gap", "delocalized") or "delocalized").lower() == "delocalized":
+        res = _delocalized_dft_gap(C, S, eps, homo_index, shells, coords_ang, syms, args)
+        if res is None:
+            logger.warning("  [QP] penn_gap delocalized: no S/P/D-like state found on one side of the gap; "
+                           "using the nominal DFT gap.")
+        else:
+            penn_gap, d_h, d_l = res
+            logger.info(f"  [QP] Penn screening from the delocalized DFT gap {penn_gap:.3f} eV (delocalized HOMO = "
+                        f"HOMO{d_h - homo_index:+d}, LUMO = LUMO{d_l - homo_index - 1:+d}; nominal gap {dft_gap:.3f} eV)")
     if args.material:   # lattice of the dot for the geometry part of the bulk QP shift
         from qdex.hardness import set_dot_strain
         set_dot_strain(args.material, syms, np.asarray(coords_ang, float))
@@ -1608,7 +1648,7 @@ def _quasiparticle_correction(args, *,
                     strict=args.qp_strict,
                     polarization_model=getattr(args, "qp_polarization", "sphere"),
                     return_details=True,
-                    dft_gap=dft_gap,
+                    dft_gap=penn_gap,
                     residual_scaling=getattr(args, "qp_residual_scaling", "econf"),
                     anchor_residual=getattr(args, "qp_anchor_residual", None) or "on",
                 )
@@ -1741,7 +1781,7 @@ def _quasiparticle_correction(args, *,
                     atom_symbols=syms,
                     material_name=args.material,
                     eps_out=args.eps_out,
-                    dft_gap=dft_gap,
+                    dft_gap=penn_gap,
                     C_occ_low=C_occ_low,
                     C_virt_low=C_virt_low,
                     eps_occ=eps[occ_idx_a],
@@ -1826,7 +1866,7 @@ def _quasiparticle_correction(args, *,
                 raise ValueError("quasiparticles.reference: gxtb is only supported by the NAMD precompute (g-xTB frames).")
             logger.info(f"  [QP] Bulk GW correction (bulk QSGW - bulk {str(getattr(args, 'functional', 'pbe')).upper()}).")
             from qdex.hardness import bulk_qp_shift
-            scissor, bulk_vertex_info = bulk_qp_shift(args.material, dft_gap)
+            scissor, bulk_vertex_info = bulk_qp_shift(args.material, penn_gap)
             if entry is not None and len(entry) >= 9:
                 pbe_bulk_gap = float(bulk_vertex_info.get("bulk_pbe_gap_dot_lattice_ev", entry[7]))
                 from qdex.hardness import bulk_gw_gap_sf
@@ -1863,7 +1903,7 @@ def _quasiparticle_correction(args, *,
                 use_dz, z_val = resolve_qp_z(args, True)
                 _, _, ipea_info = resta_edge_shifts(
                     C, S, homo_index, atom_ao_ranges, np.array(coords_ang), syms, args.material, args.eps_out,
-                    dft_gap, scissor, f_homo, alpha=args.alpha,
+                    penn_gap, scissor, f_homo, alpha=args.alpha,
                     solvent_term=getattr(args, "qp_solvent_term", "sphere"),
                     selfenergy=getattr(args, "qp_selfenergy", "cohsex"),
                     z_mode="derived" if use_dz else "fixed", z_fixed=z_val, populations=qp_pop_mode)
@@ -1883,6 +1923,11 @@ def _quasiparticle_correction(args, *,
     qp_w = None
     if qp_provenance is not None and "w_bse_ev" in qp_provenance:
         qp_w = (qp_provenance.pop("w_bse_ev"), qp_provenance.pop("w_bse_label", "QP-model W"))
+    elif (str(args.qp_gap).lower() == "bulk" and str(getattr(args, "qp_ip_ea", "resta")).lower() == "resta"
+          and getattr(args, "qp_z", None) is not None):
+        # 'bulk' has no Z in its gap, levels or BSE; Z only weights the sgw-resta edge self-energies of IP/EA
+        logger.info(f"  [QP] quasiparticles.z = {args.qp_z} applies to the sgw-resta edge self-energies of IP and EA "
+                    "only; the gap, the levels and the BSE of 'bulk' have no Z.")
     elif getattr(args, "qp_z", None) is not None or getattr(args, "dynamic_z", False):
         raise ValueError(
             f"qp_z / dynamic_z apply only to Delta-W QP models (sgw-*, evgw-*, qsgw-*, sgw); "

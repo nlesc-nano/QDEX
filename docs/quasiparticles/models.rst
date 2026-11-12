@@ -195,6 +195,11 @@ opens the average gap E_P by the KS confinement energy ΔE:
 
 * ħω_p is the free-electron plasmon of the bulk valence (s, p) density: 14.1 eV for CdSe, so
   E_P = 6.2 eV.
+* E_g^PBE(QD) is by default the **delocalized** gap (``quasiparticles.penn_gap: delocalized``): the gap
+  between the first S/P/D-like (interior) states by angular coverage, so facet and localized states inside
+  the gap do not lower the screening of the interior. ``penn_gap: nominal`` uses the HOMO-LUMO gap. The
+  same gap sets the vertex fraction f(R) of the bulk shift. The QP gap itself always starts from the
+  HOMO-LUMO gap.
 * ε_in = 3.97 at 1.2 nm and 5.06 at 2 nm for CdSe.
 
 **ΔW:**

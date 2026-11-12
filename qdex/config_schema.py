@@ -48,6 +48,7 @@ SECTIONS = {
         "bulk_vertex": "bulk_vertex",
         "bulk_vertex_factor": "bulk_vertex_factor",
         "bulk_geometry": "bulk_geometry",
+        "penn_gap": "penn_gap",
         "bulk_residual": "bulk_residual",
         "bulk_edge_split": "bulk_edge_split",
         "z": "qp_z",
