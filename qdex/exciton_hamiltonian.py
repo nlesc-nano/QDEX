@@ -3,7 +3,7 @@ import numpy as np
 import time
 import sys
 from qdex.constants import HA_TO_EV
-from qdex.device_utils import is_gpu, to_tensor, to_numpy, has_torch
+from qdex.device_utils import is_gpu, to_tensor, to_numpy, has_torch, common_dtype
 import logging
 
 logger = logging.getLogger(__name__)
@@ -1017,19 +1017,22 @@ class ExcitonHamiltonian:
         elif is_gpu(self.device):
             import torch
             dev = torch.device(self.device) if isinstance(self.device, str) else self.device
-            U_occ_a_t = to_tensor(U_occ_a, dev)
-            U_virt_a_t = to_tensor(U_virt_a, dev)
-            U_occ_b_t = to_tensor(U_occ_b, dev)
-            U_virt_b_t = to_tensor(U_virt_b, dev)
-            q_ov_t = to_tensor(self.q_ov, dev)
+            # real charges against the complex rotation: one complex dtype for every operand (torch einsum/matmul
+            # do not promote)
+            cdt = common_dtype(U_mo, self.q_ov)
+            U_occ_a_t = to_tensor(U_occ_a, dev, dtype=cdt)
+            U_virt_a_t = to_tensor(U_virt_a, dev, dtype=cdt)
+            U_occ_b_t = to_tensor(U_occ_b, dev, dtype=cdt)
+            U_virt_b_t = to_tensor(U_virt_b, dev, dtype=cdt)
+            q_ov_t = to_tensor(self.q_ov, dev, dtype=cdt)
 
             q_trans_a = torch.einsum("ip,iaA,aq->pqA", U_occ_a_t.conj(), q_ov_t, U_virt_a_t)
             q_trans_b = torch.einsum("ip,iaA,aq->pqA", U_occ_b_t.conj(), q_ov_t, U_virt_b_t)
             self.q_spinor = to_numpy((q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_features))
 
             if self.include_direct_eh:
-                q_occ_t = to_tensor(self.q_occ, dev)
-                q_virt_t = to_tensor(self.q_virt, dev)
+                q_occ_t = to_tensor(self.q_occ, dev, dtype=cdt)
+                q_virt_t = to_tensor(self.q_virt, dev, dtype=cdt)
                 q_hole_sp = (
                     torch.einsum("ip,ijA,jq->pqA", U_occ_a_t.conj(), q_occ_t, U_occ_a_t)
                     + torch.einsum("ip,ijA,jq->pqA", U_occ_b_t.conj(), q_occ_t, U_occ_b_t)
@@ -1041,7 +1044,7 @@ class ExcitonHamiltonian:
                 self.q_hole_spinor = to_numpy(q_hole_sp)
                 self.q_elec_spinor = to_numpy(q_elec_sp)
                 qe = q_elec_sp.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_features)
-                W_resta_t = to_tensor(self.W_resta, dev)
+                W_resta_t = to_tensor(self.W_resta, dev, dtype=qe.dtype)
                 self.W_elec_spinor = to_numpy((qe @ W_resta_t.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_features))
         else:
             q_trans_a = np.einsum("ip,iaA,aq->pqA", U_occ_a.conj(), self.q_ov, U_virt_a, optimize=True)
@@ -1213,22 +1216,23 @@ class ExcitonHamiltonian:
         if is_gpu(self.device):
             import torch
             dev = torch.device(self.device) if isinstance(self.device, str) else self.device
-            U_occ_a_t = to_tensor(U_occ_a, dev)
-            U_virt_a_t = to_tensor(U_virt_a, dev)
-            U_occ_b_t = to_tensor(U_occ_b, dev)
-            U_virt_b_t = to_tensor(U_virt_b, dev)
-            q_ov_a_t = to_tensor(self.q_ov_a, dev)
-            q_ov_b_t = to_tensor(self.q_ov_b, dev)
+            cdt = common_dtype(U_mo, self.q_ov_a, self.q_ov_b)
+            U_occ_a_t = to_tensor(U_occ_a, dev, dtype=cdt)
+            U_virt_a_t = to_tensor(U_virt_a, dev, dtype=cdt)
+            U_occ_b_t = to_tensor(U_occ_b, dev, dtype=cdt)
+            U_virt_b_t = to_tensor(U_virt_b, dev, dtype=cdt)
+            q_ov_a_t = to_tensor(self.q_ov_a, dev, dtype=cdt)
+            q_ov_b_t = to_tensor(self.q_ov_b, dev, dtype=cdt)
 
             q_trans_a = torch.einsum("ip,iaA,aq->pqA", U_occ_a_t.conj(), q_ov_a_t, U_virt_a_t)
             q_trans_b = torch.einsum("ip,iaA,aq->pqA", U_occ_b_t.conj(), q_ov_b_t, U_virt_b_t)
             self.q_spinor = to_numpy((q_trans_a + q_trans_b).reshape(self.dim_spinor, self.n_features))
 
             if self.include_direct_eh:
-                q_occ_a_t = to_tensor(self.q_occ_a, dev)
-                q_occ_b_t = to_tensor(self.q_occ_b, dev)
-                q_virt_a_t = to_tensor(self.q_virt_a, dev)
-                q_virt_b_t = to_tensor(self.q_virt_b, dev)
+                q_occ_a_t = to_tensor(self.q_occ_a, dev, dtype=cdt)
+                q_occ_b_t = to_tensor(self.q_occ_b, dev, dtype=cdt)
+                q_virt_a_t = to_tensor(self.q_virt_a, dev, dtype=cdt)
+                q_virt_b_t = to_tensor(self.q_virt_b, dev, dtype=cdt)
                 q_hole_sp = (
                     torch.einsum("ip,ijA,jq->pqA", U_occ_a_t.conj(), q_occ_a_t, U_occ_a_t)
                     + torch.einsum("ip,ijA,jq->pqA", U_occ_b_t.conj(), q_occ_b_t, U_occ_b_t)
@@ -1240,7 +1244,7 @@ class ExcitonHamiltonian:
                 self.q_hole_spinor = to_numpy(q_hole_sp)
                 self.q_elec_spinor = to_numpy(q_elec_sp)
                 qe = q_elec_sp.reshape(self.n_virt_spinor * self.n_virt_spinor, self.n_features)
-                W_resta_t = to_tensor(self.W_resta, dev)
+                W_resta_t = to_tensor(self.W_resta, dev, dtype=qe.dtype)
                 self.W_elec_spinor = to_numpy((qe @ W_resta_t.T).reshape(self.n_virt_spinor, self.n_virt_spinor, self.n_features))
         else:
             q_trans_a = np.einsum("ip,iaA,aq->pqA", U_occ_a.conj(), self.q_ov_a, U_virt_a, optimize=True)
@@ -1304,6 +1308,37 @@ class ExcitonHamiltonian:
         logger.info(f"  -> UKS BSE Active Space expanded to {self.dim_spinor_full} spinor transitions.")
         logger.info(f"  -> Truncated UKS Spinor Space (Energy <= {e_thresh} eV): {self.dim} valid transitions")
 
+    def _on_device(self, name, dev, dtype, layout=None):
+        """Attribute ``name`` as a tensor on ``dev`` with ``dtype``, kept between calls: Davidson calls kernel_actions
+        once per vector, and uploading the spinor charge tensors each time costs GBs of host-device traffic. The
+        cached copy is replaced when the attribute is rebound (e.g. the spinor rotation) or the device/dtype
+        changes. ``layout`` stores a hole or electron density tensor in the matrix form _direct_action uses."""
+        arr = getattr(self, name)
+        cache = self.__dict__.setdefault("_device_cache", {})
+        key = name if layout is None else f"{name}:{layout}"
+        hit = cache.get(key)
+        if hit is not None and hit[0] is arr and hit[1] == (str(dev), dtype):
+            return hit[2]
+        cache.pop(key, None)  # free the old device copy before uploading the new one
+        t = to_tensor(arr, dev, dtype=dtype)
+        if layout == "hole":    # conj(q_hole)[i, j, A] -> (i, j*A)
+            t = t.conj().resolve_conj().reshape(t.shape[0], -1).contiguous()
+        elif layout == "elec":  # W[a, b, A] -> (a*A, b)
+            t = t.permute(0, 2, 1).reshape(-1, t.shape[1]).contiguous()
+        cache[key] = (arr, (str(dev), dtype), t)
+        return t
+
+    def _direct_action(self, hole, elec, xmat, dev):
+        """sum_{j,b,A} conj(q_hole[i,j,A]) W_elec[a,b,A] x[j,b] on the device as two matrix products (the order NumPy's
+        optimize=True picks). torch.einsum without opt_einsum builds the i,j,a,b intermediate instead: ~19 GB per
+        call for 172 x 200 spinors, most of the device memory."""
+        n_A = getattr(self, hole).shape[2]
+        qh = self._on_device(hole, dev, xmat.dtype, "hole")      # (i, j*A)
+        we = self._on_device(elec, dev, xmat.dtype, "elec")      # (a*A, b)
+        n_j, n_a = xmat.shape[0], we.shape[0] // n_A
+        T = (we @ xmat.T).reshape(n_a, n_A, n_j).permute(2, 1, 0).reshape(n_j * n_A, n_a)  # [j*A, a]
+        return qh @ T                                                                     # (i, a)
+
     def kernel_actions(self, x):
         """Return Kx_bare@x and Kd_screened@x in the active transition space."""
         if has_torch():
@@ -1324,10 +1359,17 @@ class ExcitonHamiltonian:
 
                 if not self.soc_flag:
                     spin = getattr(self, 'spin', 'singlet')
+                    # Davidson's vectors are complex while the spin-free operators are real (and xs charges may be
+                    # complex for real x): work in the common dtype, as NumPy does
+                    x = x.to(common_dtype(x, *(getattr(self, n) for n in
+                                               ("q_flat", "q_occ", "W_virt", "q_occ_a", "W_virt_a", "q_occ_b", "W_virt_b")
+                                               if getattr(self, n, None) is not None)))
+                    kx = torch.zeros(self.dim, dtype=x.dtype, device=dev)
+                    kd = torch.zeros(self.dim, dtype=x.dtype, device=dev)
                     if spin != 'triplet' and getattr(self, 'include_exchange', True):
                         factor = 1.0 if spin == 'uks_spin_preserving' else 2.0
-                        q_flat_t = to_tensor(self.q_flat, dev)
-                        gamma_t = to_tensor(self.gamma, dev)
+                        q_flat_t = self._on_device("q_flat", dev, x.dtype)
+                        gamma_t = self._on_device("gamma", dev, x.dtype)
                         transition_potential = gamma_t @ (q_flat_t.T @ x)
                         kx = factor * (q_flat_t @ transition_potential)
 
@@ -1338,9 +1380,7 @@ class ExcitonHamiltonian:
                             vi_a = torch.as_tensor(self.vi_a, device=dev, dtype=torch.long)
                             va_a = torch.as_tensor(self.va_a, device=dev, dtype=torch.long)
                             xmat_a[vi_a, va_a] = x_a
-                            q_occ_a = to_tensor(self.q_occ_a, dev)
-                            W_virt_a = to_tensor(self.W_virt_a, dev)
-                            act_a = torch.einsum("ijA,abA,jb->ia", q_occ_a.conj(), W_virt_a, xmat_a)
+                            act_a = self._direct_action("q_occ_a", "W_virt_a", xmat_a, dev)
                             kd[:self.dim_a] = act_a[vi_a, va_a]
 
                             x_b = x[self.dim_a:]
@@ -1348,37 +1388,30 @@ class ExcitonHamiltonian:
                             vi_b = torch.as_tensor(self.vi_b, device=dev, dtype=torch.long)
                             va_b = torch.as_tensor(self.va_b, device=dev, dtype=torch.long)
                             xmat_b[vi_b, va_b] = x_b
-                            q_occ_b = to_tensor(self.q_occ_b, dev)
-                            W_virt_b = to_tensor(self.W_virt_b, dev)
-                            act_b = torch.einsum("ijA,abA,jb->ia", q_occ_b.conj(), W_virt_b, xmat_b)
+                            act_b = self._direct_action("q_occ_b", "W_virt_b", xmat_b, dev)
                             kd[self.dim_a:] = act_b[vi_b, va_b]
                         else:
                             xmat = torch.zeros((self.n_occ_act, self.n_virt_act), dtype=x.dtype, device=dev)
                             vi = torch.as_tensor(self.valid_i, device=dev, dtype=torch.long)
                             va = torch.as_tensor(self.valid_a, device=dev, dtype=torch.long)
                             xmat[vi, va] = x
-                            q_occ = to_tensor(self.q_occ, dev)
-                            W_virt = to_tensor(self.W_virt, dev)
-                            act = torch.einsum("ijA,abA,jb->ia", q_occ.conj(), W_virt, xmat)
+                            act = self._direct_action("q_occ", "W_virt", xmat, dev)
                             kd = act[vi, va]
                     return kx, kd
                 else:
                     if getattr(self, 'include_exchange', True):
-                        q_sp = to_tensor(self.q_spinor, dev)
-                        gamma_t = to_tensor(self.gamma, dev)
-                        transition_potential = gamma_t @ (q_sp.T @ x)
+                        cdt = common_dtype(x, self.q_spinor)
+                        q_sp = self._on_device("q_spinor", dev, cdt)
+                        gamma_t = self._on_device("gamma", dev, cdt)
+                        transition_potential = gamma_t @ (q_sp.T @ x.to(cdt))
                         kx = q_sp.conj() @ transition_potential
                     if self.include_direct_eh:
-                        x_full = torch.zeros(self.dim_spinor_full, dtype=x.dtype, device=dev)
+                        cdt = common_dtype(x, self.q_hole_spinor, self.W_elec_spinor)
+                        x_full = torch.zeros(self.dim_spinor_full, dtype=cdt, device=dev)
                         v_idx = torch.as_tensor(self.valid_spinor_idx, device=dev, dtype=torch.long)
                         x_full[v_idx] = x
                         xmat = x_full.reshape(self.n_occ_spinor, self.n_virt_spinor)
-                        qh_sp = to_tensor(self.q_hole_spinor, dev)
-                        we_sp = to_tensor(self.W_elec_spinor, dev)
-                        act = torch.einsum(
-                            "ijA,abA,jb->ia", qh_sp.conj(),
-                            we_sp, xmat,
-                        ).reshape(-1)
+                        act = self._direct_action("q_hole_spinor", "W_elec_spinor", xmat, dev).reshape(-1)
                         kd = act[v_idx]
                     return kx, kd
 
