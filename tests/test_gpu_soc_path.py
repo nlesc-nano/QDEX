@@ -103,3 +103,19 @@ def test_dense_eigh_out_of_device_memory_falls_back_to_cpu(torch_cpu_as_gpu):
         e, _ = gpu.solve(nroots=gpu.ham.dim, full_diag=True)
     np.testing.assert_allclose(e, e_ref, atol=1e-10)
     assert isinstance(gpu.J_mat, np.ndarray) and isinstance(gpu.K_mat, np.ndarray)
+
+
+@pytest.mark.parametrize("complex_charges", [True, False])
+def test_truncated_exchange_blocked_torch_matches_numpy(torch_cpu_as_gpu, complex_charges):
+    """The blocked (large-system) branch of the torch K assembly, on a truncated, unordered transition list."""
+    from qdex.solver import _assemble_truncated_exchange
+    rng = np.random.default_rng(11)
+    n_occ, n_virt, n_A = 7, 5, 6
+    qh = rng.normal(size=(n_occ, n_occ, n_A)) + (1j * rng.normal(size=(n_occ, n_occ, n_A)) if complex_charges else 0)
+    we = rng.normal(size=(n_virt, n_virt, n_A)) + (1j * rng.normal(size=(n_virt, n_virt, n_A)) if complex_charges else 0)
+    full = rng.permutation(n_occ * n_virt)[:23]
+    vi, va = full // n_virt, full % n_virt
+    K_ref = _assemble_truncated_exchange(qh, we, vi, va, device="numpy")
+    with mock.patch("qdex.solver._K_BLOCK_BYTES", 16 * n_occ * n_virt * n_virt * 2):  # 2 holes per block
+        K = _assemble_truncated_exchange(qh, we, vi, va, max_full_elements=0, device=torch_cpu_as_gpu)
+    np.testing.assert_allclose(K.numpy(), K_ref, atol=1e-12)

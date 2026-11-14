@@ -21,6 +21,9 @@ def _dense_eigh(H):
     return np.linalg.eigh(H)
 
 
+_K_BLOCK_BYTES = 2e9  # device memory per hole block of the torch K assembly
+
+
 def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_full_elements=12_000_000, device="numpy"):
     """Build K[p,q] = sum_A q_hole[i_p,i_q,A]^* W_elec[a_p,a_q,A]."""
     n_p = len(vi)
@@ -43,13 +46,27 @@ def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_ful
             idx = vi_t * n_virt + va_t
             return K_2d[idx[:, None], idx[None, :]]
 
-        dtype = torch.complex128 if qh_t.is_complex() or we_t.is_complex() else torch.float64
-        K = torch.empty((n_p, n_p), dtype=dtype, device=dev)
-        for p0 in range(0, n_p, block_size):
-            p1 = min(p0 + block_size, n_p)
-            qh = qh_t[vi_t[p0:p1, None], vi_t[None, :], :].conj()
-            we = we_t[va_t[p0:p1, None], va_t[None, :], :]
-            K[p0:p1, :] = torch.einsum("pqA,pqA->pq", qh, we)
+        # Blocks of holes i as matrix products: (i j, A) @ (A, a b) -> rows (i, a), all columns (j, b), then the valid
+        # rows/columns. Gathering q_hole[i_p, i_q, :] for a block of p against all q instead takes
+        # block x n_p x n_atoms (29 GiB for 128 x 36808 x 416 complex), more than the device has beside H.
+        K = torch.empty((n_p, n_p), dtype=cdt, device=dev)
+        qh2 = qh_t.conj().resolve_conj().reshape(n_occ * n_occ, n_atoms)
+        we2 = we_t.reshape(n_virt * n_virt, n_atoms).T.contiguous()
+        full_idx = vi_t * n_virt + va_t                       # p -> (i, a) in the full occ x virt grid
+        pos = torch.full((full_dim,), -1, dtype=torch.long, device=dev)
+        pos[full_idx] = torch.arange(n_p, device=dev)
+        itemsize = 16 if cdt == torch.complex128 else 8
+        n_i = max(1, min(n_occ, int(_K_BLOCK_BYTES // (itemsize * n_occ * n_virt * n_virt))))
+        for i0 in range(0, n_occ, n_i):
+            i1 = min(i0 + n_i, n_occ)
+            rows = pos[i0 * n_virt:i1 * n_virt]
+            keep = rows >= 0
+            if not bool(keep.any()):
+                continue
+            blk = (qh2[i0 * n_occ:i1 * n_occ] @ we2).reshape(i1 - i0, n_occ, n_virt, n_virt)
+            blk = blk.permute(0, 2, 1, 3).reshape((i1 - i0) * n_virt, full_dim)
+            K[rows[keep]] = blk[keep][:, full_idx]
+            del blk
         return K
 
     dtype = np.result_type(q_hole, w_elec)
@@ -784,14 +801,20 @@ class ExcitonSolver:
                 self.K_mat = to_numpy(K_mat)
                 del J_mat, K_mat
                 torch.cuda.empty_cache()
+                # the eigensolver needs ~3 n x n on the device (input, eigenvectors, workspace: MAGMA n = 20000
+                # complex peaked at 19.2 GB); MAGMA (ROCm) segfaults instead of raising when it runs out, so check first
+                need = 3 * H.numel() * H.element_size()
+                free = (torch.cuda.mem_get_info(H.device)[0] + H.numel() * H.element_size() if H.is_cuda
+                        else float("inf"))
                 try:
+                    if need > 0.95 * free:
+                        raise torch.OutOfMemoryError(f"needs ~{need / 1e9:.0f} GB, {free / 1e9:.0f} GB free")
                     evals_t, evecs_t = torch.linalg.eigh(H)
                     del H
                     evals = to_numpy(evals_t)
                     evecs = to_numpy(evecs_t)
                     del evals_t, evecs_t
                 except torch.OutOfMemoryError as e:
-                    # the eigensolver needs ~3 n x n on the device; past that, diagonalize this H on the CPU
                     logger.info(f"  [Dense] {self.ham.dim}x{self.ham.dim} eigensolver does not fit on {self.device} "
                                 f"({str(e).splitlines()[0][:80]}); diagonalizing on the CPU")
                     H = to_numpy(H)
