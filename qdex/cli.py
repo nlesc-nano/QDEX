@@ -1556,7 +1556,7 @@ def _delocalized_active_mos(C, S, eps, homo_index, n_occ, n_virt, shells, coords
     the first n_virt S/P/D-like virtual MOs counted up from the LUMO (angular coverage, qdex.angular, the
     classification of the frontier diagnostic and the trap filter). Only the MOs within window_ev below the
     nominal HOMO and above the nominal LUMO are classified (as the fuzzy-band / PDOS window). Returns
-    (occ_idx, virt_idx, info), both index arrays ascending."""
+    (occ_idx, virt_idx, info), both index arrays ascending; info["trap_idx"] lists the classified trap MOs."""
     from qdex.angular import states_omega, BAND_CLASSES
     eps = np.asarray(eps, dtype=float)
     lumo = homo_index + 1
@@ -1579,6 +1579,7 @@ def _delocalized_active_mos(C, S, eps, homo_index, n_occ, n_virt, shells, coords
         "n_trap_occ": int(homo_index - occ_sel[0] + 1 - len(occ_sel)),
         "n_trap_virt": int(virt_sel[-1] - lumo + 1 - len(virt_sel)),
         "short_occ": len(occ_sel) < n_occ, "short_virt": len(virt_sel) < n_virt,
+        "trap_idx": idx[~band].astype(int),     # every classified non-S/P/D MO, kept out of the SOC window too
     }
     return occ_sel.astype(int), virt_sel.astype(int), info
 
@@ -1588,7 +1589,7 @@ def _active_mo_selection(args, *, C, C_beta, S, coords_ang, eps, homo_index, she
     the first nhomos / nlumos S/P/D-like MOs, so that facet and localized (trap) MOs do not take window slots."""
     mode = str(getattr(args, "active_space", "nominal") or "nominal").lower()
     if mode == "nominal":
-        return _export(locals(), ("active_occ_mo", "active_virt_mo"))     # not set: the nominal window
+        return _export(locals(), ("active_occ_mo", "active_virt_mo", "active_trap_mo"))   # not set: nominal window
     if mode != "delocalized":
         raise ValueError(f"excitations.active_space must be 'nominal' or 'delocalized', not '{mode}'.")
     if C_beta is not None:
@@ -1603,6 +1604,7 @@ def _active_mo_selection(args, *, C, C_beta, S, coords_ang, eps, homo_index, she
     active_occ_mo, active_virt_mo, info = _delocalized_active_mos(C, S, eps, homo_index, n_occ, n_virt, shells,
                                                                   coords_ang, syms, args, window_ev=window_ev)
     occ_sel, virt_sel = active_occ_mo, active_virt_mo
+    active_trap_mo = info["trap_idx"]
     logger.info(f"\n--- Delocalized BSE Active Space (angular coverage of the {info['n_classified']} MOs within "
                 f"{window_ev:g} eV of the band edges, {time.time() - t0:.1f} s) ---")
     logger.info(f"  Holes    : {len(occ_sel)} S/P/D-like MOs, HOMO{occ_sel[-1] - homo_index:+d} ... "
@@ -1612,7 +1614,7 @@ def _active_mo_selection(args, *, C, C_beta, S, coords_ang, eps, homo_index, she
     if info["short_occ"] or info["short_virt"]:
         logger.warning(f"  [Active space] Only {len(occ_sel)} / {len(virt_sel)} delocalized holes / electrons within "
                        f"{window_ev:g} eV (asked {n_occ} / {n_virt}); widen excitations.active_window.")
-    return _export(locals(), ("active_occ_mo", "active_virt_mo"))
+    return _export(locals(), ("active_occ_mo", "active_virt_mo", "active_trap_mo"))
 
 
 def _quasiparticle_correction(args, *,
@@ -2473,7 +2475,8 @@ def _active_space_and_soc(args, *,
         C_act, C_beta, C_dense, S, SC_dense, SC_dense_beta_pop, coords_ang, dft_gap, e_fermi_raw, eps,
         eps_beta, eps_beta_shifted, eps_dft_shifted, eps_qp_active, eps_shifted, f_h, fb, homo_index,
         homo_index_beta, occ, occ_beta, pops_beta, pops_sf, qp_provenance, scissor, shells,
-        soc_assume_orthonormal, syms, target_qp_gap, tracker, active_occ_mo=None, active_virt_mo=None):
+        soc_assume_orthonormal, syms, target_qp_gap, tracker, active_occ_mo=None, active_virt_mo=None,
+        active_trap_mo=None):
     """BSE active space, SOC spinor subspace, population printouts and the scissor operator."""
     # -----------------------------------------------------------------
     # BSE Active Space Setup
@@ -2510,12 +2513,19 @@ def _active_space_and_soc(args, *,
         tracker.start_stage("SOC Active Space (BSE)")
         # SOC is diagonalized in a larger window W around the BSE window P; the BSE spinors are the
         # W spinors living in P (des Cloizeaux projection), so their energies include the SOC
-        # coupling to the MOs outside P.
+        # coupling to the MOs outside P. With a delocalized active space the trap MOs are left out of W as
+        # well: a band-edge MO nearly degenerate with traps would otherwise be spread by SOC over several
+        # trap-mixed W spinors, and the projection onto P would lose it.
         bse_window_ev = _bse_soc_window_ev(args)
         soc_W = bse_active_indices
         soc_W_beta = bse_active_indices_beta
+        n_trap_W = 0
         if bse_window_ev > 0:
             soc_W = np.union1d(bse_active_indices, _select_soc_window_indices(eps_shifted, homo_index, bse_window_ev))
+            if active_trap_mo is not None and len(active_trap_mo):
+                n_W_all = len(soc_W)
+                soc_W = np.setdiff1d(soc_W, np.asarray(active_trap_mo, dtype=int))
+                n_trap_W = n_W_all - len(soc_W)
             if is_uks_sp:
                 soc_W_beta = np.union1d(bse_active_indices_beta,
                                         _select_soc_window_indices(eps_beta_shifted, homo_index_beta, bse_window_ev))
@@ -2523,6 +2533,8 @@ def _active_space_and_soc(args, *,
         if use_W:
             logger.info(f"\n--- Computing SOC Spinor Subspace for BSE (|E-Ef| <= {bse_window_ev:.3f} eV, "
                         f"projected onto the {len(bse_active_indices)}-MO BSE window) ---")
+            if n_trap_W:
+                logger.info(f"  -> {n_trap_W} trap MOs left out of the SOC window (delocalized active space)")
         else:
             logger.info(f"\n--- Computing SOC Spinor Subspace for BSE (Small Window) ---")
         if is_uks_sp:
