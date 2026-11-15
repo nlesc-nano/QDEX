@@ -278,7 +278,7 @@ IPR = Σ\ :sub:`μ` P\ :sub:`μ`\ :sup:`2` of the normalized Mulliken AO populat
 description (``qdex/angular.py``).
 
 **Angular coverage.** With the normalized atom populations p\ :sub:`A` and the directions
-**u**\ :sub:`A` = (**R**\ :sub:`A` − **c**)/|**R**\ :sub:`A` − **c**| from the centre **c** of the inorganic core,
+**u**\ :sub:`A` = (**R**\ :sub:`A` − **c**)/\|\ **R**\ :sub:`A` − **c**\ \| from the centre **c** of the inorganic core,
 
 .. math::
 

@@ -52,7 +52,7 @@ the gap is zero; the table gives the s-p band order :math:`E(\Gamma_1) - E(\Gamm
 spin-orbit splittings are well defined and shown in the overlay.
 
 Orbitals from another functional
--------------------------------
+--------------------------------
 
 ``system.functional`` names the functional of the dot's orbitals (``pbe``, the default, ``hle17`` or ``pbe0``). The bulk
 bands then come from ``<name>_<functional>[_soc].bs.gz`` and ``<name>_<functional>.json``, for the fuzzy-band
