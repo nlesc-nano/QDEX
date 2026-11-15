@@ -97,6 +97,8 @@ def test_selection_skips_traps_and_stays_in_the_window():
     np.testing.assert_array_equal(virt, [21, 22, 24])
     assert info["n_trap_occ"] == 4 and info["n_trap_virt"] == 2
     assert info["n_classified"] == len(idx) and not info["short_occ"] and not info["short_virt"]
+    # every classified trap is reported, so the SOC window can leave them out
+    np.testing.assert_array_equal(info["trap_idx"], sorted(trap))
 
 
 def test_selection_reports_a_short_window():
