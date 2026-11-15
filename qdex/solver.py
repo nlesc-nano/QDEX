@@ -2,7 +2,7 @@ import numpy as np
 import time
 from qdex.davidson import davidson
 from qdex.exciton_hamiltonian import ExcitonHamiltonian
-from qdex.device_utils import is_gpu, to_tensor, to_numpy
+from qdex.device_utils import is_gpu, to_tensor, to_numpy, common_dtype
 
 # --- UPDATED IMPORTS ---
 from qdex.hardness import build_gamma, build_resta_mnok, build_xs_kernel, build_sbse_kernel
@@ -21,6 +21,9 @@ def _dense_eigh(H):
     return np.linalg.eigh(H)
 
 
+_K_BLOCK_BYTES = 2e9  # device memory per hole block of the torch K assembly
+
+
 def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_full_elements=12_000_000, device="numpy"):
     """Build K[p,q] = sum_A q_hole[i_p,i_q,A]^* W_elec[a_p,a_q,A]."""
     n_p = len(vi)
@@ -31,8 +34,9 @@ def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_ful
     if is_gpu(device):
         import torch
         dev = torch.device(device) if isinstance(device, str) else device
-        qh_t = to_tensor(q_hole, dev)
-        we_t = to_tensor(w_elec, dev)
+        cdt = common_dtype(q_hole, w_elec)
+        qh_t = to_tensor(q_hole, dev, dtype=cdt)
+        we_t = to_tensor(w_elec, dev, dtype=cdt)
         vi_t = torch.as_tensor(vi, device=dev, dtype=torch.long)
         va_t = torch.as_tensor(va, device=dev, dtype=torch.long)
 
@@ -42,13 +46,27 @@ def _assemble_truncated_exchange(q_hole, w_elec, vi, va, block_size=128, max_ful
             idx = vi_t * n_virt + va_t
             return K_2d[idx[:, None], idx[None, :]]
 
-        dtype = torch.complex128 if qh_t.is_complex() or we_t.is_complex() else torch.float64
-        K = torch.empty((n_p, n_p), dtype=dtype, device=dev)
-        for p0 in range(0, n_p, block_size):
-            p1 = min(p0 + block_size, n_p)
-            qh = qh_t[vi_t[p0:p1, None], vi_t[None, :], :].conj()
-            we = we_t[va_t[p0:p1, None], va_t[None, :], :]
-            K[p0:p1, :] = torch.einsum("pqA,pqA->pq", qh, we)
+        # Blocks of holes i as matrix products: (i j, A) @ (A, a b) -> rows (i, a), all columns (j, b), then the valid
+        # rows/columns. Gathering q_hole[i_p, i_q, :] for a block of p against all q instead takes
+        # block x n_p x n_atoms (29 GiB for 128 x 36808 x 416 complex), more than the device has beside H.
+        K = torch.empty((n_p, n_p), dtype=cdt, device=dev)
+        qh2 = qh_t.conj().resolve_conj().reshape(n_occ * n_occ, n_atoms)
+        we2 = we_t.reshape(n_virt * n_virt, n_atoms).T.contiguous()
+        full_idx = vi_t * n_virt + va_t                       # p -> (i, a) in the full occ x virt grid
+        pos = torch.full((full_dim,), -1, dtype=torch.long, device=dev)
+        pos[full_idx] = torch.arange(n_p, device=dev)
+        itemsize = 16 if cdt == torch.complex128 else 8
+        n_i = max(1, min(n_occ, int(_K_BLOCK_BYTES // (itemsize * n_occ * n_virt * n_virt))))
+        for i0 in range(0, n_occ, n_i):
+            i1 = min(i0 + n_i, n_occ)
+            rows = pos[i0 * n_virt:i1 * n_virt]
+            keep = rows >= 0
+            if not bool(keep.any()):
+                continue
+            blk = (qh2[i0 * n_occ:i1 * n_occ] @ we2).reshape(i1 - i0, n_occ, n_virt, n_virt)
+            blk = blk.permute(0, 2, 1, 3).reshape((i1 - i0) * n_virt, full_dim)
+            K[rows[keep]] = blk[keep][:, full_idx]
+            del blk
         return K
 
     dtype = np.result_type(q_hole, w_elec)
@@ -212,7 +230,8 @@ class ExcitonSolver:
                   selection_pt=1e-4, selection_shift=True,
                   hole_trap_mask=None, elec_trap_mask=None,
                   hole_trap_mask_soc=None, elec_trap_mask_soc=None,
-                  one_centre=False, one_centre_cutoff=0.0, one_centre_tail="dipole", one_centre_direct=False):
+                  one_centre=False, one_centre_cutoff=0.0, one_centre_tail="dipole", one_centre_direct=False,
+                  occ_indices=None, virt_indices=None):
 
         self.C = C
         self.eps = eps
@@ -222,6 +241,13 @@ class ExcitonSolver:
         self.atom_symbols = atom_symbols
         self.coords = atom_coords
         self.atom_ao_ranges = atom_ao_ranges
+        if occ_indices is not None:
+            # explicit active MOs (excitations.active_space delocalized): n_occ / n_virt follow them
+            if spin == 'uks_spin_preserving':
+                raise ValueError("Explicit active MO indices are implemented for restricted references only.")
+            occ_indices = np.asarray(occ_indices, dtype=int)
+            virt_indices = np.asarray(virt_indices, dtype=int)
+            n_occ, n_virt = len(occ_indices), len(virt_indices)
         self.n_occ = n_occ
         self.n_virt = n_virt
         self.homo_index = homo_index
@@ -454,7 +480,7 @@ class ExcitonSolver:
             selection_shift=selection_shift,
             hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
             hole_trap_mask_soc=hole_trap_mask_soc, elec_trap_mask_soc=elec_trap_mask_soc,
-            onecentre=onecentre,
+            onecentre=onecentre, occ_indices=occ_indices, virt_indices=virt_indices,
         )
 
     def solve(self, nroots=10, full_diag=False, tol=1e-5, excitation_mode="bse"):
@@ -661,14 +687,22 @@ class ExcitonSolver:
                 t0 = time.time()
                 if use_gpu:
                     import torch
-                    q_sp = to_tensor(self.ham.q_spinor, dev)
-                    gamma_t = to_tensor(self.ham.gamma, dev)
+                    # complex spinor charges, real gamma: one dtype (torch matmul does not promote)
+                    cdt = common_dtype(self.ham.q_spinor, self.ham.gamma)
+                    q_sp = to_tensor(self.ham.q_spinor, dev, dtype=cdt)
+                    gamma_t = to_tensor(self.ham.gamma, dev, dtype=cdt)
                     temp = q_sp.conj() @ gamma_t
-                    J_mat = temp @ q_sp.T
+                    # at most two n x n matrices on the device (n ~ 33000: 17 GB each): H, built in place, and the
+                    # term being added; J and K go to the host (they are kept only for the analysis)
                     H = torch.diag(to_tensor(self.ham.D, dev, dtype=torch.complex128))
+                    J_t = temp @ q_sp.T
+                    del temp, q_sp
                     if self.ham.include_exchange:
-                        H = H + J_mat
-                    K_mat = torch.zeros_like(J_mat)
+                        H += J_t
+                    J_mat = to_numpy(J_t)
+                    del J_t
+                    K_mat = np.zeros_like(J_mat)
+                    torch.cuda.empty_cache()
                     logger.debug(f"    -> Kx_bare built in {time.time()-t0:.2f}s")
 
                     if self.ham.include_direct_eh:
@@ -685,15 +719,19 @@ class ExcitonSolver:
                                 self.ham.q_hole_spinor, W_elec, vi_sp, va_sp, device=dev
                             )
                             H -= K_truncated
-                            K_mat = K_truncated
+                            K_mat = to_numpy(K_truncated)
+                            del K_truncated
                         else:
-                            W = to_tensor(self.ham.W_elec_spinor, dev)
-                            qh = to_tensor(self.ham.q_hole_spinor, dev)
+                            cdt = common_dtype(self.ham.W_elec_spinor, self.ham.q_hole_spinor)
+                            W = to_tensor(self.ham.W_elec_spinor, dev, dtype=cdt)
+                            qh = to_tensor(self.ham.q_hole_spinor, dev, dtype=cdt)
                             K_full = torch.tensordot(qh.conj(), W, dims=([2], [2]))
                             K_full_trans = K_full.permute(0, 2, 1, 3)
                             K_2d = K_full_trans.reshape(n_occ_sp * n_virt_sp, n_occ_sp * n_virt_sp)
                             H -= K_2d
-                            K_mat = K_2d
+                            K_mat = to_numpy(K_2d)
+                            del K_full, K_full_trans, K_2d
+                        torch.cuda.empty_cache()
                         logger.debug(f"    -> Kd_screened built in {time.time()-t1:.2f}s")
                 else:
                     # Notice: No factor of 2.0, and requires complex conjugate transpose
@@ -748,8 +786,12 @@ class ExcitonSolver:
                     dKx, dKd = dKx.real, dKd.real
                 if use_gpu:
                     H = H + to_tensor(dKx - dKd, dev, dtype=H.dtype)
-                    J_mat = J_mat + to_tensor(dKx, dev, dtype=H.dtype)
-                    K_mat = K_mat + to_tensor(dKd, dev, dtype=H.dtype)
+                    if isinstance(J_mat, np.ndarray):  # dense SOC builder keeps J and K on the host
+                        J_mat = J_mat + dKx
+                        K_mat = K_mat + dKd
+                    else:
+                        J_mat = J_mat + to_tensor(dKx, dev, dtype=H.dtype)
+                        K_mat = K_mat + to_tensor(dKd, dev, dtype=H.dtype)
                 else:
                     H = H + (dKx - dKd)
                     J_mat = J_mat + dKx
@@ -761,11 +803,33 @@ class ExcitonSolver:
             t_diag = time.time()
             if use_gpu:
                 import torch
-                evals_t, evecs_t = torch.linalg.eigh(H)
-                evals = to_numpy(evals_t)
-                evecs = to_numpy(evecs_t)
+                # J and K are kept only for the analysis: move them to the host first, so that the device holds just
+                # H and the eigensolver workspace (dense SOC n ~ 33000: 17 GB per complex matrix)
                 self.J_mat = to_numpy(J_mat)
                 self.K_mat = to_numpy(K_mat)
+                del J_mat, K_mat
+                torch.cuda.empty_cache()
+                # the eigensolver needs ~3 n x n on the device (input, eigenvectors, workspace: MAGMA n = 20000
+                # complex peaked at 19.2 GB); MAGMA (ROCm) segfaults instead of raising when it runs out, so check first
+                need = 3 * H.numel() * H.element_size()
+                free = (torch.cuda.mem_get_info(H.device)[0] + H.numel() * H.element_size() if H.is_cuda
+                        else float("inf"))
+                try:
+                    if need > 0.95 * free:
+                        raise torch.OutOfMemoryError(f"needs ~{need / 1e9:.0f} GB, {free / 1e9:.0f} GB free")
+                    evals_t, evecs_t = torch.linalg.eigh(H)
+                    del H
+                    evals = to_numpy(evals_t)
+                    evecs = to_numpy(evecs_t)
+                    del evals_t, evecs_t
+                except torch.OutOfMemoryError as e:
+                    logger.info(f"  [Dense] {self.ham.dim}x{self.ham.dim} eigensolver does not fit on {self.device} "
+                                f"({str(e).splitlines()[0][:80]}); diagonalizing on the CPU")
+                    H = to_numpy(H)
+                    torch.cuda.empty_cache()
+                    evals, evecs = _dense_eigh(H)
+                    del H
+                torch.cuda.empty_cache()
             else:
                 evals, evecs = _dense_eigh(H)
                 self.J_mat = J_mat

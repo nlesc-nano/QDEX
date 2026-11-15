@@ -94,6 +94,8 @@ SECTIONS = {
         "allow_inconsistent_kernel": "allow_inconsistent_kernel",
         "nhomos": "nhomos",
         "nlumos": "nlumos",
+        "active_space": "active_space",
+        "active_window": "active_window",
         "n_occ": "n_occ",
         "n_virt": "n_virt",
         "e_thresh": "e_thresh",

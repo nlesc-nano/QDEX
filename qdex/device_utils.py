@@ -90,6 +90,17 @@ def to_tensor(arr, device, dtype=None):
     return torch.as_tensor(arr, dtype=dtype, device=dev)
 
 
+def common_dtype(*items):
+    """torch dtype that holds every item (NumPy arrays or tensors): complex128 if any is complex, else float64.
+    torch's matmul and einsum, unlike NumPy, do not promote a real operand to complex (e.g. the real transition
+    charges against the complex SOC rotation or a complex Davidson vector), so mixed operands are cast to this."""
+    import torch
+    for a in items:
+        if (a.is_complex() if isinstance(a, torch.Tensor) else np.iscomplexobj(a)):
+            return torch.complex128
+    return torch.float64
+
+
 def to_numpy(t):
     """Converts torch Tensor or NumPy array to contiguous NumPy array."""
     if isinstance(t, np.ndarray):
