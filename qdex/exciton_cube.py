@@ -100,14 +100,14 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
     # --- 2. Identify Active MOs from Spinor Requests ---
     if spinor_list and soc_U is not None:
         n_mo_act = soc_U.shape[0] // 2
-        offset = solver.homo_index - solver.n_occ + 1
+        act_mo = np.concatenate([solver.ham.occ_idx, solver.ham.virt_idx])
         for sp_idx in spinor_list:
             U_a = soc_U[:n_mo_act, sp_idx]
             U_b = soc_U[n_mo_act:, sp_idx]
             weights = np.abs(U_a)**2 + np.abs(U_b)**2
             for p_rel, w in enumerate(weights):
                 if w > 1e-6:
-                    active_mos.add(offset + p_rel)
+                    active_mos.add(int(act_mo[p_rel]))
                     
     # --- 3. Identify Active MOs from BSE Excitons ---
     bse_abs_holes = {p: np.zeros(n_spatial_total) for p in bse_states_dict}
@@ -119,8 +119,8 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
             if w > 1e-6:
                 i_rel = solver.ham.valid_i[idx]
                 a_rel = solver.ham.valid_a[idx]
-                i_abs = (solver.homo_index - solver.n_occ + 1) + i_rel
-                a_abs = (solver.homo_index + 1) + a_rel
+                i_abs = int(solver.ham.occ_idx[i_rel])
+                a_abs = int(solver.ham.virt_idx[a_rel])
                 
                 bse_abs_holes[prefix][i_abs] += w
                 bse_abs_elecs[prefix][a_abs] += w
@@ -156,7 +156,7 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
         # Build Spinor Densities (|Psi|^2)
         if spinor_list and soc_U is not None:
             n_mo_act = soc_U.shape[0] // 2
-            offset = solver.homo_index - solver.n_occ + 1
+            act_mo = np.concatenate([solver.ham.occ_idx, solver.ham.virt_idx])
             for sp in spinor_list:
                 U_a_full = soc_U[:n_mo_act, sp]
                 U_b_full = soc_U[n_mo_act:, sp]
@@ -165,7 +165,7 @@ def generate_cubes(solver, bse_states_dict, mo_list, spinor_list, soc_U, shells,
                 U_a_act = np.zeros(len(active_mos), dtype=complex)
                 U_b_act = np.zeros(len(active_mos), dtype=complex)
                 for p_rel in range(n_mo_act):
-                    p_abs = offset + p_rel
+                    p_abs = int(act_mo[p_rel])
                     if p_abs in mo_to_col:
                         U_a_act[mo_to_col[p_abs]] = U_a_full[p_rel]
                         U_b_act[mo_to_col[p_abs]] = U_b_full[p_rel]
@@ -243,20 +243,19 @@ def generate_exciton_cubes(solver, bse_vec, shells, symbols, coords, prefix, spa
     logger.info(f"  [Cube] Grid size: {Nx} x {Ny} x {Nz} = {n_points} points.")
     
     # Pre-calculate MO weights for the exciton
-    n_occ_tot = solver.C.shape[1] - solver.n_virt
-    C_occ = solver.C[:, :n_occ_tot]
-    C_virt = solver.C[:, n_occ_tot:]
-    
+    # active-space MOs (window positions -> MO columns of C through ham.occ_idx / ham.virt_idx)
+    C_occ = solver.C[:, np.asarray(solver.ham.occ_idx)]
+    C_virt = solver.C[:, np.asarray(solver.ham.virt_idx)]
+    if hasattr(C_occ, "toarray"):
+        C_occ, C_virt = C_occ.toarray(), C_virt.toarray()
+
     weights = bse_vec**2
-    hole_weights = np.zeros(n_occ_tot)
-    elec_weights = np.zeros(solver.n_virt)
-    
+    hole_weights = np.zeros(C_occ.shape[1])
+    elec_weights = np.zeros(C_virt.shape[1])
+
     for idx, w in enumerate(weights):
-        i_rel = solver.ham.valid_i[idx]
-        a_rel = solver.ham.valid_a[idx]
-        i_abs = (solver.homo_index - solver.n_occ + 1) + i_rel
-        hole_weights[i_abs] += w
-        elec_weights[a_rel] += w
+        hole_weights[solver.ham.valid_i[idx]] += w
+        elec_weights[solver.ham.valid_a[idx]] += w
 
     rho_h = np.zeros(n_points)
     rho_e = np.zeros(n_points)

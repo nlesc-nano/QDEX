@@ -387,8 +387,8 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
                 abs_e = (solver.ham.homo_index_beta + 1) + elec_idx
                 trans_str = f"{abs_h:3d}->{abs_e:3d}(β)"
         else:
-            abs_h = (solver.homo_index - solver.ham.n_occ_act + 1) + hole_idx
-            abs_e = (solver.homo_index + 1) + elec_idx
+            abs_h = int(solver.ham.occ_idx[hole_idx])
+            abs_e = int(solver.ham.virt_idx[elec_idx])
             trans_str = f"{abs_h:3d}->{abs_e:3d}"
 
         vec_conj = vec.conj() if np.iscomplexobj(vec) else vec
@@ -568,9 +568,7 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
             eps_eval[solver.homo_index + 1:] += eff_scissor
         if solver.soc_flag and soc_E is not None and soc_U is not None:
             k = soc_U.shape[0] // 2
-            act_start = solver.homo_index - solver.n_occ + 1
-            act_end = solver.homo_index + 1 + solver.n_virt
-            C_act = solver.C[:, act_start:act_end]
+            C_act = solver.C[:, np.concatenate([solver.ham.occ_idx, solver.ham.virt_idx])]
             U_spinor_alpha = C_act @ soc_U[:k, :]
             U_spinor_beta = C_act @ soc_U[k:, :]
             eps_eval = soc_E
@@ -978,6 +976,13 @@ def _build_parser():
     # --- BSE Active Space Arguments ---
     parser.add_argument("--nhomos", type=int, default=None, help="Number of occupied MOs to include in the BSE active space")
     parser.add_argument("--nlumos", type=int, default=None, help="Number of virtual MOs to include in the BSE active space")
+    parser.add_argument("--active_space", choices=["nominal", "delocalized"], default="nominal",
+                        help="BSE active MOs: 'nominal' = the nhomos / nlumos MOs next to the gap; 'delocalized' = the "
+                             "first nhomos / nlumos S/P/D-like MOs (angular coverage), skipping facet and localized "
+                             "(trap) MOs. Restricted references only. YAML: excitations.active_space")
+    parser.add_argument("--active_window", type=float, default=5.0,
+                        help="Delocalized active space: classify the MOs within this many eV below the HOMO and above "
+                             "the LUMO (default 5). YAML: excitations.active_window")
     parser.add_argument("--charge_type", choices=["mulliken", "lowdin"], default="mulliken", help="Method to compute transition charges (Mulliken or Lowdin).")
 
     # --- Triplet State / UKS Arguments ---
@@ -1540,6 +1545,70 @@ def _delocalized_dft_gap(C, S, eps, homo_index, shells, coords_ang, syms, args, 
     return None
 
 
+def _delocalized_active_mos(C, S, eps, homo_index, n_occ, n_virt, shells, coords_ang, syms, args, window_ev=5.0):
+    """BSE active MOs that skip the traps: the first n_occ S/P/D-like occupied MOs counted down from the HOMO and
+    the first n_virt S/P/D-like virtual MOs counted up from the LUMO (angular coverage, qdex.angular, the
+    classification of the frontier diagnostic and the trap filter). Only the MOs within window_ev below the
+    nominal HOMO and above the nominal LUMO are classified (as the fuzzy-band / PDOS window). Returns
+    (occ_idx, virt_idx, info), both index arrays ascending."""
+    from qdex.angular import states_omega, BAND_CLASSES
+    eps = np.asarray(eps, dtype=float)
+    lumo = homo_index + 1
+    idx = np.where((eps >= eps[homo_index] - window_ev) & (eps <= eps[lumo] + window_ev))[0]
+    Cw = C[:, idx]
+    Cw = Cw.toarray() if hasattr(Cw, "toarray") else np.asarray(Cw, dtype=float)
+    SCw = S @ Cw
+    SCw = SCw.toarray() if hasattr(SCw, "toarray") else np.asarray(SCw)
+    _, cls, _, _ = states_omega(Cw * SCw, shells, coords_ang, syms,
+                                core_elements=getattr(args, "centroid_core_elements", None))
+    band = np.array([str(c) in BAND_CLASSES for c in cls], dtype=bool)
+    occ_band = idx[(idx <= homo_index) & band][::-1]      # counted down from the HOMO
+    virt_band = idx[(idx >= lumo) & band]                 # counted up from the LUMO
+    occ_sel, virt_sel = np.sort(occ_band[:n_occ]), virt_band[:n_virt]
+    if len(occ_sel) == 0 or len(virt_sel) == 0:
+        raise ValueError(f"excitations.active_space delocalized: no S/P/D-like {'occupied' if len(occ_sel) == 0 else 'virtual'} "
+                         f"MO within {window_ev:g} eV of the band edge (widen excitations.active_window).")
+    info = {
+        "n_classified": int(len(idx)),
+        "n_trap_occ": int(homo_index - occ_sel[0] + 1 - len(occ_sel)),
+        "n_trap_virt": int(virt_sel[-1] - lumo + 1 - len(virt_sel)),
+        "short_occ": len(occ_sel) < n_occ, "short_virt": len(virt_sel) < n_virt,
+    }
+    return occ_sel.astype(int), virt_sel.astype(int), info
+
+
+def _active_mo_selection(args, *, C, C_beta, S, coords_ang, eps, homo_index, shells, syms, tracker):
+    """excitations.active_space: 'nominal' (default) = the nhomos / nlumos MOs next to the gap; 'delocalized' =
+    the first nhomos / nlumos S/P/D-like MOs, so that facet and localized (trap) MOs do not take window slots."""
+    mode = str(getattr(args, "active_space", "nominal") or "nominal").lower()
+    if mode == "nominal":
+        return _export(locals(), ("active_occ_mo", "active_virt_mo"))     # not set: the nominal window
+    if mode != "delocalized":
+        raise ValueError(f"excitations.active_space must be 'nominal' or 'delocalized', not '{mode}'.")
+    if C_beta is not None:
+        raise ValueError("excitations.active_space delocalized is implemented for restricted references only.")
+    if args.e_thresh is not None:
+        raise ValueError("excitations.active_space delocalized needs nhomos / nlumos, not e_thresh.")
+    tracker.start_stage("Delocalized Active Space")
+    n_occ = args.nhomos if args.nhomos is not None else 25
+    n_virt = args.nlumos if args.nlumos is not None else 25
+    window_ev = float(getattr(args, "active_window", 5.0) or 5.0)
+    t0 = time.time()
+    active_occ_mo, active_virt_mo, info = _delocalized_active_mos(C, S, eps, homo_index, n_occ, n_virt, shells,
+                                                                  coords_ang, syms, args, window_ev=window_ev)
+    occ_sel, virt_sel = active_occ_mo, active_virt_mo
+    logger.info(f"\n--- Delocalized BSE Active Space (angular coverage of the {info['n_classified']} MOs within "
+                f"{window_ev:g} eV of the band edges, {time.time() - t0:.1f} s) ---")
+    logger.info(f"  Holes    : {len(occ_sel)} S/P/D-like MOs, HOMO{occ_sel[-1] - homo_index:+d} ... "
+                f"HOMO{occ_sel[0] - homo_index:+d}; {info['n_trap_occ']} trap MOs skipped")
+    logger.info(f"  Electrons: {len(virt_sel)} S/P/D-like MOs, LUMO+{virt_sel[0] - homo_index - 1} ... "
+                f"LUMO+{virt_sel[-1] - homo_index - 1}; {info['n_trap_virt']} trap MOs skipped")
+    if info["short_occ"] or info["short_virt"]:
+        logger.warning(f"  [Active space] Only {len(occ_sel)} / {len(virt_sel)} delocalized holes / electrons within "
+                       f"{window_ev:g} eV (asked {n_occ} / {n_virt}); widen excitations.active_window.")
+    return _export(locals(), ("active_occ_mo", "active_virt_mo"))
+
+
 def _quasiparticle_correction(args, *,
         C, S, atom_ao_ranges, coords_ang, eps, eps_beta, homo_index, homo_index_beta, shells, syms, tracker):
     """QP model: gap correction and the screened interaction W it is built on."""
@@ -1962,7 +2031,8 @@ def _quasiparticle_correction(args, *,
 
 def _qp_levels_and_kernel(args, *,
         C, S, _all_populations, _xs_gamma_ao, atom_ao_ranges, coords_ang, dft_gap, eps, eps_qp,
-        eps_qp_active, homo_index, qp_pop_mode, qp_provenance, qp_w, scissor, syms, target_qp_gap):
+        eps_qp_active, homo_index, qp_pop_mode, qp_provenance, qp_w, scissor, syms, target_qp_gap,
+        active_occ_mo=None, active_virt_mo=None):
     """Orbital-resolved QP levels, the BSE kernel and the sTDA interactions; QP provenance."""
     w_parts = qp_provenance.pop("w_parts", None) if qp_provenance is not None else None
     use_xs = str(args.kernel_type).lower() in ("xs", "xs-qdex")
@@ -2008,6 +2078,11 @@ def _qp_levels_and_kernel(args, *,
                     n_virt_req = 25
                 n_occ_act = min(homo_index + 1, max(1, n_occ_req))
                 n_virt_act = min(len(eps) - (homo_index + 1), max(1, n_virt_req))
+                if active_occ_mo is not None and n_win_override is None:
+                    # delocalized active space: the QP levels span every MO from the deepest active hole to the
+                    # highest active electron (the skipped traps included, so the level shifts stay contiguous)
+                    n_occ_act = int(homo_index - np.min(active_occ_mo) + 1)
+                    n_virt_act = int(np.max(active_virt_mo) - homo_index)
                 occ_w = np.arange(homo_index - n_occ_act + 1, homo_index + 1)
                 virt_w = np.arange(homo_index + 1, homo_index + 1 + n_virt_act)
                 eval_indices = np.concatenate([occ_w, virt_w])
@@ -2392,7 +2467,7 @@ def _active_space_and_soc(args, *,
         C_act, C_beta, C_dense, S, SC_dense, SC_dense_beta_pop, coords_ang, dft_gap, e_fermi_raw, eps,
         eps_beta, eps_beta_shifted, eps_dft_shifted, eps_qp_active, eps_shifted, f_h, fb, homo_index,
         homo_index_beta, occ, occ_beta, pops_beta, pops_sf, qp_provenance, scissor, shells,
-        soc_assume_orthonormal, syms, target_qp_gap, tracker):
+        soc_assume_orthonormal, syms, target_qp_gap, tracker, active_occ_mo=None, active_virt_mo=None):
     """BSE active space, SOC spinor subspace, population printouts and the scissor operator."""
     # -----------------------------------------------------------------
     # BSE Active Space Setup
@@ -2415,6 +2490,12 @@ def _active_space_and_soc(args, *,
 
     bse_active_indices = np.arange(homo_index - bse_n_occ + 1, homo_index + 1 + bse_n_virt)
     bse_active_indices_beta = np.arange(homo_index_beta - bse_n_occ_beta + 1, homo_index_beta + 1 + bse_n_virt_beta)
+    if active_occ_mo is not None:
+        # delocalized active space (restricted only): the selected S/P/D-like MOs, not a contiguous block
+        bse_n_occ, bse_n_virt = len(active_occ_mo), len(active_virt_mo)
+        bse_n_occ_beta, bse_n_virt_beta = bse_n_occ, bse_n_virt
+        bse_active_indices = np.concatenate([active_occ_mo, active_virt_mo]).astype(int)
+        bse_active_indices_beta = bse_active_indices
     bse_soc_E, bse_soc_U, bse_spinor_homo_idx = None, None, None
     calculated_soc_gap = None
     soc_overlap_cache = None
@@ -2624,7 +2705,7 @@ def _active_space_and_soc(args, *,
         
         soc_occ = np.zeros_like(bse_soc_E)
         soc_occ[:bse_spinor_homo_idx + 1] = 1.0
-        soc_offset = (homo_index - bse_n_occ + 1) * 2 
+        soc_offset = int(bse_active_indices[0]) * 2
         centroid_info_soc = print_orbital_summary(
             bse_soc_E, soc_occ, bse_spinor_homo_idx, pops_soc_act, syms, shells,
             is_soc=True, offset=soc_offset, print_range=pop_range, population_bars=pop_tags,
@@ -2929,7 +3010,7 @@ def _write_store(args):
 
 def _transition_dipoles(args, *,
         C, C_beta, C_dense_beta, bse_n_occ, bse_n_virt, compute_device, dev_obj, eps_beta, homo_index,
-        homo_index_beta, is_uks_sp, shells, tracker):
+        homo_index_beta, is_uks_sp, shells, tracker, active_occ_mo=None, active_virt_mo=None):
     """Transition dipoles of the active space."""
     # -----------------------------------------------------------------
     # BSE CONTINUATION (Only if run_bse is True)
@@ -2989,7 +3070,10 @@ def _transition_dipoles(args, *,
     else:
         # Singlet or spin-flip triplet: standard single-channel dipoles
         C_occ = C[:, homo_index - bse_n_occ + 1 : homo_index + 1].astype(np.float64)
-        if C_beta is not None:
+        if active_occ_mo is not None:
+            C_occ = C[:, active_occ_mo].astype(np.float64)
+            C_virt = C[:, active_virt_mo].astype(np.float64)
+        elif C_beta is not None:
             C_virt = C_beta[:, homo_index_beta + 1 : homo_index_beta + 1 + bse_n_virt].astype(np.float64)
         else:
             C_virt = C[:, homo_index + 1 : homo_index + 1 + bse_n_virt].astype(np.float64)
@@ -3012,7 +3096,8 @@ def _solve_excitons(args, *,
         bse_soc_U, calculated_soc_gap, compute_device, confinement_energy, coords_ang, db_gap, dft_gap,
         eps_beta_shifted, eps_dft_shifted, eps_qp_active, eps_shifted, homo_index, homo_index_beta, mu_ia_x,
         mu_ia_y, mu_ia_z, occ, qp_w, scissor, shared_gamma_ao, shells, spin_mode, stda_gamma_j, stda_gamma_k,
-        syms, target_qp_gap, tracker, centroid_info_alpha=None, centroid_info_soc=None):
+        syms, target_qp_gap, tracker, centroid_info_alpha=None, centroid_info_soc=None,
+        active_occ_mo=None, active_virt_mo=None):
     """Spin-free (and SOC) exciton solvers and their analysis."""
     # Store this for the analysis printouts later
     args.qp_gap_num = target_qp_gap
@@ -3028,8 +3113,8 @@ def _solve_excitons(args, *,
     if getattr(args, "trap_filter", False):
         if centroid_info_alpha is not None and "labels" in centroid_info_alpha:
             labels_sf = centroid_info_alpha["labels"]
-            occ_idx = np.arange(homo_index - bse_n_occ + 1, homo_index + 1)
-            virt_idx = np.arange(homo_index + 1, homo_index + 1 + bse_n_virt)
+            occ_idx = np.arange(homo_index - bse_n_occ + 1, homo_index + 1) if active_occ_mo is None else active_occ_mo
+            virt_idx = np.arange(homo_index + 1, homo_index + 1 + bse_n_virt) if active_virt_mo is None else active_virt_mo
             hole_trap_mask = np.array([labels_sf[i] in ("Facet", "Localized") for i in occ_idx], dtype=bool)
             elec_trap_mask = np.array([labels_sf[a] in ("Facet", "Localized") for a in virt_idx], dtype=bool)
             logger.info(f"\n  [Trap Filter] Flagged transitions with Facet or Localized states (angular coverage):")
@@ -3075,6 +3160,7 @@ def _solve_excitons(args, *,
         shells=shells,
         eps_dft=eps_dft_solver,
         hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
+        occ_indices=active_occ_mo, virt_indices=active_virt_mo,
         one_centre=args.one_centre, one_centre_cutoff=args.one_centre_cutoff,
             one_centre_tail=args.one_centre_tail, one_centre_direct=args.one_centre_direct,
     )
@@ -3127,6 +3213,7 @@ def _solve_excitons(args, *,
             eps_dft=eps_dft_solver,
             hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
             hole_trap_mask_soc=hole_trap_mask_soc, elec_trap_mask_soc=elec_trap_mask_soc,
+            occ_indices=active_occ_mo, virt_indices=active_virt_mo,
             one_centre=args.one_centre, one_centre_cutoff=args.one_centre_cutoff,
             one_centre_tail=args.one_centre_tail, one_centre_direct=args.one_centre_direct,
         )
@@ -3161,7 +3248,8 @@ def main():
         return
     args = loaded["args"]
     state = {"parser": parser, "config_path": loaded["config_path"]}
-    for stage in (_prepare_run, _read_geometry_and_basis, _read_molecular_orbitals, _quasiparticle_correction,
+    for stage in (_prepare_run, _read_geometry_and_basis, _read_molecular_orbitals, _active_mo_selection,
+                  _quasiparticle_correction,
                   _qp_levels_and_kernel, _ip_ea_and_energy_axis, _orbital_populations, _active_space_and_soc,
                   _cubes_and_fuzzy, _store_electronic_and_mo_cubes):
         _run_stage(stage, args, state)

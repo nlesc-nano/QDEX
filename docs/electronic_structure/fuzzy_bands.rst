@@ -308,3 +308,20 @@ the ``cube_nhomos_deloc`` / ``cube_nlumos_deloc`` cubes. The third panel of the 
 the class bands shaded and their boundaries dashed, and the IPR on its own axis along the top; states between the
 nominal and the delocalized edges are outlined (red Localized, orange Facet). The h5 file stores
 ``sf|soc/fuzzy/{trap_flag, ipr, omega}`` and ``sf/mo/centroid/omega`` with the boundaries as attributes.
+
+**Delocalized active space.** ``trap_filter`` removes the transitions of trap states *inside* the nominal
+``nhomos`` x ``nlumos`` window, so traps still take window slots: on large dots whose valence edge is a block of
+facet states, a 25 x 25 window can lose every hole. ``excitations.active_space: delocalized`` classifies the MOs
+first (the MOs within ``excitations.active_window``, default 5 eV, below the HOMO and above the LUMO) and builds the
+window from the first ``nhomos`` S/P/D-like occupied MOs counted down from the HOMO and the first ``nlumos``
+S/P/D-like virtual MOs counted up from the LUMO. With SOC the spinors are still taken from the SOC window
+``soc.bse_window`` (traps included) and projected onto these MOs, so the SOC mixing with the skipped traps is kept.
+Orbital-resolved QP levels span every MO from the deepest active hole to the highest active electron. The log
+prints the selection (``Delocalized BSE Active Space``) and warns when the window holds fewer delocalized MOs than
+asked. Restricted references only::
+
+   excitations:
+     nhomos: 25
+     nlumos: 25
+     active_space: delocalized     # nominal (default) or delocalized
+     active_window: 5.0            # eV beyond the nominal band edges

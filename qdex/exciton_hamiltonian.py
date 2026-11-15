@@ -66,7 +66,8 @@ class ExcitonHamiltonian:
                  include_direct_eh=True, eps_dft=None, selection=None, selection_energy=7.0,
                  selection_pt=1e-4, selection_shift=True,
                  hole_trap_mask=None, elec_trap_mask=None,
-                 hole_trap_mask_soc=None, elec_trap_mask_soc=None, onecentre=None):
+                 hole_trap_mask_soc=None, elec_trap_mask_soc=None, onecentre=None,
+                 occ_indices=None, virt_indices=None):
         # One-centre correction to the xs kernel (qdex.onecentre.OneCentreKernel); None = plain xs or MNOK
         self.onecentre = onecentre
         self.selection_shift = bool(selection_shift)
@@ -132,6 +133,13 @@ class ExcitonHamiltonian:
 
         occ_idx = np.arange(homo_index - n_occ + 1, homo_index + 1)
         virt_idx = np.arange(homo_index_beta + 1, homo_index_beta + 1 + n_virt)
+        if occ_indices is not None:
+            # explicit active MOs (ascending, not necessarily contiguous: the delocalized active space)
+            occ_idx = np.asarray(occ_indices, dtype=int)
+            virt_idx = np.asarray(virt_indices, dtype=int)
+            if np.any(np.diff(occ_idx) <= 0) or np.any(np.diff(virt_idx) <= 0) \
+                    or occ_idx[-1] > homo_index or virt_idx[0] <= homo_index_beta:
+                raise ValueError("occ_indices / virt_indices must be ascending occupied / virtual MO indices.")
         n_occ_act, n_virt_act = len(occ_idx), len(virt_idx)
         
         e_min_occ, e_homo = eps[occ_idx[0]], eps[occ_idx[-1]]

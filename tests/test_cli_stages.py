@@ -5,7 +5,7 @@ from pathlib import Path
 
 import qdex.cli as cli
 
-STAGES = [cli._prepare_run, cli._read_geometry_and_basis, cli._read_molecular_orbitals,
+STAGES = [cli._prepare_run, cli._read_geometry_and_basis, cli._read_molecular_orbitals, cli._active_mo_selection,
           cli._quasiparticle_correction, cli._qp_levels_and_kernel, cli._ip_ea_and_energy_axis,
           cli._orbital_populations, cli._active_space_and_soc, cli._cubes_and_fuzzy,
           cli._transition_dipoles, cli._solve_excitons]

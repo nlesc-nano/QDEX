@@ -230,7 +230,8 @@ class ExcitonSolver:
                   selection_pt=1e-4, selection_shift=True,
                   hole_trap_mask=None, elec_trap_mask=None,
                   hole_trap_mask_soc=None, elec_trap_mask_soc=None,
-                  one_centre=False, one_centre_cutoff=0.0, one_centre_tail="dipole", one_centre_direct=False):
+                  one_centre=False, one_centre_cutoff=0.0, one_centre_tail="dipole", one_centre_direct=False,
+                  occ_indices=None, virt_indices=None):
 
         self.C = C
         self.eps = eps
@@ -240,6 +241,13 @@ class ExcitonSolver:
         self.atom_symbols = atom_symbols
         self.coords = atom_coords
         self.atom_ao_ranges = atom_ao_ranges
+        if occ_indices is not None:
+            # explicit active MOs (excitations.active_space delocalized): n_occ / n_virt follow them
+            if spin == 'uks_spin_preserving':
+                raise ValueError("Explicit active MO indices are implemented for restricted references only.")
+            occ_indices = np.asarray(occ_indices, dtype=int)
+            virt_indices = np.asarray(virt_indices, dtype=int)
+            n_occ, n_virt = len(occ_indices), len(virt_indices)
         self.n_occ = n_occ
         self.n_virt = n_virt
         self.homo_index = homo_index
@@ -472,7 +480,7 @@ class ExcitonSolver:
             selection_shift=selection_shift,
             hole_trap_mask=hole_trap_mask, elec_trap_mask=elec_trap_mask,
             hole_trap_mask_soc=hole_trap_mask_soc, elec_trap_mask_soc=elec_trap_mask_soc,
-            onecentre=onecentre,
+            onecentre=onecentre, occ_indices=occ_indices, virt_indices=virt_indices,
         )
 
     def solve(self, nroots=10, full_diag=False, tol=1e-5, excitation_mode="bse"):

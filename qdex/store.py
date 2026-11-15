@@ -290,8 +290,8 @@ def put_excitations(store, solver, energies_ev, vectors, f_strengths, mu_ia, ana
         out["pr"] = np.ones(n)
         if not solver.soc_flag:
             i, a = np.asarray(ham.valid_i)[p], np.asarray(ham.valid_a)[p]
-            out["hole_mo"] = solver.homo_index - ham.n_occ_act + 1 + i
-            out["electron_mo"] = solver.homo_index + 1 + a
+            out["hole_mo"] = np.asarray(ham.occ_idx)[i]
+            out["electron_mo"] = np.asarray(ham.virt_idx)[a]
             r_o, v_o = _orbital_moments(analyzer.q_occ, coords)
             r_v, v_v = _orbital_moments(analyzer.q_virt, coords)
             rh, re, vh, ve = r_o[i], r_v[a], v_o[i], v_v[a]
