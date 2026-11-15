@@ -336,6 +336,12 @@ def run_solver_and_analysis(solver, coords_ang, syms, shells, mu_ia_x, mu_ia_y, 
     logger.info(f" SYSTEM ENERGY SUMMARY ({label})")
     logger.info("-" * 60)
     logger.info(f"  Raw DFT Gap           : {dft_gap:8.4f} eV")
+    occ_w, virt_w = np.asarray(solver.ham.occ_idx), np.asarray(solver.ham.virt_idx)
+    if len(occ_w) and len(virt_w) and (occ_w[-1] != solver.homo_index or virt_w[0] != solver.homo_index + 1):
+        # delocalized active space: the window's own spin-free gap (the SOC gap below refers to this window)
+        e_ref = solver.eps_dft if getattr(solver, "eps_dft", None) is not None else solver.eps
+        logger.info(f"  Active-Window DFT Gap : {float(e_ref[virt_w[0]] - e_ref[occ_w[-1]]):8.4f} eV "
+                    f"(HOMO{occ_w[-1] - solver.homo_index:+d} -> LUMO+{virt_w[0] - solver.homo_index - 1})")
     if solver.soc_flag and soc_gap is not None:
         logger.info(f"  SOC Gap               : {soc_gap:8.4f} eV")
     logger.info(f"  QP Correction (Shift) : {scissor:8.4f} eV")
@@ -2721,16 +2727,30 @@ def _active_space_and_soc(args, *,
             calculated_soc_gap -= scissor
 
         # --- RIGID SCISSOR APPLICATION ---
+        # The SOC gap is the gap of the BSE spinors, i.e. of the active window. With a delocalized active space
+        # (trap MOs skipped) the window edges are not the nominal HOMO / LUMO, so the spin-free reference for
+        # D_SOC is the gap between the window's edge MOs, not the nominal DFT gap.
+        sf_gap_ref = dft_gap
+        if active_occ_mo is not None:
+            h_w, l_w = int(active_occ_mo[-1]), int(active_virt_mo[0])
+            sf_gap_ref = float(eps[l_w] - eps[h_w])
+
         logger.info("\n--- Scissor Operator Application ---")
         logger.info(f"  Rigid Scissor (Computed above)  : {scissor:+8.4f} eV")
         logger.info(f"  Spin-Free DFT Gap               : {dft_gap:8.4f} eV")
-        logger.info(f"  SOC-Shrunken DFT Gap            : {calculated_soc_gap:8.4f} eV")
-        
+        if active_occ_mo is not None:
+            logger.info(f"  Spin-Free DFT Gap (active win.) : {sf_gap_ref:8.4f} eV (delocalized edges HOMO{h_w - homo_index:+d}, "
+                        f"LUMO+{l_w - homo_index - 1})")
+        logger.info(f"  SOC-Shrunken DFT Gap            : {calculated_soc_gap:8.4f} eV"
+                    + (" (active window)" if active_occ_mo is not None else ""))
+
         final_sf_qp_gap = dft_gap + scissor
         final_soc_qp_gap = calculated_soc_gap + scissor
-        
+
         logger.info(f"  -> Final Spin-Free QP Gap       : {final_sf_qp_gap:8.4f} eV")
-        logger.info(f"  -> Final SOC QP Gap             : {final_soc_qp_gap:8.4f} eV (D_SOC = {dft_gap - calculated_soc_gap:.4f} eV)")
+        if active_occ_mo is not None:
+            logger.info(f"  -> Final SF QP Gap (active win.): {sf_gap_ref + scissor:8.4f} eV")
+        logger.info(f"  -> Final SOC QP Gap             : {final_soc_qp_gap:8.4f} eV (D_SOC = {sf_gap_ref - calculated_soc_gap:.4f} eV)")
 
     else:
         # --- RIGID SCISSOR FOR SPIN-FREE ONLY ---
