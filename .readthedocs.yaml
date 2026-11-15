@@ -8,9 +8,9 @@ build:
 sphinx:
   configuration: docs/conf.py
 
+# The docs do not install qdex: docs/conf.py puts the repository on sys.path and mocks the C++ extension
+# libint_cpp, as in the GitHub docs job. Installing the package would build that extension, and
+# CMake finds no pybind11 on Read the Docs.
 python:
   install:
     - requirements: docs/requirements.txt
-    - method: pip
-      path: .
-      extra_requirements: []
