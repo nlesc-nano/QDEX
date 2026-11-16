@@ -1556,7 +1556,8 @@ def _delocalized_active_mos(C, S, eps, homo_index, n_occ, n_virt, shells, coords
     the first n_virt S/P/D-like virtual MOs counted up from the LUMO (angular coverage, qdex.angular, the
     classification of the frontier diagnostic and the trap filter). Only the MOs within window_ev below the
     nominal HOMO and above the nominal LUMO are classified (as the fuzzy-band / PDOS window). Returns
-    (occ_idx, virt_idx, info), both index arrays ascending; info["trap_idx"] lists the classified trap MOs."""
+    (occ_idx, virt_idx, info), both index arrays ascending; info["gap_trap_idx"] lists the in-gap trap MOs, those
+    between the delocalized HOMO and the delocalized LUMO (the trap MOs inside the bands are not listed)."""
     from qdex.angular import states_omega, BAND_CLASSES
     eps = np.asarray(eps, dtype=float)
     lumo = homo_index + 1
@@ -1579,7 +1580,9 @@ def _delocalized_active_mos(C, S, eps, homo_index, n_occ, n_virt, shells, coords
         "n_trap_occ": int(homo_index - occ_sel[0] + 1 - len(occ_sel)),
         "n_trap_virt": int(virt_sel[-1] - lumo + 1 - len(virt_sel)),
         "short_occ": len(occ_sel) < n_occ, "short_virt": len(virt_sel) < n_virt,
-        "trap_idx": idx[~band].astype(int),     # every classified non-S/P/D MO, kept out of the SOC window too
+        # trap MOs in the gap between the delocalized band edges (all non-S/P/D by construction), kept out of the
+        # SOC window too; shallow trap MOs inside the bands stay in it (their SOC mixing with the band states counts)
+        "gap_trap_idx": np.arange(occ_sel[-1] + 1, virt_sel[0], dtype=int),
     }
     return occ_sel.astype(int), virt_sel.astype(int), info
 
@@ -1604,7 +1607,7 @@ def _active_mo_selection(args, *, C, C_beta, S, coords_ang, eps, homo_index, she
     active_occ_mo, active_virt_mo, info = _delocalized_active_mos(C, S, eps, homo_index, n_occ, n_virt, shells,
                                                                   coords_ang, syms, args, window_ev=window_ev)
     occ_sel, virt_sel = active_occ_mo, active_virt_mo
-    active_trap_mo = info["trap_idx"]
+    active_trap_mo = info["gap_trap_idx"]
     logger.info(f"\n--- Delocalized BSE Active Space (angular coverage of the {info['n_classified']} MOs within "
                 f"{window_ev:g} eV of the band edges, {time.time() - t0:.1f} s) ---")
     logger.info(f"  Holes    : {len(occ_sel)} S/P/D-like MOs, HOMO{occ_sel[-1] - homo_index:+d} ... "
@@ -2534,7 +2537,7 @@ def _active_space_and_soc(args, *,
             logger.info(f"\n--- Computing SOC Spinor Subspace for BSE (|E-Ef| <= {bse_window_ev:.3f} eV, "
                         f"projected onto the {len(bse_active_indices)}-MO BSE window) ---")
             if n_trap_W:
-                logger.info(f"  -> {n_trap_W} trap MOs left out of the SOC window (delocalized active space)")
+                logger.info(f"  -> {n_trap_W} in-gap trap MOs (between the delocalized band edges) left out of the SOC window")
         else:
             logger.info(f"\n--- Computing SOC Spinor Subspace for BSE (Small Window) ---")
         if is_uks_sp:
