@@ -315,7 +315,9 @@ facet states, a 25 x 25 window can lose every hole. ``excitations.active_space: 
 first (the MOs within ``excitations.active_window``, default 5 eV, below the HOMO and above the LUMO) and builds the
 window from the first ``nhomos`` S/P/D-like occupied MOs counted down from the HOMO and the first ``nlumos``
 S/P/D-like virtual MOs counted up from the LUMO. With SOC the spinors are still taken from the SOC window
-``soc.bse_window`` (traps included) and projected onto these MOs, so the SOC mixing with the skipped traps is kept.
+``soc.bse_window`` and projected onto these MOs; the trap MOs in the gap between the delocalized band edges are left
+out of that window (otherwise a band-edge MO near-degenerate with them is spread over trap-mixed spinors and lost),
+while the shallow trap MOs inside the bands stay in it, so their SOC mixing with the band states is kept.
 Orbital-resolved QP levels span every MO from the deepest active hole to the highest active electron. The log
 prints the selection (``Delocalized BSE Active Space``) and warns when the window holds fewer delocalized MOs than
 asked. Restricted references only::
